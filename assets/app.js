@@ -7,7 +7,7 @@
 
   var MSG = {
     lookup: 'Searching the web for this business',
-    splan: 'Planning posts and drawing the pictures', publish: 'Publishing to Facebook', approve: 'Approving and drawing the picture', redraw: 'Drawing the picture', draft_reply: 'Writing a reply', reply: 'Posting the reply', social_check: 'Checking the Facebook connection',
+    splan: 'Planning posts and drawing the pictures', publish: 'Publishing to Facebook', approve: 'Approving and drawing the picture', approve_all: 'Approving and drawing the pictures', approve_selected: 'Approving and drawing the pictures', hold: 'Holding back', request_approval: 'Sending for approval', request_changes: 'Sending the note', mark_posted: 'Saving', ig_url_test: 'Checking the Instagram picture address', redraw: 'Drawing the picture', draft_reply: 'Writing a reply', reply: 'Posting the reply', social_check: 'Checking the Facebook connection',
     kit: 'Making the profile pictures and covers', apply_profile: 'Updating the Facebook profile picture', apply_cover: 'Updating the Facebook cover',
     research: 'Studying their website, social pages and the news',
     audit: 'Auditing the Facebook Page', judge: 'Checking everything people put on the Page', group: 'Working through the list on Facebook', item: 'Doing it on Facebook', playbook: 'Working out who to engage today', cleanup: 'Reviewing every post on the Page', cleanup_apply: 'Changing the Page', ads_plan: 'Planning targeted ads', ads_create: 'Creating the campaign in Ads Manager (paused)', autopilot_now: 'Running the autopilot', capture: 'Looking for buyers', profile_apply: 'Updating the Page profile', connect: 'Connecting to Facebook', draft_message: 'Writing an answer', message: 'Sending the answer', edit: 'Updating the post', delete: 'Deleting', delete_comment: 'Deleting the comment', hide: 'Hiding the comment', unhide: 'Showing the comment', like: 'Liking', unlike: 'Removing the like',
@@ -62,13 +62,56 @@
     show(text, (d === 'download' || d === 'preview') ? 5000 : 0);
   }, false);
 
-  document.addEventListener('click', function (e) {          // "Copy" buttons
-    var b = e.target.closest('[data-copy]');
+  function toast(m) {                                         // small message at the bottom of the screen
+    var t = document.createElement('div');
+    t.className = 'sx-toast'; t.textContent = m; document.body.appendChild(t);
+    setTimeout(function () { t.classList.add('on'); }, 10);
+    setTimeout(function () { t.classList.remove('on'); setTimeout(function () { t.remove(); }, 300); }, 1600);
+  }
+  window.pmToast = toast;
+
+  document.addEventListener('click', function (e) {          // "Copy" buttons: data-copy="text" or data-copy-target="#id" (a box's value or text)
+    var b = e.target.closest('[data-copy],[data-copy-target]');
     if (!b) return;
     var t = b.getAttribute('data-copy'), old = b.textContent;
-    var done = function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = old; }, 1500); };
+    if (t === null) {
+      var el = document.querySelector(b.getAttribute('data-copy-target'));
+      t = el ? (typeof el.value === 'string' ? el.value : el.textContent) : '';
+    }
+    var done = function () { toast('Copied'); if (b.tagName === 'BUTTON') { b.textContent = 'Copied'; setTimeout(function () { b.textContent = old; }, 1500); } };
     if (navigator.clipboard) { navigator.clipboard.writeText(t).then(done); }
     else { var a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); document.execCommand('copy'); a.remove(); done(); }
+  });
+
+  document.addEventListener('change', function (e) {         // files bigger than the server accepts are refused before uploading
+    var f = e.target;
+    if (!f || f.type !== 'file' || !f.getAttribute('data-max-mb') || !f.files || !f.files[0]) return;
+    var max = parseFloat(f.getAttribute('data-max-mb'));
+    if (f.files[0].size > max * 1024 * 1024) {
+      alert('That file is ' + (f.files[0].size / 1048576).toFixed(1) + ' MB. This server accepts at most ' + max + ' MB. Use a smaller file.');
+      f.value = '';
+    }
+  });
+
+  document.addEventListener('click', function (e) {          // "Request changes": ask for the note first
+    var b = e.target.closest('[data-ask]');
+    if (!b || !b.form) return;
+    var note = prompt('What should change?', '');
+    if (!note || !note.trim()) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+    var h = b.form.querySelector('input[name=' + b.getAttribute('data-ask') + ']');
+    if (h) h.value = note.trim();
+  }, true);
+
+  document.addEventListener('change', function (e) {         // post selection: "select all" and the live count in the action bar
+    var all = e.target.closest('[data-pick-all]');
+    var sel = all ? all.getAttribute('data-pick-all') : (e.target.matches('.sx-pick') ? '.sx-pick' : '');
+    if (!sel) return;
+    if (all) document.querySelectorAll(sel).forEach(function (c) { c.checked = all.checked; });
+    document.querySelectorAll('[data-pick-count]').forEach(function (n) {
+      var k = document.querySelectorAll(n.getAttribute('data-pick-count') + ':checked').length;
+      n.textContent = k + ' selected';
+      n.parentNode.classList.toggle('on', k > 0);
+    });
   });
 
   document.addEventListener('click', function (e) {          // "Copy" from a box next to the button
@@ -163,6 +206,13 @@
     }).catch(function () { msg.textContent = 'Network problem. Try again.'; }).then(function () {
       b.textContent = old; box.querySelectorAll('.aigen').forEach(function (x) { x.disabled = false; });
     });
+  });
+
+  // Heat maps (table.heat): each td[data-v] is shaded by its value relative to the largest in the table.
+  document.querySelectorAll('table.heat').forEach(function (t) {
+    var cells = t.querySelectorAll('td[data-v]'), max = 0;
+    cells.forEach(function (c) { max = Math.max(max, parseFloat(c.getAttribute('data-v')) || 0); });
+    cells.forEach(function (c) { c.style.setProperty('--v', max > 0 ? ((parseFloat(c.getAttribute('data-v')) || 0) / max).toFixed(2) : 0); });
   });
 
   window.addEventListener('pageshow', hide);              // back button: never leave the loader stuck

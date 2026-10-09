@@ -5,6 +5,9 @@
  */
 require_once __DIR__ . '/social.php';
 
+/** LinkedIn REST API version (YYYYMM) sent as the LinkedIn-Version header. Override with LI_API_VERSION in .env. Each version is supported for about a year. */
+const PM_LI_API_VERSION = '202601';
+
 /**
  * The platform catalogue. auto: what the app can do by itself once connected. env: the .env lines it needs (TM_ prefix for Travel Malawi).
  * profile/cover: picture sizes in pixels (cover null = the platform has none). steps: setup, thorough and in order.
@@ -32,7 +35,7 @@ function pm_platforms(): array
         ],
         'instagram' => [
             'name' => 'Instagram (business account)', 'profile' => [1080, 1080], 'cover' => null,
-            'auto' => 'Publishes picture posts on schedule through the Facebook connection (needs the app online at your web address, because Instagram fetches the picture from a link). Profile picture: change it in the Instagram app.',
+            'auto' => 'Publishes picture, carousel and story posts on schedule through the Facebook connection, and reels when the app can serve the video. Instagram fetches every picture and video from a public web address, so the app must be online (APP_URL in .env). Until then the Channels tab lists each Instagram post as a hand-post task. Profile picture: change it in the Instagram app.',
             'env' => ['IG_USER_ID'],
             'steps' => [
                 'In the Instagram app create the account (@travelmalawi or @promanagedit if free), then Settings > Account type and tools > Switch to professional account > Business.',
@@ -40,12 +43,13 @@ function pm_platforms(): array
                 'Link it to the Facebook Page: on the Facebook Page go to Settings > Linked accounts > Instagram > Connect (or Meta Business Suite > Settings > Instagram accounts > Connect). Instagram posting from the app only works for an account linked to a Page.',
                 'Find the Instagram account ID: in Graph API Explorer, with the Page token, GET <Page ID>?fields=instagram_business_account. The "id" inside instagram_business_account is the IG_USER_ID (it is not your @username).',
                 'Add IG_USER_ID to .env. Make sure the token includes instagram_basic and instagram_content_publish (recreate it if not).',
-                'Put the app online (APP_URL in .env) so Instagram can fetch post pictures. Until then, download the picture from a post and share it from your phone.',
+                'Put the app online (APP_URL in .env, the public https address of this app) so Instagram can fetch post pictures. Instagram downloads each picture or video from APP_URL/media.php, so a link that only works on your own computer does not work. Until then the Channels tab gives you the caption and picture to post by hand.',
+                'Reels: Instagram publishes a reel only when it can download the video from APP_URL/media.php. If the app is offline the reel appears in the Channels tab as a hand-post task, never as a failure.',
             ],
         ],
         'linkedin' => [
             'name' => 'LinkedIn Company Page', 'profile' => [400, 400], 'cover' => [1128, 191],
-            'auto' => 'Can publish text-and-link posts to the Company Page once LinkedIn approves API access (Community Management API). Until then, use "Copy" on a post and paste it on LinkedIn. Logo and cover: change on LinkedIn (Edit page).',
+            'auto' => 'Can publish text, link and picture posts to the Company Page once LinkedIn approves API access (Community Management API). The post id it returns is kept so results can be read later. Until then, use "Copy" on a post (Channels tab) and paste it on LinkedIn. Logo and cover: change on LinkedIn (Edit page).',
             'env' => ['LI_ORG_ID', 'LI_TOKEN'],
             'steps' => [
                 'From your personal LinkedIn profile: For Business (grid icon) > Create a Company Page > Company. Name, LinkedIn public URL (e.g. linkedin.com/company/promanaged-it), website, industry ("IT Services and IT Consulting" / "Travel Arrangements"), size "0-1 employees" (be honest), type "Self-owned" or "Privately held".',
@@ -54,6 +58,8 @@ function pm_platforms(): array
                 'For posting from the app (optional, takes approval): on linkedin.com/developers create a NEW app just for this (LinkedIn requires the Community Management API to be the only product on its app), link it to your Company Page and verify it as the Page admin, then request "Community Management API". LinkedIn reviews it and may ask for business details.',
                 'When approved, open the developer portal > Docs and tools > OAuth Token Tools, pick the app and the scopes w_organization_social, r_organization_social and rw_organization_admin, and create the token. Tokens last 60 days: put a reminder to renew it.',
                 'Add LI_ORG_ID (the number in your Company Page admin address, linkedin.com/company/<number>/admin) and LI_TOKEN to .env, then switch on "LinkedIn" under Post automatically to.',
+                'Add LI_TOKEN_EXPIRES=YYYY-MM-DD (60 days after you made the token) so the app warns you before it stops working. Renew the token in the same way as step 5.',
+                'API version: the app sends the LinkedIn-Version header set by LI_API_VERSION in .env (YYYYMM, default ' . PM_LI_API_VERSION . '). LinkedIn supports each version for about a year; if posting says "version not active" (HTTP 426), set LI_API_VERSION to a newer month listed in LinkedIn\'s Marketing API versioning page.',
             ],
         ],
         'tiktok' => [
@@ -108,6 +114,18 @@ function pm_platforms(): array
                 'Business tools: set a greeting message, an away message for outside working hours ("Thanks for your message, we reply on the next working day"), and quick replies (copy them from the WhatsApp tab).',
                 'Catalogue: add your packages or services (no prices needed). Labels: New lead, Proposal sent, Client.',
                 'Post the Social pictures as Status 3 to 4 times a week: your contacts see them for 24 hours.',
+            ],
+        ],
+        'whatsapp_channel' => [
+            'name' => 'WhatsApp Channel', 'profile' => [640, 640], 'cover' => null,
+            'auto' => 'The Channels tab prepares the text and picture; you post it from the Updates tab. There is no automatic posting: only admins can post to a Channel, and a Channel made from a personal number has no API at all.',
+            'env' => [],
+            'steps' => [
+                'Open WhatsApp (or WhatsApp Business) > Updates tab > Channels > + > Create channel. The person who creates it is the admin.',
+                'Name it after the business, add the profile picture from the branding kit and a one-line description. Set it to public so people can find it.',
+                'Put the Channel link in your Facebook Page intro, the links page and your email signature, and ask clients to follow it. Followers are anonymous to each other and cannot reply in the Channel.',
+                'Post 2 to 3 times a week from the Updates tab: use the Copy button and the story or square picture from the Channels tab, then Mark posted. One link per update.',
+                'Honest limits: Channels cannot be posted to by the app for a personal number, and updates are not private conversations, so keep enquiries on your WhatsApp number (the post text already says how).',
             ],
         ],
     ];
@@ -320,25 +338,89 @@ function pm_linkedin_cfg(string $brand): array
     return $c;
 }
 
-function pm_linkedin_post(string $brand, string $text): array
+/** The LinkedIn-Version header: LI_API_VERSION (TM_ for Travel Malawi) in .env, else the constant. LinkedIn supports each version for about a year. */
+function pm_li_version(string $brand = ''): string
 {
-    $c = pm_linkedin_cfg($brand);
-    if (!$c['ready']) {
-        return [false, 'LinkedIn is not connected.'];
+    $e = pm_env();
+    $v = trim((string)($e[($brand === 'travel' ? 'TM_' : '') . 'LI_API_VERSION'] ?? $e['LI_API_VERSION'] ?? ''));
+    return preg_match('/^\d{6}$/', $v) ? $v : PM_LI_API_VERSION;
+}
+
+/**
+ * One LinkedIn REST call. $body: array (sent as JSON), string (raw upload) or null. Returns [http code, response headers (lower-case keys), decoded JSON or null].
+ * Tests set $GLOBALS['PM_LI_STUB'] = fn(string $method, string $url, array $headers, $body): array [code, headers, json]; under PM_TEST there is no other route.
+ */
+function pm_li_request(string $method, string $url, string $token, $body, string $brand = '', array $extra = []): array
+{
+    $h = array_merge(['Authorization: Bearer ' . $token, 'X-Restli-Protocol-Version: 2.0.0', 'LinkedIn-Version: ' . pm_li_version($brand)], $extra);
+    if (is_array($body)) {
+        $h[] = 'Content-Type: application/json';
     }
-    $body = ['author' => 'urn:li:organization:' . $c['org'], 'commentary' => mb_substr($text, 0, 2900), 'visibility' => 'PUBLIC',
-        'distribution' => ['feedDistribution' => 'MAIN_FEED', 'targetEntities' => [], 'thirdPartyDistributionChannels' => []], 'lifecycleState' => 'PUBLISHED', 'isReshareDisabledByAuthor' => false];
-    $ch = curl_init('https://api.linkedin.com/rest/posts');
-    curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 30, CURLOPT_POSTFIELDS => json_encode($body),
-        CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $c['token'], 'Content-Type: application/json', 'X-Restli-Protocol-Version: 2.0.0',
-            'LinkedIn-Version: ' . (pm_env()['LI_API_VERSION'] ?? date('Ym', strtotime('-3 months')))]]);
+    if (isset($GLOBALS['PM_LI_STUB']) || getenv('PM_TEST')) {
+        return isset($GLOBALS['PM_LI_STUB']) ? ($GLOBALS['PM_LI_STUB'])($method, $url, $h, $body) : [0, [], null];
+    }
+    $heads = [];
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [CURLOPT_CUSTOMREQUEST => $method, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 60, CURLOPT_HTTPHEADER => $h,
+        CURLOPT_HEADERFUNCTION => function ($c, $line) use (&$heads) {
+            if (str_contains($line, ':')) {
+                [$k, $v] = explode(':', $line, 2);
+                $heads[strtolower(trim($k))] = trim($v);
+            }
+            return strlen($line);
+        }]);
+    if ($body !== null) {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, is_array($body) ? json_encode($body) : $body);
+    }
     pm_curl_native_ca($ch);
     $raw = curl_exec($ch);
     $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    if ($code === 201) {
-        return [true, 'Posted on LinkedIn.'];
+    return [$code, $heads, $raw === false ? null : json_decode((string)$raw, true)];
+}
+
+/**
+ * Posts to the Company Page. $post is the post row (its 1200x627 card is uploaded first through /rest/images, with its alt text) or a local picture path.
+ * Returns [ok, message, post urn]: the urn comes from the x-restli-id header and is kept as li_urn (also in $GLOBALS['PM_LI_LAST_URN'] = [brand, urn]).
+ */
+function pm_linkedin_post(string $brand, string $text, array|string $post = '', string $alt = '', string $title = ''): array
+{
+    $image = is_string($post) ? $post : '';
+    if (is_array($post) && $post) {
+        $img = function_exists('pm_social_card') && ($post['format'] ?? 'image') !== 'text' ? pm_social_card($post, 'link') : '';
+        $image = is_string($img) ? $img : '';
+        $alt = $alt !== '' ? $alt : (function_exists('pm_variant_alt') ? pm_variant_alt($post) : '');
+        $title = $title !== '' ? $title : (string)($post['headline'] ?? '');
     }
-    $j = json_decode((string)$raw, true);
-    return [false, 'LinkedIn: ' . ($j['message'] ?? ('error ' . $code)) . ($code === 401 ? ' (the token has expired: tokens last 60 days)' : '')];
+    $c = pm_linkedin_cfg($brand);
+    if (!$c['ready']) {
+        return [false, 'LinkedIn is not connected.', ''];
+    }
+    $owner = 'urn:li:organization:' . $c['org'];
+    $body = ['author' => $owner, 'commentary' => mb_substr($text, 0, 2900), 'visibility' => 'PUBLIC',
+        'distribution' => ['feedDistribution' => 'MAIN_FEED', 'targetEntities' => [], 'thirdPartyDistributionChannels' => []], 'lifecycleState' => 'PUBLISHED', 'isReshareDisabledByAuthor' => false];
+    $note = '';
+    if ($image !== '' && is_file($image)) {
+        [$code, , $j] = pm_li_request('POST', 'https://api.linkedin.com/rest/images?action=initializeUpload', $c['token'], ['initializeUploadRequest' => ['owner' => $owner]], $brand);
+        $up = (string)($j['value']['uploadUrl'] ?? '');
+        $urn = (string)($j['value']['image'] ?? '');
+        if ($code === 200 && $up !== '' && $urn !== '') {
+            [$code2] = pm_li_request('PUT', $up, $c['token'], (string)file_get_contents($image), $brand, ['Content-Type: application/octet-stream']);
+            if ($code2 >= 200 && $code2 < 300) {
+                $body['content'] = ['media' => ['id' => $urn, 'altText' => mb_substr($alt, 0, 300)] + ($title !== '' ? ['title' => mb_substr($title, 0, 200)] : [])];
+            } else {
+                $note = ' (the picture upload failed, so it went out as text)';
+            }
+        } else {
+            $note = ' (LinkedIn did not accept the picture, so it went out as text)';
+        }
+    }
+    [$code, $heads, $j] = pm_li_request('POST', 'https://api.linkedin.com/rest/posts', $c['token'], $body, $brand);
+    if ($code === 201) {
+        $urn = (string)($heads['x-restli-id'] ?? '');
+        $GLOBALS['PM_LI_LAST_URN'] = [$brand, $urn];
+        return [true, 'Posted on LinkedIn.' . $note, $urn];
+    }
+    $why = $code === 401 ? ' (the token has expired: tokens last 60 days)' : ($code === 426 ? ' (LinkedIn no longer supports API version ' . pm_li_version($brand) . ': set LI_API_VERSION in .env to a newer month)' : '');
+    return [false, 'LinkedIn: ' . ($j['message'] ?? ($code === 0 ? 'no answer' : 'error ' . $code)) . $why, ''];
 }

@@ -306,6 +306,14 @@ function pm_claude(string $system, string $user, bool $web = false, int $maxToke
 {
     pm_budget_check();
     $tier = $tier ?: ($web ? 'std' : 'cheap');
+    if (isset($GLOBALS['PM_AI_STUB']) && is_callable($GLOBALS['PM_AI_STUB'])) { // tests: no network; tokens are estimated so the cost logic still runs
+        $out = (string)($GLOBALS['PM_AI_STUB'])($system, $user, $tier, $maxTokens);
+        pm_usage_add('stub', 'stub-' . $tier, (int)ceil((strlen($system) + strlen($user)) / 4), (int)ceil(strlen($out) / 4));
+        return $out;
+    }
+    if (getenv('PM_TEST')) {
+        throw new RuntimeException('AI not stubbed');
+    }
     return pm_provider($web) === 'gemini' ? pm_gemini($system, $user, $web, $maxTokens, $tier) : pm_anthropic($system, $user, $web, $maxTokens, $tier);
 }
 
@@ -313,7 +321,7 @@ function pm_claude(string $system, string $user, bool $web = false, int $maxToke
 
 function pm_usage_file(): string { return PM_DATA . '/ai_usage.log'; }
 
-function pm_usage_add(string $provider, string $model, int $in, int $out, int $think = 0): void
+function pm_usage_add(string $provider, string $model, int $in, int $out, int $think = 0, string $ref = ''): void
 {
     $who = 'other';
     foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 8) as $f) {
@@ -323,7 +331,22 @@ function pm_usage_add(string $provider, string $model, int $in, int $out, int $t
             break;
         }
     }
-    @file_put_contents(pm_usage_file(), date('Y-m-d') . "\t" . pm_brand() . "\t$provider\t$model\t$in\t$out\t$think\t$who\n", FILE_APPEND | LOCK_EX);
+    $brand = pm_brand();
+    $ref = (string)preg_replace('/[^A-Za-z0-9_.:-]/', '', $ref !== '' ? $ref : (string)($GLOBALS['PM_AI_REF'] ?? '')); // what the call was for, e.g. a post id
+    @file_put_contents(pm_usage_file(), date('Y-m-d') . "\t$brand\t$provider\t$model\t$in\t$out\t$think\t$who\t$ref\n", FILE_APPEND | LOCK_EX);
+    try { // daily totals by brand and agent survive the log being rotated
+        pm_update('ai_usage_daily', function (array $d) use ($brand, $who, $in, $out, $think) {
+            $day = date('Y-m-d');
+            $r = $d[$day][$brand][$who] ?? ['in' => 0, 'out' => 0, 'calls' => 0];
+            $d[$day][$brand][$who] = ['in' => (int)$r['in'] + $in, 'out' => (int)$r['out'] + $out + $think, 'calls' => (int)$r['calls'] + 1];
+            if (count($d) > 400) {
+                ksort($d);
+                $d = array_slice($d, -400, null, true);
+            }
+            return $d;
+        }, fn() => []);
+    } catch (Throwable) {
+    }
 }
 
 /** Today's totals: ['calls','in','out','think','total','models'=>[model=>tokens]]. */
@@ -348,10 +371,65 @@ function pm_usage_today(): array
         $u['agents'][$c[7] ?? 'other'] = ($u['agents'][$c[7] ?? 'other'] ?? 0) + (int)$c[4] + (int)$c[5] + (int)$c[6];
     }
     $u['total'] = $u['in'] + $u['out'] + $u['think'];
-    if (filesize($f) > 400000) { // keep the log small: only today's lines are ever read
-        file_put_contents($f, implode("\n", array_filter(file($f, FILE_IGNORE_NEW_LINES), fn($l) => str_starts_with($l, $today))) . "\n", LOCK_EX);
+    if (filesize($f) > 100000) {
+        pm_usage_rotate($f, $today);
     }
     return $u;
+}
+
+/** Keeps the log small without losing writes made meanwhile: the old file is renamed (never rewritten) and today's lines are appended to the new one. */
+function pm_usage_rotate(string $f, string $today): void
+{
+    $lock = @fopen(PM_DATA . '/ai_usage.lock', 'c');
+    if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
+        return;
+    }
+    try {
+        clearstatcache(true, $f);
+        if (!is_file($f) || filesize($f) <= 100000) {
+            return; // another process just did it
+        }
+        $old = $f . '.' . date('Ymd-His');
+        if (!@rename($f, $old)) {
+            return; // a writer holds it right now (Windows): next call
+        }
+        $keep = '';
+        foreach (file($old, FILE_IGNORE_NEW_LINES) ?: [] as $l) {
+            $keep .= str_starts_with($l, $today) ? $l . "\n" : '';
+        }
+        if ($keep !== '') {
+            @file_put_contents($f, $keep, FILE_APPEND | LOCK_EX);
+        }
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
+
+/** Tokens used so far today (all brands). The planner reads it before and after a call to learn what a batch cost. */
+function pm_usage_mark(): int
+{
+    return (int)pm_usage_today()['total'];
+}
+
+/** Tokens (in + out) one brand used today, from the daily totals. */
+function pm_usage_brand_today(string $brand): int
+{
+    $f = PM_DATA . '/ai_usage_daily.json';
+    $d = is_file($f) ? (json_decode((string)file_get_contents($f), true) ?: []) : [];
+    $n = 0;
+    foreach ((array)($d[date('Y-m-d')][$brand] ?? []) as $r) {
+        $n += (int)($r['in'] ?? 0) + (int)($r['out'] ?? 0);
+    }
+    return $n;
+}
+
+/** The brand's own soft cap (Social > Results > goals); 0 = none. */
+function pm_brand_token_cap(string $brand): int
+{
+    $f = PM_DATA . '/social_goals.json';
+    $g = is_file($f) ? (json_decode((string)file_get_contents($f), true) ?: []) : [];
+    return max(0, (int)($g[$brand]['daily_token_budget'] ?? 0));
 }
 
 function pm_budget(): int
@@ -364,6 +442,10 @@ function pm_budget_check(): void
     $b = pm_budget();
     if ($b > 0 && pm_usage_today()['total'] >= $b) {
         throw new RuntimeException('Daily AI budget of ' . number_format($b) . ' tokens reached. Raise it in Agent settings, or wait until tomorrow.');
+    }
+    $cap = pm_brand_token_cap(pm_brand());
+    if ($cap > 0 && pm_usage_brand_today(pm_brand()) >= $cap) {
+        throw new RuntimeException('This business reached its own daily AI limit of ' . number_format($cap) . ' tokens (Social > Results > goals). It continues tomorrow.');
     }
 }
 

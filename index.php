@@ -12,6 +12,7 @@ require __DIR__ . '/lib/mail.php';
 require __DIR__ . '/lib/agents.php';
 require __DIR__ . '/lib/engage.php';
 require __DIR__ . '/lib/social_growth.php';
+require __DIR__ . '/lib/social_modules.php'; // Social extension registry + every lib/sx_*.php module
 
 // ---------- Access ----------
 $isLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true);
@@ -166,18 +167,56 @@ if (isset($_GET['kit']) && preg_match('/^(promanaged|travel)$/', (string)($_GET[
 
 // ---------- Social post pictures ----------
 if (isset($_GET['simg']) && preg_match('/^[a-f0-9]{20}$/', (string)$_GET['simg'])) {
-    $sp0 = array_values(array_filter(pm_social_posts(), fn($p) => $p['id'] === $_GET['simg']))[0] ?? null;
-    $sf = $sp0 && $sp0['media'] !== '' && is_file($sp0['media']) ? $sp0['media'] : pm_social_dir() . '/' . $_GET['simg'] . '.png';
-    if (!is_file($sf)) {
+    $sf = pm_social_img_file((string)$_GET['simg'], (string)($_GET['size'] ?? 'sq'), (int)($_GET['slide'] ?? 0)); // unknown sizes fall back to the square
+    if ($sf === '') {
         http_response_code(404);
         exit;
     }
-    header('Content-Type: ' . (preg_match('/\.jpe?g$/i', $sf) ? 'image/jpeg' : 'image/png'));
+    $sjpg = (bool)preg_match('/\.jpe?g$/i', $sf);
+    header('Content-Type: ' . ($sjpg ? 'image/jpeg' : 'image/png'));
+    header('Cache-Control: private, max-age=300');
+    if (isset($_GET['dl'])) {
+        header('Content-Disposition: attachment; filename="post-' . $_GET['simg'] . (preg_match('/^[A-Za-z0-9]{1,8}$/', (string)($_GET['size'] ?? '')) ? '-' . $_GET['size'] : '') . ((int)($_GET['slide'] ?? 0) > 0 ? '-' . (int)$_GET['slide'] : '') . ($sjpg ? '.jpg' : '.png') . '"');
+    }
     readfile($sf);
     exit;
 }
+if (isset($_GET['sslides']) && preg_match('/^[a-f0-9]{20}$/', (string)$_GET['sslides'])) { // all slides of a carousel as one zip
+    $sz = array_values(array_filter(pm_social_posts(), fn($p) => $p['id'] === $_GET['sslides']))[0] ?? null;
+    $spaths = $sz && function_exists('pm_card_slides') ? array_values(array_filter((array)pm_card_slides($sz, '4x5'), 'is_file')) : [];
+    if (!$spaths || !class_exists('ZipArchive')) {
+        http_response_code($spaths ? 500 : 404);
+        exit($spaths ? 'The server has no zip support (php-zip).' : 'No slides for this post.');
+    }
+    $ztmp = tempnam(sys_get_temp_dir(), 'sl');
+    $zip = new ZipArchive();
+    if ($zip->open($ztmp, ZipArchive::OVERWRITE) !== true) {
+        http_response_code(500);
+        exit('Could not make the zip.');
+    }
+    foreach ($spaths as $zi => $zf) {
+        $zip->addFile($zf, sprintf('slide-%02d.png', $zi + 1));
+    }
+    $zip->close();
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="slides-' . $_GET['sslides'] . '.zip"');
+    header('Content-Length: ' . filesize($ztmp));
+    readfile($ztmp);
+    @unlink($ztmp);
+    exit;
+}
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    pm_social_due(); // scheduled posts go out when the app is in use too (throttled, a few minutes apart)
+    // Scheduled posts go out when the app is in use too (throttled), unless the scheduler (cron) ran in the last 5 minutes.
+    // The session is released first: a slow publish must not freeze every other page of this user.
+    $hbAge = pm_social_heartbeat_age();
+    if ($hbAge === null || $hbAge >= 300) {
+        session_write_close();
+        try {
+            pm_social_due();
+        } catch (Throwable) {
+        }
+        @session_start();
+    }
 }
 
 // ---------- Link thumbnail (data/ is private, so it is served here) ----------
@@ -224,6 +263,9 @@ if (isset($_GET['file'])) {
 
 // ---------- POST actions ----------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!$_POST && !$_FILES && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+        pm_redirect($tab, 'That upload is bigger than this server accepts (post_max_size ' . ini_get('post_max_size') . ', upload_max_filesize ' . ini_get('upload_max_filesize') . '). Use a smaller file.', 'err');
+    }
     if (!hash_equals($csrf, (string)($_POST['csrf'] ?? ''))) {
         pm_redirect($tab, 'Your session expired. Please try again.', 'err');
     }
@@ -975,6 +1017,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         pm_social_action($vb, $action);
     }
 
+    if ($action === 'social_ext') { // module forms: POST action=social_ext&do=<name> -> pm_do_<name>($vb) returns [msg, kind, to]
+        @set_time_limit(300);
+        pm_brand_set($vb);
+        $xr = pm_social_ext_run((string)($_POST['do'] ?? ''), $vb);
+        pm_redirect($xr['to'], $xr['msg'], $xr['kind']);
+    }
+
     if ($action === 'social_accounts') { // links, cover wording, channels, hero photo, branding kit, Facebook picture updates
         $b = $vb;
         $cfg = pm_social_settings($b);
@@ -1059,9 +1108,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 pm_env_set([$pre . 'IG_USER_ID' => $dI['instagram_business_account']['id']]);
             }
             unset($_SESSION['fb_pages']);
-            $all = pm_load('social_page', fn() => []);
-            unset($all[$vb]);
-            pm_save('social_page', $all);
+            pm_update('social_page', function (array $all) use ($vb) {
+                unset($all[$vb]);
+                return $all;
+            }, fn() => []);
             $info = pm_fb_token_info($pick['token']);
             pm_redirect('social&view=accounts', 'Connected "' . $pick['name'] . '" with a permanent Page token' . ($okI && !empty($dI['instagram_business_account']['id']) ? ' and its linked Instagram account' : '') . '.'
                 . ($info['missing'] ? ' Still missing: ' . implode(', ', $info['missing']) . ' (generate the token again with those ticked).' : ''), $info['missing'] ? 'err' : 'ok');
@@ -1281,7 +1331,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $new['next_ref'] = max(1, (int)($in['next_ref'] ?? 1));
         $new['link_url'] = pm_clean_url((string)($in['link_url'] ?? ''));
         $new['link_on'] = !empty($in['link_on']);
-        $new['social_auto'] = !empty($in['social_auto']);
+        $new['social_auto'] = pm_social_can_approve() ? !empty($in['social_auto']) : !empty($settings['social_auto']); // editors cannot switch Auto-publish
         $new['team'] = array_values(array_unique(array_filter(array_map('trim', preg_split('/\R/', (string)($in['team'] ?? ''))))));
         $tin = (array)($in['travel'] ?? []);
         $tv = (array)($new['travel'] ?? pm_default_settings()['travel']);
@@ -1323,7 +1373,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $tv['charging'] = !empty($tin['charging']);
         $tv['link_url'] = pm_clean_url((string)($tin['link_url'] ?? ''));
         $tv['link_on'] = !empty($tin['link_on']);
-        $tv['social_auto'] = !empty($tin['social_auto']);
+        $tv['social_auto'] = pm_social_can_approve() ? !empty($tin['social_auto']) : !empty($settings['travel']['social_auto']);
         foreach (['about', 'facts', 'audience', 'voice', 'never'] as $bk) {
             if (isset($in['brain'][$bk])) {
                 $new['brain'][$bk] = trim((string)$in['brain'][$bk]);
@@ -1555,6 +1605,9 @@ $team = array_values(array_filter((array)($settings['team'] ?? [])));
       <a href="?tab=<?= $k ?>" class="<?= $tab === $k ? 'on' : '' ?>"><?= $l ?></a>
     <?php endforeach; ?>
   </nav>
+  <?php $hbAge = pm_social_heartbeat_age(); $hbMin = $hbAge === null ? 0 : intdiv($hbAge, 60);
+  $hbTxt = $hbAge === null ? 'Scheduler has not run yet' : 'Scheduler last ran ' . ($hbMin >= 120 ? intdiv($hbMin, 60) . ' h' : $hbMin . ' min') . ' ago'; ?>
+  <a class="sx-chip <?= $hbAge === null || $hbAge >= 2700 ? ($hbAge !== null && $hbAge >= 7200 ? 'bad' : 'warn') : 'ok' ?>" href="?tab=social&view=accounts" title="Posts go out when the scheduler runs (every 15 to 30 minutes), or when the app is open. See README: SOCIAL."><?= pm_h($hbTxt) ?></a>
   <?php if ($team): ?><form method="post" class="who" data-quiet><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="who"><input type="hidden" name="back" value="<?= pm_h($tab) ?>">
     <select name="who" onchange="this.form.submit()" aria-label="Who is working"><option value="">Working as…</option><?php foreach ($team as $m): ?><option <?= $GLOBALS['PM_WHO'] === $m ? 'selected' : '' ?>><?= pm_h($m) ?></option><?php endforeach; ?></select></form><?php endif; ?>
 </div></header>
@@ -1869,7 +1922,7 @@ $team = array_values(array_filter((array)($settings['team'] ?? [])));
 
 <?php elseif ($tab === 'whatsapp'): require __DIR__ . '/lib/view_whatsapp.php'; ?>
 
-<?php elseif ($tab === 'social'): $sv = (string)($_GET['view'] ?? ''); require __DIR__ . '/lib/' . ($sv === 'accounts' ? 'view_social_accounts.php' : (in_array($sv, ['page', 'inbox', 'audit'], true) ? 'view_social_page.php' : (in_array($sv, ['growth', 'cleanup', 'ads'], true) ? 'view_social_growth.php' : 'view_social.php'))); ?>
+<?php elseif ($tab === 'social'): $sv = (string)($_GET['view'] ?? ''); require pm_social_view_file($sv); ?>
 
 <?php elseif ($tab === 'settings'): require __DIR__ . '/lib/view_settings.php'; ?>
 

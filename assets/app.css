@@ -272,3 +272,56 @@ main:has(.withpage) { max-width:1560px; }
 .repcard { border-left:3px solid #f0b429; } .repcard textarea { margin:6px 0; } .repcard .hint.in { background:var(--okbg); border-radius:8px; padding:6px 9px; }
 .lostf { display:flex; gap:6px; } .lostf select { min-width:0; flex:1; }
 @media (max-width:820px) { .unm { flex-direction:column; } .unm form { max-width:none; } }
+
+/* ---- Social extension kit (shared by the Social modules) ---- */
+.sx-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px; margin-bottom:14px; }
+.sx-card { background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; box-shadow:var(--shadow); }
+.sx-card h3, .sx-card h4 { margin-top:0; }
+.sx-chip { display:inline-block; padding:1px 9px; border-radius:99px; font-size:12px; line-height:1.6; background:var(--bg); border:1px solid var(--line); color:var(--muted); white-space:nowrap; text-decoration:none; }
+.sx-chip.ok { background:var(--okbg); border-color:#cfe3d4; color:var(--ok); font-weight:600; }
+.sx-chip.warn { background:var(--warnbg); border-color:#f0dcaa; color:var(--warn); font-weight:600; }
+.sx-chip.bad { background:#fdecea; border-color:#f3c4bf; color:var(--danger); font-weight:600; white-space:normal; }
+.sx-chips { display:flex; gap:6px; flex-wrap:wrap; margin:4px 0 8px; }
+.sx-table { width:100%; border-collapse:collapse; font-size:13px; }
+.sx-table th { text-align:left; font-weight:600; color:var(--muted); font-size:12px; padding:6px 8px; border-bottom:1px solid var(--line); }
+.sx-table td { padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+.sx-table td.num, .sx-table th.num { text-align:right; font-variant-numeric:tabular-nums; }
+.sx-bar { display:block; height:8px; background:var(--bg); border-radius:99px; overflow:hidden; border:1px solid var(--line); }
+.sx-bar > i { display:block; height:100%; background:var(--accent); border-radius:99px; }
+.spark { display:inline-block; vertical-align:middle; width:96px; height:26px; }
+.spark polyline { fill:none; stroke:var(--accent); stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+.heat td[data-v] { text-align:center; min-width:44px; font-size:12px; background:color-mix(in srgb, var(--accent) calc(var(--v, 0) * 70%), transparent); }
+.sx-toast { position:fixed; left:50%; bottom:70px; transform:translate(-50%,12px); opacity:0; background:#16181d; color:#fff; padding:8px 16px; border-radius:99px; font-size:13px; z-index:60; transition:opacity .2s, transform .2s; pointer-events:none; }
+.sx-toast.on { opacity:.95; transform:translate(-50%,0); }
+
+/* Plan screen */
+.sx-ready > summary { cursor:pointer; list-style:none; }
+.sx-checks { list-style:none; margin:10px 0 0; padding:0; display:grid; gap:6px; }
+.sx-day { margin:20px 0 8px; font-size:15px; }
+.sx-topbar { align-items:center; margin:0 0 10px; }
+.sx-topbar form { display:inline; }
+.sx-pickbox { display:inline-flex; margin:0 6px 0 0; vertical-align:middle; }
+.sx-warn { margin:4px 0 8px; padding-left:18px; color:var(--warn); font-size:12px; }
+.sx-log { list-style:none; margin:8px 0 0; padding:0; font-size:12px; color:var(--muted); }
+.sx-log span { font-variant-numeric:tabular-nums; margin-right:4px; }
+.sx-more { margin:6px 0; }
+.sx-more > summary { font-size:12px; }
+.sx-slides { display:flex; gap:6px; overflow-x:auto; margin:6px 0 8px; padding-bottom:4px; }
+.sx-slides img { height:96px; width:auto; border-radius:6px; border:1px solid var(--line); flex:0 0 auto; }
+.sx-done { border-top:1px solid var(--line); padding:4px 0; }
+.sx-done:first-of-type { border-top:0; }
+.sx-bulk { position:sticky; bottom:0; z-index:15; display:flex; gap:8px; align-items:center; flex-wrap:wrap; background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:10px 14px; margin:12px 0; box-shadow:0 -2px 10px rgba(16,24,40,.08); }
+.sx-bulk:not(.on) .btn.primary, .sx-bulk:not(.on) .btn.danger { opacity:.55; }
+.sx-bulkn { font-weight:600; margin-right:auto; }
+.sx-banner a { color:inherit; text-decoration:underline; }
+header .sx-chip { margin-left:6px; text-decoration:none; }
+
+/* printing: cards, tasks and reports without the app chrome */
+@media print {
+  header, nav, .subnav, .btns, .sx-bulk, .btn, .flash, #busy { display:none !important; }
+  main { max-width:none; padding:0; }
+  .card, .sx-card { box-shadow:none; break-inside:avoid; }
+  .sx-print { display:block !important; }
+}
+.sx-print { }
+@media (max-width:820px) { .sx-bulk { padding:8px 10px; } .sx-grid { grid-template-columns:1fr; } }

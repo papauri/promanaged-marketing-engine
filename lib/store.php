@@ -5,8 +5,12 @@ require_once __DIR__ . '/links.php';
 date_default_timezone_set('Africa/Blantyre');
 
 define('PM_ROOT', dirname(__DIR__));
-define('PM_DATA', PM_ROOT . '/data');
-define('PM_OUT', PM_ROOT . '/output');
+// Test overrides: PM_DATA_DIR / PM_OUT_DIR must be existing dirs, else the real data/ and output/ are used.
+$pm_d = (string)getenv('PM_DATA_DIR');
+$pm_o = (string)getenv('PM_OUT_DIR');
+define('PM_DATA', ($pm_d !== '' && is_dir($pm_d)) ? rtrim(strtr($pm_d, chr(92), '/'), '/') : PM_ROOT . '/data');
+define('PM_OUT', ($pm_o !== '' && is_dir($pm_o)) ? rtrim(strtr($pm_o, chr(92), '/'), '/') : PM_ROOT . '/output');
+unset($pm_d, $pm_o);
 
 
 function pm_load(string $name, callable $default): array
@@ -122,7 +126,7 @@ function pm_env(): array
         return $env;
     }
     $env = [];
-    $file = PM_ROOT . '/.env';
+    $file = (string)getenv('PM_ENV_FILE') !== '' ? (string)getenv('PM_ENV_FILE') : PM_ROOT . '/.env';
     if (is_file($file)) {
         foreach (file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
             $line = trim($line);

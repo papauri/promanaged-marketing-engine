@@ -20,7 +20,7 @@ $status = function (string $k) use ($fb, $li, $cfg): array {
 $built = is_dir(pm_kit_dir($vb)) && glob(pm_kit_dir($vb) . '/*.png');
 ?>
 <h1>Social · <?= pm_h($bname) ?></h1>
-<?= pm_social_nav('accounts') ?>
+<?php $nav = pm_social_nav('accounts'); echo $nav; if (!str_contains($nav, 'sx-banner')) { echo pm_social_banner(); } ?>
 
 <?php $tinfo = $fb['ready'] ? pm_fb_token_info($fb['token']) : null; $e0 = pm_env(); ?>
 <div class="card">
@@ -59,6 +59,18 @@ $built = is_dir(pm_kit_dir($vb)) && glob(pm_kit_dir($vb) . '/*.png');
     </form>
   </details>
   <?php endif; ?>
+</div>
+
+<?php $gi = pm_social_gd_info(); $igT = (array)(pm_social_state()['ig_url_test'][$vb] ?? []); $hb = pm_social_heartbeat_age(); ?>
+<div class="card">
+  <h2>Pictures, Instagram and the scheduler</h2>
+  <p><?= pm_social_gd_ok() ? '<span class="pill hot">Pictures can be drawn</span>' : '<span class="pill warn">Pictures cannot be drawn</span>' ?>
+    GD <?= $gi['gd'] ? 'on' : '<b>missing</b>' ?> · FreeType <?= $gi['freetype'] ? 'on' : '<b>missing</b>' ?> · fonts: <?= $gi['bundled'] ? 'bundled with the app' : ($gi['serif'] !== '' && $gi['sans'] !== '' ? 'from this computer (' . pm_h(basename($gi['serif'])) . ', ' . pm_h(basename($gi['sans'])) . ')' : '<b>none found</b>') ?></p>
+  <?php if (!pm_social_gd_ok()): ?><p class="hint warnt">Posts with a picture wait as "Needs an edit" instead of going out as plain text. Fix: enable the GD extension with FreeType in php.ini, and make sure assets/fonts/serif.ttf and sans.ttf exist (or a system font such as DejaVu is installed).</p><?php endif; ?>
+  <form method="post" class="btns"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_x"><input type="hidden" name="do" value="ig_url_test">
+    <button class="btn small"<?= pm_app_url() === '' ? ' disabled title="Set APP_URL in .env first"' : '' ?>>Test Instagram image URL</button>
+    <span class="hint"><?= pm_app_url() === '' ? 'APP_URL is empty in .env: Instagram cannot fetch pictures until the app is online.' : (empty($igT) ? 'Instagram downloads each picture from ' . pm_h(pm_app_url()) . '/media.php. Press to check it can be reached from outside.' : (!empty($igT['ok']) ? 'OK: ' : 'Problem: ') . pm_h((string)$igT['msg']) . ' · tested ' . date('j M H:i', (int)$igT['at'])) ?></span></form>
+  <p class="hint">Scheduler: <?= $hb === null ? '<b>has not run yet</b>' : 'last ran ' . (intdiv($hb, 60) >= 120 ? intdiv($hb, 3600) . ' h' : intdiv($hb, 60) . ' min') . ' ago' ?>. Posts go out when it runs (every 15 to 30 minutes) or when the app is open. On a website: add a cPanel cron line, see README: SOCIAL.</p>
 </div>
 
 <form method="post" enctype="multipart/form-data">
@@ -134,13 +146,18 @@ $built = is_dir(pm_kit_dir($vb)) && glob(pm_kit_dir($vb) . '/*.png');
     <div class="split" style="margin-bottom:12px">
       <div>
         <input type="hidden" name="proof[<?= $i ?>][id]" value="<?= pm_h((string)($r['id'] ?? '')) ?>"><input type="hidden" name="proof[<?= $i ?>][lead_id]" value="<?= pm_h((string)($r['lead_id'] ?? '')) ?>">
-        <select name="proof[<?= $i ?>][type]" aria-label="Type"><?php foreach (['quote' => 'Quote', 'result' => 'Result', 'photo' => 'Photo or story', 'offer' => 'Offer'] as $k => $l): ?><option value="<?= $k ?>" <?= ($r['type'] ?? 'quote') === $k ? 'selected' : '' ?>><?= $l ?></option><?php endforeach; ?></select>
+        <select name="proof[<?= $i ?>][type]" aria-label="Type"><?php foreach (['quote' => 'Quote', 'result' => 'Result', 'photo' => 'Photo or story', 'offer' => 'Offer', 'stay' => 'Stay (host we may feature)'] as $k => $l): ?><option value="<?= $k ?>" <?= ($r['type'] ?? 'quote') === $k ? 'selected' : '' ?>><?= $l ?></option><?php endforeach; ?></select>
         <textarea name="proof[<?= $i ?>][text]" rows="2" placeholder="Exact words (quote, result or offer)" aria-label="Text"><?= pm_h((string)($r['text'] ?? '')) ?></textarea>
       </div>
       <div>
         <input type="text" name="proof[<?= $i ?>][client_name]" value="<?= pm_h((string)($r['client_name'] ?? '')) ?>" placeholder="Client name" aria-label="Client name">
         <input type="text" name="proof[<?= $i ?>][consent_note]" value="<?= pm_h((string)($r['consent_note'] ?? '')) ?>" placeholder="How consent was given" aria-label="Consent note">
         <input type="date" name="proof[<?= $i ?>][expires]" value="<?= pm_h((string)($r['expires'] ?? '')) ?>" aria-label="Ends on">
+        <input type="text" name="proof[<?= $i ?>][fb_url]" value="<?= pm_h((string)($r['fb_url'] ?? '')) ?>" placeholder="Their Facebook page link" aria-label="Facebook page link">
+        <input type="text" name="proof[<?= $i ?>][ig_handle]" value="<?= pm_h((string)($r['ig_handle'] ?? '')) ?>" placeholder="Instagram handle (no @)" aria-label="Instagram handle">
+        <label class="check"><input type="checkbox" name="proof[<?= $i ?>][tag_ok]" value="1" <?= !empty($r['tag_ok']) ? 'checked' : '' ?>> They are happy to be tagged</label>
+        <input type="hidden" name="proof[<?= $i ?>][host_id]" value="<?= pm_h((string)($r['host_id'] ?? '')) ?>">
+        <?php if (!empty($r['consent_at'])): ?><span class="hint">Consent recorded <?= pm_h((string)$r['consent_at']) ?></span><?php endif; ?>
         <label class="check"><input type="checkbox" name="proof[<?= $i ?>][consent]" value="1" <?= !empty($r['consent']) ? 'checked' : '' ?>> They agreed to be featured</label>
         <?php if (!empty($r['id'])): ?><label class="check"><input type="checkbox" name="proof[<?= $i ?>][delete]" value="1"> Delete</label><?php endif; ?>
       </div>
@@ -149,3 +166,4 @@ $built = is_dir(pm_kit_dir($vb)) && glob(pm_kit_dir($vb) . '/*.png');
     <div class="btns"><button class="btn small primary" name="do" value="proof_save">Save proof bank</button></div>
   </form>
 </div>
+<?= pm_social_panels('accounts', $vb) ?>

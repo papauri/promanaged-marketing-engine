@@ -210,3 +210,83 @@ function pm_agents_extra_defaults(): array
         'run_stale_hours' => 36,  // dead-man: warn when a brand's agent run has not finished for this long
     ];
 }
+
+/* ---------------- Social content defaults (Content tab edits them; data/social_bank.json holds the owner's changes) ---------------- */
+
+/** Content pillars [['name','weight']]. Used when the owner has not saved their own list in Accounts. */
+function pm_default_pillars(string $brand): array
+{
+    $p = $brand === 'travel'
+        ? ['Destination/inspiration' => 35, 'Host tips' => 20, 'Stay spotlight' => 20, 'Practical travel info' => 15, 'Offer' => 10, 'Host sign-up' => 10, 'Guest tips' => 15]
+        : ['Tip/How-to' => 30, 'Local problem story' => 20, 'Proof' => 15, 'Behind the scenes' => 15, 'Offer' => 20, 'Free check' => 10];
+    return array_map(fn($n, $w) => ['name' => $n, 'weight' => $w], array_keys($p), array_values($p));
+}
+
+/** Hashtag bank: local places, niche words and per-pillar tags. Rotated so the same set is not repeated every post. */
+function pm_default_bank_tags(string $brand): array
+{
+    if ($brand === 'travel') {
+        return ['local' => ['#Malawi', '#LakeMalawi', '#Lilongwe', '#Blantyre', '#Mzuzu'],
+            'niche' => ['#MalawiTravel', '#LakeMalawiStays', '#MalawiLodges', '#VisitMalawi', '#WarmHeartOfAfrica', '#TravelMalawi'],
+            'pillar' => ['Destination/inspiration' => ['#ExploreMalawi', '#MalawiTourism'], 'Host tips' => ['#HospitalityTips', '#LodgeOwners'], 'Stay spotlight' => ['#StaySpotlight', '#MalawiStays'],
+                'Practical travel info' => ['#TravelTips', '#MalawiTravelTips'], 'Offer' => ['#StayOffer', '#MalawiGetaway'], 'Host sign-up' => ['#ListYourStay', '#MalawiHosts'],
+                'Guest tips' => ['#TravelTips', '#GuestTips'], 'Giveaway' => ['#MalawiGiveaway'], '_default' => ['#TravelTips']]];
+    }
+    return ['local' => ['#Malawi', '#Lilongwe', '#Blantyre', '#Mzuzu'],
+        'niche' => ['#MalawiBusiness', '#SmallBusinessMalawi', '#ITSupportMalawi', '#MalawiTech', '#BusinessSoftware'],
+        'pillar' => ['Tip/How-to' => ['#BusinessTips', '#SmallBusinessTips'], 'Local problem story' => ['#SMEMalawi', '#BusinessGrowth'], 'Proof' => ['#CustomerStories', '#ClientStory'],
+            'Behind the scenes' => ['#BehindTheScenes', '#MadeInMalawi'], 'Offer' => ['#SpecialOffer', '#BusinessOffer'], 'Free check' => ['#WebsiteTips', '#OnlinePresence'],
+            'Giveaway' => ['#MalawiGiveaway'], '_default' => ['#BusinessTips']]];
+}
+
+/** Starter ideas: general, number-free advice the owner can build on. Switch off in the Content tab. [pillar name => [texts]] */
+function pm_default_ideas(string $brand): array
+{
+    if ($brand === 'travel') {
+        return [
+            'Host tips' => [
+                'Reply to every enquiry as soon as you can, and say clearly what you can offer.',
+                'Put your real photos first: the entrance, the room, the bathroom and the view.',
+                'Write your house rules and check-in time where guests can see them before they book.',
+                'Tell guests how to reach you: the road, a landmark and a WhatsApp number.',
+                'Keep your calendar up to date so a room is never promised twice.',
+                'Tell guests what is nearby: food, water, transport and things to do.',
+                'Ask happy guests for an honest review, and answer every review politely.',
+            ],
+            'Guest tips' => [
+                'Message the host before you travel and confirm the directions and the check-in time.',
+                'Ask whether meals are included, and whether the host can arrange transport.',
+                'Ask the host to send a location pin on WhatsApp so you can find the place easily.',
+                'Check what is nearby before you book: shops, food, a clinic and a fuel station.',
+                'Tell the host your arrival time, especially if you will arrive late.',
+            ],
+            'Practical travel info' => [
+                'Plan long road trips for daylight hours and tell your host when to expect you.',
+                'Keep some cash with you for places far from towns, and ask your host what they accept.',
+            ],
+        ];
+    }
+    return [
+        'Tip/How-to' => [
+            'Count the till at close and compare it with the system total every day.',
+            'Give each staff member their own login so you can see who did what.',
+            'Check your stock against your records once a week, starting with the items that sell fastest.',
+            'Keep a backup of your business data somewhere that is not the same computer.',
+            'Keep your prices in one place so everyone quotes the same amount.',
+            'Reply to every enquiry the same day, even if only to say when you will give a full answer.',
+            'Pick one day a week to review your sales, your expenses and what customers still owe you.',
+        ],
+        'Behind the scenes' => [
+            'Every project starts with a conversation about how you trade today, before we suggest anything.',
+            'We load your products, rooms, menus and staff logins for you, then train your team.',
+        ],
+    ];
+}
+
+/** An empty bank for a brand (the shape of data/social_bank.json[brand]). */
+function pm_default_bank(string $brand): array
+{
+    return ['ideas' => [], 'tags' => ['local' => [], 'niche' => [], 'pillar' => []], 'dates' => [], 'places' => [], 'chichewa' => [], 'banned' => [],
+        'ratio' => ['host' => 50, 'guest' => 50], 'builtin_ideas' => true,
+        'giveaway' => ['prize' => '', 'donor' => '', 'donor_consent' => false, 'start' => '', 'end' => '', 'rules_ok' => false, 'drawn' => []]];
+}

@@ -703,6 +703,9 @@ function pm_web_clean(mixed $v, int $max): string
  * A lead created by a public web form (enquiry, free site check, Travel Malawi host sign-up). Merges into an existing lead
  * of the same brand when any key matches, else adds one. Returns ['id','merged','lead'].
  * $d: brand, kind (enquiry|check|host), name, business, phone, email, website, message, src, type, city, evidence[].
+ * Optional: src_tag (where it came from; src is read as the legacy name), ref (4-character post code), referred_by (lead id), channel (web|whatsapp|facebook|...),
+ * audience (host|traveller|unknown), source ('web' by default), status ('replied' by default), label, note, first_touch_at.
+ * A traveller is not a business: type "traveller", score 40, no proposal. A Travel Malawi enquiry of unknown kind scores 70, no proposal.
  */
 function pm_web_lead(array $d): array
 {
@@ -713,7 +716,16 @@ function pm_web_lead(array $d): array
     $cand = ['name' => $biz, 'website' => (string)($d['website'] ?? ''), 'phone' => (string)($d['phone'] ?? ''), 'whatsapp' => (string)($d['phone'] ?? ''), 'email' => (string)($d['email'] ?? '')];
     $id = pm_lead_find_dupe($leads, $cand, $brand);
     $merged = $id !== null;
-    $label = ['enquiry' => 'Asked via website form', 'check' => 'Asked via website form (free website check)', 'host' => 'Host sign-up via website form'][$d['kind'] ?? 'enquiry'] ?? 'Asked via website form';
+    $label = pm_web_clean($d['label'] ?? '', 100) ?: (['enquiry' => 'Asked via website form', 'check' => 'Asked via website form (free website check)', 'host' => 'Host sign-up via website form'][$d['kind'] ?? 'enquiry'] ?? 'Asked via website form');
+    $aud = in_array($d['audience'] ?? '', ['host', 'traveller', 'unknown'], true) ? $d['audience'] : ($brand === 'travel' ? (($d['kind'] ?? '') === 'host' ? 'host' : 'unknown') : '');
+    $trav = $aud === 'traveller';
+    $soft = $trav || $aud === 'unknown'; // not a business to pitch: no proposal, lower score
+    $srcTag = pm_web_clean(($d['src_tag'] ?? '') ?: ($d['src'] ?? ''), 40);
+    $status = in_array($d['status'] ?? '', ['qualified', 'replied', 'proposal'], true) ? $d['status'] : 'replied';
+    $attr = ['source_post' => '', 'source_ref' => pm_web_clean($d['ref'] ?? '', 8), 'source_pillar' => '', 'source_format' => ''];
+    if (function_exists('pm_lead_attrib')) {
+        $attr = pm_lead_attrib(['brand' => $brand, 'source_ref' => $attr['source_ref']], ($d['message'] ?? '') . ' ' . ($d['business'] ?? '')) + $attr;
+    }
     $ev = array_values(array_unique(array_merge([$label], array_map('strval', array_slice((array)($d['evidence'] ?? []), 0, 8)))));
     $msg = pm_web_clean($d['message'] ?? '', 1500);
     $thread = ['dir' => 'in', 'at' => $now, 'text' => ($msg !== '' ? $msg : $label . (!empty($d['name']) ? ' by ' . $d['name'] : ''))];
@@ -724,10 +736,12 @@ function pm_web_lead(array $d): array
         }
         $leads[$id] = ['id' => $id, 'brand' => $brand, 'name' => $biz, 'type' => pm_web_clean($d['type'] ?? '', 60) ?: 'business', 'city' => pm_web_clean($d['city'] ?? '', 60), 'address' => '',
             'website' => pm_web_clean($d['website'] ?? '', 200), 'phone' => pm_web_clean($d['phone'] ?? '', 60), 'email' => pm_web_clean($d['email'] ?? '', 120), 'whatsapp' => pm_web_clean($d['phone'] ?? '', 60),
-            'contact' => pm_web_clean($d['name'] ?? '', 80), 'contact_title' => '', 'evidence' => $ev, 'need_signals' => [], 'score' => 85, 'status' => 'replied', 'notes' => [], 'drafts' => [],
-            'sent' => [], 'followups' => 0, 'source' => 'web', 'src' => pm_web_clean($d['src'] ?? '', 40), 'want_proposal' => true, 'reason' => $label, 'thread' => [$thread],
-            'last_reply' => $now, 'created' => $now, 'updated' => $now];
-        pm_lead_note($leads[$id], $label . ($msg !== '' ? ': ' . mb_substr($msg, 0, 200) : ''));
+            'contact' => pm_web_clean($d['name'] ?? '', 80), 'contact_title' => '', 'evidence' => $ev, 'need_signals' => [], 'score' => $trav ? 40 : ($soft ? 70 : 85), 'status' => $status, 'notes' => [], 'drafts' => [],
+            'sent' => [], 'followups' => 0, 'source' => pm_web_clean($d['source'] ?? '', 20) ?: 'web', 'src' => pm_web_clean($d['src'] ?? '', 40) ?: $srcTag, 'src_tag' => $srcTag, 'want_proposal' => !$soft, 'reason' => $label, 'thread' => [$thread],
+            'channel' => pm_web_clean($d['channel'] ?? '', 20) ?: 'web', 'audience' => $aud, 'first_touch_at' => pm_web_clean($d['first_touch_at'] ?? '', 40) ?: date('c'), 'first_reply_at' => '',
+            'referred_by' => preg_match('/^[a-f0-9]{12}$/', (string)($d['referred_by'] ?? '')) ? $d['referred_by'] : '',
+            'last_reply' => $now, 'created' => $now, 'updated' => $now] + $attr;
+        pm_lead_note($leads[$id], $label . ($msg !== '' ? ': ' . mb_substr($msg, 0, 200) : '') . (($d['note'] ?? '') !== '' ? ' ' . pm_web_clean($d['note'], 300) : ''));
     } else {
         $L = &$leads[$id];
         foreach (['phone' => 60, 'email' => 120, 'website' => 200, 'contact' => 80] as $f => $max) {
@@ -738,18 +752,43 @@ function pm_web_lead(array $d): array
         $L['evidence'] = array_values(array_unique(array_merge((array)($L['evidence'] ?? []), $ev)));
         $L['thread'][] = $thread;
         $L['last_reply'] = $now;
-        $L['score'] = max(85, (int)($L['score'] ?? 0));
-        $L['want_proposal'] = true;
+        if (!$soft) {
+            $L['score'] = max(85, (int)($L['score'] ?? 0));
+            $L['want_proposal'] = true;
+        }
         $L['source'] = $L['source'] ?? 'web';
+        foreach (['src_tag' => $srcTag, 'source_post' => $attr['source_post'], 'source_ref' => $attr['source_ref'], 'source_pillar' => $attr['source_pillar'], 'source_format' => $attr['source_format']] as $f => $v) {
+            if ($v !== '' && trim((string)($L[$f] ?? '')) === '') {
+                $L[$f] = $v; // the first touch wins: later enquiries never rewrite where a lead came from
+            }
+        }
+        $L['channel'] = $L['channel'] ?? (pm_web_clean($d['channel'] ?? '', 20) ?: 'web');
+        $L['first_touch_at'] = ($L['first_touch_at'] ?? '') ?: date('c');
+        if (empty($L['referred_by']) && preg_match('/^[a-f0-9]{12}$/', (string)($d['referred_by'] ?? '')) && $d['referred_by'] !== $id) {
+            $L['referred_by'] = $d['referred_by'];
+        }
+        if ($aud !== '' && empty($L['audience'])) {
+            $L['audience'] = $aud;
+        }
         if (($L['status'] ?? '') !== 'optout' && ($L['status'] ?? '') !== 'won') {
-            $L['status'] = 'replied'; // they asked us: that beats any cold-outreach state
+            $L['status'] = $status; // they asked us: that beats any cold-outreach state
         }
         unset($L['approved_at']); // never send a cold email to someone who just wrote to us
-        pm_lead_note($L, $label . ' (matched an existing lead)' . ($msg !== '' ? ': ' . mb_substr($msg, 0, 200) : ''));
+        pm_lead_note($L, $label . ' (matched an existing lead)' . ($msg !== '' ? ': ' . mb_substr($msg, 0, 200) : '') . (($d['note'] ?? '') !== '' ? ' ' . pm_web_clean($d['note'], 300) : ''));
         unset($L);
     }
     pm_leads_save($leads);
     return ['id' => $id, 'merged' => $merged, 'lead' => $leads[$id]];
+}
+
+/** Our posts if the social module is loaded, else read from the file (the enquiry page does not load the social code). */
+function pm_social_posts_safe(): array
+{
+    try {
+        return function_exists('pm_social_posts') ? pm_social_posts() : pm_load('social_posts', fn() => []);
+    } catch (Throwable) {
+        return [];
+    }
 }
 
 /** Tell the owner about a web lead: pm_notify_owner() when P2 provides it, else a plain email to the business address. Never throws. */
@@ -761,8 +800,19 @@ function pm_web_notify(array $lead, bool $merged): bool
         $subject = ($merged ? 'Website enquiry (existing lead): ' : 'New website enquiry: ') . preg_replace('/\s+/', ' ', (string)$lead['name']);
         $last = (array)end($lead['thread']);
         $link = pm_app_url() !== '' ? "\n\nOpen it: " . pm_app_url() . '/index.php?tab=agents&brand=' . ($lead['brand'] ?? 'promanaged') . '&lead=' . $lead['id'] : '';
+        $from = function_exists('pm_lead_src_tag') ? pm_lead_src_tag($lead) : (is_string($lead['src'] ?? null) ? $lead['src'] : '');
+        $by = '';
+        if (!empty($lead['referred_by'])) {
+            $rl = pm_leads()[$lead['referred_by']] ?? null;
+            $by = "\nReferred by: " . ($rl['name'] ?? 'an existing client') . ($rl && !empty($rl['contact']) ? ' (' . $rl['contact'] . ')' : '');
+        }
+        $post = '';
+        if (!empty($lead['source_post'])) {
+            $sp = array_values(array_filter(pm_social_posts_safe(), fn($x) => ($x['id'] ?? '') === $lead['source_post']))[0] ?? null;
+            $post = $sp ? "\nCame from our post: " . ($sp['headline'] ?? '') . ' (' . ($sp['pillar'] ?? '') . ')' : '';
+        }
         $body = "Someone asked for you through the website.\n\nBusiness: {$lead['name']}\nName: " . ($lead['contact'] ?? '') . "\nPhone/WhatsApp: " . ($lead['phone'] ?? '') . "\nEmail: " . ($lead['email'] ?? '')
-            . "\nWebsite: " . ($lead['website'] ?? '') . "\nCame from: " . (($lead['src'] ?? '') ?: 'direct') . "\n\nWhat they wrote:\n" . ($last['text'] ?? '')
+            . "\nWebsite: " . ($lead['website'] ?? '') . "\nCame from: " . ($from ?: 'direct') . $post . $by . "\n\nWhat they wrote:\n" . ($last['text'] ?? '')
             . ($lead['evidence'] ? "\n\nNotes:\n- " . implode("\n- ", array_map('strval', (array)$lead['evidence'])) : '') . $link;
         if (function_exists('pm_notify_owner')) {
             try {
@@ -816,6 +866,11 @@ function pm_web_ack(array $lead): bool
     }
 }
 
+foreach (['sx_replies', 'sx_inbound', 'sx_attrib', 'sx_links', 'sx_magnet'] as $m) { // inbound helpers the public enquiry page needs
+    if (is_file(__DIR__ . "/$m.php")) {
+        require_once __DIR__ . "/$m.php";
+    }
+}
 if (is_file(__DIR__ . '/view_outbound.php')) {
     require_once __DIR__ . '/view_outbound.php'; // echo-functions for the Agents and Settings screens
 }

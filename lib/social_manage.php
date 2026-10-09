@@ -5,6 +5,8 @@
  * and an AI page audit that judges the Page, its posts and its replies.
  */
 require_once __DIR__ . '/social_platforms.php';
+require_once __DIR__ . '/sx_replies.php';
+require_once __DIR__ . '/sx_inbound.php';
 
 /** What the app needs from Facebook to manage the Page fully. */
 function pm_fb_scopes(): array
@@ -14,8 +16,14 @@ function pm_fb_scopes(): array
         'pages_manage_posts' => 'publish, edit and delete posts', 'pages_manage_engagement' => 'reply to, like, hide and delete comments', 'pages_manage_metadata' => 'change the profile picture and cover',
         'pages_messaging' => 'read and answer Messenger messages', 'read_insights' => 'reach and impressions for the audit',
         'ads_management' => 'create targeted ads (always paused until you switch them on)', 'ads_read' => 'read ad results',
+        // Instagram: optional (the Page works without them); needed to read and answer Instagram comments and messages
+        'instagram_basic' => 'read your linked Instagram account', 'instagram_manage_comments' => 'read and answer Instagram comments',
+        'instagram_manage_messages' => 'answer Instagram messages (private replies)', 'instagram_manage_insights' => 'Instagram reach and followers',
     ];
 }
+
+/** Permissions that are nice to have: never counted as "missing". */
+const PM_FB_OPTIONAL_SCOPES = ['read_insights', 'ads_management', 'ads_read', 'instagram_basic', 'instagram_manage_comments', 'instagram_manage_messages', 'instagram_manage_insights'];
 
 /* ---------------- .env writing (local file, keeps everything else as it is) ---------------- */
 
@@ -55,7 +63,8 @@ function pm_fb_token_info(string $token): array
     $data = (array)($d['data'] ?? []);
     $scopes = (array)($data['scopes'] ?? []);
     return ['ok' => !empty($data['is_valid']), 'type' => (string)($data['type'] ?? ''), 'scopes' => $scopes,
-        'missing' => array_values(array_diff(array_keys(pm_fb_scopes()), $scopes, ['read_insights', 'ads_management', 'ads_read'])), // insights are a nice-to-have
+        'missing' => array_values(array_diff(array_keys(pm_fb_scopes()), $scopes, PM_FB_OPTIONAL_SCOPES)), // insights, ads and Instagram are nice-to-haves
+        'optional_missing' => array_values(array_intersect(PM_FB_OPTIONAL_SCOPES, array_diff(array_keys(pm_fb_scopes()), $scopes))),
         'expires' => (int)($data['expires_at'] ?? 0), 'error' => !empty($data['is_valid']) ? '' : 'Token is not valid'];
 }
 
@@ -114,7 +123,7 @@ function pm_fb_comment_rows(array $data, string $pageId): array
         $replies = array_map(fn($r) => ['id' => $r['id'], 'from' => $r['from']['name'] ?? 'Someone', 'ours' => ($r['from']['id'] ?? '') === $pageId, 'message' => (string)($r['message'] ?? ''), 'at' => (string)($r['created_time'] ?? '')], (array)($cm['comments']['data'] ?? []));
         $out[] = ['id' => $cm['id'], 'from' => $cm['from']['name'] ?? 'Someone', 'from_id' => (string)($cm['from']['id'] ?? ''), 'ours' => ($cm['from']['id'] ?? '') === $pageId, 'message' => (string)($cm['message'] ?? ''),
             'at' => (string)($cm['created_time'] ?? ''), 'likes' => (int)($cm['like_count'] ?? 0), 'hidden' => !empty($cm['is_hidden']), 'liked' => !empty($cm['user_likes']),
-            'answered' => (bool)array_filter($replies, fn($r) => $r['ours']), 'replies' => $replies];
+            'answered' => (bool)array_filter($replies, fn($r) => $r['ours']), 'answered_at' => (string)(array_values(array_filter($replies, fn($r) => $r['ours']))[0]['at'] ?? ''), 'replies' => $replies];
     }
     return $out;
 }
@@ -155,12 +164,57 @@ function pm_fb_comments(string $brand, string $postId): array
     return $ok ? ['error' => '', 'comments' => pm_fb_comment_rows((array)($d['data'] ?? []), $c['page_id'])] : ['error' => $d, 'comments' => []];
 }
 
-/** Page actions: edit/delete a post, reply/like/unlike/hide/unhide/delete a comment. Returns [ok, message]. */
+/** Marks a judged item as answered now (public reply or private reply). Never throws. */
+function pm_inb_mark_answered(string $brand, string $id): void
+{
+    try {
+        $now = date('c');
+        pm_update('fb_judged', function (array $all) use ($brand, $id, $now) {
+            if (isset($all[$brand][$id])) {
+                $all[$brand][$id]['answered'] = true;
+                $all[$brand][$id]['answered_at'] = ($all[$brand][$id]['answered_at'] ?? '') ?: $now;
+            }
+            return $all;
+        }, fn() => []);
+    } catch (Throwable) {
+    }
+}
+
+/** The lead made from a Facebook/Instagram person gets first_reply_at the first time we answer them. Never throws. */
+function pm_inb_lead_replied(string $brand, string $fromId): void
+{
+    if ($fromId === '') {
+        return;
+    }
+    try {
+        $leads = pm_leads();
+        $lb = $brand === 'travel' ? 'travel' : 'promanaged';
+        $hit = false;
+        foreach ($leads as $k => $l) {
+            if (($l['brand'] ?? 'promanaged') === $lb && ($l['fb_from_id'] ?? '') === $fromId && empty($l['first_reply_at'])) {
+                $leads[$k]['first_reply_at'] = date('c');
+                $hit = true;
+            }
+        }
+        if ($hit) {
+            pm_leads_save($leads);
+        }
+    } catch (Throwable) {
+    }
+}
+
+/** Page actions: edit/delete a post, reply/like/unlike/hide/unhide/delete a comment. Returns [ok, message]. Replies and edits pass pm_reply_lint first. */
 function pm_fb_action(string $brand, string $what, string $id, string $text = ''): array
 {
     $c = pm_social_cfg($brand);
     if (!$c['ready'] || !preg_match('/^[0-9_]+$/', $id)) {
         return [false, 'Not connected, or a bad id.'];
+    }
+    if (in_array($what, ['reply', 'edit'], true)) {
+        $bad = pm_reply_lint($text, $brand, $what === 'edit' ? 'post' : 'reply');
+        if ($bad) {
+            return [false, 'Not posted: ' . implode(' ', $bad)];
+        }
     }
     [$ok, $d] = match ($what) {
         'edit' => pm_graph('POST', $id, ['message' => $text], $c['token']),
@@ -173,7 +227,100 @@ function pm_fb_action(string $brand, string $what, string $id, string $text = ''
         default => [false, 'Unknown action'],
     };
     $labels = ['edit' => 'Post updated.', 'delete' => 'Post deleted from the Page.', 'delete_comment' => 'Comment deleted.', 'reply' => 'Reply posted.', 'like' => 'Liked.', 'unlike' => 'Like removed.', 'hide' => 'Comment hidden (the writer and their friends still see it).', 'unhide' => 'Comment visible again.'];
+    if ($ok && $what === 'reply') {
+        pm_inb_mark_answered($brand, $id);
+        pm_inb_lead_replied($brand, (string)((array)(pm_load('fb_judged', fn() => [])[$brand][$id] ?? [])['from_id'] ?? ''));
+    }
     return $ok ? [true, $labels[$what] ?? 'Done.'] : [false, 'Facebook: ' . $d];
+}
+
+/**
+ * One private reply to a comment, within 7 days of it (Facebook allows exactly one per comment; needs pages_messaging).
+ * Instagram ($platform "ig"): POST {ig_id}/messages with the comment id as recipient. Refuses a second send. Returns [ok, message].
+ */
+function pm_fb_private_reply(string $brand, string $commentId, string $text, string $platform = 'fb'): array
+{
+    $c = pm_social_cfg($brand);
+    if (!$c['ready'] || !preg_match('/^\d+(_\d+)?$/', $commentId)) {
+        return [false, 'Not connected, or not a comment id.'];
+    }
+    $ig = $platform === 'ig';
+    if ($ig && $c['ig_id'] === '') {
+        return [false, 'No Instagram account is linked to this Page.'];
+    }
+    $text = trim($text);
+    if ($text === '') {
+        return [false, 'No text.'];
+    }
+    $bad = pm_reply_lint($text, $brand, 'dm');
+    if ($bad) {
+        return [false, 'Not sent: ' . implode(' ', $bad)];
+    }
+    $row = (array)(pm_load('fb_judged', fn() => [])[$brand][$commentId] ?? []);
+    if (!empty($row['private_reply_at'])) {
+        return [false, 'Already answered privately. Facebook allows one private reply per comment.'];
+    }
+    $at = (string)($row['at'] ?? '');
+    if ($at === '') { // the comment's age, from the cached feed
+        $feed = $ig ? pm_ig_feed($brand) : pm_fb_feed($brand);
+        foreach ($feed['items'] as $post) {
+            foreach ($post['comment_list'] as $cm) {
+                if ($cm['id'] === $commentId) {
+                    $at = $cm['at'];
+                    $row = ['from_id' => $cm['from_id'] ?? '', 'from' => $cm['from'] ?? '', 'text' => $cm['message'] ?? '', 'link' => $post['url'] ?? ''] + $row;
+                }
+            }
+        }
+    }
+    $ts = strtotime($at);
+    if (!$ts) {
+        return [false, 'Could not confirm how old the comment is, so no private reply was sent.'];
+    }
+    if ($ts < pm_inb_now() - 7 * 86400) {
+        return [false, 'That comment is more than 7 days old: Facebook no longer allows a private reply. Use WhatsApp or the public reply.'];
+    }
+    // claim it under the lock so two clicks cannot both send
+    $stop = '';
+    $stub = $row + ['id' => $commentId, 'kind' => 'comment', 'from' => '', 'text' => '', 'at' => $at, 'hidden' => false, 'liked' => false, 'answered' => false, 'post' => '', 'link' => '',
+        'verdict' => 'question', 'action' => 'reply', 'reason' => 'Private reply', 'reply' => '', 'state' => '', 'by' => 'owner', 'platform' => $platform];
+    pm_update('fb_judged', function (array $all) use ($brand, $commentId, $stub, &$stop) {
+        $r = $all[$brand][$commentId] ?? $stub;
+        if (!empty($r['private_reply_at'])) {
+            $stop = 'Already answered privately. Facebook allows one private reply per comment.';
+        } elseif ((int)($r['private_claim'] ?? 0) > time() - 300) {
+            $stop = 'A private reply to this comment is already being sent.';
+        } else {
+            $r['private_claim'] = time();
+            $all[$brand][$commentId] = $r;
+        }
+        return $all;
+    }, fn() => []);
+    if ($stop !== '') {
+        return [false, $stop];
+    }
+    if ($ig) {
+        [$ok, $d] = pm_graph('POST', $c['ig_id'] . '/messages', ['recipient' => json_encode(['comment_id' => $commentId]), 'message' => json_encode(['text' => $text])], $c['token']);
+    } else {
+        [$ok, $d] = pm_graph('POST', $commentId . '/private_replies', ['message' => $text], $c['token']);
+    }
+    $now = date('c');
+    pm_update('fb_judged', function (array $all) use ($brand, $commentId, $ok, $now) {
+        if (isset($all[$brand][$commentId])) {
+            unset($all[$brand][$commentId]['private_claim']);
+            if ($ok) {
+                $all[$brand][$commentId]['private_reply_at'] = $now;
+                $all[$brand][$commentId]['answered_at'] = ($all[$brand][$commentId]['answered_at'] ?? '') ?: $now;
+            }
+        }
+        return $all;
+    }, fn() => []);
+    if ($ok) {
+        pm_inb_lead_replied($brand, (string)($row['from_id'] ?? ''));
+        pm_agent_log('Social', 'Private reply sent to ' . ($row['from'] ?? 'a commenter'));
+        return [true, 'Private reply sent. They get it in ' . ($ig ? 'Instagram messages' : 'Messenger') . '; you cannot send another to this comment.'];
+    }
+    $why = (string)$d;
+    return [false, 'Facebook: ' . $why . (preg_match('/permission|pages_messaging|\(#10\)|\(#200\)/i', $why) ? ' (the token needs pages_messaging' . ($ig ? ' and instagram_manage_messages' : '') . ')' : '')];
 }
 
 /* ---------------- Messenger inbox ---------------- */
@@ -203,11 +350,130 @@ function pm_fb_inbox(string $brand): array
     return ['error' => '', 'threads' => $out];
 }
 
-function pm_fb_message(string $brand, string $psid, string $text): array
+/**
+ * A Messenger answer. Normal replies work within 24 hours of their last message. $human (owner-pressed only, never the autopilot) sends a
+ * human follow-up with the HUMAN_AGENT tag, which Facebook allows from 24 hours up to 7 days after their last message.
+ */
+function pm_fb_message(string $brand, string $psid, string $text, bool $human = false): array
 {
     $c = pm_social_cfg($brand);
-    [$ok, $d] = pm_graph('POST', $c['page_id'] . '/messages', ['recipient' => json_encode(['id' => $psid]), 'messaging_type' => 'RESPONSE', 'message' => json_encode(['text' => $text])], $c['token']);
-    return $ok ? [true, 'Message sent.'] : [false, 'Facebook: ' . $d . (str_contains((string)$d, '24') ? ' (Facebook only allows replies within 24 hours of their last message.)' : '')];
+    if (!$c['ready'] || !preg_match('/^\d+$/', $psid)) {
+        return [false, 'Not connected, or a bad recipient.'];
+    }
+    $bad = pm_reply_lint($text, $brand, 'dm');
+    if ($bad) {
+        return [false, 'Not sent: ' . implode(' ', $bad)];
+    }
+    $note = ' (Facebook only allows replies within 24 hours of their last message.)';
+    $p = ['recipient' => json_encode(['id' => $psid]), 'messaging_type' => 'RESPONSE', 'message' => json_encode(['text' => $text])];
+    if ($human) {
+        if (!empty($GLOBALS['PM_AUTOPILOT'])) {
+            return [false, 'The autopilot never sends human follow-ups.'];
+        }
+        $t = pm_inb_thread($brand, $psid);
+        $last = 0;
+        foreach ((array)($t['messages'] ?? []) as $m) {
+            $last = !$m['ours'] ? strtotime($m['at']) : $last;
+        }
+        $age = $last ? pm_inb_now() - $last : 0;
+        if ($last && $age > 7 * 86400) {
+            return [false, 'More than 7 days since their last message: Facebook does not allow a follow-up from apps. Answer from the Facebook app.'];
+        }
+        if ($last && $age >= 86400) {
+            $p['messaging_type'] = 'MESSAGE_TAG';
+            $p['tag'] = 'HUMAN_AGENT';
+        }
+    }
+    [$ok, $d] = pm_graph('POST', $c['page_id'] . '/messages', $p, $c['token']);
+    if ($ok) {
+        pm_inb_lead_replied($brand, $psid);
+        return [true, 'Message sent.'];
+    }
+    $why = (string)$d;
+    if (isset($p['tag']) && preg_match('/tag|HUMAN_AGENT|outside|window|#10|#200|permission/i', $why)) {
+        return [false, 'Facebook: ' . $why . $note]; // the tag was refused: say what the 24-hour rule is
+    }
+    return [false, 'Facebook: ' . $why . (str_contains($why, '24') ? $note : '')];
+}
+
+/* ---------------- Instagram: comments to answer, followers ---------------- */
+
+/** 'off' (no Instagram linked), 'needs_scope', 'error' or 'ok'. Based on the last cached read. */
+function pm_ig_state(string $brand): string
+{
+    $c = pm_social_cfg($brand);
+    if (!$c['ready'] || $c['ig_id'] === '') {
+        return 'off';
+    }
+    $f = pm_ig_feed($brand);
+    return !empty($f['needs_scope']) ? 'needs_scope' : ($f['error'] !== '' ? 'error' : 'ok');
+}
+
+/**
+ * Our Instagram posts with their comments in one cached call, in the same shape as pm_fb_feed (platform "ig").
+ * No Instagram linked: empty and silent. Missing permission: needs_scope true, never throws.
+ */
+function pm_ig_feed(string $brand): array
+{
+    $c = pm_social_cfg($brand);
+    if (!$c['ready'] || $c['ig_id'] === '') {
+        return ['error' => '', 'items' => [], 'off' => true];
+    }
+    [$ok, $d] = pm_graph('GET', $c['ig_id'] . '/media', ['limit' => 20, 'fields' => 'id,caption,timestamp,like_count,comments_count,permalink,media_type,comments.limit(25){id,text,username,timestamp,replies{id,username}}'], $c['token']);
+    if (!$ok) {
+        $scope = (bool)preg_match('/permission|scope|\(#10\)|\(#200\)|instagram_basic|instagram_manage|OAuth|access token/i', (string)$d);
+        return ['error' => $scope ? 'needs scope: ' . $d : (string)$d, 'items' => [], 'needs_scope' => $scope];
+    }
+    $user = '';
+    [$okU, $dU] = pm_graph('GET', $c['ig_id'], ['fields' => 'username'], $c['token']);
+    if ($okU) {
+        $user = strtolower((string)($dU['username'] ?? ''));
+    }
+    $out = [];
+    foreach ((array)($d['data'] ?? []) as $m) {
+        $cl = [];
+        foreach ((array)($m['comments']['data'] ?? []) as $cm) {
+            $u = (string)($cm['username'] ?? '');
+            $ours = $user !== '' && strtolower($u) === $user;
+            $answered = (bool)array_filter((array)($cm['replies']['data'] ?? []), fn($r) => $user !== '' && strtolower((string)($r['username'] ?? '')) === $user);
+            $cl[] = ['id' => (string)$cm['id'], 'from' => $u ?: 'Someone', 'from_id' => 'ig:' . strtolower($u), 'ours' => $ours, 'message' => (string)($cm['text'] ?? ''), 'at' => (string)($cm['timestamp'] ?? ''),
+                'likes' => 0, 'hidden' => false, 'liked' => false, 'answered' => $answered, 'answered_at' => '', 'replies' => []];
+        }
+        $out[] = ['id' => (string)$m['id'], 'ours' => true, 'platform' => 'ig', 'from' => '', 'hidden' => false, 'message' => (string)($m['caption'] ?? ''), 'at' => (string)($m['timestamp'] ?? ''),
+            'url' => (string)($m['permalink'] ?? ''), 'picture' => '', 'type' => (string)($m['media_type'] ?? ''), 'shares' => 0, 'reactions' => (int)($m['like_count'] ?? 0),
+            'comments' => (int)($m['comments_count'] ?? 0), 'comment_list' => $cl];
+    }
+    return ['error' => '', 'items' => $out];
+}
+
+/** Answers an Instagram comment (POST {comment}/replies). Returns [ok, message]. */
+function pm_ig_reply(string $brand, string $commentId, string $text): array
+{
+    $c = pm_social_cfg($brand);
+    if (!$c['ready'] || $c['ig_id'] === '' || !preg_match('/^\d+$/', $commentId)) {
+        return [false, 'Instagram is not linked, or a bad comment id.'];
+    }
+    $bad = pm_reply_lint($text, $brand, 'reply');
+    if ($bad) {
+        return [false, 'Not posted: ' . implode(' ', $bad)];
+    }
+    [$ok, $d] = pm_graph('POST', $commentId . '/replies', ['message' => $text], $c['token']);
+    if ($ok) {
+        pm_inb_mark_answered($brand, $commentId);
+        pm_inb_lead_replied($brand, (string)((array)(pm_load('fb_judged', fn() => [])[$brand][$commentId] ?? [])['from_id'] ?? ''));
+    }
+    return $ok ? [true, 'Instagram reply posted.'] : [false, 'Instagram: ' . $d . (preg_match('/permission|scope|#10|#200/i', (string)$d) ? ' (needs instagram_manage_comments)' : '')];
+}
+
+/** Followers and post count of the linked Instagram account, or null (not linked, or permission missing). */
+function pm_ig_followers(string $brand): ?array
+{
+    $c = pm_social_cfg($brand);
+    if (!$c['ready'] || $c['ig_id'] === '') {
+        return null;
+    }
+    [$ok, $d] = pm_graph('GET', $c['ig_id'], ['fields' => 'followers_count,media_count'], $c['token']);
+    return $ok ? ['followers' => (int)($d['followers_count'] ?? 0), 'media_count' => (int)($d['media_count'] ?? 0)] : null;
 }
 
 /* ---------------- AI page audit: judges the Page, its posts and its replies ---------------- */
@@ -282,9 +548,10 @@ function pm_agent_page_audit(string $brand): array
     }
     $out['at'] = date('Y-m-d H:i');
     $out['data'] = $data;
-    $all = pm_load('page_audit', fn() => []);
-    $all[$brand] = $out;
-    pm_save('page_audit', $all);
+    pm_update('page_audit', function (array $all) use ($brand, $out) {
+        $all[$brand] = $out;
+        return $all;
+    }, fn() => []);
     return $out;
 }
 
