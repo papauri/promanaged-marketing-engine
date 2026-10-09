@@ -4,6 +4,13 @@ PROMANAGED IT — PROPOSALS
 Make a proposal and/or service agreement PDF for a client, email it, and let the
 client accept and sign online.
 
+MARKETING PLAN
+  MARKETING.md is the working plan for the marketing agents and socials: the gap
+  analysis, the multi-swarm blueprint, and the register of proposed → accepted →
+  done improvements. Claude and Cline read it first in every marketing session;
+  nothing in it is built until the owner accepts it. When the register is empty
+  the file is wiped and the cycle starts over.
+
 START ON THIS COMPUTER
   Double-click start.bat  (opens http://127.0.0.1:8085)
   or:  php -S 127.0.0.1:8000 router.php     (always include router.php)
