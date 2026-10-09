@@ -238,14 +238,18 @@ function pm_verify_email(string $email, string $website = '', bool $fetch = true
 
 /* ---------------- Warm-up cap, bounce breaker, sender-domain check ---------------- */
 
-/** Daily cap that ramps with the age of the mailbox's sending: 3 on day 0, +2 a week, never above the configured send_cap. */
+/** Daily cap that ramps with the age of the mailbox's sending: 3 on day 0, +2 a week, never above the configured send_cap. Then nudged by the trailing bounce rate (adaptive). */
 function pm_effective_send_cap(array $cfg): int
 {
     $cap = (int)($cfg['send_cap'] ?? 10);
     $st = pm_ob_read('send_stats');
     $fs = (string)($st['brands'][pm_brand()]['first_send'] ?? '');
     $days = $fs === '' ? 0 : max(0, (int)floor((strtotime(date('Y-m-d')) - strtotime($fs)) / 86400));
-    return max(0, min($cap, 3 + 2 * intdiv($days, 7)));
+    $base = max(0, min($cap, 3 + 2 * intdiv($days, 7)));
+    if (function_exists('pm_adaptive_send_cap')) { // MARKETING.md MG-G02: bounce-aware drift within the ceiling
+        return pm_adaptive_send_cap($base, pm_brand());
+    }
+    return $base;
 }
 
 function pm_send_stats_mark(): void

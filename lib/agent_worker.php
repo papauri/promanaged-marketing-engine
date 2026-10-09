@@ -36,6 +36,10 @@ try {
         'followup' => pm_agent_followup($job['leads']),
         'research' => pm_agent_research($job['lead']),
         'polish'   => pm_agent_polish($job['p'], $job['line'], $job['package'], $job['lead']),
+        'watch'    => pm_agent_watch($job['brand'], $job['known'] ?? []),
+        'reverify' => pm_agent_reverify($job['leads']),
+        'winback'  => pm_agent_winback($job['leads']),
+        'postsign' => pm_agent_postsign($job['leads']),
         default    => throw new RuntimeException('unknown agent "' . (is_string($job['agent'] ?? null) ? $job['agent'] : '?') . '"'),
     };
     $result = ['ok' => true, 'data' => $data, 'error' => ''];

@@ -144,6 +144,12 @@ function pm_env(): array
     return $env;
 }
 
+/** One env value: the .env file first, then the real environment (tests use putenv). */
+function pm_env_val(string $k): string
+{
+    return trim((string)(pm_env()[$k] ?? getenv($k) ?: ''));
+}
+
 /** True when the mail server details come from .env (the Settings screen then shows them read-only). */
 function pm_smtp_from_env(): bool
 {

@@ -254,14 +254,15 @@ function pm_sx_usage(string $brand, int $days): array
     return $o;
 }
 
-/** Ad spend (Kwacha), conversations, clicks and reach over the last $days days, split into figures read from Facebook and figures typed in. */
-function pm_sx_ads_sum(string $brand, int $days): array
+/** Ad spend (Kwacha), conversations, clicks and reach over a window, split into figures read from Facebook and figures typed in. $skipDays shifts the window back (prev period). */
+function pm_sx_ads_sum(string $brand, int $days, int $skipDays = 0): array
 {
     $d = (array)(pm_load('social_ads_results', fn() => [])[$brand] ?? []);
     $o = ['spend' => 0.0, 'conversations' => 0, 'clicks' => 0, 'reach' => 0, 'api_spend' => 0.0, 'api_conv' => 0, 'manual_spend' => 0.0, 'manual_conv' => 0, 'manual_by' => '', 'campaigns' => []];
-    $since = date('Y-m-d', strtotime('-' . max(0, $days - 1) . ' days'));
+    $since = date('Y-m-d', strtotime('-' . max(0, $days + $skipDays - 1) . ' days'));
+    $until = $skipDays > 0 ? date('Y-m-d', strtotime('-' . $skipDays . ' days')) : '9999-12-31';
     foreach ($d as $day => $camps) {
-        if ($day < $since) {
+        if ($day < $since || $day >= $until) {
             continue;
         }
         foreach ((array)$camps as $name => $r) {
@@ -317,6 +318,23 @@ function pm_sx_ads_hints(array $s, array $g): array
     }
     if ($cpc !== null && (int)$g['max_cost_per_conv_mwk'] > 0 && $cpc > $g['max_cost_per_conv_mwk']) {
         $h[] = 'Cost per conversation is MWK ' . number_format($cpc) . ', above your limit of MWK ' . number_format($g['max_cost_per_conv_mwk']) . ': consider pausing the campaign.';
+    }
+    return $h;
+}
+
+/** MG-S06: freshness and pacing hints from this week vs the week before. Pure. */
+function pm_sx_ads_trend_hints(array $cur, array $prev, array $g): array
+{
+    $h = [];
+    $conv = (int)($cur['conversations'] ?? 0);
+    $prevConv = (int)($prev['conversations'] ?? 0);
+    if ($prevConv >= 6 && $conv < $prevConv * 0.7 && (float)$cur['spend'] >= (float)$prev['spend'] * 0.8) {
+        $h[] = 'Conversations fell from ' . $prevConv . ' to ' . $conv . ' while spend stayed up: refresh the creative (new picture or headline) before changing the budget.';
+    }
+    $cpc = $conv > 0 ? (float)$cur['spend'] / $conv : null;
+    $limit = (int)($g['max_cost_per_conv_mwk'] ?? 0);
+    if ($cpc !== null && $limit > 0 && $cpc <= 0.5 * $limit && $conv >= 3) {
+        $h[] = 'Cost per conversation is well under your limit (MWK ' . number_format($cpc) . ' vs ' . number_format($limit) . '): the ads can safely take more budget.';
     }
     return $h;
 }
@@ -385,7 +403,8 @@ function pm_ads_results(string $brand, bool $refresh = false): array
     $src = $s['api_spend'] > 0 || $s['api_conv'] > 0 ? ($s['manual_spend'] > 0 || $s['manual_conv'] > 0 ? 'both' : 'api') : ($s['manual_spend'] > 0 || $s['manual_conv'] > 0 ? 'manual' : 'none');
     return ['source' => $src, 'connected' => !empty($a['ready']), 'error' => $err, 'spend_mwk' => (int)round($s['spend']), 'conversations' => (int)$s['conversations'], 'clicks' => (int)$s['clicks'], 'reach' => (int)$s['reach'],
         'cost_per_conversation' => $s['conversations'] > 0 ? (int)round($s['spend'] / $s['conversations']) : null, 'cost_per_click' => $s['clicks'] > 0 ? round($s['spend'] / $s['clicks'], 1) : null,
-        'manual_by' => $s['manual_by'], 'campaigns' => $s['campaigns'], 'hints' => pm_sx_ads_hints($s, $g)];
+        'manual_by' => $s['manual_by'], 'campaigns' => $s['campaigns'],
+        'hints' => array_merge(pm_sx_ads_hints($s, $g), function_exists('pm_sx_ads_trend_hints') ? pm_sx_ads_trend_hints($s, pm_sx_ads_sum($brand, 7, 7), $g) : [])];
 }
 
 /** Every six hours at most: refresh the ad numbers when ads are connected. */

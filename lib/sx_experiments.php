@@ -266,10 +266,55 @@ function pm_experiment_autostart(string $brand): ?array
 
 function pm_do_experiment_start(string $vb): array
 {
+    $to = 'social&view=results';
+    if (($_POST['custom'] ?? '') === '1') { // MG-S04: the owner frames their own hypothesis
+        $e = pm_experiment_start_custom($vb, [
+            'slug' => (string)($_POST['slug'] ?? ''), 'hypothesis' => (string)($_POST['hypothesis'] ?? ''),
+            'field' => (string)($_POST['field'] ?? ''), 'min_posts' => (int)($_POST['min_posts'] ?? 4),
+            'A' => ['label' => (string)($_POST['a_label'] ?? ''), 'value' => (string)($_POST['a_value'] ?? ''), 'instruction' => (string)($_POST['a_instruction'] ?? '')],
+            'B' => ['label' => (string)($_POST['b_label'] ?? ''), 'value' => (string)($_POST['b_value'] ?? ''), 'instruction' => (string)($_POST['b_instruction'] ?? '')],
+        ]);
+        return $e ? ['msg' => 'Your experiment started: ' . $e['hypothesis'] . '. The next planned posts alternate between the two ways.', 'kind' => 'ok', 'to' => $to]
+            : ['msg' => pm_experiment_active($vb) ? 'Finish or stop the running experiment first.' : 'Fill in the hypothesis, a supported field (cta, lang, format, hour) and both arms.', 'kind' => 'err', 'to' => $to];
+    }
     $key = (string)($_POST['key'] ?? '');
     $e = pm_experiment_start($vb, $key);
-    return $e ? ['msg' => 'Experiment started: ' . $e['hypothesis'] . '. The next planned posts alternate between the two ways.', 'kind' => 'ok', 'to' => 'social&view=results']
-        : ['msg' => pm_experiment_active($vb) ? 'Finish or stop the running experiment first.' : 'Unknown experiment.', 'kind' => 'err', 'to' => 'social&view=results'];
+    return $e ? ['msg' => 'Experiment started: ' . $e['hypothesis'] . '. The next planned posts alternate between the two ways.', 'kind' => 'ok', 'to' => $to]
+        : ['msg' => pm_experiment_active($vb) ? 'Finish or stop the running experiment first.' : 'Unknown experiment.', 'kind' => 'err', 'to' => $to];
+}
+
+/** The measurable fields an owner-defined experiment may change (the scoreboard can compare these). */
+const PM_SX_EXP_FIELDS = ['cta', 'lang', 'format', 'hour'];
+
+/** Starts an owner-defined experiment. $spec: slug, hypothesis, field, min_posts, A/B {label, value, instruction}. */
+function pm_experiment_start_custom(string $brand, array $spec): ?array
+{
+    if (pm_experiment_active($brand)) {
+        return null;
+    }
+    $field = (string)($spec['field'] ?? '');
+    if (!in_array($field, PM_SX_EXP_FIELDS, true)) {
+        return null;
+    }
+    $arms = [];
+    foreach (['A', 'B'] as $arm) {
+        $a = (array)($spec[$arm] ?? []);
+        if (trim((string)($a['label'] ?? '')) === '' || trim((string)($a['instruction'] ?? '')) === '') {
+            return null;
+        }
+        $arms[$arm] = ['label' => mb_substr(trim((string)$a['label']), 0, 60), 'value' => mb_substr(trim((string)($a['value'] ?? '')), 0, 40),
+            'instruction' => mb_substr(trim((string)$a['instruction']), 0, 200)];
+    }
+    $slug = substr(preg_replace('/[^a-z0-9]/', '', (string)($spec['slug'] ?? 'custom')), 0, 20);
+    $row = ['id' => 'x' . substr(md5($brand . $slug . microtime(true)), 0, 8), 'brand' => $brand, 'key' => 'custom-' . $slug,
+        'hypothesis' => mb_substr(trim((string)($spec['hypothesis'] ?? '')), 0, 160), 'metric' => 'eng', 'field' => $field,
+        'arms' => $arms, 'start' => date('Y-m-d'), 'min_posts' => max(2, min(10, (int)($spec['min_posts'] ?? 4))),
+        'status' => 'active', 'verdict' => '', 'figures' => [], 'learning' => ''];
+    pm_sx_exp_update(function (array $rows) use ($row) {
+        $rows[] = $row;
+        return $rows;
+    });
+    return $row;
 }
 
 function pm_do_experiment_stop(string $vb): array

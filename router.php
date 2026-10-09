@@ -19,6 +19,10 @@ if ($path === '/enquire.php') { // public enquiry form and free website check (n
     require __DIR__ . '/enquire.php';
     return true;
 }
+if ($path === '/wa.php') { // WhatsApp Business responder webhook (off unless configured in .env)
+    require __DIR__ . '/wa.php';
+    return true;
+}
 if (preg_match('#^/assets/[A-Za-z0-9._-]+$#', $path) && is_file(__DIR__ . $path)) {
     return false; // let the built-in server send the static file
 }

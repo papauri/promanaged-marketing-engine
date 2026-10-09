@@ -65,6 +65,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
     <button class="btn">Find</button>
     <button class="btn primary" name="proposal" value="1">Find + proposal</button>
   </form>
+  <form method="post" style="display:inline"><?= $post('', 'export') ?><button class="btn" title="Download all leads of this business as JSON (no mail server details)">Export</button></form>
 </div>
 
 <!-- 2. Run the agents + progress -->
@@ -266,6 +267,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
             <form method="post"><?= $post($id, 'paste_reply') ?><textarea name="text" rows="3" placeholder="Paste what they wrote (WhatsApp or another inbox)"></textarea>
               <select name="ch" aria-label="Where they wrote"><option value="wa">They wrote on WhatsApp</option><option value="email">They wrote by email</option></select><button class="btn small">Draft my answer</button></form></details>
           <form method="post" onsubmit="return confirm('Remove this lead?')"><?= $post($id, 'delete') ?><button class="btn small danger">Remove lead</button></form>
+          <form method="post" onsubmit="return confirm('Forget this lead everywhere (privacy)? Their data is removed; signed history is anonymised.')"><?= $post($id, 'lead_forget') ?><button class="btn small danger">Forget lead (privacy)</button></form>
         </div>
       </details>
     </div>

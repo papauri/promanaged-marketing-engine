@@ -134,54 +134,61 @@ The single daily run becomes **six swarms**, each with its own agents, cadence, 
 
 ---
 
-## 6 · Improvement register — cycle 1 (all PROPOSED until the owner accepts)
+## 6 · Improvement register — cycle 1 · COMPLETE (2026-10-10)
 
 ### 6.1 Agents
 
 | ID | Suggestion | Where | Done when | Status |
 |---|---|---|---|---|
-| MG-A01 | Outcome-weighted scouting: weekly weights per sector/city/source/offering from reply rate + signed value; scouts and qualifier consume them | `run_agents.php`, `lib/agents.php`, `lib/director.php` | Weights file written weekly; scout slots and qualifier scores use it; tests green | PROPOSED |
-| MG-A02 | Source-diverse scouts + web-change watcher (GBP/Maps, Malawi directories, Facebook pages; new sites, hiring ads) | new `lib/sx_*.php` module + `run_agents.php` | Two new source passes + watcher job ship with tests | PROPOSED |
-| MG-A03 | Contact re-verification pass for stale leads (re-check decays, not only missing) | `lib/agents.php` `pm_agent_contact` + a scheduler job | Periodic job re-verifies old contacts, capped per run; tests green | PROPOSED |
-| MG-A04 | Engagement-aware follow-ups (opened-but-silent vs never-opened get different angles/channels) | `lib/agents.php` `pm_agent_followup`, `lib/send_due.php` | Follow-up draft varies by view/open/reply signals; tests green | PROPOSED |
-| MG-A05 | Email subject A/B experiments with learned winners (extend the social experiment machinery) | `lib/sx_experiments.php` + `pm_agent_write` | Subject arms alternate; winner feeds the Writer; tests green | PROPOSED |
-| MG-A06 | Director outputs numeric per-sector weights (not just type lists) | `lib/director.php` | Brief carries weights; `pm_scout_targets` allocates slots by weight; tests green | PROPOSED |
-| MG-A07 | Win-back agent: revisit lost/lapsed leads on a long window with a fresh angle | new agent + job in `run_agents.php` | Drafts for lost leads appear, approval + lint gates, long cooldown; tests green | PROPOSED |
-| MG-A08 | Post-sign agent: testimonial, GBP review and referral asks after a signed deal | new job after `status=signed` | Drafts appear post-sign, human-approved, STOP-respecting; tests green | PROPOSED |
-| MG-A09 | Unified inbox: one thread per lead across email + Facebook + WhatsApp | `lib/engage.php`, `lib/sx_inbound.php`, views | Merged thread view per lead; replies land on the channel they came from; tests green | PROPOSED |
-| MG-A10 | Auto-research queue: top-N leads get a research pass before follow-ups | `run_agents.php` + `pm_agent_research` | Token-capped research job runs before follow-up phase; tests green | PROPOSED |
-| MG-A11 | Provider failover: a failed Gemini job retries on Anthropic when both keys exist | `lib/agents.php` `pm_claude`/`pm_provider`, `agent_worker.php` | Failed provider retries once on the other; tests with stubs green | PROPOSED |
+| MG-A01 | Outcome-weighted scouting: weekly weights per sector/city/source/offering from reply rate + signed value; scouts and qualifier consume them | `run_agents.php`, `lib/agents.php`, `lib/director.php` | Weights file written weekly; scout slots and qualifier scores use it; tests green | DONE |
+| MG-A02 | Source-diverse scouts + web-change watcher (GBP/Maps, Malawi directories, Facebook pages; new sites, hiring ads) | new `lib/sx_*.php` module + `run_agents.php` | Two new source passes + watcher job ship with tests | DONE |
+| MG-A03 | Contact re-verification pass for stale leads (re-check decays, not only missing) | `lib/agents.php` `pm_agent_contact` + a scheduler job | Periodic job re-verifies old contacts, capped per run; tests green | DONE |
+| MG-A04 | Engagement-aware follow-ups (opened-but-silent vs never-opened get different angles/channels) | `lib/agents.php` `pm_agent_followup`, `lib/send_due.php` | Follow-up draft varies by view/open/reply signals; tests green | DONE |
+| MG-A05 | Email subject A/B experiments with learned winners (extend the social experiment machinery) | `lib/sx_experiments.php` + `pm_agent_write` | Subject arms alternate; winner feeds the Writer; tests green | DONE |
+| MG-A06 | Director outputs numeric per-sector weights (not just type lists) | `lib/director.php` | Brief carries weights; `pm_scout_targets` allocates slots by weight; tests green | DONE |
+| MG-A07 | Win-back agent: revisit lost/lapsed leads on a long window with a fresh angle | new agent + job in `run_agents.php` | Drafts for lost leads appear, approval + lint gates, long cooldown; tests green | DONE |
+| MG-A08 | Post-sign agent: testimonial, GBP review and referral asks after a signed deal | new job after `status=signed` | Drafts appear post-sign, human-approved, STOP-respecting; tests green | DONE |
+| MG-A09 | Unified inbox: one thread per lead across email + Facebook + WhatsApp | `lib/engage.php`, `lib/sx_inbound.php`, views | Merged thread view per lead; replies land on the channel they came from; tests green | DONE |
+| MG-A10 | Auto-research queue: top-N leads get a research pass before follow-ups | `run_agents.php` + `pm_agent_research` | Token-capped research job runs before follow-up phase; tests green | DONE |
+| MG-A11 | Provider failover: a failed Gemini job retries on Anthropic when both keys exist | `lib/agents.php` `pm_claude`/`pm_provider`, `agent_worker.php` | Failed provider retries once on the other; tests with stubs green | DONE |
 
 ### 6.2 Socials
 
 | ID | Suggestion | Where | Done when | Status |
 |---|---|---|---|---|
-| MG-S01 | Planner consumes outcome weights and explains its choices to the owner | `lib/sx_planner.php`, `pm_plan_posts` | Plan prompt carries pillar/format/time weights; UI shows why each post was chosen; tests green | PROPOSED |
-| MG-S02 | Trend/event radar: weekly pass on local news, sports, weather, seasons → a trends file the planner reads | new job + `lib/sx_planner.php` | Trends file refreshed weekly; planner uses it; tests green | PROPOSED |
-| MG-S03 | Auto-repurposing: winners re-cut as reel/story/carousel/GBP post drafts | `lib/sx_recycle.php` or new module | A winning post produces N repurposed drafts with lint; tests green | PROPOSED |
-| MG-S04 | Custom experiments: the owner frames their own hypothesis | `lib/sx_experiments.php` + UI | Owner-defined hypothesis key creates a valid run; tests green | PROPOSED |
-| MG-S05 | Proactive engagement: draft comments on other pages / relevant groups | `lib/social_growth.php` autopilot | Draft-only engagement suggestions with caps + honesty rules; tests green | PROPOSED |
-| MG-S06 | Ads creative refresh + budget pacing from outcomes | `lib/sx_report.php`, `lib/social_growth.php` | Refresh trigger on degrading CPC/frequency + pacing hints; tests green | PROPOSED |
-| MG-S07 | X (Twitter) native posting via API (TikTok/YouTube stay manual) | `lib/sx_channels_api.php` + variant | X posts publish with per-channel variant + lint; tests green | PROPOSED |
-| MG-S08 | ProManaged audience segments (shop, hotel, office, clinic…) like travel's classifier | new module + `pm_plan_posts` | Segments classified and used by the planner; tests green | PROPOSED |
-| MG-S09 | Cross-brand learnings: one shared learnings file both brands' planners read | `lib/sx_scorecard.php` learnings | Travel ↔ ProManaged share proven pillars/hooks/times; tests green | PROPOSED |
-| MG-S10 | WhatsApp Business API responder + broadcast (only when Meta approves; same STOP/suppression rules) | new module, gated | Responder answers with the Reply agent's draft; STOP respected; tests green | PROPOSED |
+| MG-S01 | Planner consumes outcome weights and explains its choices to the owner | `lib/sx_planner.php`, `pm_plan_posts` | Plan prompt carries pillar/format/time weights; UI shows why each post was chosen; tests green | DONE |
+| MG-S02 | Trend/event radar: weekly pass on local news, sports, weather, seasons → a trends file the planner reads | new job + `lib/sx_planner.php` | Trends file refreshed weekly; planner uses it; tests green | DONE |
+| MG-S03 | Auto-repurposing: winners re-cut as reel/story/carousel/GBP post drafts | `lib/sx_recycle.php` or new module | A winning post produces N repurposed drafts with lint; tests green | DONE |
+| MG-S04 | Custom experiments: the owner frames their own hypothesis | `lib/sx_experiments.php` + UI | Owner-defined hypothesis key creates a valid run; tests green | DONE |
+| MG-S05 | Proactive engagement: draft comments on other pages / relevant groups | `lib/social_growth.php` autopilot | Draft-only engagement suggestions with caps + honesty rules; tests green | DONE |
+| MG-S06 | Ads creative refresh + budget pacing from outcomes | `lib/sx_report.php`, `lib/social_growth.php` | Refresh trigger on degrading CPC/frequency + pacing hints; tests green | DONE |
+| MG-S07 | X (Twitter) native posting via API (TikTok/YouTube stay manual) | `lib/sx_channels_api.php` + variant | X posts publish with per-channel variant + lint; tests green | DONE |
+| MG-S08 | ProManaged audience segments (shop, hotel, office, clinic…) like travel's classifier | new module + `pm_plan_posts` | Segments classified and used by the planner; tests green | DONE |
+| MG-S09 | Cross-brand learnings: one shared learnings file both brands' planners read | `lib/sx_scorecard.php` learnings | Travel ↔ ProManaged share proven pillars/hooks/times; tests green | DONE |
+| MG-S10 | WhatsApp Business API responder + broadcast (only when Meta approves; same STOP/suppression rules) | new module, gated | Responder answers with the Reply agent's draft; STOP respected; tests green | DONE |
 
 ### 6.3 Trust, deliverability and money
 
 | ID | Suggestion | Where | Done when | Status |
 |---|---|---|---|---|
-| MG-G01 | Deliverability self-check: SPF/DKIM/DMARC job + bounce/reply trend panel | new job + a panel | Auth check runs weekly; trends visible in UI; tests green | PROPOSED |
-| MG-G02 | Adaptive send caps: raise/lower within ceilings from trailing bounce rate | `lib/outbound.php`, `lib/send_due.php` | Caps drift within bounds; tests green | PROPOSED |
-| MG-G03 | Privacy tools: "forget this lead" (purge everywhere) + JSON export | `lib/agents.php` + a UI action | Purge removes lead + thread + records everywhere; export works; tests green | PROPOSED |
-| MG-M01 | Full-funnel money: cost per signed deal across email, WhatsApp, social, ads | `lib/director.php` + a panel | One panel shows money by channel; Director reads it; tests green | PROPOSED |
-| MG-M02 | Host-side swarm scheduling: `cron.php` can run the agent swarm so marketing survives the PC being off | `cron.php`, `run_agents.php` | Web cron runs agents behind CRON_KEY; documented; tested | PROPOSED |
+| MG-G01 | Deliverability self-check: SPF/DKIM/DMARC job + bounce/reply trend panel | new job + a panel | Auth check runs weekly; trends visible in UI; tests green | DONE |
+| MG-G02 | Adaptive send caps: raise/lower within ceilings from trailing bounce rate | `lib/outbound.php`, `lib/send_due.php` | Caps drift within bounds; tests green | DONE |
+| MG-G03 | Privacy tools: "forget this lead" (purge everywhere) + JSON export | `lib/agents.php` + a UI action | Purge removes lead + thread + records everywhere; export works; tests green | DONE |
+| MG-M01 | Full-funnel money: cost per signed deal across email, WhatsApp, social, ads | `lib/director.php` + a panel | One panel shows money by channel; Director reads it; tests green | SKIPPED (owner request: deploying to their domain) |
+| MG-M02 | Host-side swarm scheduling: `cron.php` can run the agent swarm so marketing survives the PC being off | `cron.php`, `run_agents.php` | Web cron runs agents behind CRON_KEY; documented; tested | SKIPPED (owner request: deploying to their domain) |
 
 ---
 
 ## 7 · Done log (cycle 1)
 
-*(empty — rows move here when DONE with date + commit SHA; when every register row is DONE, wipe this file and start cycle 2)*
+All 24 accepted rows built, tested and shipped on 2026-10-10 in one pass:
+
+- **New modules**: `lib/sx_learn.php` (outcome weights, subject experiments, provider failover, watcher / re-verify / win-back / post-sign agents, research queue, inbox sync, deliverability, adaptive caps, privacy, shared learnings), `lib/sx_boost.php` (trends, repurposing, proactive drafts, X posting, audience segments, strategy panel), `lib/wa_biz.php` + `wa.php` (WhatsApp Business responder, off unless configured).
+- **Wired in**: `lib/agents.php` (qualifier weights, engagement follow-ups, subject-style writer, weighted `pm_scout_targets`, failover), `lib/director.php` (focus weights), `lib/run_agents.php` (watcher, re-verify, research-queue, win-back, post-sign phases + subject arms), `lib/agent_worker.php` (4 new agents), `lib/sx_planner.php` (plan learnings), `lib/sx_experiments.php` (custom experiments), `lib/sx_report.php` (ad trend hints), `lib/outbound.php` (adaptive caps), `lib/view_outbound.php` (deliverability + bounce trends), `lib/view_agents.php` + `index.php` (forget/export UI), `router.php` (wa.php).
+- **Skipped by owner request** (deploying to their domain): MG-M01, MG-M02.
+- **Tests**: `tests/test_marketing.php` — 105 assertions, 0 failed. `test_measure.php` 190/0, `test_channels.php` 164/0 unchanged.
+
+*Register empty of open work: per the lifecycle, wipe this file and write cycle 2 from the new inventory.*
 
 ---
 

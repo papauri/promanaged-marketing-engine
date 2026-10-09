@@ -441,7 +441,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (($_POST['bt'] ?? '') === 'whatsapp') {
                 pm_redirect('whatsapp', $m, $k);
             }
-            $noLead = in_array($do, ['delete', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'unapprove_send', 'dismiss_unmatched'], true);
+            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'unapprove_send', 'dismiss_unmatched'], true);
             if ($id !== '' && !$noLead) {
                 pm_redirect(!empty($_POST['rl']) ? 'agents&lead=' . $id : 'agents' . $keep . '#l' . $id, $m, $k);
             }
@@ -459,6 +459,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $back('Add ' . pm_agents_missing_key() . ' to .env first.', 'err');
             }
             $back(pm_agents_launch('names') ? 'Looking for owner and manager names. This page shows progress.' : 'The agents are already running.');
+        }
+        if ($do === 'lead_forget' && $id !== '') { // MARKETING.md MG-G03: privacy
+            $r = function_exists('pm_lead_forget') ? pm_lead_forget($id) : ['ok' => false, 'msg' => 'Not available.'];
+            pm_redirect('agents', $r['msg'], $r['ok'] ? 'ok' : 'err');
+        }
+        if ($do === 'export') { // MARKETING.md MG-G03: JSON export (no secrets)
+            $json = function_exists('pm_data_export') ? pm_data_export(pm_brand()) : '{}';
+            header('Content-Type: application/json; charset=utf-8');
+            header('Content-Disposition: attachment; filename="promanaged-' . pm_brand() . '-export-' . date('Y-m-d') . '.json"');
+            echo $json;
+            exit;
         }
         if ($do === 'config') {
             $list = fn($k) => array_values(array_filter(array_map('trim', explode(',', (string)($_POST['cfg'][$k] ?? '')))));

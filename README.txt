@@ -148,3 +148,6 @@ SOCIAL (tab "Social", per business)
   Settings > Social media: connection steps and an Auto-publish switch. Needs FB_PAGE_ID and FB_PAGE_TOKEN (TM_ for Travel Malawi) in .env;
   IG_USER_ID adds Instagram once the app is online (APP_URL), because Instagram fetches pictures from a web address (media.php).
   Leads now record their Facebook/Instagram and "where they lack online" (no website, inactive page, no online booking) for sharper pitches.
+  X (Twitter): set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET in .env and switch X on in Settings > Social media.
+  WhatsApp auto-answers: set WA_BIZ_TOKEN, WA_BIZ_PHONE_ID, WA_BIZ_VERIFY in .env and point the Meta webhook at /wa.php. It only answers
+  known leads inside the 24-hour window; STOP is honoured forever. Without these keys the feature is completely off.

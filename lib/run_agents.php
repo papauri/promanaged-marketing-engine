@@ -290,7 +290,7 @@ try {
         } elseif ($bs['room'] <= 0) {
             pm_agent_log('Scout', "Skipped: {$bs['added_today']} leads already added today (limit {$cfg['new_per_day']})");
         } else {
-            $targets = array_slice(pm_scout_targets($cfg), 0, max(1, min($bs['room'], (int)$cfg['scouts_per_day'])));
+            $targets = array_slice(pm_scout_targets($cfg, function_exists('pm_director_focus_weights') ? pm_director_focus_weights() : null), 0, max(1, min($bs['room'], (int)$cfg['scouts_per_day'])));
             $want = max(2, (int)ceil($bs['room'] * 1.5 / max(1, count($targets))));
             $progress('Scouts searching ' . count($targets) . ' areas');
             $jobs = [];
@@ -355,6 +355,52 @@ try {
         }
     }
 
+    // ---- 1b. Web-change watcher: fresh signals a normal sweep may have missed (one call per brand per day) ----
+    if ($cfg['enabled']['scout'] && !$bs['pause'] && $stats['added'] < $bs['room']) {
+        $ws = pm_load('watch_state', fn() => []);
+        if (($ws[$brand] ?? '') !== date('Y-m-d')) {
+            $progress('Watcher looking for fresh signals');
+            try {
+                $known = array_slice(array_map(fn($l) => (string)$l['name'], $leads), -200);
+                foreach (array_slice(pm_agent_watch($brand, $known), 0, 4) as $b) {
+                    if ($stats['added'] >= $bs['room']) {
+                        break;
+                    }
+                    $c = trim((string)($b['city'] ?? '')) ?: (string)($cfg['cities'][0] ?? '');
+                    $pool = array_replace($all, $leads);
+                    $cand = ['name' => trim((string)$b['name']), 'brand' => $brand, 'type' => (string)($b['type'] ?? ''),
+                        'website' => (string)($b['website'] ?? ''), 'phone' => (string)($b['phone'] ?? ''), 'email' => (string)($b['email'] ?? '')];
+                    $dupe = pm_lead_find_dupe($pool, $cand, $brand);
+                    if ($dupe !== null) {
+                        if (isset($leads[$dupe]) && pm_lead_merge_missing($leads[$dupe], $b)) {
+                            $stats['merged'] = ($stats['merged'] ?? 0) + 1;
+                        }
+                        continue;
+                    }
+                    if ($brand === 'promanaged' && array_filter((array)($cfg['existing_clients'] ?? []), fn($x) => $x !== '' && stripos((string)$b['name'], (string)$x) !== false)) {
+                        continue;
+                    }
+                    $id = pm_lead_id(trim((string)$b['name']), $c, $brand);
+                    $leads[$id] = [
+                        'id' => $id, 'brand' => $brand, 'name' => trim((string)$b['name']), 'type' => (string)($b['type'] ?? ''), 'city' => $c,
+                        'address' => '', 'website' => (string)($b['website'] ?? ''), 'phone' => (string)($b['phone'] ?? ''), 'email' => (string)($b['email'] ?? ''), 'whatsapp' => '',
+                        'contact' => '', 'contact_title' => '', 'evidence' => array_values((array)($b['evidence'] ?? [])),
+                        'facebook' => (string)($b['facebook'] ?? ''), 'instagram' => '', 'social_gaps' => array_values(array_filter(array_map('strval', (array)($b['social_gaps'] ?? [])))),
+                        'need_signals' => array_values((array)($b['need_signals'] ?? [])), 'offering' => pm_clean_offering($b['offering'] ?? ''), 'score' => 0, 'status' => 'new',
+                        'notes' => [], 'drafts' => [], 'sent' => [], 'followups' => 0, 'created' => date('Y-m-d H:i'), 'updated' => date('Y-m-d H:i'),
+                        'src' => ['kind' => 'watch'],
+                    ];
+                    $stats['added']++;
+                    $stats['watched'] = ($stats['watched'] ?? 0) + 1;
+                }
+                $save();
+            } catch (Throwable $e) {
+                pm_agent_log('Watcher', 'failed: ' . $e->getMessage(), true);
+            }
+            pm_save('watch_state', [$brand => date('Y-m-d')] + $ws);
+        }
+    }
+
     // ---- 2. Contact finders (new leads) ----
     // A search is only paid for when the lead still lacks an email or a named owner/manager (a name makes the message far more likely to be read). Capped for cost.
     // "names" mode skips leads already searched in the last 30 days.
@@ -415,6 +461,39 @@ try {
         $save();
     }
 
+    // ---- 2b. Contact re-verification: old leads whose published details may have changed ----
+    if ($cfg['enabled']['contact']) {
+        $stale = pm_reverify_due($leads, 3);
+        if ($stale) {
+            $progress('Re-checking ' . count($stale) . ' old contact details');
+            $jobs = array_map(fn($b) => ['agent' => 'reverify', 'leads' => $b], array_chunk($stale, 3));
+            foreach (pm_swarm_retry($jobs, $cfg['parallel'], $tmp, $beat, 'leads') as $r) {
+                if (!$r['ok'] || empty($r['data'])) {
+                    continue;
+                }
+                foreach ($r['data'] as $d) {
+                    $id = (string)($d['id'] ?? '');
+                    if (!isset($leads[$id])) {
+                        continue;
+                    }
+                    $leads[$id]['contact_checked_at'] = date('Y-m-d H:i');
+                    $newEmail = strtolower(trim((string)($d['email'] ?? '')));
+                    if ($newEmail !== '' && filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
+                        $cur = strtolower((string)($leads[$id]['email'] ?? ''));
+                        if ($cur === '' || (!empty($leads[$id]['email_bad']) && $cur !== $newEmail)) {
+                            $leads[$id]['email'] = $newEmail;
+                            unset($leads[$id]['email_bad']);
+                            pm_lead_note($leads[$id], 'Contact re-verified: new address ' . $newEmail);
+                            $stats['reverified'] = ($stats['reverified'] ?? 0) + 1;
+                        }
+                    }
+                    pm_apply_contact($leads[$id], $d);
+                }
+            }
+            $save();
+        }
+    }
+
     // ---- 3. Qualifiers ----
     $todo = array_values(array_filter($leads, fn($l) => $l['status'] === 'new'));
     if ($cfg['enabled']['qualifier'] && $todo) {
@@ -452,6 +531,10 @@ try {
     $rs = array_values(array_filter($leads, fn($l) => in_array($l['status'], ['qualified', 'new'], true) && ($l['score'] ?? 0) >= 65 && empty($l['research'])));
     usort($rs, fn($a, $b) => $b['score'] <=> $a['score']);
     $rs = array_slice($rs, 0, (int)($cfg['research_per_day'] ?? 5));
+    if (function_exists('pm_research_queue')) { // follow-up-bound and proposal-bound leads get a fresh research pass too
+        $extra = array_filter(pm_research_queue($leads, 2), fn($l) => !in_array((string)($l['id'] ?? ''), array_column($rs, 'id'), true));
+        $rs = array_merge($rs, array_values($extra));
+    }
     if (($cfg['enabled']['research'] ?? true) && $rs && !$hold) {
         $progress('Researchers studying ' . count($rs) . ' businesses');
         $jobs = array_map(fn($l) => ['agent' => 'research', 'lead' => $l], $rs);
@@ -488,6 +571,7 @@ try {
                 if (isset($leads[$id]) && !empty($w['email_body'])) {
                     $L = $leads[$id];
                     $leads[$id]['drafts'] = ['email_subject' => (string)$w['email_subject'], 'email_body' => (string)$w['email_body'], 'whatsapp' => (string)($w['whatsapp'] ?? '')];
+                    $leads[$id]['email_arm'] = function_exists('pm_email_exp_arm') ? pm_email_exp_arm((string)$id, $brand) : 'A'; // subject experiment arm
                     $leads[$id]['variant'] = ['angle' => mb_substr((string)($L['pain'] ?? ''), 0, 60), 'research' => !empty($L['research']), 'named' => !empty($L['contact']),
                         'channel_first' => !empty($L['email']) ? 'email' : 'whatsapp']; // what was tried, so the Director can learn what gets replies
                     $leads[$id]['status'] = 'drafted';
@@ -550,6 +634,50 @@ try {
                 if (isset($leads[$id]) && !empty($w['email_body'])) {
                     $leads[$id]['followup_draft'] = ['email_subject' => (string)$w['email_subject'], 'email_body' => (string)$w['email_body'], 'whatsapp' => (string)($w['whatsapp'] ?? '')];
                     $stats['followups']++;
+                }
+            }
+        }
+        $save();
+    }
+
+    // ---- 6. Win-back: one fresh angle for lost leads, on a long cooldown ----
+    $wbDue = function_exists('pm_winback_due') ? pm_winback_due($leads, 2) : [];
+    if ($wbDue) {
+        $progress('Win-back agent on ' . count($wbDue) . ' lost leads');
+        $jobs = array_map(fn($b) => ['agent' => 'winback', 'leads' => $b], array_chunk($wbDue, 2));
+        foreach (pm_swarm_retry($jobs, $cfg['parallel'], $tmp, $beat, 'leads') as $r) {
+            if (!$jobFailed($r, 'Win-back', '')) {
+                continue;
+            }
+            foreach ($r['data'] as $w) {
+                $id = (string)($w['id'] ?? '');
+                if (isset($leads[$id]) && !empty($w['email_body'])) {
+                    $leads[$id]['winback_draft'] = ['email_subject' => (string)$w['email_subject'], 'email_body' => (string)$w['email_body'], 'whatsapp' => (string)($w['whatsapp'] ?? '')];
+                    $leads[$id]['winback_at'] = date('Y-m-d');
+                    pm_lead_note($leads[$id], 'Win-back draft ready: review and send if the time is right');
+                    $stats['winbacks'] = ($stats['winbacks'] ?? 0) + 1;
+                }
+            }
+        }
+        $save();
+    }
+
+    // ---- 7. Post-sign: testimonial, review and referral asks after a signed deal ----
+    $psDue = function_exists('pm_postsign_due') ? pm_postsign_due($leads, 3) : [];
+    if ($psDue) {
+        $progress('Post-sign agent on ' . count($psDue) . ' new clients');
+        $jobs = array_map(fn($b) => ['agent' => 'postsign', 'leads' => $b], array_chunk($psDue, 3));
+        foreach (pm_swarm_retry($jobs, $cfg['parallel'], $tmp, $beat, 'leads') as $r) {
+            if (!$jobFailed($r, 'Post-sign', '')) {
+                continue;
+            }
+            foreach ($r['data'] as $w) {
+                $id = (string)($w['id'] ?? '');
+                if (isset($leads[$id]) && !empty($w['testimonial'])) {
+                    $leads[$id]['postsign'] = ['testimonial' => (string)$w['testimonial'], 'review' => (string)($w['review'] ?? ''), 'referral' => (string)($w['referral'] ?? '')];
+                    $leads[$id]['postsign_at'] = date('Y-m-d');
+                    pm_lead_note($leads[$id], 'Post-sign asks ready: testimonial, Google review and referral');
+                    $stats['postsigns'] = ($stats['postsigns'] ?? 0) + 1;
                 }
             }
         }

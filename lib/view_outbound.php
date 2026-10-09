@@ -70,6 +70,12 @@ function pm_view_email_health(): void
       <?php foreach ($a['advice'] as $t): ?><p class="hint"><?= pm_h($t) ?></p><?php endforeach; ?>
       <p>Daily limit now: <b><?= $cap ?></b> <span class="muted">(you allowed up to <?= (int)$cfg['send_cap'] ?>; it starts at 3 and rises by 2 each week of sending<?= $fs !== '' ? ', first email sent ' . pm_h($fs) : ', no email sent yet' ?>)</span></p>
       <p><span class="pill <?= $br['blocked'] ? 'warn' : 'hot' ?>"><?= $br['blocked'] ? 'Sending paused' : 'Bounce check OK' ?></span> <span class="muted"><?= pm_h($br['why']) ?></span></p>
+      <?php if (function_exists('pm_bounce_rate7')): $tr = pm_bounce_rate7(pm_leads(), pm_brand()); ?>
+        <p class="hint">Last 14 days: <?= (int)$tr['sends'] ?> sent, <?= (int)$tr['bounces'] ?> bounced (<?= $tr['sends'] ? round(100 * $tr['rate'], 1) : 0 ?>%). The daily limit drifts down on bouncy weeks and up on clean ones.</p>
+      <?php endif; ?>
+      <?php if (function_exists('pm_deliverability')): foreach (pm_deliverability() as $dom => $v): if (($v['day'] ?? '') === date('Y-m-d')): ?>
+        <p class="hint"><?= pm_h($dom) ?> (checked today): SPF <?= pm_h($v['spf']) ?> · DKIM <?= pm_h($v['dkim']) ?> · DMARC <?= pm_h($v['dmarc']) ?></p>
+      <?php endif; endforeach; endif; ?>
     </div>
     <?php
 }

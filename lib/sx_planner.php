@@ -467,7 +467,10 @@ function pm_sx_build(string $brand, int $n, string $start, string $focus, bool $
             $items[] = $it;
         }
         $learn = '';
-        if (function_exists('pm_social_learnings')) {
+        if (function_exists('pm_plan_learnings')) { // MARKETING.md MG-S01: outcomes, trends, cross-brand lessons and the audience mix
+            $learn = trim((string)pm_plan_learnings($brand));
+        }
+        if ($learn === '' && function_exists('pm_social_learnings')) {
             $learn = trim((string)pm_social_learnings($brand));
         }
         if ($learn === '' && function_exists('pm_audit_learnings')) {

@@ -314,8 +314,9 @@ function pm_claude(string $system, string $user, bool $web = false, int $maxToke
     if (getenv('PM_TEST')) {
         throw new RuntimeException('AI not stubbed');
     }
-    return pm_provider($web) === 'gemini' ? pm_gemini($system, $user, $web, $maxTokens, $tier) : pm_anthropic($system, $user, $web, $maxTokens, $tier);
+    return pm_ai_call($web, $system, $user, $maxTokens, $tier);
 }
+require_once __DIR__ . '/sx_learn.php';
 
 /* ---------------- Spend control: every call is counted against a daily token budget ---------------- */
 
@@ -883,7 +884,7 @@ function pm_agent_qualify(array $leads): array
             . "Above 70 needs concrete evidence. " . PM_AGENT_RULES;
     } else {
         $system = pm_agents_company_brief('full') . "\nYou are the Qualifier. Score each lead 0-100 on need and ability to pay (size, manual processes, reachable decision maker, package fit). Be sceptical: above 70 needs concrete evidence. "
-            . "Pick the package index and the best pain point/need; the package must match what they need. " . PM_AGENT_RULES;
+            . "Pick the package index and the best pain point/need; the package must match what they need. " . pm_learn_qualifier_line(pm_brand()) . PM_AGENT_RULES;
     }
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'evidence' => array_slice($l['evidence'] ?? [], 0, 2),
         'signals' => array_slice($l['need_signals'] ?? [], 0, 2), 'reachable' => !empty($l['email']) || !empty($l['phone'])], $leads);
@@ -922,21 +923,33 @@ function pm_agent_write(array $leads): array
         ? "Invite the stay to list on {$s['company_name']} free; the gain is direct bookings with no commission. "
         : "";
     $sender = pm_sender_name();
-    $system = pm_agents_company_brief('tiny') . "\nYou are writing outreach for {$s['company_name']} as " . ($sender !== '' ? "$sender (use this first name: " . explode(' ', $sender)[0] . ")" : "a member of the team (no personal name: introduce the company instead)") . ". $ask" . PM_EMAIL_CRAFT . " " . PM_AGENT_RULES;
+    $subjectLine = function_exists('pm_email_exp_example') ? pm_email_exp_example(pm_brand()) : '';
+    $system = pm_agents_company_brief('tiny') . "\nYou are writing outreach for {$s['company_name']} as " . ($sender !== '' ? "$sender (use this first name: " . explode(' ', $sender)[0] . ")" : "a member of the team (no personal name: introduce the company instead)") . ". $ask" . PM_EMAIL_CRAFT . ' ' . ($subjectLine !== '' ? $subjectLine . ' ' : '') . PM_AGENT_RULES;
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'city' => $l['city'], 'contact' => $l['contact'] ?? '',
         'evidence' => array_slice($l['evidence'] ?? [], 0, 2), 'online_gaps' => array_slice($l['social_gaps'] ?? [], 0, 2), 'research' => pm_research_brief($l), 'lead_with' => $l['pain'] ?? '', 'how_it_stops' => pm_fix_for((string)($l['pain'] ?? ''))], $leads);
     return pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
         . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}. Never greet with the business name.", false, 2500, 'write')));
 }
 
-/** FOLLOW-UP: a short nudge for leads that have gone quiet. */
+/** FOLLOW-UP: a short nudge for leads that have gone quiet. Engagement-aware: opened-but-silent, never-opened and replied-then-quiet get different angles. */
 function pm_agent_followup(array $leads): array
 {
     $s = pm_settings();
     $system = pm_agents_company_brief('tiny') . "\nYou are the Follow-up agent for {$s['company_name']}. Write a 40-word follow-up email and 25-word WhatsApp that add ONE new angle (a different gain, or a one-page plan offer). "
+        . "Match the state: for \"opened\" (they opened our proposal or email but stayed quiet) gently reference what they saw and add one new, true reason; for \"silent\" (never engaged) be shorter and lead with one specific fact about their business; for \"replied\" pick up their last words, never repeat a whole earlier message. "
         . "No prices, no guilt, no pressure, no urgency. Plain text, no sign-off. " . PM_AGENT_RULES;
-    $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'contact' => $l['contact'] ?? '', 'used' => mb_substr($l['drafts']['email_body'] ?? '', 0, 220)], $leads);
+    $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'contact' => $l['contact'] ?? '', 'used' => mb_substr($l['drafts']['email_body'] ?? '', 0, 220),
+        'state' => pm_lead_engagement((array)$l), 'views' => (int)($l['view_count'] ?? 0), 'last_seen' => (string)($l['last_viewed_at'] ?? '')], $leads);
     return pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}", false, 1800)));
+}
+
+/** One word for the follow-up writer: 'replied', 'opened' or 'silent'. */
+function pm_lead_engagement(array $l): string
+{
+    if (!empty($l['last_reply']) || pm_lead_replied($l)) {
+        return 'replied';
+    }
+    return !empty($l['view_count']) || !empty($l['last_viewed_at']) || !empty($l['opened_at']) ? 'opened' : 'silent';
 }
 
 /**
@@ -1684,8 +1697,8 @@ function pm_lead_merge_missing(array &$into, array $b): bool
     return $changed;
 }
 
-/** Today's sector x city searches. Rotates so every combination is visited over time. */
-function pm_scout_targets(array $cfg): array
+/** Today's sector x city searches. Rotates so every combination is visited over time. $weights: Director's numeric per-type weights (0..100) — searches are allocated proportionally. */
+function pm_scout_targets(array $cfg, ?array $weights = null): array
 {
     // Types the Director says to search less of are left out today (never below 2 types).
     $drop = function_exists('pm_director_drop') ? pm_director_drop() : [];
@@ -1704,11 +1717,19 @@ function pm_scout_targets(array $cfg): array
     if (!$combos) {
         return [];
     }
-    // Different business type and city on every search; the pairing shifts each day so all combinations come round.
     $S = count($cfg['sectors']);
     $C = max(1, count($cfg['cities']));
     $n = min($cfg['scouts_per_day'], count($combos));
     $day = (int)floor(time() / 86400);
+    if ($weights) { // the Director's numeric weights decide how many slots each type gets
+        $sectors = pm_weighted_pick($cfg['sectors'], $weights, $n, $day * $n);
+        $out = [];
+        for ($i = 0; $i < $n; $i++) {
+            $out[] = [$sectors[$i], $cfg['cities'][($day * 7 + $i * 3) % $C]];
+        }
+        return $out;
+    }
+    // Different business type and city on every search; the pairing shifts each day so all combinations come round.
     $out = [];
     for ($i = 0; $i < $n; $i++) {
         $k = $day * $n + $i;

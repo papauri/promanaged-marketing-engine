@@ -231,7 +231,7 @@ function pm_director_brief(bool $force = false): array
     $system = pm_agents_company_brief('tiny') . "\nYou are the Marketing Director. From the pipeline numbers, decide what will bring the most qualified replies and signed deals at the least effort and AI spend. "
         . "Be concrete and honest: if there is too little data to judge, say so and say what to collect. Never suggest spam, pressure or fake urgency. Think like a sales lead: in Malawi, small businesses usually answer a WhatsApp message or a phone call faster than an email, so recommend the channel mix and a daily rhythm for the marketing team (who to call first, when to follow up). Prefer leads with a named decision maker. "
         . "Replies from people who wrote to us first (inbound) are not outreach results. If backlog is high, say to send or clear drafts before finding more leads. "
-        . "Reply JSON only: {\"headline\":\"one sentence\",\"priorities\":[\"3 to 5 specific actions for today\"],\"focus\":[\"up to 3 business types from segments or target_types to search more of\"],\"drop\":[\"types to search less of, or empty\"],\"experiment\":\"one small thing to test this week\"";
+        . "Reply JSON only: {\"headline\":\"one sentence\",\"priorities\":[\"3 to 5 specific actions for today\"],\"focus\":[\"up to 3 business types from segments or target_types to search more of\"],\"drop\":[\"types to search less of, or empty\"],\"experiment\":\"one small thing to test this week\",\"focus_weights\":{\"type\":0 to 100, how many of today's searches each type deserves, only for types in target_types}\"";
     $ai = $stats; // by_src can be long: only the five biggest sources go to the AI
     $ai['by_src'] = array_slice($ai['by_src'] ?? [], 0, 5, true);
     $ai['won_value_by_src'] = array_slice($ai['won_value_by_src'] ?? [], 0, 5, true);
@@ -261,10 +261,23 @@ function pm_director_brief(bool $force = false): array
         return $show($keep, $keep['error']);
     }
     $list = fn($k) => array_values(array_filter(array_map('strval', (array)($out[$k] ?? []))));
+    $norm = fn(string $s) => preg_replace('/[^a-z0-9]/', '', strtolower(str_replace('&', 'and', $s)));
+    $weights = [];
+    foreach ((array)($out['focus_weights'] ?? []) as $k => $v) {
+        if (!is_string($k) || $k === '' || !is_numeric($v)) {
+            continue;
+        }
+        foreach ($cfg['sectors'] as $sec) { // only types we actually target; matched on normalised text (case, & / and, spaces)
+            if ($norm((string)$k) === $norm((string)$sec)) {
+                $weights[(string)$sec] = max(0, min(100, (int)$v));
+                break;
+            }
+        }
+    }
     $brief = [
         'date' => date('Y-m-d'), 'stats' => $stats, 'headline' => (string)$out['headline'],
         'priorities' => $list('priorities'), 'focus' => $list('focus'), 'drop' => $list('drop'), 'experiment' => (string)($out['experiment'] ?? ''),
-    ];
+    ] + ($weights ? ['focus_weights' => $weights] : []);
     if ($social) { // the social part of the reply: a valid focus key and one note
         $sf = (string)($out['social_focus'] ?? '');
         if (defined('PM_SOCIAL_FOCUS') && isset(PM_SOCIAL_FOCUS[$sf])) {
@@ -283,6 +296,20 @@ function pm_director_today(): array
 {
     $mine = (pm_load('director', fn() => [])[pm_brand()] ?? []);
     return ($mine['date'] ?? '') === date('Y-m-d') ? $mine : [];
+}
+
+/** Today's focus weights from the Director (type => 0..100), or [] when the brief carries none. */
+function pm_director_focus_weights(): array
+{
+    $b = pm_director_today();
+    $w = (array)($b['focus_weights'] ?? []);
+    $out = [];
+    foreach ($w as $k => $v) {
+        if (is_string($k) && $k !== '' && is_numeric($v)) {
+            $out[$k] = max(0, min(100, (int)$v));
+        }
+    }
+    return $out;
 }
 
 /** Business types the Director wants searched more today (only ones already in the brand's target list; a segment name maps to the targets in it). */
