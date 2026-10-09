@@ -18,6 +18,7 @@ $status = function (string $k) use ($fb, $li, $cfg): array {
     };
 };
 $built = is_dir(pm_kit_dir($vb)) && glob(pm_kit_dir($vb) . '/*.png');
+$stepHtml = fn(string $t): string => preg_match('/^([^:]{3,48}):\s(.+)$/su', $t, $m) ? '<b>' . pm_h($m[1]) . ':</b> ' . pm_h($m[2]) : pm_h($t); // bold the lead-in so the steps scan quickly
 ?>
 <h1>Social · <?= pm_h($bname) ?></h1>
 <?php $nav = pm_social_nav('accounts'); echo $nav; if (!str_contains($nav, 'sx-banner')) { echo pm_social_banner(); } ?>
@@ -36,26 +37,37 @@ $built = is_dir(pm_kit_dir($vb)) && glob(pm_kit_dir($vb) . '/*.png');
       <?php foreach ($_SESSION['fb_pages'] as $pgx): ?><label class="check"><input type="radio" name="page" value="<?= pm_h($pgx['id']) ?>"> <?= pm_h($pgx['name']) ?> <span class="muted">(<?= pm_h($pgx['id']) ?>)</span></label><?php endforeach; ?>
       <div class="btns"><button class="btn primary">Use this Page</button></div></form>
   <?php else: ?>
-  <details <?= (!$tinfo || $tinfo['type'] !== 'PAGE' || $tinfo['missing']) ? 'open' : '' ?>><summary>Connect in one step (recommended)</summary>
-    <ol class="steps">
-      <li><b>Get the App ID and App Secret:</b>
-        <ol>
-          <li>Open <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer">developers.facebook.com/apps</a> and log in with the Facebook account that manages the Page.</li>
-          <li>Click the app you made for the Page (the one chosen in Graph API Explorer). No app yet? Press <b>Create app</b>, choose "Other" then "Business", give it a name such as "<?= pm_h($bname) ?> Manager", and press Create.</li>
-          <li>In the left menu open <b>App settings</b> > <b>Basic</b>.</li>
-          <li><b>App ID</b> is the number at the top. Copy it.</li>
-          <li><b>App Secret</b> is the dotted box next to it. Press <b>Show</b>, type your Facebook password if asked, then copy it. Never share it or post it anywhere.</li>
-        </ol></li>
-      <li>Tools > Graph API Explorer: choose the app, add the permissions <code><?= pm_h(implode(', ', array_keys(pm_fb_scopes()))) ?>, business_management</code>, press Generate Access Token and allow it for the Page.</li>
-      <li>Paste the token below. The app makes it permanent, finds your Pages and saves the right one in .env. (Your token and secret stay on this computer.)</li>
-    </ol>
+  <?php $scopes = pm_fb_scopes(); $needScopes = array_diff_key($scopes, array_flip(PM_FB_OPTIONAL_SCOPES));
+        $extraScopes = array_intersect_key($scopes, array_flip(PM_FB_OPTIONAL_SCOPES)) + ['instagram_content_publish' => 'publish posts to Instagram']; ?>
+  <details class="fbconnect" <?= (!$tinfo || $tinfo['type'] !== 'PAGE' || $tinfo['missing']) ? 'open' : '' ?>><summary><?= $tinfo ? 'Reconnect Facebook, or add permissions' : 'Connect Facebook in 3 steps' ?></summary>
+    <p class="hint">About 5 minutes, once. Your App Secret and token stay on this computer.</p>
     <form method="post"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="fbm"><input type="hidden" name="do" value="connect"><input type="hidden" name="view" value="accounts">
-      <div class="row">
-        <div><label>App ID</label><input type="text" name="app_id" value="<?= pm_h((string)($e0['FB_APP_ID'] ?? '')) ?>"></div>
-        <div><label>App Secret</label><input type="password" name="app_secret" placeholder="<?= !empty($e0['FB_APP_SECRET']) ? 'Saved, leave blank to keep' : '' ?>" autocomplete="new-password"></div>
-      </div>
-      <label>Token from Graph API Explorer</label><textarea name="user_token" rows="2" autocomplete="off"></textarea>
-      <div class="btns"><button class="btn primary">Connect</button></div>
+    <ol class="fbsteps">
+      <li>
+        <h4>Open your Facebook app and copy two things</h4>
+        <p><a class="btn small" href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer">Open Facebook apps &#8599;</a></p>
+        <p>Click your app. No app yet? Press <b>Create app</b>, choose <b>Other</b>, then <b>Business</b>, and name it "<?= pm_h($bname) ?> Manager". Then open <b>App settings &gt; Basic</b> and copy:</p>
+        <div class="row">
+          <div><label>App ID <span class="muted">(the number at the top)</span></label><input type="text" name="app_id" value="<?= pm_h((string)($e0['FB_APP_ID'] ?? '')) ?>" inputmode="numeric"></div>
+          <div><label>App Secret <span class="muted">(press Show, then copy)</span></label><input type="password" name="app_secret" placeholder="<?= !empty($e0['FB_APP_SECRET']) ? 'Saved, leave blank to keep' : '' ?>" autocomplete="new-password"></div>
+        </div>
+      </li>
+      <li>
+        <h4>Make a token in Graph API Explorer</h4>
+        <p><a class="btn small" href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noopener noreferrer">Open Graph API Explorer &#8599;</a></p>
+        <p>Choose your app on the right. Under <b>Permissions</b> add the ones below, press <b>Generate Access Token</b>, and allow it for your Page.</p>
+        <ul class="perms"><?php foreach ($needScopes as $scn => $why): ?><li><code><?= pm_h($scn) ?></code> <span class="muted"><?= pm_h($why) ?></span></li><?php endforeach; ?></ul>
+        <p class="hint">Step 3 finds no Pages? Your Page is in a Meta business, so also add <code>business_management</code> and generate the token again.</p>
+        <details class="more"><summary>Optional: Instagram, ads and reach numbers</summary>
+          <ul class="perms"><?php foreach ($extraScopes as $scn => $why): ?><li><code><?= pm_h($scn) ?></code> <span class="muted"><?= pm_h($why) ?></span></li><?php endforeach; ?></ul></details>
+      </li>
+      <li>
+        <h4>Paste the token and connect</h4>
+        <label>Token from Graph API Explorer</label><textarea name="user_token" rows="2" autocomplete="off" placeholder="Starts with EAA..."></textarea>
+        <div class="btns"><button class="btn primary">Connect</button></div>
+        <p class="hint">The app makes the token permanent and lists your Pages. You pick the right one next, and it is saved for you (no .env editing).</p>
+      </li>
+    </ol>
     </form>
   </details>
   <?php endif; ?>
@@ -106,8 +118,11 @@ $built = is_dir(pm_kit_dir($vb)) && glob(pm_kit_dir($vb) . '/*.png');
       <div>
         <label>Profile link</label><input type="text" name="url[<?= $k ?>]" value="<?= pm_h((string)($cfg['urls'][$k] ?? '')) ?>" placeholder="https://...">
         <p class="hint"><b>What the app does here:</b> <?= pm_h($p['auto']) ?></p>
-        <?php if ($p['env']): ?><p class="hint"><b>.env lines:</b> <code><?= pm_h(implode('=…  ', array_map(fn($x) => $pre . $x, $p['env']))) ?>=…</code></p><?php endif; ?>
-        <ol class="steps"><?php foreach ($p['steps'] as $stp): ?><li><?= pm_h($stp) ?></li><?php endforeach; ?></ol>
+        <?php $envHint = $p['env'] ? '<p class="hint"><b>.env lines:</b> <code>' . pm_h(implode('=…  ', array_map(fn($x) => $pre . $x, $p['env']))) . '=…</code></p>' : ''; ?>
+        <?php if (empty($p['manual'])) { echo $envHint; } ?>
+        <ol class="steps"><?php foreach ($p['steps'] as $stp): ?><li><?= $stepHtml($stp) ?></li><?php endforeach; ?></ol>
+        <?php if (!empty($p['manual'])): ?><details class="more"><summary>Connecting by hand (only if the Connect box does not work)</summary>
+          <ol class="steps"><?php foreach ($p['manual'] as $stp): ?><li><?= $stepHtml($stp) ?></li><?php endforeach; ?></ol><?= $envHint ?></details><?php endif; ?>
       </div>
       <div class="kit">
         <label>Profile picture <?= $p['profile'][0] ?>×<?= $p['profile'][1] ?></label>

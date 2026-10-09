@@ -1611,17 +1611,17 @@ $team = array_values(array_filter((array)($settings['team'] ?? [])));
   <img class="<?= $vb === 'travel' ? 'sq' : '' ?>" src="<?= $hdrLogo ?>?v=<?= @filemtime(PM_ROOT . '/' . $hdrLogo) ?>" alt="">
   <span class="name"><?= pm_h($hdrName) ?></span>
   <span class="brandsw"><a href="?tab=<?= pm_h($tab) ?>&brand=promanaged" class="<?= $vb === 'promanaged' ? 'on' : '' ?>">ProManaged IT</a><a href="?tab=<?= pm_h($tab) ?>&brand=travel" class="<?= $vb === 'travel' ? 'on' : '' ?>">Travel Malawi</a></span>
-  <nav>
-    <?php foreach (['agents' => 'Agents', 'whatsapp' => 'WhatsApp', 'social' => 'Social', 'proposal' => 'New proposal', 'history' => 'History', 'template' => 'Template', 'settings' => 'Settings'] as $k => $l): ?>
-      <a href="?tab=<?= $k ?>" class="<?= $tab === $k ? 'on' : '' ?>"><?= $l ?></a>
-    <?php endforeach; ?>
-  </nav>
   <?php $hbAge = pm_social_heartbeat_age(); $hbMin = $hbAge === null ? 0 : intdiv($hbAge, 60);
   $hbTxt = $hbAge === null ? 'Scheduler has not run yet' : 'Scheduler last ran ' . ($hbMin >= 120 ? intdiv($hbMin, 60) . ' h' : $hbMin . ' min') . ' ago'; ?>
   <a class="sx-chip <?= $hbAge === null || $hbAge >= 2700 ? ($hbAge !== null && $hbAge >= 7200 ? 'bad' : 'warn') : 'ok' ?>" href="?tab=social&view=accounts" title="Posts go out when the scheduler runs (every 15 to 30 minutes), or when the app is open. See README: SOCIAL."><?= pm_h($hbTxt) ?></a>
   <?php if ($team): ?><form method="post" class="who" data-quiet><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="who"><input type="hidden" name="back" value="<?= pm_h($tab) ?>">
     <select name="who" onchange="this.form.submit()" aria-label="Who is working"><option value="">Working as…</option><?php foreach ($team as $m): ?><option <?= $GLOBALS['PM_WHO'] === $m ? 'selected' : '' ?>><?= pm_h($m) ?></option><?php endforeach; ?></select></form><?php endif; ?>
 </div></header>
+<div class="tabsbar"><nav aria-label="Main">
+  <?php foreach (['agents' => 'Agents', 'whatsapp' => 'WhatsApp', 'social' => 'Social', 'proposal' => 'New proposal', 'history' => 'History', 'template' => 'Template', 'settings' => 'Settings'] as $k => $l): ?>
+    <a href="?tab=<?= $k ?>" class="<?= $tab === $k ? 'on' : '' ?>"<?= $tab === $k ? ' aria-current="page"' : '' ?>><?= $l ?></a>
+  <?php endforeach; ?>
+</nav></div>
 <main>
 <?php if ($flash): ?><div class="flash <?= pm_h($flash[0]) ?>"><?= pm_h($flash[1]) ?></div><?php endif; ?>
 

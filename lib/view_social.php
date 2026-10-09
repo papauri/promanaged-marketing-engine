@@ -45,8 +45,8 @@ $isVideo = fn($f) => (bool)preg_match('/\.(mp4|mov|m4v)$/i', (string)$f);
 <?php if (!$sc['ready']): ?>
   <div class="card setup">
     <b>Connect the <?= pm_h($bname) ?> Facebook Page</b>
-    <p class="hint">You can already plan and prepare posts below. To publish them, read numbers and answer comments, the app needs a Page access token. Add these lines to <code>.env</code> (Settings shows how to get them):</p>
-    <code class="blockcode"><?= $vb === 'travel' ? 'TM_FB_PAGE_ID=...<br>TM_FB_PAGE_TOKEN=...<br>TM_IG_USER_ID=...   (optional, Instagram)' : 'FB_PAGE_ID=...<br>FB_PAGE_TOKEN=...<br>IG_USER_ID=...   (optional, Instagram)' ?></code>
+    <p class="hint">You can already plan and prepare posts below. To publish them, read numbers and answer comments, the app needs to be connected to the Page. It takes about 5 minutes and you do it once.</p>
+    <div class="btns"><a class="btn primary" href="?tab=social&amp;view=accounts">Connect Facebook in 3 steps</a></div>
   </div>
 <?php elseif (empty($page['ok'])): ?>
   <div class="flash err">Facebook did not accept the connection: <?= pm_h((string)($page['error'] ?? '')) ?></div>
