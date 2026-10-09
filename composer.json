@@ -1,0 +1,7 @@
+{
+    "require": {
+        "tecnickcom/tcpdf": "^6.7",
+        "phpmailer/phpmailer": "^6.9",
+        "anthropic-ai/sdk": "^0.56.0"
+    }
+}

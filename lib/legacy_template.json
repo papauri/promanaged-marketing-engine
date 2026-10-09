@@ -1,0 +1,111 @@
+{
+    "support_intro": "Support is included in every subscription, by phone, WhatsApp and email, Monday to Saturday, 07:00 to 19:00 (Malawi time).",
+    "support_note": "The subscription also covers hosting, daily backups kept for 30 days, security updates and new features as they are released. Changes made only for your business are quoted separately at the hourly rate.",
+    "fees_note": "All fees are in {currency_name} and exclude VAT.{fx_line} The monthly subscription includes hosting, daily backups, security updates, new features as they are released and support as set out below.",
+    "steps_note": "You provide your logo, photos, product and price lists and a contact person with authority to make decisions. Delays in receiving these extend the timeline but not the setup fee.",
+    "support": [
+        [
+            "Critical",
+            "The system is down, or you cannot take payments or serve customers",
+            "Within 1 hour, any day",
+            "Same day"
+        ],
+        [
+            "High",
+            "One area is not working, such as reports or the kitchen screen",
+            "Within 4 working hours",
+            "Within 2 working days"
+        ],
+        [
+            "Normal",
+            "A question, a small fault or a change request",
+            "Within 1 working day",
+            "Agreed with you"
+        ]
+    ],
+    "steps": [
+        [
+            "Discovery",
+            "Week 1",
+            "We visit or call to understand how you trade today, which areas you need and who will use the system."
+        ],
+        [
+            "Branding and website",
+            "Weeks 1 to 2",
+            "Your logo, colours, photos and wording on your own web address."
+        ],
+        [
+            "Your data",
+            "Weeks 1 to 2",
+            "We load your rooms and rates, menus and products, stock items, suppliers, staff logins and opening balances."
+        ],
+        [
+            "Training",
+            "Week 2",
+            "Hands-on sessions for managers and staff at your premises or online, with a written guide for each role."
+        ],
+        [
+            "Go-live",
+            "Week 3",
+            "We are with you on the first day of trading, and check in daily for the first week."
+        ]
+    ],
+    "terms": [
+        [
+            "Term",
+            "The agreement runs for an initial 12 months, then continues month to month until either party ends it with 30 days' written notice."
+        ],
+        [
+            "Fees",
+            "You pay the setup fee and monthly subscription for your package and any extras, as set out in the Quotation."
+        ],
+        [
+            "Invoicing and payment",
+            "The setup fee is invoiced on signing: 50% is due before work starts and 50% at go-live. The monthly subscription is invoiced in advance on the 1st of each month and is due within 14 days."
+        ],
+        [
+            "Price review",
+            "We may review fees once a year with 60 days' written notice. Fees will not rise during the initial 12 months."
+        ],
+        [
+            "Late payment",
+            "If an invoice is unpaid 30 days after its due date, we may suspend access after 7 days' written notice. Access is restored within one working day of payment. Your data is never deleted because of late payment."
+        ],
+        [
+            "Licence",
+            "We grant you a non-exclusive right to use the system for your business during this agreement. The software, its design and its code remain the property of ProManaged IT and may not be copied, resold or transferred."
+        ],
+        [
+            "Your data",
+            "All customer, guest, sales and financial records you enter belong to you. We use them only to provide the service, and we do not sell or share them."
+        ],
+        [
+            "Leaving",
+            "On request at the end of the agreement, we provide a full export of your data in standard formats within 14 days, at no charge. We delete it 90 days after the agreement ends unless you ask us to sooner."
+        ],
+        [
+            "Availability",
+            "We aim for 99.5% monthly availability, excluding planned maintenance announced 48 hours ahead and carried out outside trading hours where possible."
+        ],
+        [
+            "Confidentiality",
+            "Each party keeps the other's business information confidential, during and after this agreement."
+        ],
+        [
+            "Your responsibilities",
+            "You keep staff passwords private, give access only to authorised staff, check that prices and tax settings are correct for your business, and keep your own internet connection and devices in working order."
+        ],
+        [
+            "Liability",
+            "Our total liability under this agreement is limited to the fees you paid in the 12 months before the claim. Neither party is liable for indirect loss, such as lost profit, except in cases of fraud or wilful misconduct."
+        ],
+        [
+            "Ending early",
+            "Either party may end the agreement with 30 days' written notice if the other seriously breaches it and does not put it right within that time. If you end the agreement without cause during the initial 12 months, the remaining subscription fees for that period become due."
+        ],
+        [
+            "Governing law",
+            "This agreement is governed by the laws of the Republic of Malawi. Disputes are first discussed in good faith, and then referred to the courts of Malawi."
+        ]
+    ]
+}

@@ -1,0 +1,25 @@
+# ProManaged Proposals — protection when hosted on Apache / cPanel.
+# Only index.php (admin, password protected), sign.php (public signing) and assets/ are reachable.
+Options -Indexes
+DirectoryIndex index.php
+
+<IfModule mod_authz_core.c>
+    # Hidden files (.env, .git, .htaccess) and private folders
+    <FilesMatch "^\.">
+        Require all denied
+    </FilesMatch>
+    <FilesMatch "(?i)\.(json|lock|md|txt|bat|bak|log)$">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(data|lib|vendor|output)(/|$) - [F,L]
+    RewriteRule ^(router|composer|ensure_server|_)[^/]*$ - [F,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "no-referrer"
+</IfModule>

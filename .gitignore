@@ -1,0 +1,13 @@
+# Secrets and local data — never commit
+.env
+data/
+output/
+vendor/
+*.bak
+.env.*
+.claude/
+assets/*signature*
+*.log
+*.lock
+*.stamp
+backup/
