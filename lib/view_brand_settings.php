@@ -103,7 +103,7 @@ $fld = fn(string $k, string $label, string $ph = '', string $type = 'text') => '
       <div><label>IMAP security</label><select name="b[imap][secure]"><?php foreach (['ssl' => 'SSL (993)', 'none' => 'None'] as $k => $l): ?><option value="<?= $k ?>" <?= ($im['secure'] ?? 'ssl') === $k ? 'selected' : '' ?>><?= $l ?></option><?php endforeach; ?></select></div>
     </div>
     <label class="check"><input type="checkbox" name="b[smtp][bcc_self]" value="1" <?= !empty($sm['bcc_self']) ? 'checked' : '' ?>> Send me a copy of every email</label>
-    <div class="btns"><button class="btn small" form="smtpcheck-<?= pm_h($b) ?>">Check the mail login</button><button class="btn small" name="test_email" value="1">Save and send a test email</button></div>
+    <div class="btns"><button class="btn small" form="smtpcheck-<?= pm_h($b) ?>">Check the mail login</button><button class="btn small" name="test_email" value="1">Save and send a test email</button><input type="email" name="test_to" placeholder="Send the test to (blank: the mailbox itself)" aria-label="Send the test email to" style="width:auto;min-width:240px"></div>
   </div>
 
   <div class="card"><h2>WhatsApp, links and social</h2>

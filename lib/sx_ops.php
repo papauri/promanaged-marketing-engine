@@ -28,7 +28,8 @@ function pm_setup_health(): array
         pm_brand_set($b);
         $sm = (array)(pm_settings()['smtp'] ?? []);
         $mailOk = trim((string)($sm['host'] ?? '')) !== '' && trim((string)($sm['username'] ?? '')) !== '';
-        $row("smtp_$b", "Email sending · $n", 'required', $mailOk, $mailOk ? 'Sends as ' . (trim((string)($sm['from_email'] ?? '')) ?: (string)$sm['username']) . '.' : 'No mail login: emails cannot go out.',
+        $row("smtp_$b", "Email sending · $n", 'required', $mailOk, $mailOk ? 'Sends as ' . (trim((string)($sm['from_email'] ?? '')) ?: (string)$sm['username']) . ' through ' . $sm['host'] . '.'
+            . (function_exists('pm_mail_source') && pm_mail_source($b) === 'shared' ? " This business has no mail login of its own, so it uses ProManaged IT's: add {$p}SMTP_HOST, {$p}SMTP_USER and {$p}SMTP_PASS to .env." : '') : 'No mail login: emails cannot go out.',
             "{$p}SMTP_HOST, {$p}SMTP_USER, {$p}SMTP_PASS in .env (or Settings > Email sending)");
         $im = function_exists('pm_imap_settings') ? pm_imap_settings($b) : ['host' => '', 'user' => '', 'pass' => ''];
         $imOk = $im['host'] !== '' && $im['user'] !== '' && $im['pass'] !== '';
@@ -360,9 +361,9 @@ function pm_smtp_login_check(array $sm): array
         $mm->Timeout = 20;
         $ok = $mm->smtpConnect();
         $mm->smtpClose();
-        return $ok ? [true, 'logged in to ' . $sm['host'] . ' as ' . $sm['username'] . '; nothing was sent'] : [false, 'the server did not accept the login'];
+        return $ok ? [true, 'logged in to ' . $sm['host'] . ':' . (int)$sm['port'] . ' as ' . $sm['username'] . '; nothing was sent'] : [false, function_exists('pm_smtp_explain') ? pm_smtp_explain($sm, 'The server did not accept the login.') : 'the server did not accept the login'];
     } catch (Throwable $e) {
-        return [false, mb_substr($e->getMessage(), 0, 200)];
+        return [false, function_exists('pm_smtp_explain') ? pm_smtp_explain($sm, $e->getMessage()) : mb_substr($e->getMessage(), 0, 200)];
     }
 }
 

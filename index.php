@@ -814,7 +814,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             [$ok, $why, $msgId] = pm_mail($settings, ['to' => $lead['email'], 'subject' => $d['email_subject'], 'body' => $d['email_body'] . pm_outreach_footer($settings),
                 'headers' => ['List-Unsubscribe' => '<mailto:' . $fromAddr . '?subject=STOP>', 'Auto-Submitted' => 'no'], 'link' => pm_link_card()]);
             if (!$ok) {
-                $back('Could not send: ' . $why, 'err');
+                $back('Could not send: ' . pm_mail_fail($settings, (string)$why), 'err');
             }
             if (empty($leads[$id]['owner']) && ($GLOBALS['PM_WHO'] ?? '') !== '') {
                 $leads[$id]['owner'] = $GLOBALS['PM_WHO']; // whoever sends it owns the follow-up
@@ -863,7 +863,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             [$ok, $why, $msgId] = pm_send_reply($lead, (string)$rd['subject'], (string)$rd['body']);
             if (!$ok) {
-                $back('Could not send: ' . $why, 'err');
+                $back('Could not send: ' . pm_mail_fail($settings, (string)$why), 'err');
             }
             pm_reply_sent($leads[$id], (string)$rd['body'], 'email', (string)$msgId); // replied -> contacted, followups 0, last_out, no longer awaiting
             $leads[$id]['last_contacted'] = date('Y-m-d H:i');
@@ -897,6 +897,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pm_brand_set($opb);
             try {
                 [$opOk, $opWhy, $opMid] = pm_send_reply($lead, $opSub, $opBody, [pm_build_onepager($opb)]);
+                $opWhy = $opOk ? '' : pm_mail_fail(pm_settings(), (string)$opWhy); // explained as the business that sends it
             } finally {
                 pm_brand_set($opPrev);
             }
@@ -1514,22 +1515,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (trim($sm['host']) === '' || trim($sm['username']) === '') {
             pm_redirect('settings&brand=' . $b, (pm_brand_name($b)) . ': no mail server is set up yet.', 'err');
         }
-        try {
-            $mm = new PHPMailer\PHPMailer\PHPMailer(true);
-            $mm->isSMTP();
-            $mm->Host = $sm['host'];
-            $mm->Port = (int)$sm['port'];
-            $mm->SMTPAuth = true;
-            $mm->Username = $sm['username'];
-            $mm->Password = $sm['password'];
-            $mm->SMTPSecure = $sm['encryption'] === 'ssl' ? PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS : ($sm['encryption'] === 'tls' ? PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS : '');
-            $mm->Timeout = 20;
-            $ok = $mm->smtpConnect();
-            $mm->smtpClose();
-        } catch (Throwable $e) {
-            pm_redirect('settings&brand=' . $b, (pm_brand_name($b)) . ' mail: could not log in. ' . $e->getMessage(), 'err');
-        }
-        pm_redirect('settings&brand=' . $b, (pm_brand_name($b)) . ' mail: logged in to ' . $sm['host'] . ' as ' . $sm['username'] . '. Nothing was sent.');
+        [$okC, $msgC] = pm_smtp_login_check($sm); // the same check as Setup health, with the reason and what to do when it fails
+        pm_redirect('settings&brand=' . $b, pm_brand_name($b) . ' mail: ' . ($okC ? ucfirst($msgC) . '.' : 'could not log in. ' . $msgC), $okC ? 'ok' : 'err');
     }
 
     if ($action === 'lines') {
@@ -1748,11 +1735,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         if (!empty($_POST['test_email'])) {
-            pm_brand_set($bid);
-            $ts = pm_settings();
-            $to = $ts['smtp']['from_email'] ?: $ts['smtp']['username'];
-            [$tok, $terr] = $to !== '' ? pm_mail($ts, ['to' => $to, 'subject' => 'Test email from ' . $ts['company_name'], 'body' => 'This is a test from the ' . $ts['company_name'] . ' mailbox. If you can read this, email is working.', 'link' => pm_link_card()]) : [false, 'no address to send to'];
-            pm_redirect('settings&brand=' . $bid, $tok ? 'Saved, and a test email was sent to ' . $to . '.' : 'Saved, but the test email failed: ' . $terr, $tok ? 'ok' : 'err');
+            [$tok, $tmsg] = pm_mail_test($bid, (string)($_POST['test_to'] ?? ''));
+            pm_redirect('settings&brand=' . $bid, 'Saved. ' . $tmsg, $tok ? 'ok' : 'err');
         }
         pm_redirect('settings&brand=' . $bid, 'Saved.');
     }
@@ -1878,18 +1862,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         pm_save('settings', $new);
-        if (!empty($_POST['test_email']) && ($_POST['test_brand'] ?? '') === 'travel') { // test the Travel Malawi mailbox
-            pm_brand_set('travel');
-            $ts = pm_settings();
-            $to = $ts['smtp']['from_email'] ?: $ts['smtp']['username'];
-            [$ok, $err] = pm_mail($ts, ['to' => $to, 'subject' => 'Test email from ' . $ts['company_name'], 'body' => 'This is a test from the ' . $ts['company_name'] . ' mailbox. If you can read this, email is working.', 'link' => pm_link_card()]);
-            pm_redirect('settings&brand=travel', $ok ? 'Settings saved and a test email was sent to ' . $to . '.' : 'Settings saved, but the test email failed: ' . $err, $ok ? 'ok' : 'err');
-        }
-        if (!empty($_POST['test_email'])) {
-            $file = pm_build_pdf($new, $tpl, ['business' => 'Test Business', 'contact' => 'Test', 'contact_title' => '', 'email' => '', 'phone' => '', 'address' => '', 'tpin' => '', 'package' => 0, 'extras' => [], 'discount_setup' => 0, 'discount_monthly' => 0, 'doc_type' => 'pitch', 'date' => date('Y-m-d'), 'start_date' => '', 'personal_note' => ''], 'TEST');
-            [$ok, $err] = pm_send_mail($new, $new['smtp']['from_email'] ?: $new['smtp']['username'], '', 'Test email from ProManaged Proposals', "This is a test. If you can read this, email sending works.", $file);
-            @unlink($file);
-            pm_redirect('settings', $ok ? 'Settings saved and a test email was sent to ' . ($new['smtp']['from_email'] ?: $new['smtp']['username']) . '.' : 'Settings saved, but the test email failed: ' . $err, $ok ? 'ok' : 'err');
+        if (!empty($_POST['test_email'])) { // the mailbox of the business on screen (ProManaged IT or Travel Malawi), saved first, tested with the same function as every real email
+            $tb = pm_brand_valid((string)($_POST['test_brand'] ?? '')) ? (string)$_POST['test_brand'] : 'promanaged';
+            [$ok, $tmsg] = pm_mail_test($tb, (string)($_POST['test_to'] ?? ''));
+            pm_redirect('settings' . ($tb === 'promanaged' ? '' : '&brand=' . $tb), 'Settings saved. ' . $tmsg, $ok ? 'ok' : 'err');
         }
         pm_redirect('settings' . ($vb === 'travel' ? '&brand=travel' : ''), 'Settings saved.');
     }

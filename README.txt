@@ -217,6 +217,14 @@ ONE WHATSAPP NUMBER AND ONE X ACCOUNT PER BUSINESS
   an offer's keyword) and you are told. A keyword gets the owner's own reply words for that offer (no AI); anything else gets an answer drafted for you,
   never sent to a stranger by itself. The owner is told when the AI cannot draft one, and the message is still kept.
 
+EMAIL WORKS ON YOUR PC BUT NOT FROM THE SERVER
+  Settings > the business > "Check the mail login" (also "Test now" in Setup health) logs in without sending, and when it fails says why and what to do:
+  it tries the usual ports (465, 587, 25) from the server and tells you which one opens. The commonest cause on a website host is that it BLOCKS outgoing
+  mail connections to other mail servers (your own host's mailbox works; one at Namecheap/Google/etc. does not). Fixes, in order: ask the host to allow
+  outgoing connections to that mail server; use the port that does open (TM_SMTP_PORT / TM_SMTP_SECURE, 465 = ssl, 587 = tls); use a mailbox on the same
+  host; or an email-sending service. "Save and send a test email" sends a plain test as that business through its own mailbox, to the mailbox itself or to
+  any address you type beside the button (an outside inbox shows spam-folder trouble), and Setup health says when a business is borrowing another's mailbox.
+
 SUGGESTIONS WHILE YOU TYPE (lib/suggest.php, assets/ui.js)
   The "Find a business" boxes (Leads, and Proposals > find a business) suggest as you type. At once and free: businesses you already know across every
   business in the app (leads, archived leads, businesses you sent a proposal to, existing clients), best match first; a lead of the business on screen

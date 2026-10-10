@@ -236,7 +236,7 @@ function pm_send_postsign(array &$leads, string $id, string $which, ?callable $m
             'headers' => ['List-Unsubscribe' => '<mailto:' . $from . '?subject=STOP>', 'Auto-Submitted' => 'no'], 'link' => null]);
         [$ok, $why, $mid] = array_pad((array)$res, 3, '');
         if (!$ok) {
-            return $no('Could not send: ' . $why);
+            return $no('Could not send: ' . (function_exists('pm_mail_fail') ? pm_mail_fail($settings, (string)$why) : $why));
         }
         $now = date('Y-m-d H:i');
         $L = &$leads[$id];

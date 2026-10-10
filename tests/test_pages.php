@@ -322,6 +322,26 @@ pm_t_assert(str_contains($html, 'Lakeview Lodge') && str_contains($html, 'Came f
 [$code, , $loc] = http($base, ['csrf' => csrf_of((string)http("$base?tab=social&view=leadposts&brand=promanaged")[1]), 'action' => 'social_ext', 'do' => 'lp_status', 'id' => $oid, 'to' => 'paused']);
 pm_t_eq(pm_lp_get($oid)['status'], 'paused', 'the pause button works over HTTP');
 
+echo "\nThe mail checks in Settings\n";
+$raw = pm_load('settings', 'pm_default_settings');
+$raw['smtp'] = ['host' => 'mail.pm.example', 'port' => 465, 'encryption' => 'ssl', 'username' => 'info@pm.example', 'password' => 'pw', 'from_email' => 'info@pm.example', 'from_name' => 'ProManaged IT', 'bcc_self' => false];
+$raw['travel']['smtp']['host'] = '';
+pm_save('settings', $raw);
+[, $html] = http("$base?tab=settings&brand=travel");
+$csrf3 = csrf_of($html);
+pm_t_assert(str_contains($html, 'name="test_to"') && str_contains($html, 'Send the test to (blank: the mailbox itself)') && str_contains($html, 'Travel Malawi has no mail login of its own'), 'the test button has a box for another recipient, and Travel Malawi says plainly that it is borrowing ProManaged IT\'s mailbox');
+[, $html] = http("$base?tab=settings&brand=promanaged");
+pm_t_assert(str_contains($html, 'name="test_to"'), 'ProManaged IT\'s page has the box too');
+$form = ['csrf' => $csrf3, 'action' => 'settings', 's' => ['company_name' => 'ProManaged IT', 'currency' => 'MWK', 'ref_prefix' => 'PM'], 'test_brand' => 'travel', 'test_email' => '1'];
+$form['s']['travel'] = ['company_name' => 'Travel Malawi', 'smtp' => ['host' => '', 'port' => '465', 'encryption' => 'ssl']];
+[$code, , $loc] = http($base, $form + ['test_to' => 'not-an-address']);
+[, $html] = http("$base?tab=settings&brand=travel");
+pm_t_assert($code === 302 && str_contains($loc, 'brand=travel') && str_contains($html, 'Settings saved.') && str_contains($html, 'Travel Malawi'), 'a test email request saves first and comes back to the business it was for: ' . $loc);
+[$code] = http($base, ['csrf' => $csrf3, 'action' => 'smtp_check', 'brand' => 'travel']);
+[, $html] = http("$base?tab=settings&brand=travel");
+pm_t_assert($code === 302 && (str_contains($html, 'Travel Malawi mail: could not log in') || str_contains($html, 'Travel Malawi: no mail server is set up yet')), 'checking the mail login always answers, in words');
+pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
+
 echo "\nThe WhatsApp webhook: one address for every connected number\n";
 $wa = "http://127.0.0.1:$port/wa.php";
 pm_t_eq(http($wa)[0], 404, 'with no business connected the webhook does not exist');

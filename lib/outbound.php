@@ -446,7 +446,7 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
         'headers' => ['List-Unsubscribe' => '<mailto:' . $fromAddr . '?subject=STOP>', 'Auto-Submitted' => 'no'], 'link' => function_exists('pm_link_card') ? pm_link_card() : null]);
     [$ok, $why, $mid] = array_pad((array)$res, 3, '');
     if (!$ok) {
-        return $no('Could not send: ' . $why, 'smtp');
+        return $no('Could not send: ' . (function_exists('pm_mail_fail') ? pm_mail_fail($settings, (string)$why) : $why), 'smtp');
     }
     $L = &$leads[$id];
     if (empty($L['owner']) && ($GLOBALS['PM_WHO'] ?? '') !== '') {

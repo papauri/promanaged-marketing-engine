@@ -11,6 +11,9 @@ use PHPMailer\PHPMailer\Exception as MailException;
  */
 function pm_mail(array $s, array $m): array
 {
+    if (isset($GLOBALS['PM_MAIL_STUB']) && is_callable($GLOBALS['PM_MAIL_STUB'])) { // tests: no network
+        return (array)$GLOBALS['PM_MAIL_STUB']($s, $m);
+    }
     $smtp = $s['smtp'];
     if (trim($smtp['host']) === '' || trim($smtp['username']) === '') {
         return [false, 'Email is not set up yet. Add the mail server details to .env or Settings.', ''];
@@ -156,4 +159,127 @@ function pm_notify_owner(string $subject, string $text): bool
 function pm_send_mail(array $s, string $to, string $cc, string $subject, string $body, string $pdfPath): array
 {
     return pm_mail($s, ['to' => $to, 'cc' => $cc, 'subject' => $subject, 'body' => $body, 'attachments' => [$pdfPath]]);
+}
+
+/* ---------------- Why a mail login or a send failed, and a test email that tells the truth ---------------- */
+
+/** Can this server open a plain connection to host:port? (tests replace it with $GLOBALS['PM_SMTP_PROBE_STUB']) */
+function pm_smtp_probe(string $host, int $port): bool
+{
+    if (isset($GLOBALS['PM_SMTP_PROBE_STUB']) && is_callable($GLOBALS['PM_SMTP_PROBE_STUB'])) {
+        return (bool)$GLOBALS['PM_SMTP_PROBE_STUB']($host, $port);
+    }
+    $f = @fsockopen($host, $port, $en, $es, 3);
+    if ($f) {
+        fclose($f);
+        return true;
+    }
+    return false;
+}
+
+/** Does this mail server name exist, as seen from this server? */
+function pm_smtp_dns_ok(string $host): bool
+{
+    if (isset($GLOBALS['PM_SMTP_DNS_STUB']) && is_callable($GLOBALS['PM_SMTP_DNS_STUB'])) {
+        return (bool)$GLOBALS['PM_SMTP_DNS_STUB']($host);
+    }
+    return filter_var($host, FILTER_VALIDATE_IP) !== false || (bool)@gethostbynamel($host);
+}
+
+/**
+ * What went wrong, in plain words, and what to do about it. $err is what the mail library said. When the connection itself failed, it also tries the other
+ * usual ports (465, 587, 25) from THIS server, because the commonest cause on a website host is that outgoing mail connections to other servers are blocked.
+ */
+function pm_smtp_explain(array $sm, string $err): string
+{
+    $host = trim((string)($sm['host'] ?? ''));
+    $port = (int)($sm['port'] ?? 0);
+    $enc = (string)($sm['encryption'] ?? '') ?: 'none';
+    $p = function_exists('pm_brand_env_prefix') ? pm_brand_env_prefix(pm_brand()) : '';
+    $err = trim((string)preg_replace('/\s+/', ' ', $err));
+    $e = strtolower($err);
+    $out = [mb_substr($err, 0, 220)];
+    $connect = (bool)preg_match('/could not connect|connect\(\) failed|connection (timed out|refused|reset)|network is unreachable|getaddrinfo|php_network_getaddresses|name or service not known|no route to host|timed out|failed to connect|unable to connect/', $e);
+    if ($host === '') {
+        $out[] = 'No mail server is set.';
+    } elseif ($connect) {
+        if (!pm_smtp_dns_ok($host)) {
+            $out[] = "The name $host could not be found from this server: check how the mail server is spelled.";
+        } elseif (pm_smtp_probe($host, $port)) {
+            $out[] = "This server can reach $host on port $port, but the secure start did not complete. Port 465 goes with security ssl and port 587 with tls; yours is $enc on port $port.";
+        } else {
+            $open = [];
+            foreach ([465 => 'ssl', 587 => 'tls', 25 => 'none'] as $pp => $ee) {
+                if ($pp !== $port && pm_smtp_probe($host, $pp)) {
+                    $open[$pp] = $ee;
+                }
+            }
+            if ($open) {
+                $first = (int)array_key_first($open);
+                $out[] = "This server cannot reach $host on port $port, but it can on port $first: set {$p}SMTP_PORT=$first and {$p}SMTP_SECURE=" . $open[$first] . ' in .env (or the Port and Security boxes in Settings).';
+            } else {
+                $out[] = "This server cannot reach $host on ports 465, 587 or 25. Web hosts often block outgoing mail connections to other servers: ask your host to allow outgoing connections to $host, or use a mailbox on the same host, or an email-sending service.";
+            }
+        }
+    } elseif (preg_match('/authenticat|\b53[45]\b|username and password|invalid login|not accepted|credentials|auth/', $e)) {
+        $out[] = "$host refused the login for " . (string)($sm['username'] ?? '') . ': check the username (usually the full email address) and the password.';
+    } elseif (preg_match('/ssl|tls|certificate|handshake|crypto/', $e)) {
+        $out[] = "The secure connection to $host failed. Port 465 goes with security ssl and port 587 with tls; yours is $enc on port $port. If the certificate is for another name, use the mail server name your host gives you.";
+    } elseif (preg_match('/sender|from address|not owned|relay|not allowed|rejected/', $e)) {
+        $out[] = 'The server refused the sender address: send from the address you log in with, or one this mailbox is allowed to use.';
+    }
+    return implode(' ', $out);
+}
+
+/** A send failure for a screen or a log: what the mail library said, plus what it means and what to do (when it can tell). */
+function pm_mail_fail(array $settings, string $why): string
+{
+    return pm_smtp_explain((array)($settings['smtp'] ?? []), $why);
+}
+
+/** Where a business's mail login comes from: 'env' (its own .env lines), 'settings' (typed in Settings), 'shared' (Travel Malawi using ProManaged IT's), 'none'. */
+function pm_mail_source(string $brand): string
+{
+    $e = pm_env();
+    $p = pm_brand_env_prefix($brand);
+    if (($e[$p . 'SMTP_HOST'] ?? '') !== '') {
+        return 'env';
+    }
+    $raw = pm_load('settings', 'pm_default_settings');
+    $blk = $brand === 'promanaged' ? $raw : (array)($brand === 'travel' ? ($raw['travel'] ?? []) : ($raw['brands'][$brand] ?? []));
+    if (trim((string)($blk['smtp']['host'] ?? '')) !== '') {
+        return 'settings';
+    }
+    return $brand === 'travel' && (($e['SMTP_HOST'] ?? '') !== '' || trim((string)($raw['smtp']['host'] ?? '')) !== '') ? 'shared' : 'none';
+}
+
+/**
+ * Sends one plain test email as a business, through its own mail login, to $to (default: the mailbox itself). Same function, settings and library as every
+ * real email, so what it says is true. Returns [ok, message]; a failure carries the reason and what to do.
+ */
+function pm_mail_test(string $brand, string $to = ''): array
+{
+    $brand = pm_brand_valid($brand) ? $brand : 'promanaged';
+    $was = pm_brand();
+    pm_brand_set($brand);
+    try {
+        $s = pm_settings();
+        $sm = (array)$s['smtp'];
+        $name = (string)($s['company_name'] ?? pm_brand_name($brand));
+        $own = trim((string)($sm['from_email'] ?? '')) ?: trim((string)($sm['username'] ?? ''));
+        $to = trim($to) !== '' ? trim($to) : $own;
+        if (trim((string)($sm['host'] ?? '')) === '' || trim((string)($sm['username'] ?? '')) === '') {
+            return [false, "$name has no mail login yet: add " . pm_brand_env_prefix($brand) . 'SMTP_HOST, ' . pm_brand_env_prefix($brand) . 'SMTP_USER and ' . pm_brand_env_prefix($brand) . 'SMTP_PASS to .env, or fill in Settings.'];
+        }
+        if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            return [false, 'There is no valid address to send the test to. Type one in the box beside the button.'];
+        }
+        $src = ['env' => '.env', 'settings' => 'Settings', 'shared' => "ProManaged IT's mailbox (this business has none of its own)", 'none' => 'nowhere'][pm_mail_source($brand)] ?? '';
+        [$ok, $err] = array_pad(pm_mail($s, ['to' => $to, 'subject' => 'Test email from ' . $name, 'bcc_self' => false, 'link' => function_exists('pm_link_card') ? pm_link_card() : null,
+            'body' => "This is a test from the $name mailbox.\n\nIt was sent " . date('j M Y, H:i') . ' as ' . ($sm['from_email'] ?: $sm['username']) . ' through ' . $sm['host'] . ':' . $sm['port'] . ' (' . ($sm['encryption'] ?: 'no') . " security).\n\nIf you can read this, email is working."]), 2, '');
+        return $ok ? [true, "A test email was sent to $to as " . ($sm['from_email'] ?: $sm['username']) . " through {$sm['host']}:{$sm['port']} (login from $src). Check that inbox, and the spam folder."]
+            : [false, 'The test email failed. ' . pm_smtp_explain($sm, (string)$err)];
+    } finally {
+        pm_brand_set($was);
+    }
 }

@@ -86,7 +86,8 @@ $brandCards = function (string $b) use ($settings, $vb): void {
     </div>
 
     <div class="card" <?= $hide ?> data-fold="closed"><h2><?= pm_h($name) ?> · Email sending</h2>
-      <?php if ($env): ?><p class="hint" style="margin-top:0">Read-only here: these come from the .env file.</p><?php endif; ?>
+      <?php if ($env): ?><p class="hint" style="margin-top:0">Read-only here: these come from the .env file (<?= $tr ? 'TM_' : '' ?>SMTP_*).</p>
+      <?php elseif ($tr && pm_mail_source('travel') === 'shared'): ?><p class="hint warnt" style="margin-top:0">Travel Malawi has no mail login of its own, so it sends through ProManaged IT's mailbox. Add TM_SMTP_HOST, TM_SMTP_USER and TM_SMTP_PASS to .env (or fill in the boxes below) to send from its own address.</p><?php endif; ?>
       <fieldset <?= $env ? 'disabled' : '' ?> style="border:0;padding:0;margin:0">
       <div class="row">
         <div><label>Mail server (SMTP host)</label><input type="text" name="<?= $n('smtp') ?>[host]" value="<?= pm_h((string)($sm['host'] ?? '')) ?>"></div>
@@ -141,7 +142,8 @@ $brandCards = function (string $b) use ($settings, $vb): void {
     <input type="hidden" name="test_brand" value="<?= pm_h($vb) ?>">
     <div class="btns">
       <button class="btn primary"><?= $isCustom ? 'Save the team and currencies' : 'Save settings' ?></button>
-      <?php if (!$isCustom): ?><button class="btn" name="test_email" value="1">Save and send a test email</button><?php endif; ?>
+      <?php if (!$isCustom): ?><button class="btn" name="test_email" value="1">Save and send a test email</button>
+        <input type="email" name="test_to" placeholder="Send the test to (blank: the mailbox itself)" aria-label="Send the test email to" style="width:auto;min-width:260px"><?php endif; ?>
     </div>
   </form>
 
