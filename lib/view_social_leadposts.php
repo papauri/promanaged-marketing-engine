@@ -102,6 +102,23 @@ $fields = function (array $o) use ($def): string {
 </details>
 <?php endforeach; ?>
 
+<?php $ideas = pm_lp_ideas($vb); ?>
+<div class="card nofold" id="ideas">
+  <h2>Not sure what to offer?</h2>
+  <p class="hint" style="margin-top:0">Get three ideas from what this business told the app: its facts, what it offers, its free first step and who it wants to reach. <?= pm_agents_ready() ? 'The AI writes them, using only those facts.' : 'The AI is not set up, so you get the free first step as a starting point.' ?></p>
+  <form method="post" class="btns"><?= $sx('lp_suggest') ?><button class="btn small primary"><?= $ideas['rows'] ? 'Suggest different ideas' : 'Suggest offers' ?></button>
+    <?php if ($ideas['rows']): ?><button class="btn small" name="do" value="lp_ideas_clear">Clear the ideas</button><?php endif; ?></form>
+  <?php foreach ($ideas['rows'] as $i => $idea): ?>
+  <details class="card" style="margin:8px 0" <?= $i === 0 ? 'open' : '' ?>><summary><b><?= pm_h($idea['title']) ?></b> <span class="muted" style="font-size:12px"><?= $idea['keyword'] !== '' ? '· ' . pm_h($idea['keyword']) . ' ' : '' ?>· an idea, not saved yet</span></summary>
+    <form method="post"><?= $sx('lp_save') ?><?= $hid('make', '1') ?>
+      <?php foreach (['freebie', 'callout', 'question', 'quote', 'whatsapp', 'ask'] as $dt): ?><?= $hid('templates[]', $dt) ?><?php endforeach; ?>
+      <?= $fields($idea) ?>
+      <div class="btns"><button class="btn primary">Use this and make my first posts</button><button class="btn" name="make" value="">Just save it</button></div>
+    </form>
+  </details>
+  <?php endforeach; ?>
+</div>
+
 <div class="card" <?= $offers ? 'data-fold="closed"' : '' ?> id="new">
   <h2><?= $offers ? 'Another offer' : 'Start with your first offer' ?> · <?= pm_h($bname) ?></h2>
   <form method="post"><?= $sx('lp_save') ?><?= $hid('make', '1') ?>

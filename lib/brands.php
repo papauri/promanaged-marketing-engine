@@ -13,6 +13,9 @@
  * Rule for callers: never write `$brand === 'travel' ? ... : ...` to mean "the other business". Ask this file.
  */
 
+require_once __DIR__ . '/brand_study.php'; // reading a business's website and learning who to target
+require_once __DIR__ . '/onepager.php'; // the one-page offer that replaces a proposal for an added business
+
 const PM_BUILTIN_BRANDS = ['promanaged' => 'ProManaged IT', 'travel' => 'Travel Malawi'];
 const PM_BRAND_RESERVED = ['promanaged', 'travel', 'default', 'all', 'brands', 'new', 'settings', 'tm', 'pm', 'shared', 'none', 'other'];
 const PM_BRAND_COLORS = ['#1f6feb', '#0f766e', '#b45309', '#7c3aed', '#be123c', '#0369a1', '#4d7c0f', '#c2410c'];
@@ -103,6 +106,16 @@ function pm_brand_setting(string $b, string $key, mixed $default = ''): mixed
     $raw = pm_load('settings', 'pm_default_settings');
     $blk = $b === 'promanaged' ? $raw : (array)($b === 'travel' ? ($raw['travel'] ?? []) : ($raw['brands'][$b] ?? []));
     return $blk[$key] ?? $default;
+}
+
+/**
+ * One of a business's OWN .env values: its prefix plus the key (ProManaged: WA_BIZ_TOKEN, Travel Malawi: TM_WA_BIZ_TOKEN, a business with id "acme": ACME_WA_BIZ_TOKEN).
+ * It never falls back to another business's value, so a business without its own WhatsApp number or X account never speaks through someone else's.
+ * A hidden or unknown business has no values at all.
+ */
+function pm_brand_env(string $brand, string $key): string
+{
+    return pm_brand_valid($brand) ? pm_env_val(pm_brand_env_prefix($brand) . $key) : '';
 }
 
 /** Where this business's own pictures live. $what: logo | signature | favicon | hero. */
@@ -202,7 +215,7 @@ function pm_brand_list(mixed $v, int $max = 10, int $len = 120): array
     $parts = is_array($v) ? $v : preg_split('/[\r\n;,]+/', (string)$v);
     $out = [];
     foreach ($parts as $x) {
-        $x = trim(preg_replace('/\s+/', ' ', (string)$x));
+        $x = trim(preg_replace('/\s+/', ' ', is_scalar($x) ? (string)$x : ''));
         if ($x !== '' && !in_array(mb_strtolower($x), array_map('mb_strtolower', $out), true)) {
             $out[] = mb_substr($x, 0, $len);
         }
@@ -233,6 +246,9 @@ function pm_brand_check_answers(array $a): array
             $bad[] = 'That email address does not look right.';
         }
     }
+    if (trim((string)($a['website'] ?? '')) !== '' && pm_study_url((string)$a['website']) === '') {
+        $bad[] = 'That website address does not look right (for example www.example.mw).';
+    }
     return $bad;
 }
 
@@ -250,19 +266,23 @@ function pm_brand_unsourced_number(string $text, string $source): bool
 }
 
 /**
- * A first draft of the business's profile from the answers. One small AI call when the AI is set up (it may only restate what the
- * owner said); otherwise, or if the call fails, a plain draft built straight from the answers. Nothing is saved here.
- * Returns ['draft' => [...], 'ai' => bool, 'note' => string].
+ * A first draft of the business's profile from the answers, the business's own website and anything the owner pasted. One AI call (when the AI is set up)
+ * learns what the business is, its facts (each one carried by a quote that is checked in code), who to target and what is still worth asking the owner;
+ * otherwise, or if the call fails, it is a plain draft built straight from the owner's own words. Nothing is saved here.
+ * $bundle is a website already read (pm_study_pages), so asking again does not fetch the pages again.
+ * Returns ['draft' => [...], 'ai' => bool, 'note' => string, 'pages' => bundle].
  */
-function pm_brand_draft(array $a): array
+function pm_brand_draft(array $a, ?array $bundle = null): array
 {
     $name = trim((string)($a['name'] ?? ''));
     $sells = trim((string)($a['sells'] ?? ''));
     $customers = trim((string)($a['customers'] ?? ''));
     $sellTo = in_array($a['sell_to'] ?? '', ['business', 'public', 'both'], true) ? $a['sell_to'] : 'business';
-    $market = trim((string)($a['market'] ?? '')) ?: 'Malawi';
     $voiceKey = isset(PM_BRAND_VOICES[$a['voice'] ?? '']) ? $a['voice'] : 'friendly';
-    $source = mb_strtolower($name . ' ' . $sells . ' ' . $customers . ' ' . ($a['facts'] ?? '') . ' ' . ($a['magnet'] ?? '') . ' ' . ($a['cities'] ?? '') . ' ' . ($a['targets'] ?? ''));
+    $notes = mb_substr(trim((string)($a['notes'] ?? '')), 0, 6000);
+    $qa = pm_study_qa($a['qa'] ?? []);
+    $ownerText = implode("\n", array_filter([$name, $sells, $customers, (string)($a['facts'] ?? ''), (string)($a['magnet'] ?? ''), (string)($a['cities'] ?? ''), (string)($a['targets'] ?? ''), $notes, implode("\n", array_column($qa, 'a'))]));
+    $source = mb_strtolower($ownerText);
     $own = [
         'about' => mb_substr($sells, 0, 300),
         'offerings' => pm_brand_list($sells, 4, 160),
@@ -279,60 +299,35 @@ function pm_brand_draft(array $a): array
     if (count($own['offerings']) === 1 && mb_strlen($own['offerings'][0]) > 160) {
         $own['offerings'] = [mb_substr($own['offerings'][0], 0, 160)];
     }
-    $out = $own;
+    $bundle ??= pm_study_pages((string)($a['website'] ?? ''));
+    $pages = (array)($bundle['pages'] ?? []);
+    $out = $own + ['targeting' => ['segments' => [], 'skip' => [], 'angles' => [], 'cities' => []], 'questions' => [], 'sources' => array_fill_keys($own['facts'], 'you'), 'found' => []];
+    $found = [];
+    if (trim((string)($a['email'] ?? '')) === '' && !empty($bundle['emails'])) {
+        $found['email'] = (string)$bundle['emails'][0];
+    }
+    if (trim((string)($a['phone'] ?? '')) === '' && !empty($bundle['phones'])) {
+        $found['phone'] = (string)$bundle['phones'][0];
+    }
+    if ($found) {
+        $found['source'] = (string)($pages[0]['url'] ?? $bundle['url'] ?? '');
+    }
+    $out['found'] = $found;
     $ai = false;
-    $note = '';
+    $note = (string)($bundle['note'] ?? '');
     if (function_exists('pm_agents_ready') && (pm_agents_ready() || isset($GLOBALS['PM_AI_STUB']))) {
         try {
-            $system = "You set up a marketing profile for a small business from the owner's own answers. Use ONLY what the owner wrote: never invent facts, numbers, prices, awards, customers, locations or capabilities. "
-                . 'Keep every field short and in plain words. Reply with JSON only.';
-            $user = json_encode(['business' => $name, 'what_it_does' => $sells, 'who_buys' => $customers, 'sells_to' => $sellTo, 'country' => $market, 'cities' => $own['cities'],
-                    'kinds_to_find' => $own['sectors'], 'true_things_owner_said' => $own['facts'], 'free_first_step' => $own['magnet']], JSON_UNESCAPED_UNICODE)
-                . "\nJSON: {\"about\":\"one or two plain sentences\",\"offerings\":[\"Name: what it is\"],\"sectors\":[\"kind of business or person to look for (up to 8; only if kinds_to_find is empty)\"],"
-                . "\"facts\":[\"statements the owner already made, reworded briefly\"],\"audience\":\"who buys\",\"cta_keyword\":\"ONE capital word a customer can send on WhatsApp, e.g. QUOTE\","
-                . "\"pillars\":[{\"name\":\"content theme\",\"weight\":20}] (4 to 6 themes, weights add to about 100),\"cities\":[\"only if cities is empty and the country is known to have these\"]}";
-            $r = pm_agent_json(pm_claude($system, $user, false, 1500, 'write'));
+            [$system, $user] = pm_study_prompt($a, $own, $pages, $qa);
+            $r = pm_agent_json(pm_claude($system, $user, false, 3500, 'write'));
             if (is_array($r)) {
                 $ai = true;
-                foreach (['about', 'audience'] as $k) {
-                    $v = trim((string)($r[$k] ?? ''));
-                    if ($v !== '' && !pm_brand_unsourced_number($v, $source)) {
-                        $out[$k] = mb_substr($v, 0, 300);
-                    }
-                }
-                if (!empty($r['offerings'])) {
-                    $o = array_values(array_filter(pm_brand_list($r['offerings'], 4, 200), fn($x) => !pm_brand_unsourced_number($x, $source)));
-                    $out['offerings'] = $o ?: $out['offerings'];
-                }
-                if (!$own['sectors'] && !empty($r['sectors'])) {
-                    $out['sectors'] = pm_brand_list($r['sectors'], 8, 60);
-                }
-                if (!$own['cities'] && !empty($r['cities'])) {
-                    $out['cities'] = pm_brand_list($r['cities'], 8, 40);
-                }
-                // Facts: only ones with no number the owner never wrote. The owner's own lines always stay.
-                $out['facts'] = $own['facts'];
-                foreach (pm_brand_list($r['facts'] ?? [], 8, 160) as $f) {
-                    if (!pm_brand_unsourced_number($f, $source) && count($out['facts']) < 8 && !in_array(mb_strtolower($f), array_map('mb_strtolower', $out['facts']), true)) {
-                        $out['facts'][] = $f;
-                    }
-                }
-                $kw = strtoupper(preg_replace('/[^A-Za-z]/', '', (string)($r['cta_keyword'] ?? '')));
-                $out['cta_keyword'] = strlen($kw) >= 3 && strlen($kw) <= 10 ? $kw : '';
-                $pl = [];
-                foreach ((array)($r['pillars'] ?? []) as $p) {
-                    $pn = trim((string)($p['name'] ?? ''));
-                    if ($pn !== '' && count($pl) < 6) {
-                        $pl[] = ['name' => mb_substr($pn, 0, 40), 'weight' => max(5, min(50, (int)($p['weight'] ?? 15)))];
-                    }
-                }
-                $out['pillars'] = $pl;
+                $out = pm_study_merge($out, $r, ['own' => $own, 'source' => $source, 'owner_text' => $ownerText, 'pages' => $pages, 'pagetext' => mb_strtolower(implode("\n", array_column($pages, 'text')))]);
             }
         } catch (Throwable $e) {
-            $note = 'The AI draft did not work (' . mb_substr($e->getMessage(), 0, 80) . '), so this is a plain draft from your answers. You can edit everything.';
+            $note = trim($note . ' The AI draft did not work (' . mb_substr($e->getMessage(), 0, 80) . '), so this is a plain draft from your answers. You can edit everything.');
         }
     } else {
-        $note = 'The AI is not set up yet, so this is a plain draft from your answers. You can edit everything.';
+        $note = trim($note . ' The AI is not set up yet, so this is a plain draft from your answers. You can edit everything.');
     }
     if ($out['cta_keyword'] === '') {
         $out['cta_keyword'] = 'QUOTE';
@@ -343,7 +338,7 @@ function pm_brand_draft(array $a): array
     if (!$out['sectors'] && $sellTo !== 'public') {
         $note = trim($note . ' Add the kinds of business to look for, or the scouts have nothing to search for.');
     }
-    return ['draft' => $out, 'ai' => $ai, 'note' => $note];
+    return ['draft' => $out, 'ai' => $ai, 'note' => $note, 'pages' => $bundle];
 }
 
 /**
@@ -366,6 +361,11 @@ function pm_brand_create(array $a, array $draft): array
     foreach (['tagline', 'address', 'phone', 'email', 'website'] as $k) {
         $blk[$k] = trim((string)($a[$k] ?? ''));
     }
+    foreach (['email', 'phone'] as $k) { // the draft screen shows what the owner typed or what the website showed, and the owner confirms it
+        if (trim((string)($draft[$k] ?? '')) !== '' && ($k !== 'email' || filter_var(trim((string)$draft[$k]), FILTER_VALIDATE_EMAIL))) {
+            $blk[$k] = mb_substr(trim((string)$draft[$k]), 0, 80);
+        }
+    }
     $blk['website'] = $blk['website'] !== '' ? preg_replace('#^https?://#i', '', rtrim($blk['website'], '/')) : '';
     $blk['smtp']['from_email'] = $blk['email'];
     $blk['brain'] = [
@@ -378,6 +378,9 @@ function pm_brand_create(array $a, array $draft): array
         'offerings' => pm_brand_list($draft['offerings'] ?? [], 4, 200), 'sectors' => pm_brand_list($draft['sectors'] ?? [], 10, 60),
         'cities' => pm_brand_list($draft['cities'] ?? [], 12, 40), 'existing_clients' => [], 'pillars' => array_values(array_filter((array)($draft['pillars'] ?? []), fn($r) => trim((string)($r['name'] ?? '')) !== '')),
     ];
+    $blk['profile']['targeting'] = pm_study_targeting_store((array)($draft['targeting'] ?? []), (array)$blk['profile']['sectors']); // who to target, with why: steers the scouts and the qualifier
+    $blk['profile']['learned'] = ['at' => date('Y-m-d H:i'), 'from' => array_slice(array_values(array_filter(array_map('strval', (array)($draft['pages_read'] ?? [])))), 0, 6), 'ai' => !empty($draft['ai']),
+        'qa' => pm_study_qa($a['qa'] ?? [])];
     if ($blk['profile']['magnet'] !== '' && $blk['profile']['cta_keyword'] !== '' && !array_filter($blk['profile']['pillars'], fn($r) => preg_match('/^free\b/i', (string)$r['name']))) {
         $blk['profile']['pillars'][] = ['name' => 'Free first step', 'weight' => 10]; // the invitation topic: posts that offer the free first step
     }

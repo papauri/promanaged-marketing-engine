@@ -893,7 +893,7 @@ function pm_inbox_poll(?callable $send = null, ?array &$report = null): array
 }
 
 /** Send an answer to a lead. Returns [ok, error, msgid]. Replies are not first contact, so they do not use the first-email limits. */
-function pm_send_reply(array $lead, string $subject, string $body): array
+function pm_send_reply(array $lead, string $subject, string $body, array $attachments = []): array
 {
     $s = pm_settings();
     if (($lead['status'] ?? '') === 'optout' || pm_suppressed(pm_leads(), (string)($lead['email'] ?? ''), (string)($lead['id'] ?? ''))) {
@@ -912,5 +912,5 @@ Kind regards,
 ", $sig) . "
 
 (Reply STOP at any time and we will stop contacting you.)",
-        'headers' => $hdr]);
+        'headers' => $hdr, 'attachments' => $attachments]);
 }

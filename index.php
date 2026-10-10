@@ -236,6 +236,21 @@ if (isset($_GET['archive']) && is_string($_GET['archive'])) {
     exit;
 }
 
+// ---------- One-page offer download (a business added in the app) ----------
+if (isset($_GET['onepager']) && is_string($_GET['onepager'])) {
+    $opb = (string)$_GET['onepager'];
+    if (!pm_brand_is_custom($opb)) {
+        http_response_code(404);
+        exit('Not found');
+    }
+    $opf = pm_build_onepager($opb);
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="' . preg_replace('/[^A-Za-z0-9]/', '', pm_brand_name($opb)) . '-one-page-offer.pdf"');
+    header('Content-Length: ' . filesize($opf));
+    readfile($opf);
+    exit;
+}
+
 // ---------- Link thumbnail (data/ is private, so it is served here) ----------
 if (isset($_GET['thumb'])) {
     $tf = pm_link_thumb_path(pm_brand_norm($_GET['thumb']));
@@ -842,6 +857,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pm_lead_note($leads[$id], 'Reply sent to ' . $lead['email']);
             pm_leads_save($leads);
             $back('Reply sent to ' . $lead['name'] . '.');
+        }
+        if ($do === 'onepager_send') { // a business added in the app sends its one-page offer instead of a proposal, only to someone who has written to it
+            $opb = (string)($lead['brand'] ?? '');
+            if (!pm_brand_is_custom($opb)) {
+                $back('The one-page offer is for businesses you added. ProManaged IT and Travel Malawi send proposals.', 'err');
+            }
+            if (!pm_onepager_wrote($lead)) {
+                $back('They have not written to you yet. The one-page offer goes to people who have: use a normal first email for a cold contact.', 'err');
+            }
+            if (!filter_var($lead['email'] ?? '', FILTER_VALIDATE_EMAIL)) {
+                $back('This lead needs a valid email address.', 'err');
+            }
+            $opSub = trim((string)($_POST['subject'] ?? ''));
+            $opBody = trim((string)($_POST['body'] ?? ''));
+            if ($opSub === '' || $opBody === '') {
+                $back('Write the subject and the message first.', 'err');
+            }
+            if ($opProbs = pm_onepager_status($opb)['problems']) {
+                $back('The one-page offer is not ready: ' . implode(' ', $opProbs), 'err');
+            }
+            if ($problems = pm_outreach_lint($opSub, $opBody, false)) {
+                $back('Not sent. ' . implode(' ', $problems), 'err');
+            }
+            $opPrev = pm_brand();
+            pm_brand_set($opb);
+            try {
+                [$opOk, $opWhy, $opMid] = pm_send_reply($lead, $opSub, $opBody, [pm_build_onepager($opb)]);
+            } finally {
+                pm_brand_set($opPrev);
+            }
+            if (!$opOk) {
+                $back('Could not send: ' . $opWhy, 'err');
+            }
+            pm_reply_sent($leads[$id], $opBody, 'email', (string)$opMid);
+            $leads[$id]['last_contacted'] = date('Y-m-d H:i');
+            pm_lead_note($leads[$id], 'One-page offer sent to ' . $lead['email']);
+            pm_leads_save($leads);
+            $back('Sent the one-page offer to ' . $lead['name'] . '.');
         }
         if ($do === 'send_reply_wa') { // C2-A04: an approved, drafted WhatsApp answer goes out through the Business API (inside the 24-hour window)
             $txt = trim((string)($_POST['whatsapp'] ?? ($lead['reply_draft']['whatsapp'] ?? '')));
@@ -1504,17 +1557,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($action === 'brand_draft') {
         $answers = [];
-        foreach (['name', 'sells', 'customers', 'sell_to', 'cities', 'targets', 'facts', 'magnet', 'voice', 'email', 'phone', 'website', 'never'] as $k) {
+        foreach (['name', 'sells', 'customers', 'sell_to', 'cities', 'targets', 'facts', 'magnet', 'voice', 'email', 'phone', 'website', 'never', 'notes'] as $k) {
             $answers[$k] = trim((string)($_POST[$k] ?? ''));
         }
+        $answers['notes'] = mb_substr($answers['notes'], 0, 6000);
         $_SESSION['bwiz'] = ['answers' => $answers];
         if ($bad = pm_brand_check_answers($answers)) {
             pm_redirect('business&new=1', implode(' ', $bad), 'err');
         }
-        @set_time_limit(120);
+        @set_time_limit(180); // up to five pages of the website, then one AI call
         $r = pm_brand_draft($answers);
-        $_SESSION['bwiz'] = ['answers' => $answers, 'draft' => $r['draft'], 'ai' => $r['ai'], 'note' => $r['note']];
+        $_SESSION['bwiz'] = ['answers' => $answers, 'draft' => $r['draft'], 'ai' => $r['ai'], 'note' => $r['note'], 'pages' => $r['pages'], 'rounds' => 0];
         pm_redirect('business&step=2');
+    }
+    if ($action === 'brand_redraft') { // the owner answered the AI's questions: draft again, keeping their edits and not reading the website again
+        $wz = (array)($_SESSION['bwiz'] ?? []);
+        $ans = (array)($wz['answers'] ?? []);
+        if (!$ans) {
+            pm_redirect('business&new=1', 'Start with the questions first.', 'err');
+        }
+        $in = (array)($_POST['d'] ?? []);
+        $lines = fn($v) => implode("\n", array_values(array_filter(array_map('trim', preg_split('/\R/', (string)$v) ?: []))));
+        foreach (['facts' => 'facts'] as $dk => $ak) {
+            if (isset($in[$dk])) {
+                $ans[$ak] = $lines($in[$dk]);
+            }
+        }
+        foreach (['sectors' => 'targets', 'cities' => 'cities', 'magnet' => 'magnet', 'never' => 'never', 'phone' => 'phone'] as $dk => $ak) {
+            if (isset($in[$dk])) {
+                $ans[$ak] = trim((string)$in[$dk]);
+            }
+        }
+        if (isset($in['email']) && ($in['email'] === '' || filter_var(trim((string)$in['email']), FILTER_VALIDATE_EMAIL))) {
+            $ans['email'] = trim((string)$in['email']);
+        }
+        $new = [];
+        foreach ((array)($_POST['qa'] ?? []) as $i => $a) {
+            $new[] = ['q' => is_scalar($_POST['qtext'][$i] ?? null) ? (string)$_POST['qtext'][$i] : '', 'a' => is_scalar($a) ? (string)$a : ''];
+        }
+        $ans['qa'] = pm_study_qa(array_merge((array)($ans['qa'] ?? []), $new));
+        @set_time_limit(180);
+        $r = pm_brand_draft($ans, (array)($wz['pages'] ?? []) ?: null);
+        $_SESSION['bwiz'] = ['answers' => $ans, 'draft' => $r['draft'], 'ai' => $r['ai'], 'note' => $r['note'], 'pages' => $r['pages'], 'rounds' => (int)($wz['rounds'] ?? 0) + 1];
+        pm_redirect('business&step=2', 'Drafted again with your answers. Your edits to the facts, kinds of business, towns and free step were kept.');
     }
     if ($action === 'brand_create') {
         $ans = (array)(($_SESSION['bwiz'] ?? [])['answers'] ?? []);
@@ -1531,9 +1616,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pl[] = ['name' => mb_substr($ln, 0, 40), 'weight' => 15];
             }
         }
+        $wzs = (array)($_SESSION['bwiz'] ?? []);
+        $segNames = array_column((array)($wzs['draft']['targeting']['segments'] ?? []), 'name');
+        $extra = array_values(array_filter(array_map('strval', (array)($in['extra'] ?? [])), fn($n) => in_array($n, $segNames, true))); // kinds the AI also suggested, ticked by the owner
         $draft = ['about' => trim((string)($in['about'] ?? '')), 'offerings' => $byLine($in['offerings'] ?? ''), 'facts' => $byLine($in['facts'] ?? ''), 'audience' => trim((string)($in['audience'] ?? '')),
-            'voice' => trim((string)($in['voice'] ?? '')), 'never' => trim((string)($in['never'] ?? '')), 'sectors' => pm_brand_list($in['sectors'] ?? '', 10, 60), 'cities' => pm_brand_list($in['cities'] ?? '', 12, 40),
-            'magnet' => trim((string)($in['magnet'] ?? '')), 'cta_keyword' => (string)($in['cta_keyword'] ?? ''), 'pillars' => array_slice($pl, 0, 8)];
+            'voice' => trim((string)($in['voice'] ?? '')), 'never' => trim((string)($in['never'] ?? '')), 'sectors' => pm_brand_list(array_merge(pm_brand_list($in['sectors'] ?? '', 10, 60), $extra), 10, 60), 'cities' => pm_brand_list($in['cities'] ?? '', 12, 40),
+            'magnet' => trim((string)($in['magnet'] ?? '')), 'cta_keyword' => (string)($in['cta_keyword'] ?? ''), 'pillars' => array_slice($pl, 0, 8),
+            'email' => trim((string)($in['email'] ?? '')), 'phone' => trim((string)($in['phone'] ?? '')), 'targeting' => (array)($wzs['draft']['targeting'] ?? []), // the advice itself is kept on the server, not posted back
+            'pages_read' => array_column((array)($wzs['pages']['pages'] ?? []), 'url'), 'ai' => !empty($wzs['ai'])];
         [$newId, $errs] = pm_brand_create($ans, $draft);
         if ($errs) {
             pm_redirect('business&step=2', implode(' ', $errs), 'err');
@@ -1541,6 +1631,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         unset($_SESSION['bwiz']);
         $_SESSION['abrand'] = $newId;
         pm_redirect('business&id=' . $newId . '&welcome=1', pm_brand_name($newId) . ' was created. Nothing was sent and nothing was switched on.');
+    }
+    if ($action === 'brand_restudy') { // read the website again and show what is new; nothing changes until the owner ticks it
+        $bid = pm_brand_norm((string)($_POST['id'] ?? ''));
+        if (!pm_brand_is_custom($bid)) {
+            pm_redirect('settings', 'Only a business you added can be studied again.', 'err');
+        }
+        if (!pm_agents_ready()) {
+            pm_redirect('settings&brand=' . $bid, 'The AI needs a key in .env first (see Settings > Setup health).', 'err');
+        }
+        @set_time_limit(180);
+        $r = pm_brand_draft(pm_study_answers_for($bid));
+        $_SESSION['bstudy'] = ['id' => $bid, 'draft' => $r['draft'], 'ai' => $r['ai'], 'note' => $r['note'], 'pages' => $r['pages']];
+        pm_redirect('business&id=' . $bid . '&study=1');
+    }
+    if ($action === 'brand_study_apply') {
+        $bid = pm_brand_norm((string)($_POST['id'] ?? ''));
+        $st = (array)($_SESSION['bstudy'] ?? []);
+        if (($st['id'] ?? '') !== $bid || !pm_brand_is_custom($bid)) {
+            pm_redirect('settings', 'That study has expired. Press "Study the business again" to start one.', 'err');
+        }
+        $msg = pm_study_apply($bid, pm_study_diff($bid, (array)$st['draft']), (array)($_POST['pick'] ?? []), (array)$st['draft'], (array)($st['pages'] ?? []), !empty($st['ai']));
+        unset($_SESSION['bstudy']);
+        pm_redirect('settings&brand=' . $bid, $msg);
     }
     if ($action === 'brand_archive') {
         $bid = (string)($_POST['id'] ?? '');
@@ -1592,6 +1705,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $prof['cta_keyword'] = strtoupper(preg_replace('/[^A-Za-z]/', '', $t('cta_keyword')));
         $prof['customers'] = $t('customers');
         $prof['sell_to'] = in_array($in['sell_to'] ?? '', ['business', 'public', 'both'], true) ? $in['sell_to'] : ($prof['sell_to'] ?? 'business');
+        if (isset($in['tg_segments'])) { // who to target and why: the scouts and the qualifier read it
+            $prof['targeting'] = ['segments' => pm_study_segments_parse((string)$in['tg_segments'], pm_brand_targeting($bid)['segments']), 'skip' => array_slice($byLine($in['tg_skip'] ?? ''), 0, 8), 'angles' => array_slice($byLine($in['tg_angles'] ?? ''), 0, 8)];
+        }
         $blk['profile'] = $prof;
         $raw = pm_load('settings', 'pm_default_settings');
         $raw['brands'][$bid] = $blk;

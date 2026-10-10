@@ -277,6 +277,7 @@ t('Proactive engagement drafts', function () {
 });
 
 t('X posting', function () use ($T) {
+    pm_brand_set('promanaged');
     pm_t_assert(!pm_x_cfg()['ready'], 'X off without keys');
     pm_t_eq(pm_x_post('hello')[0], false, 'no send without keys');
     pm_t_eq(pm_job_channels_x('promanaged'), 'X not connected', 'job gated');
@@ -343,6 +344,7 @@ t('Plan learnings composition', function () {
 });
 
 t('WhatsApp Business responder', function () {
+    pm_brand_set('promanaged');
     putenv('WA_BIZ_TOKEN=tok');
     putenv('WA_BIZ_PHONE_ID=999');
     putenv('WA_BIZ_VERIFY=verify-me');
@@ -359,7 +361,12 @@ t('WhatsApp Business responder', function () {
         $sent[] = [$to, $text];
         return [true, 'wamid.1'];
     };
-    pm_t_eq(pm_wa_biz_handle('265888000000', 'hello?'), 'unknown number: logged as unmatched', 'unknown numbers logged');
+    $unk = pm_wa_biz_handle('265888000000', 'hello?');
+    pm_t_assert(str_starts_with($unk, 'new lead from WhatsApp:'), 'someone new who writes is a new lead, not a dropped message: ' . $unk);
+    $nl = array_values(array_filter(pm_leads(), fn($l) => str_contains((string)($l['phone'] ?? ''), '265888000000')))[0] ?? [];
+    pm_t_assert($nl && $nl['source'] === 'whatsapp' && $nl['channel'] === 'whatsapp' && $nl['status'] === 'replied' && $nl['brand'] === 'promanaged' && ($nl['thread'][count($nl['thread']) - 1]['text'] ?? '') === 'hello?' && (($nl['thread'][count($nl['thread']) - 1]['ch'] ?? '') === 'wa'),
+        'with the message in its thread, marked as WhatsApp');
+    pm_save('leads', ['w1' => pm_leads()['w1']]);
     pm_t_eq(pm_wa_biz_handle('265999123456', 'STOP please'), 'STOP honoured', 'STOP is honoured on WhatsApp');
     pm_t_eq(pm_leads()['w1']['status'] ?? '', 'optout', 'lead is now optout');
     pm_t_assert(count($sent) === 1, 'only the STOP confirmation went out');

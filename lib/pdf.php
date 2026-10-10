@@ -7,6 +7,7 @@ class PM_PDF extends TCPDF
     public string $ref = '';
     public array $accent = [23, 55, 94];
     public string $footNote = '';
+    public bool $onePage = false; // a one-page document has no "Page 1 of 1"
 
     public function __construct(...$args)
     {
@@ -39,7 +40,9 @@ class PM_PDF extends TCPDF
         $this->SetTextColor(120, 120, 120);
         $bits = array_filter([$this->s['company_name'], $this->s['phone'], $this->s['email'], $this->s['website']]);
         $this->Cell(140, 5, $this->footNote !== '' ? $this->footNote : implode('   ·   ', $bits), 0, 0, 'L');
-        $this->Cell(0, 5, 'Page ' . $this->getAliasNumPage() . ' of ' . $this->getAliasNbPages(), 0, 0, 'R');
+        if (!$this->onePage) {
+            $this->Cell(0, 5, 'Page ' . $this->getAliasNumPage() . ' of ' . $this->getAliasNbPages(), 0, 0, 'R');
+        }
     }
 }
 

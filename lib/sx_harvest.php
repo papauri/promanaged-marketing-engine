@@ -360,8 +360,8 @@ function pm_send_wa_draft(array &$leads, string $id, string $kind): array
         if (($l['status'] ?? '') === 'optout') {
             return $no(($l['name'] ?? 'This business') . ' asked not to be contacted.');
         }
-        if (!function_exists('pm_wa_biz_cfg') || !pm_wa_biz_cfg()['ready']) {
-            return $no('WhatsApp Business is not connected: use "Open WhatsApp" and send it from your phone.');
+        if (!function_exists('pm_wa_biz_cfg') || !pm_wa_biz_cfg((string)($l['brand'] ?? 'promanaged'))['ready']) {
+            return $no('WhatsApp Business is not connected for ' . pm_brand_name((string)($l['brand'] ?? 'promanaged')) . ': use "Open WhatsApp" and send it from your phone.');
         }
         $text = pm_wa_draft_text($l, $kind);
         [$num] = pm_wa_best($l);
@@ -380,7 +380,7 @@ function pm_send_wa_draft(array &$leads, string $id, string $kind): array
         if ($bad) {
             return $no('Not sent. ' . implode(' ', $bad) . ' Edit the message and try again.');
         }
-        [$ok, $mid] = pm_wa_biz_send($num, $full);
+        [$ok, $mid] = pm_wa_biz_send($num, $full, (string)($l['brand'] ?? 'promanaged'));
         if (!$ok) {
             return $no('Could not send: ' . $mid);
         }

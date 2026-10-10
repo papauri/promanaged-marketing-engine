@@ -572,18 +572,19 @@ t('C2-A12 the winning picture is re-cut, not just the text', function () {
 t('C2-G01 setup-health panel', function () {
     $rows = pm_setup_health();
     $by = array_column($rows, null, 'key');
-    foreach (['ai', 'smtp_promanaged', 'smtp_travel', 'imap_promanaged', 'imap_travel', 'fb_promanaged', 'fb_travel', 'ig_promanaged', 'li_promanaged', 'x', 'wa', 'scheduler', 'cron_key', 'app_url'] as $k) {
+    foreach (['ai', 'smtp_promanaged', 'smtp_travel', 'imap_promanaged', 'imap_travel', 'fb_promanaged', 'fb_travel', 'ig_promanaged', 'li_promanaged', 'x_promanaged', 'x_travel', 'wa_promanaged', 'wa_travel', 'scheduler', 'cron_key', 'app_url'] as $k) {
         pm_t_assert(isset($by[$k]), "row $k present");
     }
     pm_t_assert($by['fb_promanaged']['ok'] && !$by['fb_travel']['ok'] && $by['fb_travel']['add'] !== '', 'Facebook is ready for ProManaged IT, missing for Travel Malawi, with what to add');
     pm_t_assert(!$by['app_url']['ok'] && str_contains($by['app_url']['add'], 'APP_URL'), 'APP_URL missing says what to add');
     pm_t_assert($by['cron_key']['ok'], 'CRON_KEY is set in the test env');
-    pm_t_eq([$by['x']['need'], $by['x']['ok']], ['optional', false], 'X is optional and off without keys');
+    pm_t_eq([$by['x_promanaged']['need'], $by['x_promanaged']['ok']], ['optional', false], 'X is optional and off without keys');
     putenv('X_API_KEY=k');
     putenv('X_API_SECRET=s');
     putenv('X_ACCESS_TOKEN=t');
     putenv('X_ACCESS_SECRET=ts');
-    pm_t_assert(array_column(pm_setup_health(), null, 'key')['x']['ok'], 'X turns ready when its keys exist');
+    $xr = array_column(pm_setup_health(), null, 'key');
+    pm_t_assert($xr['x_promanaged']['ok'] && !$xr['x_travel']['ok'], 'X turns ready for the business whose keys exist, and only that one');
     putenv('X_API_KEY');
     putenv('X_API_SECRET');
     putenv('X_ACCESS_TOKEN');

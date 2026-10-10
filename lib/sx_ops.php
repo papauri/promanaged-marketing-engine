@@ -39,13 +39,14 @@ function pm_setup_health(): array
         $row("ig_$b", "Instagram · $n", 'optional', $fb['ig_id'] !== '', $fb['ig_id'] !== '' ? 'Linked.' : 'Instagram posts stay hand-posted.', "Link the account to the Page, then reconnect Facebook ({$p}IG_USER_ID)");
         $li = pm_linkedin_cfg($b);
         $row("li_$b", "LinkedIn · $n", 'optional', $li['ready'], $li['ready'] ? 'Connected.' : 'LinkedIn posts stay hand-posted.', "{$p}LI_ORG_ID and {$p}LI_TOKEN in .env (needs LinkedIn approval)");
+        $x = pm_x_cfg($b); // each business has its own X account and its own WhatsApp Business number
+        $row("x_$b", "X (Twitter) · $n", 'optional', $x['ready'], $x['ready'] ? 'Connected.' : 'Nothing is posted to X for this business.', "{$p}X_API_KEY, {$p}X_API_SECRET, {$p}X_ACCESS_TOKEN, {$p}X_ACCESS_SECRET in .env");
+        $wa = function_exists('pm_wa_biz_cfg') ? pm_wa_biz_cfg($b) : ['ready' => false, 'template' => ''];
+        $row("wa_$b", "WhatsApp Business · $n", 'optional', $wa['ready'], $wa['ready'] ? 'Connected' . ($wa['template'] !== '' ? ', campaign template set.' : '; add a template name to run campaigns outside the 24-hour window.')
+            . (pm_brand_env($b, 'WA_BIZ_APP_SECRET') === '' ? ' Messages are not checked as coming from WhatsApp: add ' . $p . 'WA_BIZ_APP_SECRET (the Meta app secret).' : ' Incoming messages are checked.') : 'No automatic WhatsApp answers or campaigns for this business.',
+            "{$p}WA_BIZ_TOKEN, {$p}WA_BIZ_PHONE_ID, {$p}WA_BIZ_VERIFY in .env (and {$p}WA_BIZ_TEMPLATE for campaigns)");
     }
     pm_brand_set($was);
-    $x = pm_x_cfg();
-    $row('x', 'X (Twitter)', 'optional', $x['ready'], $x['ready'] ? 'Connected.' : 'Nothing is posted to X.', 'X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET in .env');
-    $wa = function_exists('pm_wa_biz_cfg') ? pm_wa_biz_cfg() : ['ready' => false];
-    $row('wa', 'WhatsApp Business', 'optional', $wa['ready'], $wa['ready'] ? 'Connected' . (pm_env_val('WA_BIZ_TEMPLATE') !== '' ? ', campaign template set.' : '; add a template name to run campaigns outside the 24-hour window.') : 'No automatic WhatsApp answers or campaigns.',
-        'WA_BIZ_TOKEN, WA_BIZ_PHONE_ID, WA_BIZ_VERIFY in .env (and WA_BIZ_TEMPLATE for campaigns)');
     $cron = pm_env_val('CRON_KEY') !== '';
     $age = function_exists('pm_social_heartbeat_age') ? pm_social_heartbeat_age() : null;
     $last = function_exists('pm_health_last') ? pm_health_last() : [];
@@ -376,7 +377,7 @@ function pm_health_check(string $key): array
     $b = (string)substr($key, strlen($what) + 1);
     $was = pm_brand();
     try {
-        if (in_array($what, ['smtp', 'imap', 'fb'], true) && !pm_brand_valid($b)) {
+        if (in_array($what, ['smtp', 'imap', 'fb', 'wa'], true) && !pm_brand_valid($b)) {
             $res = [false, 'Unknown business.'];
         } elseif ($what === 'smtp') {
             pm_brand_set($b);
@@ -386,8 +387,8 @@ function pm_health_check(string $key): array
         } elseif ($what === 'fb') {
             $pg = pm_social_page($b, true);
             $res = !empty($pg['ok']) ? [true, 'connected to the Page "' . $pg['name'] . '" (' . number_format((int)$pg['followers']) . ' followers)'] : [false, (string)($pg['error'] ?? 'not connected')];
-        } elseif ($key === 'wa') {
-            $res = function_exists('pm_wa_biz_check') ? pm_wa_biz_check() : [false, 'Not available.'];
+        } elseif ($what === 'wa') {
+            $res = function_exists('pm_wa_biz_check') ? pm_wa_biz_check($b) : [false, 'Not available.'];
         }
     } catch (Throwable $e) {
         $res = [false, mb_substr($e->getMessage(), 0, 200)];
@@ -411,7 +412,7 @@ function pm_health_last(): array
 /** Does this setup-health row have a check behind it, and is it set up enough to try? */
 function pm_health_testable(array $row): bool
 {
-    return !empty($row['ok']) && (preg_match('/^(smtp|imap|fb)_/', (string)$row['key']) === 1 || $row['key'] === 'wa');
+    return !empty($row['ok']) && preg_match('/^(smtp|imap|fb|wa)_/', (string)$row['key']) === 1;
 }
 
 /* ---------------- C3-G01 · restore one file from a weekly archive ---------------- */

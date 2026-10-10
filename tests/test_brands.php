@@ -271,9 +271,12 @@ t('Replies: neutral wording, no claim the owner did not write', function () use 
 
 t('A WhatsApp message is answered as the business the lead belongs to', function () use (&$CREATED, &$SEEN) {
     $id = $CREATED;
-    putenv('WA_BIZ_TOKEN=tok');
-    putenv('WA_BIZ_PHONE_ID=999');
-    putenv('WA_BIZ_VERIFY=v');
+    $pre = strtoupper($id) . '_';
+    foreach (['' => '999', 'TM_' => '998', $pre => '997'] as $p => $pid) { // three businesses, three numbers
+        putenv($p . 'WA_BIZ_TOKEN=tok');
+        putenv($p . 'WA_BIZ_PHONE_ID=' . $pid);
+        putenv($p . 'WA_BIZ_VERIFY=v');
+    }
     $mk = fn($lid, $brand, $num) => ['id' => $lid, 'brand' => $brand, 'name' => "Lead $lid", 'type' => 'shop', 'city' => 'Zomba', 'status' => 'contacted', 'whatsapp' => $num, 'phone' => $num, 'score' => 70, 'sent' => ['2026-10-01 09:00'],
         'notes' => [], 'thread' => [['dir' => 'out', 'at' => date('Y-m-d H:i', time() - 7200), 'text' => 'Hello', 'ch' => 'wa']], 'wa_sent' => [date('Y-m-d H:i', time() - 7200)], 'email' => "l$lid@x$lid.mw"];
     pm_save('leads', ['w1' => $mk('w1', $id, '+265 999 700 001'), 'w2' => $mk('w2', 'travel', '+265 999 700 002'), 'w3' => $mk('w3', 'promanaged', '+265 999 700 003')]);
@@ -284,9 +287,9 @@ t('A WhatsApp message is answered as the business the lead belongs to', function
         return json_encode(['intent' => 'question', 'summary' => 'asks', 'needs_human' => false, 'reply_subject' => 'Re', 'reply_body' => 'Thanks for asking, we will reply.', 'whatsapp' => 'Thanks for asking.', 'resume_on' => '', 'next_step' => 'reply']);
     };
     pm_brand_set('promanaged');
-    pm_wa_biz_handle('265999700001', 'Do you cover Zomba?');
-    pm_wa_biz_handle('265999700002', 'Do you have a room for Friday?');
-    pm_wa_biz_handle('265999700003', 'Do you do websites?');
+    pm_wa_biz_handle('265999700001', 'Do you cover Zomba?', '997');
+    pm_wa_biz_handle('265999700002', 'Do you have a room for Friday?', '998');
+    pm_wa_biz_handle('265999700003', 'Do you do websites?', '999');
     $GLOBALS['PM_AI_STUB'] = null;
     $GLOBALS['PM_WA_STUB'] = null;
     pm_t_eq(count($systems), 3, 'three messages, three replies drafted');
@@ -294,9 +297,214 @@ t('A WhatsApp message is answered as the business the lead belongs to', function
     pm_t_assert(str_contains($systems[1], 'Reply agent for Travel Malawi') && str_contains($systems[2], 'Reply agent for ProManaged IT'), 'and the others by theirs');
     pm_t_eq(pm_brand(), 'promanaged', 'the app is back where it started');
     pm_save('leads', []);
-    putenv('WA_BIZ_TOKEN');
-    putenv('WA_BIZ_PHONE_ID');
-    putenv('WA_BIZ_VERIFY');
+    foreach (['', 'TM_', $pre] as $p) {
+        foreach (['WA_BIZ_TOKEN', 'WA_BIZ_PHONE_ID', 'WA_BIZ_VERIFY'] as $k) {
+            putenv($p . $k);
+        }
+    }
+});
+
+t('Every business has its own WhatsApp number and X account', function () use (&$CREATED) {
+    $id = $CREATED;
+    $pre = strtoupper($id) . '_';
+    $set = function (string $p, string $pid) {
+        putenv($p . 'WA_BIZ_TOKEN=tok' . $pid);
+        putenv($p . 'WA_BIZ_PHONE_ID=' . $pid);
+        putenv($p . 'WA_BIZ_VERIFY=verify' . $pid);
+    };
+    $clear = function () use ($pre) {
+        foreach (['', 'TM_', $pre] as $p) {
+            foreach (['WA_BIZ_TOKEN', 'WA_BIZ_PHONE_ID', 'WA_BIZ_VERIFY', 'WA_BIZ_TEMPLATE', 'X_API_KEY', 'X_API_SECRET', 'X_ACCESS_TOKEN', 'X_ACCESS_SECRET'] as $k) {
+                putenv($p . $k);
+            }
+        }
+    };
+    $clear();
+    pm_brand_set('promanaged');
+    pm_t_eq(pm_wa_biz_brands(), [], 'nothing is connected to start with');
+    $r0 = array_column(pm_setup_health(), null, 'key');
+    pm_t_assert(str_contains($r0["wa_$id"]['add'], $pre . 'WA_BIZ_TOKEN') && str_contains($r0['wa_travel']['add'], 'TM_WA_BIZ_TOKEN') && str_contains($r0['wa_promanaged']['add'], 'WA_BIZ_TOKEN') && str_contains($r0["x_$id"]['add'], $pre . 'X_API_KEY'),
+        'each Setup health row says which keys that business needs');
+    $set('', '999');
+    pm_t_eq(pm_wa_biz_brands(), ['promanaged'], 'ProManaged IT\'s keys connect ProManaged IT and nobody else');
+    pm_t_assert(!pm_wa_biz_cfg('travel')['ready'] && !pm_wa_biz_cfg($id)['ready'], 'Travel Malawi and the added business do not borrow that number');
+    [$ok, $why] = pm_wa_biz_send('265999000111', 'Hello', 'travel');
+    pm_t_assert(!$ok && str_contains($why, 'TM_WA_BIZ_'), 'sending as a business with no number is refused and says which keys to add: ' . $why);
+    [$ok, $why] = pm_wa_biz_send('265999000111', 'Hello', $id);
+    pm_t_assert(!$ok && str_contains($why, $pre . 'WA_BIZ_'), 'the same for an added business: ' . $why);
+    $set('TM_', '998');
+    $set($pre, '997');
+    pm_t_eq(pm_wa_biz_brands(), ['promanaged', 'travel', $id], 'each business with its own keys is connected');
+    pm_t_eq(pm_wa_biz_brands('998'), ['travel'], 'a number id belongs to exactly one business');
+    pm_t_eq(pm_wa_biz_brands('555'), [], 'and an unknown number id to none');
+    pm_t_assert(pm_wa_biz_verify_ok('verify997') && pm_wa_biz_verify_ok('verify999') && !pm_wa_biz_verify_ok('nope') && !pm_wa_biz_verify_ok(''), 'Meta\'s check passes for any connected business\'s token, and for nothing else');
+
+    $out = [];
+    $GLOBALS['PM_WA_STUB'] = function ($to, $text, $pid = '') use (&$out) {
+        $out[] = [$to, $pid];
+        return [true, 'wamid'];
+    };
+    pm_wa_biz_send('265999000111', 'Hello', 'travel');
+    pm_wa_biz_send('265999000111', 'Hello', $id);
+    pm_wa_biz_send('265999000111', 'Hello', 'promanaged');
+    pm_brand_set('travel');
+    pm_wa_biz_send('265999000111', 'Hello');
+    pm_brand_set('promanaged');
+    pm_t_eq(array_column($out, 1), ['998', '997', '999', '998'], 'every message leaves from the number of its own business (and the current business is the default)');
+
+    // an approved answer, a campaign message and a template go out from the lead's own business number too
+    $out = [];
+    $lead = ['id' => 'q1', 'brand' => $id, 'name' => 'Lead q1', 'status' => 'replied', 'whatsapp' => '+265 999 800 001', 'phone' => '+265 999 800 001', 'thread' => [['dir' => 'in', 'at' => date('Y-m-d H:i', time() - 600), 'text' => 'Hi', 'ch' => 'wa']], 'email' => 'q1@x.mw'];
+    [$ok] = pm_wa_biz_send_approved($lead, 'Thanks for writing, we are happy to help you with that today.');
+    pm_t_assert($ok && array_column($out, 1) === ['997'], 'an approved answer goes from the lead\'s business number even when another business is on screen: ' . json_encode($out));
+    $out = [];
+    $send = pm_wac_api_sender('', 'travel');
+    $send('265999800002', 'Hello again', ['id' => 'q2', 'brand' => 'travel', 'thread' => [['dir' => 'in', 'ch' => 'wa', 'at' => date('Y-m-d H:i', time() - 600), 'text' => 'hi']]]);
+    pm_t_eq(array_column($out, 1), ['998'], 'a campaign message goes from the campaign\'s own number');
+    $out = [];
+    $r = $send('265999800003', 'x', ['id' => 'q3', 'brand' => 'travel', 'thread' => []]);
+    pm_t_assert(!$r[0] && str_contains($r[1], 'TM_WA_BIZ_TEMPLATE'), 'outside the 24-hour window with no template, the refusal names that business\'s own template key: ' . $r[1]);
+
+    // templates belong to a number, so to a business
+    putenv('TM_WA_BIZ_TEMPLATE=tm_hello');
+    putenv('WA_BIZ_TEMPLATE=pm_hello');
+    pm_t_eq(array_keys(pm_wa_templates('travel')), ['tm_hello'], 'Travel Malawi\'s default template is its own');
+    pm_t_eq(array_keys(pm_wa_templates('promanaged')), ['pm_hello'], 'and ProManaged IT\'s is its own');
+    pm_t_eq(array_keys(pm_wa_templates($id)), [], 'the added business has none until it names one');
+    $_POST = ['tname' => 'sunrise_promo', 'tlang' => 'en'];
+    pm_do_wa_template_add($id);
+    pm_t_eq(array_keys(pm_wa_templates($id)), ['sunrise_promo'], 'a template named for one business is listed for it');
+    pm_t_assert(!isset(pm_wa_templates('travel')['sunrise_promo']) && !isset(pm_wa_templates('promanaged')['sunrise_promo']), 'and for no other');
+    $_POST = ['tname' => 'sunrise_promo'];
+    pm_do_wa_template_remove('travel');
+    pm_t_assert(isset(pm_wa_templates($id)['sunrise_promo']), 'removing a name from another business\'s list leaves it alone');
+    pm_do_wa_template_remove($id);
+    pm_t_eq(array_keys(pm_wa_templates($id)), [], 'and removing it from its own list works');
+    $_POST = [];
+    $GLOBALS['PM_WA_STUB'] = null;
+
+    // X: its own account, never someone else's
+    pm_t_assert(!pm_x_cfg('travel')['ready'], 'X is off for a business with no keys');
+    putenv('X_API_KEY=k');
+    putenv('X_API_SECRET=s');
+    putenv('X_ACCESS_TOKEN=t');
+    putenv('X_ACCESS_SECRET=ts');
+    pm_t_assert(pm_x_cfg('promanaged')['ready'] && !pm_x_cfg('travel')['ready'] && !pm_x_cfg($id)['ready'], 'ProManaged IT\'s X keys do not turn X on for the others');
+    $posted = [];
+    $GLOBALS['PM_X_STUB'] = function ($text, $b = '') use (&$posted) {
+        $posted[] = $b;
+        return [true, 'id1'];
+    };
+    [$ok, $why] = pm_x_post('Hello', 'travel');
+    pm_t_assert(!$ok && str_contains($why, 'TM_X_API_KEY') && $posted === [], 'a post for a business with no X account is refused, naming its keys: ' . $why);
+    pm_x_post('Hello', 'promanaged');
+    foreach (['X_API_KEY', 'X_API_SECRET', 'X_ACCESS_TOKEN', 'X_ACCESS_SECRET'] as $k) {
+        putenv("TM_$k=tm" . $k);
+    }
+    pm_x_post('Hello', 'travel');
+    pm_t_eq($posted, ['promanaged', 'travel'], 'each business posts through its own account');
+    pm_t_eq(pm_job_channels_x($id), 'X not connected', 'the job for an added business stays off without its own keys');
+    $GLOBALS['PM_X_STUB'] = null;
+
+    // Setup health: a row each, naming each business's own keys
+    $rows = array_column(pm_setup_health(), null, 'key');
+    pm_t_assert(isset($rows["wa_$id"], $rows["x_$id"], $rows['wa_travel'], $rows['x_travel']) && !isset($rows['wa']) && !isset($rows['x']), 'Setup health has a WhatsApp and an X row for every business, and no shared one');
+    pm_t_assert(str_contains($rows["x_$id"]['add'], $pre . 'X_API_KEY') && $rows['wa_travel']['add'] === '', 'a row that is connected stops asking for keys');
+    pm_t_assert($rows['wa_promanaged']['ok'] && $rows["wa_$id"]['ok'] && $rows['x_travel']['ok'] && !$rows["x_$id"]['ok'], 'and shows each business\'s own state');
+
+    // hiding a business takes its keys with it
+    pm_t_eq(pm_brand_env('nosuchbusiness', 'WA_BIZ_TOKEN'), '', 'an unknown business has no keys (it never falls back to ProManaged IT\'s)');
+    $clear();
+    foreach (['X_API_KEY', 'X_API_SECRET', 'X_ACCESS_TOKEN', 'X_ACCESS_SECRET'] as $k) {
+        putenv("TM_$k");
+    }
+});
+
+t('Someone new who writes to a business\'s WhatsApp number becomes that business\'s lead', function () use (&$CREATED) {
+    $id = $CREATED;
+    $pre = strtoupper($id) . '_';
+    foreach (['' => '999', 'TM_' => '998', $pre => '997'] as $p => $pid) {
+        putenv($p . 'WA_BIZ_TOKEN=tok');
+        putenv($p . 'WA_BIZ_PHONE_ID=' . $pid);
+        putenv($p . 'WA_BIZ_VERIFY=v');
+    }
+    pm_save('leads', []);
+    $ac = pm_load('agents_config', 'pm_agents_default_config');
+    $ac['wa_reply_mode'] = 'auto';
+    pm_save('agents_config', $ac);
+    $o = pm_lp_clean(['title' => 'A free site visit', 'problem' => 'Power cuts', 'fix' => 'We look at your roof and tell you what would work.', 'keyword' => 'visit', 'button' => 'whatsapp', 'reply' => 'Thank you. Tell us about your building and a person will reply.'], $id);
+    pm_lp_update(fn($rows) => [$o + ['id' => 'abcdef0123', 'status' => 'active', 'created' => date('Y-m-d H:i'), 'views' => 0]]);
+    $sent = [];
+    $GLOBALS['PM_WA_STUB'] = function ($to, $text, $pid = '') use (&$sent) {
+        $sent[] = [$to, $pid, $text];
+        return [true, 'wamid'];
+    };
+    $ai = 0;
+    $GLOBALS['PM_AI_STUB'] = function ($sys, $user) use (&$ai) {
+        $ai++;
+        return json_encode(['intent' => 'question', 'summary' => 'asks about a room', 'needs_human' => false, 'reply_subject' => 'Re', 'reply_body' => 'Thanks for asking, we will reply.', 'whatsapp' => 'Thanks for asking, we will check and reply today.', 'resume_on' => '', 'next_step' => 'reply']);
+    };
+    $find = fn(string $brand, string $digits) => array_values(array_filter(pm_leads(), fn($l) => ($l['brand'] ?? '') === $brand && str_contains(preg_replace('/\D/', '', (string)$l['phone']), $digits)))[0] ?? null;
+
+    // an offer's keyword: the owner's own reply, no AI, from that business's number
+    pm_brand_set('promanaged');
+    $note = pm_wa_biz_handle('265999800777', 'VISIT', '997', 'Chikondi Banda');
+    $l = $find($id, '999800777');
+    pm_t_assert(str_starts_with($note, 'new lead from WhatsApp:') && $l !== null, 'a new number writing the keyword becomes a lead of the business whose number it wrote to: ' . $note);
+    pm_t_assert($l['name'] === 'Chikondi Banda' && $l['contact'] === 'Chikondi Banda' && $l['channel'] === 'whatsapp' && $l['source'] === 'whatsapp' && in_array($l['status'], ['replied', 'contacted'], true) && $l['src_tag'] === 'offer-abcdef0123',
+        'named as they named themselves, warm, and tagged with the offer it came from');
+    $in = array_values(array_filter($l['thread'], fn($m) => ($m['dir'] ?? '') === 'in' && ($m['ch'] ?? '') === 'wa'));
+    pm_t_assert(count($in) === 1 && $in[0]['text'] === 'VISIT' && !empty(pm_wa_optin($l)), 'their message is in the thread once, as a WhatsApp message, which also records their agreement to be messaged on WhatsApp');
+    pm_t_eq($ai, 0, 'a keyword needs no AI');
+    pm_t_assert(count($sent) === 1 && $sent[0][1] === '997' && str_contains($sent[0][2], 'Tell us about your building'), 'the owner\'s own reply words went out, from that business\'s number: ' . json_encode($sent));
+    pm_t_assert(!str_contains(json_encode($find($id, '999800777')['thread']), 'ProManaged'), 'and nothing of another business is in it');
+
+    // anything else: a drafted answer that waits, never sent to a stranger by itself
+    $sent = [];
+    $note = pm_wa_biz_handle('265999800888', 'Do you have a room for Friday?', '998', 'Mary <b>Phiri</b>');
+    $t = $find('travel', '999800888');
+    pm_t_assert($t !== null && $t['name'] === 'Mary Phiri', 'a stranger\'s first message makes a lead for the business it came to, with a plain name: ' . ($t['name'] ?? '-'));
+    pm_t_assert($sent === [] && $ai === 1 && !empty($t['reply_draft']['whatsapp']), 'its answer was drafted for the owner and not sent');
+    pm_t_eq($find('promanaged', '999800888'), null, 'and no other business got a lead');
+
+    // the same person writing to a second business is a lead of that one too, not a merge
+    $sent = [];
+    pm_wa_biz_handle('265999800888', 'Do you do websites?', '999', 'Mary');
+    pm_t_assert($find('promanaged', '999800888') !== null && $find('travel', '999800888') !== null, 'the same person is a separate lead for each business they write to');
+    // once known, the normal path
+    $before = count(pm_leads());
+    $note = pm_wa_biz_handle('265999800888', 'Thanks, one more question', '998');
+    pm_t_assert(!str_starts_with($note, 'new lead') && count(pm_leads()) === $before, 'a second message from the same number is the ordinary conversation, not another lead');
+    // STOP from nobody, and a message to a number nobody owns
+    pm_t_eq(pm_wa_biz_handle('265999800999', 'STOP', '997'), 'STOP from a number with no lead: nothing to stop', 'STOP from a number we have no record of creates nothing');
+    pm_t_eq($find($id, '999800999'), null, 'no lead was made for it');
+    pm_update('leads', function (array $all) {
+        foreach ($all as $k => $l) {
+            if (str_contains(preg_replace('/\D/', '', (string)$l['phone']), '999800777')) {
+                $all[$k]['status'] = 'optout';
+            }
+        }
+        return $all;
+    });
+    $count = count(pm_leads());
+    $sent = [];
+    pm_t_assert(str_contains(pm_wa_biz_handle('265999800777', 'Please contact me again', '997', 'Chikondi'), 'do-not-contact number wrote again') && count(pm_leads()) === $count && $sent === [], 'a number that said STOP is never a new lead and never answered');
+    pm_t_eq(pm_wa_biz_handle('265999801000', 'hello', '555'), 'a number that is not connected to any business: ignored', 'a message to a number no business owns is ignored');
+    // the AI being down does not lose the message
+    $GLOBALS['PM_AI_STUB'] = function () { throw new RuntimeException('AI is down'); };
+    pm_wa_biz_handle('265999801111', 'Is anyone there?', '999', 'Joyce');
+    $j = $find('promanaged', '999801111');
+    pm_t_assert($j !== null && str_contains(json_encode($j['thread']), 'Is anyone there?'), 'if the AI is down the message is still kept, for a person to read');
+    $GLOBALS['PM_AI_STUB'] = null;
+    $GLOBALS['PM_WA_STUB'] = null;
+    pm_lp_update(fn($rows) => []);
+    pm_save('leads', []);
+    foreach (['', 'TM_', $pre] as $p) {
+        foreach (['WA_BIZ_TOKEN', 'WA_BIZ_PHONE_ID', 'WA_BIZ_VERIFY'] as $k) {
+            putenv($p . $k);
+        }
+    }
+    pm_brand_set('promanaged');
 });
 
 /* =========================================================== social */

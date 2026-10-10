@@ -257,7 +257,18 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
       <?php if ($tel = pm_tel_link($l)): ?><a class="btn" href="<?= pm_h($tel) ?>">Call</a><?php endif; ?>
       <form method="post"><?= $post($id, 'research') ?><button class="btn" title="Website, Facebook, Instagram, reviews and recent news"><?= empty($l['research']) ? 'Research' : 'Research again' ?></button></form>
       <?php if (empty($dr['email_body'])): ?><form method="post"><?= $post($id, 'draft_outreach') ?><button class="btn">Draft outreach</button></form><?php endif; ?>
+      <?php if (pm_brand_is_custom((string)($l['brand'] ?? ''))): $op = pm_onepager_status((string)$l['brand']); [$osub, $obody] = pm_onepager_default_mail($l); ?>
+      <details class="more drop"><summary class="btn">One-page offer</summary>
+        <div class="menu" style="min-width:280px">
+          <a class="btn small" href="?onepager=<?= pm_h((string)$l['brand']) ?>">Download the PDF</a>
+          <?php if ($op['problems']): ?><p class="hint warnt"><?= pm_h(implode(' ', $op['problems'])) ?></p>
+          <?php elseif (!pm_onepager_wrote($l) || !filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL)): ?><p class="hint">It can be emailed once they have written to you and you have their email address.</p>
+          <?php else: ?><form method="post"><?= $post($id, 'onepager_send') ?><input type="text" name="subject" value="<?= pm_h($osub) ?>" aria-label="Subject"><textarea name="body" rows="5" aria-label="Message"><?= pm_h($obody) ?></textarea>
+            <button class="btn small primary" onclick="return confirm('Email the one-page offer to <?= pm_h(addslashes($l['email'])) ?> now?')">Send with the PDF</button></form><?php endif; ?>
+        </div></details>
+      <?php else: ?>
       <form method="post"><?= $post($id, 'proposal') ?><button class="btn">Create proposal</button></form>
+      <?php endif; ?>
       <?php if ($focusId === ''): ?><a class="btn" href="?tab=agents&lead=<?= pm_h($id) ?>" title="Work on this business alone">Focus</a><?php endif; ?>
       <details class="more drop"><summary class="btn">More</summary>
         <div class="menu">

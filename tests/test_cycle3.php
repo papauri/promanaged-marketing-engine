@@ -578,7 +578,7 @@ t('C3-G02 setup-health test buttons', function () {
     putenv('IMAP_PASS=p');
     wa_on();
     $rows = array_column(pm_setup_health(), null, 'key');
-    pm_t_assert(!empty($rows['smtp_promanaged']['testable']) && !empty($rows['imap_promanaged']['testable']) && !empty($rows['fb_promanaged']['testable']) && !empty($rows['wa']['testable']), 'rows that are set up have a Test button');
+    pm_t_assert(!empty($rows['smtp_promanaged']['testable']) && !empty($rows['imap_promanaged']['testable']) && !empty($rows['fb_promanaged']['testable']) && !empty($rows['wa_promanaged']['testable']), 'rows that are set up have a Test button');
     pm_t_assert(empty($rows['ai']['testable']) && empty($rows['scheduler']['testable']) && empty($rows['li_promanaged']['testable']), 'rows with no check behind them do not');
     pm_t_assert(empty($rows['fb_travel']['testable']), 'and a row that is not set up cannot be tested yet');
     [$ok, $m] = pm_health_check('smtp_promanaged');
@@ -587,7 +587,7 @@ t('C3-G02 setup-health test buttons', function () {
     pm_t_assert(!$ok && str_contains($m, 'refused'), 'a failing check gives the reason: ' . $m);
     [$ok, $m] = pm_health_check('fb_promanaged');
     pm_t_assert($ok && str_contains($m, 'Test Page'), 'the Facebook check names the Page: ' . $m);
-    [$ok, $m] = pm_health_check('wa');
+    [$ok, $m] = pm_health_check('wa_promanaged');
     pm_t_assert($ok && str_contains($m, '+265'), 'the WhatsApp check names the number: ' . $m);
     pm_t_assert(!pm_health_check('smtp_nobody')[0] && !pm_health_check('bogus')[0] && !pm_health_check('')[0], 'an unknown business or row is refused');
     $last = pm_health_last();

@@ -15,6 +15,8 @@ $envMail = ((pm_env()[$pre . 'SMTP_HOST'] ?? '') !== '');
 $row = pm_brands_custom()[$b] ?? [];
 $logo = pm_brand_asset($b, 'logo');
 $name = (string)$c['company_name'];
+$tg = pm_brand_targeting($b);
+$learned = (array)(((array)($c['profile'] ?? []))['learned'] ?? []);
 $fld = fn(string $k, string $label, string $ph = '', string $type = 'text') => '<div><label>' . pm_h($label) . '</label><input type="' . $type . '" name="b[' . $k . ']" value="' . pm_h((string)($c[$k] ?? '')) . '" placeholder="' . pm_h($ph) . '"></div>';
 ?>
 <form method="post" enctype="multipart/form-data" id="brandform">
@@ -69,6 +71,18 @@ $fld = fn(string $k, string $label, string $ph = '', string $type = 'text') => '
     <p class="hint">Limits (emails and WhatsApp messages a day, follow-ups) are on the Leads screen under More &gt; Agent settings. They start low on purpose.</p>
   </div>
 
+  <div class="card"><h2>Who to target, and why</h2>
+    <p class="hint" style="margin-top:0">What the AI learned, which the scouts and the qualifier read to pick better leads. It is advice, not a claim about you: change anything. The kinds listed in "Kinds of business or people to look for" above are the ones that get searched.</p>
+    <label>Why each kind buys <span class="muted">(one per line: kind | why they buy | a sign they need it; another sign)</span></label>
+    <textarea name="b[tg_segments]" rows="5" placeholder="schools | They lose lessons when the power fails | runs on a diesel generator; has a computer lab"><?= pm_h(pm_study_segments_text($tg['segments'])) ?></textarea>
+    <div class="row">
+      <div><label>Not a fit (one per line; the agents skip them)</label><textarea name="b[tg_skip]" rows="3" placeholder="international chains"><?= pm_h(implode("\n", $tg['skip'])) ?></textarea></div>
+      <div><label>What matters to these buyers (one per line; the qualifier leads with them)</label><textarea name="b[tg_angles]" rows="3"><?= pm_h(implode("\n", $tg['angles'])) ?></textarea></div>
+    </div>
+    <p class="hint"><?= !empty($learned['at']) ? 'Last studied ' . pm_h((string)$learned['at']) . (!empty($learned['from']) ? ' from ' . pm_h(implode(', ', array_map('pm_study_host', (array)$learned['from']))) : ' from your answers') . '.' : 'Not studied by the AI yet.' ?>
+      <button class="btn small" form="restudy-<?= pm_h($b) ?>" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?>>Study the business again</button></p>
+  </div>
+
   <div class="card"><h2>Email</h2>
     <?php if ($envMail): ?><p class="hint" style="margin-top:0">The mail login comes from .env (<?= pm_h($pre) ?>SMTP_*), so it is read-only here.</p>
     <?php else: ?><p class="hint" style="margin-top:0">Outreach and replies go from this business's own mailbox. Ask the person who runs the mail for the server details.</p><?php endif; ?>
@@ -104,8 +118,16 @@ $fld = fn(string $k, string $label, string $ph = '', string $type = 'text') => '
     <label class="check"><input type="checkbox" name="b[social_auto]" value="1" <?= !empty($c['social_auto']) ? 'checked' : '' ?>> Auto-publish: posts the AI plans go out at their time without my approval</label>
   </div>
 
+  <?php $opS = pm_onepager_status($b); ?>
+  <div class="card"><h2>One-page offer</h2>
+    <p class="hint" style="margin-top:0">One page about the business, made from the details and facts above: what it does, what it offers, a free first step and how to reach it. It has no prices. It takes the place of a proposal for this business, and is emailed from a lead's card once they have written to you.</p>
+    <?php if ($opS['problems']): ?><p class="hint warnt"><?= pm_h(implode(' ', $opS['problems'])) ?></p><?php endif; ?>
+    <a class="btn small" href="?onepager=<?= pm_h($b) ?>">Download the PDF</a>
+  </div>
+
   <div class="btns"><button class="btn primary">Save <?= pm_h($name) ?></button></div>
 </form>
+<form method="post" id="restudy-<?= pm_h($b) ?>"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="brand_restudy"><input type="hidden" name="id" value="<?= pm_h($b) ?>"></form>
 <form method="post" id="smtpcheck-<?= pm_h($b) ?>"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="smtp_check"><input type="hidden" name="brand" value="<?= pm_h($b) ?>"></form>
 
 <details class="card" style="margin-top:14px"><summary>Hide this business</summary>

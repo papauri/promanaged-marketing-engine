@@ -148,9 +148,7 @@ SOCIAL (tab "Social", per business)
   Settings > Social media: connection steps and an Auto-publish switch. Needs FB_PAGE_ID and FB_PAGE_TOKEN (TM_ for Travel Malawi) in .env;
   IG_USER_ID adds Instagram once the app is online (APP_URL), because Instagram fetches pictures from a web address (media.php).
   Leads now record their Facebook/Instagram and "where they lack online" (no website, inactive page, no online booking) for sharper pitches.
-  X (Twitter): set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET in .env and switch X on in Settings > Social media.
-  WhatsApp auto-answers: set WA_BIZ_TOKEN, WA_BIZ_PHONE_ID, WA_BIZ_VERIFY in .env and point the Meta webhook at /wa.php. It only answers
-  known leads inside the 24-hour window; STOP is honoured forever. Without these keys the feature is completely off.
+  X (Twitter) and WhatsApp Business: see "ONE WHATSAPP NUMBER AND ONE X ACCOUNT PER BUSINESS" below. Without keys they are completely off.
 
 REVIEW BEFORE SEND, CAMPAIGNS, ARCHIVE, HEALTH (cycle 2)
   Agents > More > Agent settings: "Email replies" and "WhatsApp Business answers" can each be "Draft for my approval". A drafted WhatsApp answer
@@ -174,6 +172,36 @@ ANY BUSINESS, NOT JUST TWO (cycle 3)
   Proposals stay ProManaged IT and Travel Malawi only (they use those price lists and terms). "Hide this business" keeps all its data.
   Code rule: never write `$brand === 'travel' ? ...` to mean "the other business"; ask lib/brands.php (pm_brand_ids, pm_brand_name, pm_brand_profile).
   tests/test_brands.php proves a third business never receives another business's words; tests/test_pages.php loads every screen for every business.
+
+THE AI LEARNS THE BUSINESS (lib/brand_study.php)
+  When you add a business, give its website and, if you like, paste any text about it. The app reads up to five pages of the site (home, about,
+  services, contact; never pricing, blog or privacy; only public addresses, so nothing inside your network is ever fetched), then ONE AI call
+  learns: what the business is and offers; FACTS about it, each carried by a sentence copied from your words or from a page that was really
+  fetched (the app checks the sentence is there, and drops any fact with a number nobody wrote); WHO TO TARGET (kinds of buyer best fit first,
+  why they buy, signs they need it, who is not a fit, where to start, what to lead with: the AI's advice, with no statistics, for you to edit);
+  and up to five questions only you can answer. Answer them and press "Update the draft" (your edits are kept; the site is not read again).
+  Facts show where each came from. Email and phone shown on the site fill blanks you left, for you to confirm. Nothing is saved until you press Create.
+  What was learned steers the scouts (who they are, why they buy, who to skip) and the qualifier (ideal customers, signs of need) for that business
+  only. Settings > the business > "Who to target, and why" edits it, and "Study the business again" reads the site again and shows only what is
+  new, with a tick box each: nothing is removed or overwritten. Social > Lead posts > "Suggest offers" turns the business's facts into three offer
+  ideas (same rules as an offer you type; with no AI key, the free first step becomes the starting point).
+
+ONE WHATSAPP NUMBER AND ONE X ACCOUNT PER BUSINESS
+  Each business uses only its own keys, which never fall back to another business's: ProManaged IT WA_BIZ_*, X_*; Travel Malawi TM_WA_BIZ_*,
+  TM_X_*; a business you added <ID>_WA_BIZ_*, <ID>_X_* (ID in capitals). WhatsApp: *_TOKEN, *_PHONE_ID, *_VERIFY (and *_TEMPLATE, *_TEMPLATE_LANG for
+  campaigns outside the 24-hour window, *_APP_SECRET to check that calls really come from WhatsApp). X: *_API_KEY, *_API_SECRET, *_ACCESS_TOKEN,
+  *_ACCESS_SECRET, then switch X on in that business's Social settings. One webhook address, /wa.php, serves every number: Meta says which number a
+  message came to and that decides the business. WhatsApp templates belong to a number, so each business has its own list. Settings > Setup health has
+  a WhatsApp and an X row per business that names the keys it needs.
+  Someone new who writes to a business's number becomes that business's lead (named as WhatsApp names them, source whatsapp, the offer when they send
+  an offer's keyword) and you are told. A keyword gets the owner's own reply words for that offer (no AI); anything else gets an answer drafted for you,
+  never sent to a stranger by itself. The owner is told when the AI cannot draft one, and the message is still kept.
+
+THE ONE-PAGE OFFER (businesses added in the app)
+  They have no proposals or price list, so each has a one-page PDF instead: what it does, what it offers, true facts, a free first step and how to reach
+  it, in its colour and logo, made only from its own words and with no prices (a claim or a price is flagged). Settings > the business downloads it; on a
+  lead's card "One-page offer" emails it with a message you can change, only to someone who has written to the business, with the same wording rules and
+  STOP line as any email.
 
 ONE LOOK FOR EVERY SCREEN (lib/ui.php, assets/ui.js)
   One sticky top bar (business menu, Leads / WhatsApp / Social / Proposals / Settings with drop-downs, scheduler status), one page head and one tab

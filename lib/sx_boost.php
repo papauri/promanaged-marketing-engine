@@ -289,11 +289,15 @@ function pm_today_proactive(string $brand): array
 
 /* ---------------- S07 · X (Twitter) native posting ---------------- */
 
-function pm_x_cfg(): array
+/**
+ * A business's own X account keys: X_* for ProManaged, TM_X_* for Travel Malawi, <ID>_X_* for a business added in the app. A business without its own keys
+ * never posts to another business's account.
+ */
+function pm_x_cfg(?string $brand = null): array
 {
-    $e = pm_env();
-    $get = fn($k) => trim((string)(function_exists('pm_env_val') ? pm_env_val($k) : ($e[$k] ?? '')));
-    $c = ['key' => $get('X_API_KEY'), 'secret' => $get('X_API_SECRET'),
+    $brand ??= pm_brand();
+    $get = fn($k) => pm_brand_env($brand, $k);
+    $c = ['brand' => $brand, 'prefix' => pm_brand_env_prefix($brand), 'key' => $get('X_API_KEY'), 'secret' => $get('X_API_SECRET'),
         'token' => $get('X_ACCESS_TOKEN'), 'token_secret' => $get('X_ACCESS_SECRET')];
     $c['ready'] = $c['key'] !== '' && $c['secret'] !== '' && $c['token'] !== '' && $c['token_secret'] !== '';
     return $c;
@@ -320,15 +324,15 @@ function pm_x_sign(string $method, string $url, array $params, array $cfg): stri
     return 'OAuth ' . implode(', ', $h);
 }
 
-/** Posts one text to X. [ok, id|message]. PM_X_STUB lets tests stub the network. */
-function pm_x_post(string $text): array
+/** Posts one text to the X account of $brand (default: the current business). [ok, id|message]. PM_X_STUB lets tests stub the network. */
+function pm_x_post(string $text, ?string $brand = null): array
 {
-    $cfg = pm_x_cfg();
+    $cfg = pm_x_cfg($brand);
     if (!$cfg['ready']) {
-        return [false, 'X is not connected (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET in .env).'];
+        return [false, 'X is not connected for ' . pm_brand_name($cfg['brand']) . ' (' . $cfg['prefix'] . 'X_API_KEY, ' . $cfg['prefix'] . 'X_API_SECRET, ' . $cfg['prefix'] . 'X_ACCESS_TOKEN, ' . $cfg['prefix'] . 'X_ACCESS_SECRET in .env).'];
     }
     if (isset($GLOBALS['PM_X_STUB']) && is_callable($GLOBALS['PM_X_STUB'])) {
-        return $GLOBALS['PM_X_STUB']($text);
+        return $GLOBALS['PM_X_STUB']($text, $cfg['brand']);
     }
     $url = 'https://api.x.com/2/tweets';
     $auth = pm_x_sign('POST', $url, [], $cfg);
@@ -350,7 +354,7 @@ function pm_x_post(string $text): array
 /** Job: publish due text/image posts to X when the channel is on. */
 function pm_job_channels_x(string $brand): string
 {
-    if (!pm_x_cfg()['ready']) {
+    if (!pm_x_cfg($brand)['ready']) {
         return 'X not connected';
     }
     $ch = function_exists('pm_social_settings') ? (array)pm_social_settings($brand)['channels'] : [];
@@ -370,7 +374,7 @@ function pm_job_channels_x(string $brand): string
         if (trim($text) === '') {
             continue;
         }
-        [$ok, $m] = pm_x_post(mb_substr($text, 0, 280));
+        [$ok, $m] = pm_x_post(mb_substr($text, 0, 280), $brand);
         pm_social_patch($p['id'], fn(array $cur) => array_merge($cur, ['x' => $ok ? 'published' : 'failed', 'x_id' => $ok ? (string)$m : '', 'x_err' => $ok ? '' : mb_substr($m, 0, 200)]));
         $n += $ok ? 1 : 0;
         if ($n >= 3) {

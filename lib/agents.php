@@ -842,7 +842,7 @@ function pm_agent_scout(string $sector, string $city, int $want, array $knownNam
     } elseif (pm_brand_is_custom(pm_brand())) {
         $system = pm_agents_company_brief('short') . "\nYou are the Scout. Web-search for real, trading {$label} in {$city}, Malawi, that could genuinely use what we offer. "
             . "Look for something published that shows a real fit or need (their website or social pages, news, hiring or expansion). Skip chains and anyone outside Malawi. "
-            . "Note which of our offerings fits best. Only include those that publish business contacts. " . PM_AGENT_RULES;
+            . 'Note which of our offerings fits best. ' . ltrim(pm_target_scout_line(pm_brand(), $sector)) . 'Only include those that publish business contacts. ' . PM_AGENT_RULES;
     } else {
         $system = pm_agents_company_brief('short') . "\nYou are the Scout. Web-search for real, trading organisations in {$city}, Malawi: {$label}, that show a genuine need for something we do "
             . "(paper/WhatsApp/spreadsheet operations, no or outdated website, agent-only bookings, no booking/POS/stock system, ageing IT, hiring IT/admin, expanding). "
@@ -918,8 +918,8 @@ function pm_agent_qualify(array $leads): array
             . "Above 70 needs concrete evidence. When an item has research, re-score it from what was found (previous_score is the old number): confirmed facts may raise or lower it. " . PM_AGENT_RULES;
     } elseif (pm_brand_is_custom(pm_brand())) {
         $system = pm_agents_company_brief('short') . "\nYou are the Qualifier. Score each lead 0-100 on how well it fits what we offer and how likely it is to buy (size, reachable decision maker, a visible need). Be sceptical: above 70 needs concrete evidence. "
-            . "Pick the offering that fits and the single best need to lead with. When an item has research, re-score it from what was found (previous_score is the old number): confirmed facts may raise or lower it. "
-            . pm_learn_qualifier_line(pm_brand()) . PM_AGENT_RULES;
+            . "Pick the offering that fits and the single best need to lead with. When an item has research, re-score it from what was found (previous_score is the old number): confirmed facts may raise or lower it."
+            . pm_target_qualifier_line(pm_brand()) . ' ' . pm_learn_qualifier_line(pm_brand()) . PM_AGENT_RULES;
     } else {
         $system = pm_agents_company_brief('full') . "\nYou are the Qualifier. Score each lead 0-100 on need and ability to pay (size, manual processes, reachable decision maker, package fit). Be sceptical: above 70 needs concrete evidence. "
             . "Pick the package index and the best pain point/need; the package must match what they need. When an item has research, re-score it from what was found (previous_score is the old number): confirmed facts may raise or lower it. "

@@ -80,6 +80,68 @@ function pm_lp_facts(array $o): array
     return array_slice(array_values(array_unique(array_map(fn($x) => trim((string)$x), $f))), 0, 12);
 }
 
+/* ---------------- ideas for offers ---------------- */
+
+/**
+ * Ideas for offers, from what the business told the app. One AI call that may only use the business's own facts, offerings, free first step and what it learned
+ * about who to target; every idea goes through the same checks as an offer typed by hand, and an idea that carries a number nobody wrote, a claim that cannot be
+ * backed up, or the title of an offer already made is dropped. Without the AI, the free first step (if there is one) is offered as a ready starting point.
+ * Returns up to three offers, cleaned as pm_lp_clean makes them. Nothing is saved: the owner picks one and changes anything.
+ */
+function pm_lp_suggest(string $brand): array
+{
+    $p = pm_brand_profile($brand);
+    $brain = pm_brain($brand);
+    $cfg = pm_agents_config($brand);
+    $t = pm_brand_targeting($brand);
+    $offerings = array_values(array_filter(array_map('strval', (array)($cfg['offerings'] ?? []))));
+    $facts = array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($brain['facts'] ?? '')) ?: [])));
+    $made = array_map('mb_strtolower', array_column(pm_lp_for_brand($brand), 'title'));
+    $own = mb_strtolower(implode("\n", array_merge([pm_brand_name($brand), (string)$brain['about'], (string)$p['magnet']], $offerings, $facts)));
+    $out = [];
+    $add = function (array $raw) use (&$out, $brand, $made, $own): void {
+        $raw['signs'] = is_array($raw['signs'] ?? null) ? implode("\n", array_map('strval', $raw['signs'])) : (string)($raw['signs'] ?? '');
+        $c = pm_lp_clean($raw, $brand);
+        $all = implode("\n", array_merge([$c['title'], $c['problem'], $c['fix'], $c['proof']], (array)$c['signs']));
+        if (pm_lp_check($c) || in_array(mb_strtolower($c['title']), $made, true) || pm_brand_unsourced_number($all, $own)
+            || array_filter($out, fn($x) => mb_strtolower($x['title']) === mb_strtolower($c['title']) || ($c['keyword'] !== '' && $x['keyword'] === $c['keyword']))) {
+            return;
+        }
+        $out[] = $c;
+    };
+    if (function_exists('pm_agents_ready') && (pm_agents_ready() || isset($GLOBALS['PM_AI_STUB']))) {
+        try {
+            $system = "You suggest free lead-capture offers for a small business's social media posts. An offer is something small and genuinely useful the business gives away or does to start a conversation, such as a free check, a free quote, a free visit or a checklist. "
+                . 'Use ONLY the facts, offerings and free first step you are given: never invent services, numbers, prices, results, deadlines or guarantees, and never use the words best, cheapest, fastest, guaranteed or 24/7. Plain words. Reply with JSON only.';
+            $user = json_encode(['business' => pm_brand_name($brand), 'about' => (string)$brain['about'], 'offerings' => $offerings, 'true_facts' => $facts, 'free_first_step' => (string)$p['magnet'],
+                    'who_buys' => (string)$brain['audience'], 'kinds_of_buyer' => array_map(fn($s) => ['kind' => $s['name'], 'why' => $s['why'] ?? '', 'signs' => $s['signals'] ?? []], array_slice($t['segments'], 0, 5)),
+                    'already_made' => array_values(array_column(pm_lp_for_brand($brand), 'title'))], JSON_UNESCAPED_UNICODE)
+                . "\nJSON: {\"offers\":[{\"title\":\"what is offered, under 8 words\",\"problem\":\"the problem it fixes, in the customer's own words\",\"fix\":\"what the business does about it\","
+                . "\"keyword\":\"ONE capital word to comment\",\"button\":\"whatsapp or call or form\",\"signs\":[\"a sign the customer needs it (up to 3)\"],\"questions\":[{\"label\":\"a short question for the landing page form\",\"options\":[]}]}]} "
+                . '(3 offers, each a different angle or a different kind of buyer)';
+            $r = pm_agent_json(pm_claude($system, $user, false, 1800, 'write'));
+            foreach ((array)($r['offers'] ?? (is_array($r) && array_is_list($r) ? $r : [])) as $o) {
+                if (is_array($o) && count($out) < 3) {
+                    $add($o);
+                }
+            }
+        } catch (Throwable $e) {
+            // fall through to the plain starting point
+        }
+    }
+    if (!$out && trim((string)$p['magnet']) !== '' && $offerings) {
+        $add(['title' => ucfirst((string)$p['magnet']), 'problem' => '', 'fix' => trim(explode(':', $offerings[0], 2)[1] ?? $offerings[0]), 'keyword' => (string)$p['cta_keyword'], 'button' => 'whatsapp']);
+    }
+    return $out;
+}
+
+/** The ideas kept for a business until it picks one: ['at', 'rows']. */
+function pm_lp_ideas(string $brand): array
+{
+    $d = (array)(pm_load('offer_ideas', fn() => [])[$brand] ?? []);
+    return ['at' => (string)($d['at'] ?? ''), 'rows' => array_values((array)($d['rows'] ?? []))];
+}
+
 /* ---------------- the templates ---------------- */
 
 /**
@@ -461,6 +523,15 @@ function pm_do_lp_save(string $vb): array
         }
     }
     if (!$old) {
+        pm_update('offer_ideas', function (array $all) use ($vb, $o) { // the idea that was just used is no longer an idea
+            if (isset($all[$vb])) {
+                $all[$vb]['rows'] = array_values(array_filter((array)$all[$vb]['rows'], fn($r) => mb_strtolower((string)($r['title'] ?? '')) !== mb_strtolower($o['title'])));
+                if (!$all[$vb]['rows']) {
+                    unset($all[$vb]);
+                }
+            }
+            return $all;
+        }, fn() => []);
         $o += ['id' => substr(bin2hex(random_bytes(6)), 0, 10), 'status' => 'active', 'created' => date('Y-m-d H:i'), 'views' => 0];
         pm_lp_update(function (array $rows) use ($o) {
             $rows[] = $o;
@@ -485,6 +556,30 @@ function pm_do_lp_save(string $vb): array
         return ['msg' => $msg, 'kind' => 'ok', 'to' => 'social'];
     }
     return pm_lp_back($msg);
+}
+
+/** Ask for offer ideas (the AI when it is set up, else the free first step as a starting point). They are shown on the Lead posts screen; nothing is made. */
+function pm_do_lp_suggest(string $vb): array
+{
+    @set_time_limit(120);
+    $rows = pm_lp_suggest($vb);
+    if (!$rows) {
+        return pm_lp_back('No ideas this time. Add what the business offers and its true facts in its settings, or write an offer yourself below.', 'err');
+    }
+    pm_update('offer_ideas', function (array $all) use ($vb, $rows) {
+        $all[$vb] = ['at' => date('Y-m-d H:i'), 'rows' => $rows];
+        return $all;
+    }, fn() => []);
+    return pm_lp_back(count($rows) . ' offer idea' . (count($rows) === 1 ? '' : 's') . ' ready below. Pick one, change anything, and make its posts.');
+}
+
+function pm_do_lp_ideas_clear(string $vb): array
+{
+    pm_update('offer_ideas', function (array $all) use ($vb) {
+        unset($all[$vb]);
+        return $all;
+    }, fn() => []);
+    return pm_lp_back('Ideas cleared.');
 }
 
 /** Make drafts from an offer's templates. */
