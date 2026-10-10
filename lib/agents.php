@@ -339,6 +339,7 @@ function pm_claude(string $system, string $user, bool $web = false, int $maxToke
 require_once __DIR__ . '/sx_learn.php';
 require_once __DIR__ . '/sx_harvest.php';
 require_once __DIR__ . '/tm_email.php';
+require_once __DIR__ . '/followups.php';
 
 /* ---------------- Spend control: every call is counted against a daily token budget ---------------- */
 

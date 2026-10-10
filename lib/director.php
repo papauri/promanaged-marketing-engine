@@ -143,8 +143,14 @@ function pm_pipeline_stats(string $brand): array
     $contacted = array_sum(array_column($seg, 'contacted'));
     $replied = array_sum(array_column($seg, 'replied'));
     uasort($seg, fn($a, $b) => [$b['won'], $b['replied'], $b['contacted']] <=> [$a['won'], $a['replied'], $a['contacted']]);
-    $bs = pm_backlog_state($leads, pm_agents_config($brand), $brand);
+    $cfgB = pm_agents_config($brand);
+    $bs = pm_backlog_state($leads, $cfgB, $brand);
+    $waitingNow = fn($l) => ($l['status'] ?? '') !== 'optout' && (($l['status'] ?? '') === 'replied' || !empty($l['awaiting_reply_since']));
     return [
+        // what is on the desk right now (live numbers; the advice about them is what the AI writes)
+        'awaiting_reply' => count(array_filter($leads, $waitingNow)), 'followups_due' => count(pm_followup_due($leads, $cfgB, true)), 'followups_to_draft' => count(pm_followup_due($leads, $cfgB, false)),
+        'drafts_unsent' => count(array_filter($leads, fn($l) => in_array($l['status'] ?? '', ['drafted', 'qualified'], true) && empty($l['sent']) && empty($l['approved_at']) && !empty($l['drafts']['email_body']))),
+        'approved_waiting' => count(array_filter($leads, fn($l) => !empty($l['approved_at']) && empty($l['sent']))), 'sent_today' => pm_sent_today($leads),
         'leads' => count($leads), 'status' => array_filter($st), 'segments' => array_slice($seg, 0, 8, true),
         'contacted' => $contacted, 'replied' => $replied, 'reply_rate' => $contacted ? round(100 * $replied / $contacted) : 0,
         'inbound' => $inbound, 'sources' => $src, 'backlog' => $bs['backlog'], 'scouting_paused' => $bs['pause'],
@@ -214,7 +220,10 @@ function pm_director_brief(bool $force = false): array
     $mine = $all[$brand] ?? [];
     $stats = pm_pipeline_stats($brand); // the numbers are always live; only the written advice is cached
     $changed = abs((int)$stats['leads'] - (int)($mine['stats']['leads'] ?? 0)) >= 3 || (int)$stats['signed'] !== (int)($mine['stats']['signed'] ?? 0);
-    if (!$force && ($mine['date'] ?? '') === date('Y-m-d') && !empty($mine['headline']) && !$changed) {
+    // the work on the desk (replies waiting, follow-ups due, drafts, the queue, what was sent) moved since the advice was written: it is rewritten, at most every 90 minutes
+    $sig = md5(json_encode([$stats['awaiting_reply'] ?? 0, $stats['followups_due'] ?? 0, $stats['followups_to_draft'] ?? 0, $stats['drafts_unsent'] ?? 0, $stats['approved_waiting'] ?? 0, $stats['sent_today'] ?? 0, $stats['contacted'] ?? 0, $stats['replied'] ?? 0]));
+    $moved = ($mine['sig'] ?? '') !== $sig && time() - (int)($mine['at'] ?? 0) >= 5400;
+    if (!$force && ($mine['date'] ?? '') === date('Y-m-d') && !empty($mine['headline']) && !$changed && !$moved) {
         $mine['stats'] = $stats;
         return $mine;
     }
@@ -231,6 +240,8 @@ function pm_director_brief(bool $force = false): array
     $system = pm_agents_company_brief('tiny') . "\nYou are the Marketing Director. From the pipeline numbers, decide what will bring the most qualified replies and signed deals at the least effort and AI spend. "
         . "Be concrete and honest: if there is too little data to judge, say so and say what to collect. Never suggest spam, pressure or fake urgency. Think like a sales lead: in Malawi, small businesses usually answer a WhatsApp message or a phone call faster than an email, so recommend the channel mix and a daily rhythm for the marketing team (who to call first, when to follow up). Prefer leads with a named decision maker. "
         . "Replies from people who wrote to us first (inbound) are not outreach results. If backlog is high, say to send or clear drafts before finding more leads. "
+        . "The pipeline also says what is waiting right now: awaiting_reply (people who wrote to us: answer them first), followups_due (leads we already wrote to that went quiet, of which followups_to_draft still have no draft: the Follow-up agent drafts them with AI), drafts_unsent and approved_waiting. "
+        . "If followups_due is above 0, one priority must say to review and send the follow-ups (and to draft the missing ones with AI); never tell the owner to send something that is not drafted yet. "
         . "Reply JSON only: {\"headline\":\"one sentence\",\"priorities\":[\"3 to 5 specific actions for today\"],\"focus\":[\"up to 3 business types from segments or target_types to search more of\"],\"drop\":[\"types to search less of, or empty\"],\"experiment\":\"one small thing to test this week\",\"focus_weights\":{\"type\":0 to 100, how many of today's searches each type deserves, only for types in target_types}\"";
     $ai = $stats; // by_src can be long: only the five biggest sources go to the AI
     $ai['by_src'] = array_slice($ai['by_src'] ?? [], 0, 5, true);
@@ -275,7 +286,7 @@ function pm_director_brief(bool $force = false): array
         }
     }
     $brief = [
-        'date' => date('Y-m-d'), 'stats' => $stats, 'headline' => (string)$out['headline'],
+        'date' => date('Y-m-d'), 'at' => time(), 'sig' => $sig, 'stats' => $stats, 'headline' => (string)$out['headline'],
         'priorities' => $list('priorities'), 'focus' => $list('focus'), 'drop' => $list('drop'), 'experiment' => (string)($out['experiment'] ?? ''),
     ] + ($weights ? ['focus_weights' => $weights] : []);
     if ($social) { // the social part of the reply: a valid focus key and one note

@@ -131,7 +131,7 @@ $brandCards = function (string $b) use ($settings, $vb): void {
 };
 ?>
   <?= pm_ui_head('Settings', 'Details, mailbox and voice for each business, and how the whole app is set up.', '<a class="btn primary" href="?tab=business&amp;new=1">+ Add a business</a>') ?>
-  <?php pm_view_biz_grid($settings, $vb, $csrf); ?>
+  <?php pm_view_biz_grid($settings, $vb, $csrf); pm_view_hidden_businesses($csrf); ?>
   <h3><?= pm_h(pm_brand_title($settings, $vb)) ?></h3>
   <?php $isCustom = pm_brand_is_custom($vb); if ($isCustom) { require __DIR__ . '/view_brand_settings.php'; } ?>
 

@@ -758,6 +758,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pm_leads_save($leads);
             $back("Added $name. The next agent run will qualify it and draft a message.");
         }
+        if ($do === 'followups_ai') { // draft every follow-up that is due, with the AI (drafts only; nothing is sent)
+            if (!pm_agents_ready()) {
+                $back('The AI needs a key in .env first.', 'err');
+            }
+            @set_time_limit(300);
+            $fr = pm_followup_draft_now();
+            try {
+                pm_director_brief(true); // the work on the desk changed: the strategy follows
+            } catch (Throwable) {
+            }
+            $back(!$fr['due'] ? 'No follow-ups are due without a draft.' : $fr['drafted'] . ' follow-up' . ($fr['drafted'] === 1 ? '' : 's') . ' drafted with AI' . ($fr['failed'] ? ', ' . $fr['failed'] . ' could not be (try again)' : '') . '. Read them, then send.', $fr['failed'] && !$fr['drafted'] ? 'err' : 'ok');
+        }
         if ($do === 'tm_rewrite') { // redraft the unsent Travel Malawi emails in the new format (hand-edited and approved ones are left alone)
             if (pm_brand() !== 'travel') {
                 $back('This is for Travel Malawi.', 'err');
@@ -1049,6 +1061,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pm_lead_note($leads[$id], 'Researched: ' . count($rr['discoveries']) . ' discoveries, ' . count($rr['news']) . ' news items');
             pm_leads_save($leads);
             $back('Research done for ' . $lead['name'] . '. Draft the outreach now and it will use what we found.');
+        }
+        if ($do === 'followup_ai') { // one lead's follow-up, written now by the Follow-up agent
+            if (!pm_agents_ready()) {
+                $back('The AI needs a key in .env first.', 'err');
+            }
+            @set_time_limit(120);
+            [$fok, $fmsg] = pm_followup_draft_one($id);
+            $back($fmsg, $fok ? 'ok' : 'err');
         }
         if ($do === 'draft_outreach') {
             try {
@@ -1684,6 +1704,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $_SESSION['abrand'] = 'promanaged';
         pm_redirect('settings', $nm . ' is hidden: no more daily runs, and it is gone from the menus. Its leads and posts are kept.');
+    }
+    if ($action === 'brand_unhide') {
+        $bid = (string)($_POST['id'] ?? '');
+        $nm = pm_brand_name($bid);
+        if (!pm_brand_unarchive($bid)) {
+            pm_redirect('settings', 'That business is not hidden.', 'err');
+        }
+        pm_redirect('settings&brand=' . $bid, $nm . ' is back in the menus and in the daily agent run.');
+    }
+    if ($action === 'brand_delete') { // an added business, hidden or not, removed for good (the typed name is the second "are you sure")
+        $bid = (string)($_POST['id'] ?? '');
+        $nm = pm_brand_name($bid);
+        if (!isset(pm_brands_custom(true)[$bid]) || isset(PM_BUILTIN_BRANDS[$bid])) {
+            pm_redirect('settings', 'Only a business you added can be deleted.', 'err');
+        }
+        if (mb_strtolower(trim((string)($_POST['confirm_name'] ?? ''))) !== mb_strtolower($nm)) {
+            pm_redirect('settings&brand=' . $bid, 'Nothing was deleted: the name typed did not match "' . $nm . '".', 'err');
+        }
+        $r = pm_brand_delete($bid, !empty($_POST['keep_backup']));
+        if (!$r['ok']) {
+            pm_redirect('settings&brand=' . $bid, $r['message'], 'err');
+        }
+        $_SESSION['abrand'] = 'promanaged';
+        pm_redirect('settings', $r['message']);
     }
     if ($action === 'brand_save') {
         $bid = pm_brand_norm((string)($_POST['id'] ?? ''));

@@ -124,8 +124,27 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
   <?php if ($dir['priorities']): ?><ol><?php foreach ($dir['priorities'] as $pr): ?><li><?= pm_h($pr) ?></li><?php endforeach; ?></ol><?php endif; ?>
   <?php if ($dir['focus']): ?><p class="hint">Searching more of: <b><?= pm_h(implode(', ', $dir['focus'])) ?></b><?= $dir['drop'] ? ' · less of: ' . pm_h(implode(', ', $dir['drop'])) : '' ?></p><?php endif; ?>
   <?php if ($dir['experiment']): ?><p class="hint">Experiment this week: <?= pm_h($dir['experiment']) ?></p><?php endif; ?>
-  <form method="post"><?= $post('', 'director') ?><button class="btn small">Refresh strategy</button></form>
+  <?php $dst = (array)($dir['stats'] ?? []); $waitBits = array_filter([
+      (int)($dst['awaiting_reply'] ?? 0) ? (int)$dst['awaiting_reply'] . ' repl' . ((int)$dst['awaiting_reply'] === 1 ? 'y' : 'ies') . ' to answer' : '',
+      (int)($dst['followups_due'] ?? 0) ? (int)$dst['followups_due'] . ' follow-up' . ((int)$dst['followups_due'] === 1 ? '' : 's') . ' due (' . ((int)$dst['followups_due'] - (int)($dst['followups_to_draft'] ?? 0)) . ' drafted)' : '',
+      (int)($dst['drafts_unsent'] ?? 0) ? (int)$dst['drafts_unsent'] . ' draft' . ((int)$dst['drafts_unsent'] === 1 ? '' : 's') . ' to read' : '',
+      (int)($dst['approved_waiting'] ?? 0) ? (int)$dst['approved_waiting'] . ' approved, waiting to go out' : '']); ?>
+  <p class="hint"><b>On your desk now:</b> <?= $waitBits ? pm_h(implode(' · ', $waitBits)) : 'nothing is waiting' ?>. <span class="muted">Strategy written <?= !empty($dir['at']) ? pm_h(date('H:i', (int)$dir['at'])) : 'earlier today' ?>; it is rewritten by itself when this changes (at most every 90 minutes) and after each agent run.</span></p>
+  <div class="btns"><form method="post"><?= $post('', 'director') ?><button class="btn small">Refresh strategy</button></form>
+    <?php if ((int)($dst['followups_to_draft'] ?? 0) > 0): ?><form method="post"><?= $post('', 'followups_ai') ?><button class="btn small primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?> title="The Follow-up agent writes them for you to read; nothing is sent">Draft <?= (int)$dst['followups_to_draft'] ?> follow-up<?= (int)$dst['followups_to_draft'] === 1 ? '' : 's' ?> with AI</button></form><?php endif; ?></div>
 </details>
+<?php
+$taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up task: its draft is ready, or the AI can write it now
+    if (($t['kind'] ?? '') !== 'followup' || empty($t['lead']) || !isset($leadsAll[$t['lead']])) {
+        return '';
+    }
+    $l = $leadsAll[$t['lead']];
+    if (!empty($l['followup_draft'])) {
+        return ' <span class="pill hot">draft ready</span>';
+    }
+    return ($l['status'] ?? '') === 'contacted' && !pm_lead_email_dead($l) && pm_agents_ready() ? '<form method="post" class="inline">' . $post($t['lead'], 'followup_ai') . '<button class="btn small" title="The Follow-up agent writes a draft for you to read; nothing is sent">Draft with AI</button></form>' : '';
+};
+?>
 
 <!-- 4. Today's tasks -->
 <?php if ($plan): ?>
@@ -133,14 +152,14 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
   <?php foreach (array_slice($plan, 0, 6) as $t): ?>
     <div class="task <?= $t['done'] ? 'done' : '' ?>">
       <form method="post"><?= $post('', 'plan', $hid('task', $t['id']) . ($t['done'] ? '' : $hid('done', 1))) ?><button title="Mark done" aria-label="Mark done"><?= $t['done'] ? '✓' : '' ?></button></form>
-      <span><?= pm_h($t['title']) ?></span>
+      <span><?= pm_h($t['title']) ?></span><?= $taskExtra($t) ?>
       <?php if ($t['lead'] && isset($leadsAll[$t['lead']])): ?><a class="muted open" href="?tab=agents&status=all#l<?= pm_h($t['lead']) ?>">open</a><?php endif; ?>
     </div>
   <?php endforeach; ?>
   <?php if (count($plan) > 6): ?><details class="more"><summary>Show the other <?= count($plan) - 6 ?></summary>
     <?php foreach (array_slice($plan, 6) as $t): ?><div class="task <?= $t['done'] ? 'done' : '' ?>">
       <form method="post"><?= $post('', 'plan', $hid('task', $t['id']) . ($t['done'] ? '' : $hid('done', 1))) ?><button title="Mark done" aria-label="Mark done"><?= $t['done'] ? '✓' : '' ?></button></form>
-      <span><?= pm_h($t['title']) ?></span></div><?php endforeach; ?></details><?php endif; ?>
+      <span><?= pm_h($t['title']) ?></span><?= $taskExtra($t) ?></div><?php endforeach; ?></details><?php endif; ?>
 </div>
 <?php endif; ?>
 
@@ -264,6 +283,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
       <?php if ($canMail): ?><form method="post" onsubmit="return confirm('Send this email to <?= pm_h(addslashes($l['email'])) ?> now?')"><?= $post($id, 'send', $hid('which', $which)) ?><button class="btn primary"><?= $which === 'followup' ? 'Send follow-up' : 'Send email' ?></button></form><?php endif; ?>
       <?php if ($wa): ?><a class="btn" href="<?= pm_h(pm_wa_link($l, pm_wa_text($l, $dr['whatsapp']))) ?>" target="_blank" rel="noopener noreferrer">WhatsApp</a><?php endif; ?>
       <?php if ($tel = pm_tel_link($l)): ?><a class="btn" href="<?= pm_h($tel) ?>">Call</a><?php endif; ?>
+      <?php if (($l['status'] ?? '') === 'contacted' && empty($l['followup_draft']) && !pm_lead_email_dead($l) && pm_agents_ready()): ?><form method="post"><?= $post($id, 'followup_ai') ?><button class="btn" title="The Follow-up agent writes a follow-up for you to read; nothing is sent">Draft follow-up with AI</button></form><?php endif; ?>
       <form method="post"><?= $post($id, 'research') ?><button class="btn" title="Website, Facebook, Instagram, reviews and recent news"><?= empty($l['research']) ? 'Research' : 'Research again' ?></button></form>
       <?php if (empty($dr['email_body'])): ?><form method="post"><?= $post($id, 'draft_outreach') ?><button class="btn">Draft outreach</button></form><?php endif; ?>
       <?php if (pm_brand_is_custom((string)($l['brand'] ?? ''))): $op = pm_onepager_status((string)$l['brand']); [$osub, $obody] = pm_onepager_default_mail($l); ?>

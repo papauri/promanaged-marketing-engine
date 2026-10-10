@@ -16,9 +16,10 @@
 require_once __DIR__ . '/brand_study.php'; // reading a business's website and learning who to target
 require_once __DIR__ . '/onepager.php'; // the one-page offer that replaces a proposal for an added business
 require_once __DIR__ . '/suggest.php'; // suggestions while typing in the "find a business" boxes
+require_once __DIR__ . '/brand_delete.php'; // bringing a hidden business back, or deleting an added one for good
 
 const PM_BUILTIN_BRANDS = ['promanaged' => 'ProManaged IT', 'travel' => 'Travel Malawi'];
-const PM_BRAND_RESERVED = ['promanaged', 'travel', 'default', 'all', 'brands', 'new', 'settings', 'tm', 'pm', 'shared', 'none', 'other'];
+const PM_BRAND_RESERVED = ['promanaged', 'travel', 'default', 'all', 'brands', 'new', 'settings', 'tm', 'pm', 'shared', 'none', 'other', 'rows', 'posts', 'summary', 'items', 'models', 'catalog', 'auth', 'state']; // (the last ones are keys inside the data files)
 const PM_BRAND_COLORS = ['#1f6feb', '#0f766e', '#b45309', '#7c3aed', '#be123c', '#0369a1', '#4d7c0f', '#c2410c'];
 
 /** Custom businesses from data/brands.json (id => row). Read straight from disk: no file is created by asking. */
@@ -139,7 +140,8 @@ function pm_brand_slug(string $name): string
     $s = $s === '' ? 'biz' : ($s[0] >= '0' && $s[0] <= '9' ? 'b' . $s : $s);
     $all = pm_brands_custom(true);
     $base = $s;
-    for ($i = 2; in_array($s, PM_BRAND_RESERVED, true) || isset($all[$s]); $i++) {
+    $own = function_exists('pm_agents_default_config') ? pm_agents_default_config() : []; // ProManaged IT's own settings sit at the top of agents_config: "Cities" or "Sectors" must not become a business id there
+    for ($i = 2; in_array($s, PM_BRAND_RESERVED, true) || isset($all[$s]) || array_key_exists($s, $own); $i++) {
         $s = substr($base, 0, 12) . $i;
     }
     return $s;
@@ -401,7 +403,7 @@ function pm_brand_create(array $a, array $draft): array
     return [$id, []];
 }
 
-/** Hides a business from the menus and stops its scheduled work. Nothing is deleted: restore it by clearing "archived" in data/brands.json. */
+/** Hides a business from the menus and stops its scheduled work. Nothing is deleted: bring it back with pm_brand_unarchive() (Settings > Hidden businesses), or delete it with pm_brand_delete(). */
 function pm_brand_archive(string $id): bool
 {
     if (!pm_brand_is_custom($id)) {

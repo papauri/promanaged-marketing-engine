@@ -131,8 +131,12 @@ $fld = fn(string $k, string $label, string $ph = '', string $type = 'text') => '
 <form method="post" id="smtpcheck-<?= pm_h($b) ?>"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="smtp_check"><input type="hidden" name="brand" value="<?= pm_h($b) ?>"></form>
 
 <details class="card" style="margin-top:14px"><summary>Hide this business</summary>
-  <p class="hint">Hiding stops its daily agent run and removes it from the menus. Its leads, posts and settings are kept in the data folder, and you can bring it back by asking for it to be unhidden (clear "archived" in data/brands.json).</p>
+  <p class="hint">Hiding stops its daily agent run and removes it from the menus. Its leads, posts and settings are kept, and you can bring it back any time from Settings > Hidden businesses.</p>
   <form method="post" onsubmit="return confirm('Hide <?= pm_h(addslashes($name)) ?>?')"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="brand_archive"><input type="hidden" name="id" value="<?= pm_h($b) ?>">
     <label class="check"><input type="checkbox" name="confirm" value="1" required> Yes, hide <?= pm_h($name) ?></label>
     <div class="btns"><button class="btn danger">Hide this business</button></div></form>
+</details>
+
+<details class="card" style="margin-top:14px"><summary>Delete this business for good</summary>
+  <?= pm_brand_delete_form($b, $csrf) ?>
 </details>

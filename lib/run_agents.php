@@ -688,9 +688,7 @@ try {
 
     // ---- 5. Follow-up ----
     // Not for leads that are snoozed, replied, in proposal, won, lost or opted out, nor those whose only channel is a bad email.
-    $due = array_values(array_filter($leads, fn($l) => $l['status'] === 'contacted' && (int)($l['followups'] ?? 0) < $cfg['max_followups']
-        && !pm_lead_snoozed($l) && !pm_lead_email_dead($l)
-        && ($t = strtotime((string)($l['last_contacted'] ?? ''))) && time() - $t >= $cfg['followup_days'] * 86400 && empty($l['followup_draft'])));
+    $due = array_values(pm_followup_due($leads, $cfg, false)); // the same rule the Leads screen and the scheduler use (lib/followups.php)
     if ($cfg['enabled']['followup'] && $due) {
         $progress('Follow-up agent on ' . count($due) . ' leads');
         $jobs = array_map(fn($b) => ['agent' => 'followup', 'leads' => $b], array_chunk($due, 6));
@@ -765,6 +763,12 @@ try {
         exit;
     }
     pm_agent_log('Swarm', sprintf('Run finished: %d new leads, %d qualified, %d drafted, %d follow-ups, %d errors', $stats['added'], $stats['qualified'], $stats['drafted'], $stats['followups'], $stats['errors']), $stats['errors'] > 0);
+    if ($only === '') {
+        try { // new drafts and follow-ups changed what is waiting: bring today's strategy up to date
+            pm_director_brief(true);
+        } catch (Throwable) {
+        }
+    }
     pm_run_state(['state' => 'done', 'started' => $run['started'], 'finished' => date('Y-m-d H:i:s'), 'stats' => $stats, 'beat' => time()]);
 } catch (Throwable $e) {
     $finished = true; // handled here, not by the shutdown function

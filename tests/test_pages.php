@@ -273,6 +273,39 @@ pm_t_assert(!str_contains($html, 'brand=greengrocers'), 'it is gone from the men
 [$code, , $loc] = http($base, ['csrf' => $csrf, 'action' => 'brand_archive', 'id' => 'travel', 'confirm' => '1']);
 pm_t_assert(pm_brand_valid('travel'), 'an original business cannot be hidden');
 
+echo "\nHidden businesses: bring one back, or delete it for good\n";
+[, $html] = http("$base?tab=settings&brand=promanaged");
+$csrf = csrf_of($html);
+pm_t_assert(str_contains($html, 'id="hiddenbiz"') && str_contains($html, 'Green Grocers Mzuzu') && str_contains($html, 'Bring it back') && str_contains($html, 'Delete for good') && str_contains($html, 'name="confirm_name"'), 'Settings lists the hidden business, with both choices');
+[$code] = http($base, ['csrf' => $csrf, 'action' => 'brand_unhide', 'id' => 'greengrocers']);
+pm_t_assert($code === 302 && isset(pm_brands_custom()['greengrocers']), 'Bring it back puts it in the menus again');
+[, $html] = http("$base?tab=settings&brand=greengrocers");
+pm_t_assert(str_contains($html, 'Delete this business for good') && str_contains($html, 'name="action" value="brand_delete"') && !str_contains($html, 'id="hiddenbiz"') && str_contains($html, 'name="keep_backup" value="1" checked'), 'its settings page has the delete form (backup ticked), and no hidden list when none is hidden');
+[$code] = http($base, ['csrf' => $csrf, 'action' => 'brand_unhide', 'id' => 'greengrocers']);
+[, $html] = http("$base?tab=settings");
+pm_t_assert($code === 302 && str_contains($html, 'That business is not hidden'), 'bringing back one that is not hidden says so');
+pm_save('leads', ['g1' => $mkl('g1', 'greengrocers', []), 'g2' => $mkl('g2', 'greengrocers', []), 'p1' => $mkl('p1', 'promanaged', [])]);
+[$code] = http($base, ['csrf' => $csrf, 'action' => 'brand_delete', 'id' => 'greengrocers', 'confirm_name' => 'Green Grocers', 'keep_backup' => '1']);
+[, $html] = http("$base?tab=settings&brand=greengrocers");
+pm_t_assert($code === 302 && isset(pm_brands_custom()['greengrocers']) && count(pm_leads()) === 3 && str_contains($html, 'Nothing was deleted: the name typed did not match'), 'a name that does not match deletes nothing, and says so');
+[$code] = http($base, ['csrf' => $csrf, 'action' => 'brand_delete', 'id' => 'greengrocers', 'keep_backup' => '1']);
+pm_t_assert(isset(pm_brands_custom()['greengrocers']), 'no name at all deletes nothing');
+foreach (['travel' => 'Travel Malawi', 'promanaged' => 'ProManaged IT', 'nobody' => 'nobody'] as $bid => $nm) {
+    http($base, ['csrf' => $csrf, 'action' => 'brand_delete', 'id' => $bid, 'confirm_name' => $nm, 'keep_backup' => '1']);
+}
+[, $html] = http("$base?tab=settings");
+pm_t_assert(pm_brand_valid('travel') && pm_brand_valid('promanaged') && str_contains($html, 'Only a business you added can be deleted') && count(pm_leads()) === 3, 'the two core businesses and an unknown id cannot be deleted, even when the right name is typed');
+$was = count(glob(PM_DATA . '/deleted/greengrocers-*.json') ?: []);
+[$code, , $loc] = http($base, ['csrf' => $csrf, 'action' => 'brand_delete', 'id' => 'greengrocers', 'confirm_name' => ' green GROCERS mzuzu ', 'keep_backup' => '1']);
+[, $html] = http("$base?tab=settings");
+pm_t_assert($code === 302 && !isset(pm_brands_custom(true)['greengrocers']) && !pm_brand_valid('greengrocers'), 'the right name (any capitals) deletes the business');
+pm_t_assert(str_contains($html, 'Green Grocers Mzuzu was deleted for good') && str_contains($html, 'A backup of its data is in data/deleted/greengrocers-'), 'and says so, with where the backup is');
+pm_t_eq(array_keys(pm_leads()), ['p1'], 'its leads went and ProManaged IT\'s lead stayed');
+pm_t_eq(count(glob(PM_DATA . '/deleted/greengrocers-*.json') ?: []), $was + 1, 'a backup file was written');
+pm_t_assert(!isset(pm_load('settings', 'pm_default_settings')['brands']['greengrocers']) && !isset(pm_load('agents_config', fn() => [])['greengrocers']), 'its settings and agent settings are gone');
+pm_t_assert(!str_contains($html, 'brand=greengrocers') && !str_contains($html, 'id="hiddenbiz"'), 'it is in no menu and no hidden list');
+pm_t_eq(http("$base?tab=settings&brand=greengrocers")[0], 200, 'asking for its screens afterwards falls back to ProManaged IT without an error');
+pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
 echo "\nSetup health, backups\n";
 [, $html] = http("$base?tab=settings&brand=promanaged");
 $csrf = csrf_of($html);
@@ -409,6 +442,31 @@ $ld = pm_load('leads', fn() => []);
 pm_t_assert(!empty($ld['tm1']['drafts']['edited_at']) && empty($ld['tm2']['drafts']['edited_at']), 'a draft changed by hand is marked, one saved unchanged is not');
 [, $html] = http("$base?tab=agents&brand=travel");
 pm_t_assert(str_contains($html, '1 unsent draft is still in the old format') && str_contains($html, 'edited by hand (1)'), 'and the Leads screen then leaves the edited one out of the redraft, saying so');
+pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
+
+echo "\nToday's strategy and follow-ups with AI on the Leads screen\n";
+$fuAgo = fn(int $d) => date('Y-m-d H:i', strtotime("-$d days"));
+$fu = fn(string $id, array $x = []) => array_replace($mkl($id, 'promanaged', []), ['status' => 'contacted', 'sent' => [$fuAgo(6)], 'last_contacted' => $fuAgo(6), 'followups' => 0, 'drafts' => ['email_subject' => 'First', 'email_body' => 'First email', 'whatsapp' => '']], $x);
+pm_save('leads', ['fu1' => $fu('fu1'), 'fu2' => $fu('fu2', ['followup_draft' => ['email_subject' => 'S', 'email_body' => 'Drafted follow-up', 'whatsapp' => '']]), 'rp1' => array_replace($mkl('rp1', 'promanaged', []), ['status' => 'replied'])]);
+[, $html] = http("$base?tab=agents&brand=promanaged");
+pm_t_assert(str_contains($html, 'On your desk now:') && str_contains($html, '1 reply to answer') && str_contains($html, '2 follow-ups due (1 drafted)') && str_contains($html, 'Strategy written') && str_contains($html, 'rewritten by itself when this changes'),
+    'the strategy card says what is on the desk right now (live numbers), when it was written, and that it keeps itself up to date');
+pm_t_assert(!str_contains($html, 'Draft with AI') && !str_contains($html, 'with AI</button>') || str_contains($html, 'disabled'), 'without an AI key the draft buttons are not offered (or are disabled)');
+$envBefore = (string)file_get_contents($T['env']);
+file_put_contents($T['env'], $envBefore . "GEMINI_API_KEY=test-key\n"); // the AI looks set up; the test server still cannot call it, so the answers show the failure path
+[, $html] = http("$base?tab=agents&brand=promanaged");
+pm_t_assert(str_contains($html, 'Draft 1 follow-up with AI') && str_contains($html, 'value="followups_ai"') && preg_match('#Follow up with Lead fu1.*?Draft with AI#s', $html) === 1 && str_contains($html, 'draft ready'),
+    'with the AI set up, the strategy card offers to draft the follow-ups still to write, the task list offers it per lead, and a follow-up that is already drafted says so');
+pm_t_assert(str_contains($html, 'Draft follow-up with AI'), 'and the lead\'s own card has the button too');
+$csrf6 = csrf_of($html);
+[$code] = http($base, ['csrf' => $csrf6, 'action' => 'agents', 'do' => 'followup_ai', 'id' => 'fu1']);
+[, $html] = http("$base?tab=agents&brand=promanaged");
+pm_t_assert($code === 302 && str_contains($html, 'The follow-up agent failed') , 'one lead\'s follow-up: when the AI cannot answer it says so plainly and changes nothing');
+[$code] = http($base, ['csrf' => $csrf6, 'action' => 'agents', 'do' => 'followups_ai']);
+[, $html] = http("$base?tab=agents&brand=promanaged");
+pm_t_assert($code === 302 && str_contains($html, '0 follow-ups drafted with AI, 1 could not be'), 'all due follow-ups: the same, counted: ' . substr(strip_tags((string)(preg_match('/class="flash[^"]*">(.*?)<\/div>/s', $html, $fm4) ? $fm4[1] : 'no flash')), 0, 140));
+pm_t_assert(empty(pm_load('leads', fn() => [])['fu1']['followup_draft']), 'and no draft was invented');
+file_put_contents($T['env'], $envBefore);
 pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
 
 echo "\nThe WhatsApp webhook: one address for every connected number\n";

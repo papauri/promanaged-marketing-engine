@@ -189,7 +189,12 @@ ANY BUSINESS, NOT JUST TWO (cycle 3)
   the business has its own voice, mailbox, leads, posts, hashtags, partner radar, limits and settings page. Nothing is sent or switched on by creating
   it. Its agents start by themselves each weekday morning from the scheduler (no change to the scheduled task), or press "Run the agents now".
   Its mail login can be typed in its Settings page or put in .env with its own prefix (id in capitals + underscore, e.g. GREENGROCERS_SMTP_HOST).
-  Proposals stay ProManaged IT and Travel Malawi only (they use those price lists and terms). "Hide this business" keeps all its data.
+  Proposals stay ProManaged IT and Travel Malawi only (they use those price lists and terms). "Hide this business" keeps all its data, and Settings >
+  "Hidden businesses" brings it back. "Delete this business for good" (its Settings page, or a hidden one in that list) removes everything it owns: its
+  leads and archived leads, posts and their pictures, offers, WhatsApp campaigns and templates, strategy, settings, mailbox details, logo and saved files, and
+  the other businesses are never touched. You type its name to confirm; a backup of what was removed is kept first in data/deleted/<id>-<date>.json (tick
+  box, on by default; nothing is deleted if the backup cannot be written), and it is refused while the agents are running for that business. ProManaged IT
+  and Travel Malawi cannot be deleted. Lines in .env that belong to it (e.g. GREENGROCERS_SMTP_HOST) are yours to remove by hand.
   Code rule: never write `$brand === 'travel' ? ...` to mean "the other business"; ask lib/brands.php (pm_brand_ids, pm_brand_name, pm_brand_profile).
   tests/test_brands.php proves a third business never receives another business's words; tests/test_pages.php loads every screen for every business.
 
@@ -225,6 +230,16 @@ THE TRAVEL MALAWI FIRST EMAIL (lib/tm_email.php)
   there), with a sample email, its word count and whether it passes the wording rules (one plain link, no prices, no spam words, 20 to 190 words). Leads >
   Travel Malawi shows how many unsent drafts are still in the old format and a "Redraft" button (one AI call per six emails, never sends); drafts that are
   approved, sent or edited by hand are left alone.
+
+FOLLOW-UPS WITH AI, AND TODAY'S STRATEGY (lib/followups.php, lib/director.php)
+  A lead we wrote to that goes quiet (default 4 days, at most 3 follow-ups, not snoozed, not left with only a dead email) is "due". The Follow-up agent writes
+  one new angle, never a repeat and never pressure, as a DRAFT for you to read and send; nothing here sends anything. It is drafted three ways: by itself in
+  the daily agent run; by the scheduler once each working morning (08:00 to 17:00, at most 12 a day, off with the Follow-up switch in the agent settings or
+  without an AI key); and on demand on the Leads screen: "Draft with AI" beside a follow-up task, "Draft follow-up with AI" on a lead's card, and "Draft N
+  follow-ups with AI" for every due one in a single press.
+  Today's strategy (the Director's brief at the top of the Leads screen) shows what is on your desk right now (replies to answer, follow-ups due and how many
+  are drafted, drafts to read, approved and waiting) and is written again by itself after each agent run, after you press "Draft N follow-ups", and when that
+  work moves (at most every 90 minutes), so it no longer repeats yesterday's advice. "Refresh strategy" still rewrites it at once.
 
 EMAIL WORKS ON YOUR PC BUT NOT FROM THE SERVER
   Settings > the business > "Check the mail login" (also "Test now" in Setup health) logs in without sending, and when it fails says why and what to do:

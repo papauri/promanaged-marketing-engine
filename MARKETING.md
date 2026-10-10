@@ -60,7 +60,7 @@ accepted by being made; they are logged in the Done log below, not in the regist
 
 ### 3.3 Businesses, trust and ops
 
-- **Add a business** in three steps (questions → check the AI draft → ready checklist); own settings page, own mailbox (typed in or `<ID>_SMTP_*` in `.env`), hide with data kept; the scheduler starts its daily run.
+- **Add a business** in three steps (questions → check the AI draft → ready checklist); own settings page, own mailbox (typed in or `<ID>_SMTP_*` in `.env`), hide with data kept (Settings > Hidden businesses brings it back) or **delete for good** (`lib/brand_delete.php`: everything it owns is removed, nothing of any other business; typed name to confirm; backup to `data/deleted/` first and no delete without it unless the owner unticks the box; refused for the two core businesses and while its agents are running); the scheduler starts its daily run.
 - **The AI learns the business** (`lib/brand_study.php`): the website (up to five pages, public addresses only) and anything pasted are read, and one AI call returns the business's facts (each with a checked quote), who to target and why, who to skip, towns to start in, and up to five questions only the owner can answer (answer them and the draft is redone without reading the site again). What was learned steers the scouts and the qualifier of that business. "Study the business again" shows only what is new, with a tick box each. Lead posts can suggest offers from the facts.
 - **One WhatsApp number and one X account per business** (`pm_brand_env`): each business's own keys, templates and Setup-health rows; one webhook (`wa.php`) serves every number and the number a message came to decides the business; calls are checked with the Meta app secret when it is set. Someone new who writes to a number becomes that business's lead (an offer keyword gets the owner's own reply, no AI; anything else gets a draft that waits for the owner); a number that said STOP is never a new lead.
 - **The one-page offer** (`lib/onepager.php`): an added business has no proposal, so it has a one-page PDF made from its own words (no prices, claims flagged), emailed from a lead's card only to someone who has written to it.
@@ -120,6 +120,12 @@ accepted by being made; they are logged in the Done log below, not in the regist
 ---
 
 ## 6 · Done log
+
+### Owner request in chat, 2026-10-11 — "delete businesses, keep today's strategy updated, and follow-ups with AI"
+
+- **Follow-ups with AI** (`lib/followups.php`): one shared "due" rule (`pm_followup_due`) used by the daily run, the Leads screen and the scheduler. Drafts only, never sends: on demand for one lead ("Draft follow-up with AI") or all that are due ("Draft N follow-ups with AI", six to a call, at most 12), and by the scheduler job `followup_drafts` once each working morning (12 a day, retried the same day only if every call failed). Same Follow-up agent, same lint and subject experiment as before.
+- **Today's strategy stays current** (`lib/director.php`): the pipeline stats now include replies awaiting an answer, follow-ups due / still to draft, unsent drafts, approved-and-waiting and sent today; the brief is rewritten when those move (at most every 90 minutes), after every full agent run and after a bulk follow-up draft; the card shows the live numbers and when it was written. The prompt may not tell the owner to send something that is not drafted yet.
+- **Delete a business** (`lib/brand_delete.php`): see 3.3. Also: ids that are also keys inside the data files ("Cities", "Rows", "Posts" ...) are no longer given out, so a new business can never overwrite ProManaged IT's own agent settings. Tests: `tests/test_branddelete.php` (82), `tests/test_followups.php` (45), HTTP checks in `tests/test_pages.php`.
 
 ### Owner request in chat, 2026-10-11 — Travel Malawi first emails with the real benefits, the link, the set-up steps, free and why
 
