@@ -77,7 +77,7 @@ function pm_recycle_make(string $postId): array
         $n = count(array_filter(pm_sx_posts($brand), fn($p) => ($p['recycled_from'] ?? '') === $postId));
         $frame = PM_SX_RECYCLE_FRAMES[(abs(crc32($postId)) + $n) % count(PM_SX_RECYCLE_FRAMES)];
         $cap = trim((string)$orig['caption']);
-        $new = array_intersect_key($orig, array_flip(['brand', 'format', 'pillar', 'cta', 'proof_id', 'headline', 'sub', 'script', 'layout', 'audience', 'hook_pattern', 'slides', 'alt', 'asset_id', 'first_comment', 'video']));
+        $new = array_intersect_key($orig, array_flip(['brand', 'format', 'pillar', 'cta', 'proof_id', 'headline', 'sub', 'script', 'layout', 'audience', 'segment', 'hook_pattern', 'slides', 'alt', 'asset_id', 'first_comment', 'video']));
         $new += ['id' => bin2hex(random_bytes(10)), 'status' => 'draft', 'caption' => $frame . $cap,
             'hashtags' => (array)($orig['hashtags'] ?? []), 'media' => '', 'fb_id' => '', 'error' => '', 'ig' => '', 'tries' => 0, 'retry_at' => '', 'lint' => [],
             'created' => date('Y-m-d H:i'), 'by' => (string)($GLOBALS['PM_WHO'] ?? '') ?: 'recycle', 'recycled_from' => $postId, 'tokens' => 0];

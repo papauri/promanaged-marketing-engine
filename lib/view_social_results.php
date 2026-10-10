@@ -85,7 +85,7 @@ $tz = fn($s) => $s === '' ? '–' : pm_h($s);
     <div class="rs-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
       <?php foreach (['top5' => 'Top 5 posts', 'bottom5' => 'Bottom 5 posts'] as $k => $title): ?>
       <div><h2><?= $title ?></h2><div class="rs-wrap"><table class="rs"><tr><th>Post</th><th class="n">Engagement</th><th>Why</th></tr>
-        <?php foreach ($sb[$k] as $r): ?><tr><td><b><?= pm_h($r['headline']) ?></b><br><span class="rs-note"><?= pm_h($r['when']) ?> <span class="rs-chip<?= $r['src'] === 'api' ? '' : ' me' ?>"><?= $r['src'] === 'api' ? 'Facebook numbers' : pm_h($r['src'] === 'manual' ? 'entered by you' : 'Facebook + yours') ?></span></span></td>
+        <?php foreach ($sb[$k] as $r): ?><tr><td><b><?= pm_h($r['headline']) ?></b><br><span class="rs-note"><?= pm_h($r['when']) ?> <span class="rs-chip<?= $r['src'] === 'api' ? '' : ' me' ?>"><?= $r['src'] === 'api' ? 'Facebook numbers' : pm_h($r['src'] === 'manual' ? 'entered by you' : ($r['src'] === 'x' ? 'X numbers, entered by you' : 'Facebook + yours')) ?></span></span></td>
           <td class="n"><?= $num($r['eng']) ?></td><td class="rs-note"><?= pm_h($r['reason']) ?></td></tr><?php endforeach; ?>
       </table></div></div>
       <?php endforeach; ?>
@@ -117,6 +117,7 @@ if ($sb['n']): ?>
   <?= $tbl('By picture layout', $sb['groups']['layout'], 'Layout') ?>
   <?= $tbl('By time of day', $sb['groups']['daypart'], 'Time') ?>
   <?= $tbl('By weekday', $sb['groups']['weekday'], 'Day') ?>
+  <?= $tbl('By audience segment', $sb['groups']['segment'] ?? [], 'Segment') ?>
 </div></div>
 
 <div class="card"><h2>Best times (weekday × time of day)</h2>
@@ -182,7 +183,7 @@ if ($sb['n']): ?>
   <?php endif; ?>
   <?php $done = array_filter($exps, fn($e) => ($e['status'] ?? '') === 'done'); if ($done): ?>
     <h3>Finished</h3>
-    <?php foreach (array_reverse($done) as $e): ?><p style="margin:4px 0"><span class="rs-chip"><?= pm_h($e['verdict'] ?: 'done') ?></span> <?= pm_h($e['learning'] !== '' ? $e['learning'] : $e['hypothesis']) ?> <span class="rs-note"><?= pm_h($e['start']) ?> to <?= pm_h($e['end'] ?? '') ?></span></p><?php endforeach; ?>
+    <?php foreach (array_reverse($done) as $e): ?><p style="margin:4px 0"><span class="rs-chip"><?= pm_h($e['verdict'] ?: 'done') ?></span><?= !empty($e['early']) ? ' <span class="rs-chip">stopped early</span>' : '' ?> <?= pm_h($e['learning'] !== '' ? $e['learning'] : $e['hypothesis']) ?> <span class="rs-note"><?= pm_h($e['start']) ?> to <?= pm_h($e['end'] ?? '') ?></span></p><?php endforeach; ?>
   <?php endif; ?>
 </div>
 
@@ -230,6 +231,29 @@ if ($sb['n']): ?>
     <button class="btn small">Save today's numbers</button>
   </form>
 </div>
+
+<?php if (function_exists('pm_x_summary')): $xs = pm_x_summary($vb); $xrecent = array_slice(array_reverse(array_values(array_filter(pm_sx_posts($vb), fn($p) => ($p['status'] ?? '') === 'published' && pm_sx_pub_ts($p) > time() - 35 * 86400))), 0, 14); ?>
+<h3 id="xnumbers">X (Twitter)</h3>
+<div class="card">
+  <p class="hint"><?= pm_x_cfg()['ready'] ? 'X is connected: approved text and picture posts are sent there.' : 'X is not connected, so post there by hand with "Copy caption" and "Download picture" on each post.' ?> X gives this app no numbers: type what you see on X for a post (likes, reposts, replies). They count toward that post's score and are marked as yours.</p>
+  <?php if ($xs['n']): ?>
+    <div class="kpis" style="margin-bottom:8px"><div><b><?= (int)$xs['n'] ?></b><span>posts with X numbers</span></div><div><b><?= $num($xs['avg']) ?></b><span>average X engagement per post</span></div></div>
+    <div class="rs-wrap"><table class="rs"><tr><th>Post</th><th class="n">Likes</th><th class="n">Reposts</th><th class="n">Replies</th><th class="n">Views</th><th class="n">Engagement</th></tr>
+    <?php foreach (array_slice($xs['rows'], 0, 8) as $r): ?><tr><td><b><?= pm_h($r['headline']) ?></b><br><span class="rs-note"><?= pm_h($r['when']) ?> <span class="rs-chip me">entered by <?= pm_h($r['by'] ?: 'you') ?></span></span></td>
+      <td class="n"><?= (int)$r['n']['reactions'] ?></td><td class="n"><?= (int)$r['n']['shares'] ?></td><td class="n"><?= (int)$r['n']['comments'] ?></td><td class="n"><?= $num($r['n']['reach']) ?></td><td class="n"><?= $num($r['eng']) ?></td></tr><?php endforeach; ?>
+    </table></div>
+  <?php endif; ?>
+  <?php if (!$xrecent): ?><p class="hint">No published posts in the last 5 weeks.</p><?php else: ?>
+  <form method="post" style="margin-top:8px"><?= $sx('x_results_save') ?>
+    <div class="rs-grid">
+      <div style="grid-column:span 2"><label>Post</label><select name="id"><?php foreach ($xrecent as $p): ?><option value="<?= pm_h($p['id']) ?>"><?= pm_h(date('j M', pm_sx_pub_ts($p)) . ' · ' . ((string)(($p['headline'] ?? '') ?: mb_substr((string)($p['caption'] ?? ''), 0, 40))) . (($p['x'] ?? '') === 'published' ? ' (sent to X)' : '')) ?></option><?php endforeach; ?></select></div>
+      <?php foreach (['likes' => 'Likes', 'reposts' => 'Reposts', 'replies' => 'Replies', 'views' => 'Views', 'clicks' => 'Link clicks'] as $k => $l): ?><div><label><?= $l ?></label><input type="number" min="0" name="<?= $k ?>"></div><?php endforeach; ?>
+    </div>
+    <button class="btn small" style="margin-top:6px">Save as entered by me</button>
+  </form>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <h3>Ads</h3>
 <div class="card">

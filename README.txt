@@ -151,3 +151,15 @@ SOCIAL (tab "Social", per business)
   X (Twitter): set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET in .env and switch X on in Settings > Social media.
   WhatsApp auto-answers: set WA_BIZ_TOKEN, WA_BIZ_PHONE_ID, WA_BIZ_VERIFY in .env and point the Meta webhook at /wa.php. It only answers
   known leads inside the 24-hour window; STOP is honoured forever. Without these keys the feature is completely off.
+
+REVIEW BEFORE SEND, CAMPAIGNS, ARCHIVE, HEALTH (cycle 2)
+  Agents > More > Agent settings: "Email replies" and "WhatsApp Business answers" can each be "Draft for my approval". A drafted WhatsApp answer
+  is sent with "Send on WhatsApp Business" (only inside the 24 hours after they wrote); anything that needs a person always waits for you.
+  WhatsApp tab > Campaigns (only with WA_BIZ_* keys): a message plus an audience, drafted by anyone, approved by an approver, then sent a few at a
+  time Mon-Fri 08:00-16:30 inside the daily WhatsApp limit. STOP is checked again at every send. Outside the 24-hour window WhatsApp delivers only an
+  approved template: set WA_BIZ_TEMPLATE (and WA_BIZ_TEMPLATE_LANG, default en); its {{1}} is filled with the first name.
+  Lead cards show the win-back draft, the post-sign asks (testimonial, Google review with the link from Social > Channels, referral) and what a
+  contact re-check found; each is sent by you. Researched leads are re-scored once (3 a run). Settings > Setup health lists what is connected.
+  Leads untouched for 12 months (never clients or "do not contact") move to data/leads_archive.json, restorable under Agents > More > Archive.
+  The scheduler also clears old temp files daily and saves a weekly backup of data/*.json without secrets to data/archive/ (8 weeks kept; a
+  .zip when PHP has php-zip, else a .json.gz). Social > Results shows results by audience segment and lets you type X numbers per post.

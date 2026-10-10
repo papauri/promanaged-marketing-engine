@@ -389,7 +389,8 @@ function pm_send_first(array &$leads, string $id, string $which, ?callable $mail
     $prev = pm_brand();
     pm_brand_set((string)($leads[$id]['brand'] ?? 'promanaged')); // act as the brand this lead was approached by
     try {
-        return pm_send_first_run($leads, $id, in_array($which, ['followup', 'followup_draft'], true) ? 'followup_draft' : 'drafts', $mailer);
+        $key = in_array($which, ['followup', 'followup_draft'], true) ? 'followup_draft' : (in_array($which, ['winback', 'winback_draft'], true) ? 'winback_draft' : 'drafts');
+        return pm_send_first_run($leads, $id, $key, $mailer);
     } finally {
         pm_brand_set($prev);
     }
@@ -461,10 +462,18 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     $L['status'] = 'contacted';
     unset($L['approved_at'], $L['send_fail_at']);
     if ($which === 'followup_draft') {
+        if (function_exists('pm_followup_log_sent')) { // C2-A03: remember the subject arm so the follow-up experiment can score it
+            pm_followup_log_sent($L, $d, $now);
+        }
         $L['followups'] = (int)($L['followups'] ?? 0) + 1;
         unset($L['followup_draft'], $L['followup_approved']);
     }
-    pm_lead_note($L, ($which === 'drafts' ? 'First email' : 'Follow-up') . ' sent to ' . $email);
+    if ($which === 'winback_draft') { // C2-A01: one fresh try after a no; no automatic follow-ups after it
+        $L['winback_sent_at'] = $now;
+        $L['followups'] = (int)$cfg['max_followups'];
+        unset($L['winback_draft'], $L['snooze_until']);
+    }
+    pm_lead_note($L, ($which === 'drafts' ? 'First email' : ($which === 'winback_draft' ? 'Win-back email' : 'Follow-up')) . ' sent to ' . $email);
     unset($L);
     pm_send_stats_mark();
     pm_leads_save($leads);

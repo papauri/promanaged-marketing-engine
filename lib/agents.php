@@ -28,6 +28,7 @@ function pm_agents_default_config(): array
         'sectors'         => ['hotels and lodges', 'restaurants and bars', 'gyms and fitness studios', 'conference venues', 'shops and supermarkets', 'schools and colleges',
                               'clinics and pharmacies', 'NGOs and associations', 'accounting and law firms', 'logistics and transport companies', 'farms and agribusiness', 'startups and small teams'],
         'reply_mode'      => 'draft',  // draft = you approve every reply; auto = simple, safe replies go out by themselves
+        'wa_reply_mode'   => 'auto',   // WhatsApp Business answers: auto = simple, safe answers by themselves (ones that need a person stop); draft = you approve every answer
         'gemini_model'    => 'economy', // economy = cheapest model that works; auto = spread across the newest 3; or a model id
         'cities'          => ['Lilongwe', 'Blantyre', 'Mzuzu', 'Mangochi', 'Zomba', 'Salima', 'Nkhata Bay', 'Kasungu'],
         'new_per_day'     => 10,   // new leads the Scouts try to add each day
@@ -317,6 +318,7 @@ function pm_claude(string $system, string $user, bool $web = false, int $maxToke
     return pm_ai_call($web, $system, $user, $maxTokens, $tier);
 }
 require_once __DIR__ . '/sx_learn.php';
+require_once __DIR__ . '/sx_harvest.php';
 
 /* ---------------- Spend control: every call is counted against a daily token budget ---------------- */
 
@@ -881,13 +883,15 @@ function pm_agent_qualify(array $leads): array
 {
     if (pm_brand() === 'travel') {
         $system = pm_agents_company_brief('tiny') . "\nYou are the Qualifier. Score each stay 0-100 on how likely it wants a free direct-booking listing: independent, genuine, reachable, reliant on agents/phone/WhatsApp or little online presence. "
-            . "Above 70 needs concrete evidence. " . PM_AGENT_RULES;
+            . "Above 70 needs concrete evidence. When an item has research, re-score it from what was found (previous_score is the old number): confirmed facts may raise or lower it. " . PM_AGENT_RULES;
     } else {
         $system = pm_agents_company_brief('full') . "\nYou are the Qualifier. Score each lead 0-100 on need and ability to pay (size, manual processes, reachable decision maker, package fit). Be sceptical: above 70 needs concrete evidence. "
-            . "Pick the package index and the best pain point/need; the package must match what they need. " . pm_learn_qualifier_line(pm_brand()) . PM_AGENT_RULES;
+            . "Pick the package index and the best pain point/need; the package must match what they need. When an item has research, re-score it from what was found (previous_score is the old number): confirmed facts may raise or lower it. "
+            . pm_learn_qualifier_line(pm_brand()) . PM_AGENT_RULES;
     }
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'evidence' => array_slice($l['evidence'] ?? [], 0, 2),
-        'signals' => array_slice($l['need_signals'] ?? [], 0, 2), 'reachable' => !empty($l['email']) || !empty($l['phone'])], $leads);
+        'signals' => array_slice($l['need_signals'] ?? [], 0, 2), 'reachable' => !empty($l['email']) || !empty($l['phone'])]
+        + (!empty($l['research']) ? ['research' => pm_research_brief($l), 'previous_score' => (int)($l['score'] ?? 0)] : []), $leads);
     return pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
         . "\nJSON array of {\"id\",\"score\",\"package\":index,\"offering\":\"build, source or support\",\"pain\":\"pain point/need to lead with\",\"reason\":\"one short sentence\",\"skip\":false}", false, 2500)));
 }
@@ -924,9 +928,12 @@ function pm_agent_write(array $leads): array
         : "";
     $sender = pm_sender_name();
     $subjectLine = function_exists('pm_email_exp_example') ? pm_email_exp_example(pm_brand()) : '';
-    $system = pm_agents_company_brief('tiny') . "\nYou are writing outreach for {$s['company_name']} as " . ($sender !== '' ? "$sender (use this first name: " . explode(' ', $sender)[0] . ")" : "a member of the team (no personal name: introduce the company instead)") . ". $ask" . PM_EMAIL_CRAFT . ' ' . ($subjectLine !== '' ? $subjectLine . ' ' : '') . PM_AGENT_RULES;
+    $system = pm_agents_company_brief('tiny') . "\nYou are writing outreach for {$s['company_name']} as " . ($sender !== '' ? "$sender (use this first name: " . explode(' ', $sender)[0] . ")" : "a member of the team (no personal name: introduce the company instead)") . ". $ask" . PM_EMAIL_CRAFT . ' ' . ($subjectLine !== '' ? $subjectLine . ' ' : '')
+        . "Each item has subject_style: write that item's email subject in that style. " . PM_AGENT_RULES;
+    $brand = pm_brand();
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'city' => $l['city'], 'contact' => $l['contact'] ?? '',
-        'evidence' => array_slice($l['evidence'] ?? [], 0, 2), 'online_gaps' => array_slice($l['social_gaps'] ?? [], 0, 2), 'research' => pm_research_brief($l), 'lead_with' => $l['pain'] ?? '', 'how_it_stops' => pm_fix_for((string)($l['pain'] ?? ''))], $leads);
+        'evidence' => array_slice($l['evidence'] ?? [], 0, 2), 'online_gaps' => array_slice($l['social_gaps'] ?? [], 0, 2), 'research' => pm_research_brief($l), 'lead_with' => $l['pain'] ?? '', 'how_it_stops' => pm_fix_for((string)($l['pain'] ?? '')),
+        'subject_style' => pm_subject_style(pm_email_exp_arm((string)$l['id'], $brand))], $leads);
     return pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
         . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}. Never greet with the business name.", false, 2500, 'write')));
 }
@@ -937,9 +944,11 @@ function pm_agent_followup(array $leads): array
     $s = pm_settings();
     $system = pm_agents_company_brief('tiny') . "\nYou are the Follow-up agent for {$s['company_name']}. Write a 40-word follow-up email and 25-word WhatsApp that add ONE new angle (a different gain, or a one-page plan offer). "
         . "Match the state: for \"opened\" (they opened our proposal or email but stayed quiet) gently reference what they saw and add one new, true reason; for \"silent\" (never engaged) be shorter and lead with one specific fact about their business; for \"replied\" pick up their last words, never repeat a whole earlier message. "
-        . "No prices, no guilt, no pressure, no urgency. Plain text, no sign-off. " . PM_AGENT_RULES;
+        . "No prices, no guilt, no pressure, no urgency. Plain text, no sign-off. Each item has subject_style: write that item's email subject in that style. "
+        . pm_email_exp_followup_example(pm_brand()) . ' ' . PM_AGENT_RULES;
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'contact' => $l['contact'] ?? '', 'used' => mb_substr($l['drafts']['email_body'] ?? '', 0, 220),
-        'state' => pm_lead_engagement((array)$l), 'views' => (int)($l['view_count'] ?? 0), 'last_seen' => (string)($l['last_viewed_at'] ?? '')], $leads);
+        'state' => pm_lead_engagement((array)$l), 'views' => (int)($l['view_count'] ?? 0), 'last_seen' => (string)($l['last_viewed_at'] ?? ''),
+        'subject_style' => pm_subject_style(pm_followup_arm((array)$l))], $leads);
     return pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}", false, 1800)));
 }
 
@@ -1034,7 +1043,8 @@ function pm_outreach_lint(string $subject, string $body, bool $first): array
     if (preg_match_all('#https?://|www\.#i', $body) > 1 || preg_match('#\b(bit\.ly|tinyurl|t\.co|goo\.gl|wa\.me)\b#i', $body)) {
         $bad[] = 'Too many links or a link shortener. Use at most one plain link to your own website.';
     }
-    if (preg_match('/(?<![A-Za-z])(MWK|USD|ZAR|GBP|EUR)(?![A-Za-z])|[$£€]|(?<![A-Za-z])K\s?\d|\d[\d,. ]{3,}\s*(a month|per month|\/\s?month|once|setup)/i', $subject . ' ' . $body)) {
+    // £ and € are matched as real characters (/u): as bytes they would also hit the em dash in a sign-off "— Company"
+    if (preg_match('/(?<![A-Za-z])(MWK|USD|ZAR|GBP|EUR)(?![A-Za-z])|\$|(?<![A-Za-z])K\s?\d|\d[\d,. ]{3,}\s*(a month|per month|\/\s?month|once|setup)/i', $subject . ' ' . $body) || preg_match('/[£€]/u', $subject . ' ' . $body)) {
         $bad[] = 'Remove prices and amounts from the email: prices belong in the proposal.';
     }
     if ($words < 20 || $words > ($first ? 190 : 120)) {
@@ -1308,7 +1318,7 @@ function pm_lead_group(array $l): string
 }
 
 /** Task kinds that stay ticked for a week (the task does not recur daily); the others are ticked for today only. */
-const PM_PLAN_STICKY = ['call', 'nudge', 'social', 'referral', 'upsell', 'research', 'followup'];
+const PM_PLAN_STICKY = ['call', 'nudge', 'social', 'referral', 'upsell', 'research', 'followup', 'winback', 'postsign'];
 
 /**
  * Today's task list, rebuilt from the state of every lead. Ids are stable (kind + key + lead + the lead's touch count),
@@ -1477,6 +1487,16 @@ function pm_daily_plan(array $leads, array $cfg): array
         }
         if ($st === 'qualified' && empty($l['email']) && empty($l['phone'])) {
             $add('research', "Find a contact for $nm ({$l['city']}): no email or phone yet", $id, 6, 'find-contact');
+        }
+        // what the win-back, post-sign and re-verify agents prepared: the owner reviews and sends (nothing goes out by itself)
+        foreach (pm_lead_open_drafts($l) as $od) {
+            if ($od === 'winback') {
+                $add('winback', "Review the win-back draft for $nm and send it if the time is right", $id, 4, 'winback');
+            } elseif ($od === 'postsign') {
+                $add('postsign', "Send $nm the thank-you asks: testimonial, Google review and referral (drafted)", $id, 3, 'postsign');
+            } else {
+                $add('research', "Check $nm: " . lcfirst((string)$l['reverify']['what']), $id, 4, 'reverify');
+            }
         }
     }
     $seen = [];
@@ -2122,6 +2142,7 @@ function pm_agent_research(array $lead): array
 function pm_apply_research(array &$lead, array $r): void
 {
     $lead['research'] = $r;
+    unset($lead['requalify_tries']); // new research: the re-score may try again
     foreach (['facebook', 'instagram'] as $k) {
         $u = (string)($r['social'][$k] ?? '');
         if (empty($lead[$k]) && preg_match('#^https?://#i', $u)) {

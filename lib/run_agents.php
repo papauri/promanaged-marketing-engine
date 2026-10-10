@@ -310,7 +310,7 @@ try {
                     $dupe = isset($leads[$id]) ? $id : null; // the old name-only check always applies
                     if ($dupe === null && function_exists('pm_lead_find_dupe')) { // same website, phone or email (outbound engine)
                         try {
-                            $pool = array_replace($all, $leads);
+                            $pool = array_replace(function_exists('pm_leads_archive') ? pm_leads_archive() : [], $all, $leads); // an archived business is not "new" again
                             $cand = ['name' => trim((string)$b['name']), 'city' => $c, 'brand' => $brand, 'type' => $sector,
                                 'website' => (string)($b['website'] ?? ''), 'phone' => (string)($b['phone'] ?? ''), 'email' => (string)($b['email'] ?? '')];
                             $dupe = pm_lead_find_dupe($pool, $cand, $brand);
@@ -367,7 +367,7 @@ try {
                         break;
                     }
                     $c = trim((string)($b['city'] ?? '')) ?: (string)($cfg['cities'][0] ?? '');
-                    $pool = array_replace($all, $leads);
+                    $pool = array_replace(function_exists('pm_leads_archive') ? pm_leads_archive() : [], $all, $leads);
                     $cand = ['name' => trim((string)$b['name']), 'brand' => $brand, 'type' => (string)($b['type'] ?? ''),
                         'website' => (string)($b['website'] ?? ''), 'phone' => (string)($b['phone'] ?? ''), 'email' => (string)($b['email'] ?? '')];
                     $dupe = pm_lead_find_dupe($pool, $cand, $brand);
@@ -477,6 +477,7 @@ try {
                         continue;
                     }
                     $leads[$id]['contact_checked_at'] = date('Y-m-d H:i');
+                    $before = [(string)($leads[$id]['email'] ?? ''), (string)($leads[$id]['phone'] ?? ''), (string)($leads[$id]['contact'] ?? '')];
                     $newEmail = strtolower(trim((string)($d['email'] ?? '')));
                     if ($newEmail !== '' && filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
                         $cur = strtolower((string)($leads[$id]['email'] ?? ''));
@@ -488,6 +489,9 @@ try {
                         }
                     }
                     pm_apply_contact($leads[$id], $d);
+                    if (function_exists('pm_reverify_result')) { // C2-A01: the owner sees what the re-check found (or that nothing changed)
+                        pm_reverify_result($leads[$id], $before);
+                    }
                 }
             }
             $save();
@@ -547,6 +551,32 @@ try {
             }
             pm_apply_research($leads[$id], $r['data']);
             $stats['researched'] = ($stats['researched'] ?? 0) + 1;
+        }
+        $save();
+    }
+
+    // ---- 3c. Re-qualify: a researched lead gets a fresh score and package from what was found (capped per run), before the Writers read the score ----
+    $rq = $cfg['enabled']['qualifier'] && !$hold && function_exists('pm_requalify_due') ? pm_requalify_due($leads, 3) : [];
+    if ($rq) {
+        $progress('Researchers re-scoring ' . count($rq) . ' leads');
+        $jobs = array_map(fn($b) => ['agent' => 'qualify', 'leads' => $b], array_chunk($rq, 3));
+        foreach (pm_swarm_retry($jobs, $cfg['parallel'], $tmp, $beat, 'leads') as $r) {
+            if (!$jobFailed($r, 'Qualifier', 're-score')) {
+                continue;
+            }
+            foreach ($r['data'] as $q) {
+                $id = (string)($q['id'] ?? '');
+                if (isset($leads[$id]) && !empty($leads[$id]['research'])) {
+                    pm_apply_requalify($leads[$id], $q, $brand);
+                    $stats['requalified'] = ($stats['requalified'] ?? 0) + 1;
+                }
+            }
+        }
+        foreach ($rq as $l0) { // a failed or empty answer is retried once more, then left until new research lands
+            $i0 = (string)$l0['id'];
+            if (isset($leads[$i0]) && strcmp((string)($leads[$i0]['requalified_at'] ?? ''), (string)($leads[$i0]['research']['at'] ?? '')) < 0) {
+                $leads[$i0]['requalify_tries'] = (int)($leads[$i0]['requalify_tries'] ?? 0) + 1;
+            }
         }
         $save();
     }
@@ -633,6 +663,9 @@ try {
                 $id = (string)($w['id'] ?? '');
                 if (isset($leads[$id]) && !empty($w['email_body'])) {
                     $leads[$id]['followup_draft'] = ['email_subject' => (string)$w['email_subject'], 'email_body' => (string)$w['email_body'], 'whatsapp' => (string)($w['whatsapp'] ?? '')];
+                    if (function_exists('pm_followup_arm')) {
+                        $leads[$id]['followup_arm'] = pm_followup_arm($leads[$id], $brand); // C2-A03: which subject style this follow-up used
+                    }
                     $stats['followups']++;
                 }
             }
@@ -674,7 +707,8 @@ try {
             foreach ($r['data'] as $w) {
                 $id = (string)($w['id'] ?? '');
                 if (isset($leads[$id]) && !empty($w['testimonial'])) {
-                    $leads[$id]['postsign'] = ['testimonial' => (string)$w['testimonial'], 'review' => (string)($w['review'] ?? ''), 'referral' => (string)($w['referral'] ?? '')];
+                    $leads[$id]['postsign'] = function_exists('pm_postsign_finish') ? pm_postsign_finish($w, $brand)
+                        : ['testimonial' => (string)$w['testimonial'], 'review' => (string)($w['review'] ?? ''), 'referral' => (string)($w['referral'] ?? '')]; // C2-A08: the review ask carries the Google review link
                     $leads[$id]['postsign_at'] = date('Y-m-d');
                     pm_lead_note($leads[$id], 'Post-sign asks ready: testimonial, Google review and referral');
                     $stats['postsigns'] = ($stats['postsigns'] ?? 0) + 1;

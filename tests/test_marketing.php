@@ -338,7 +338,7 @@ t('Plan learnings composition', function () {
     pm_t_assert(str_contains($line, 'Schools open Monday'), 'trends are in the planner input');
     pm_t_assert(str_contains($line, 'Cross-brand'), 'shared learnings are in the planner input');
     pm_t_assert(str_contains($line, 'Hotels & lodges'), 'audience mix is in the planner input');
-    $panel = pm_panel_plan_card_strategy('promanaged');
+    $panel = pm_panel_plan_top_strategy('promanaged');
     pm_t_assert(str_contains($panel, 'Why this week') && !str_contains($panel, 'Warning:'), 'strategy panel renders');
 });
 

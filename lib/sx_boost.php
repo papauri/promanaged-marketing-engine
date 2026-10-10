@@ -7,43 +7,89 @@
 
 /* ---------------- S02 · trend/event radar ---------------- */
 
-/** The stored trend file: {day, items[]}. Fresh for 6 days. */
-function pm_social_trends(): array
+/**
+ * A brand's stored trend list: {day, items[]}, fresh for 6 days, else []. C2-A11: each brand has its own (data/social_trends.json {brands:{promanaged:{...}, travel:{...}}});
+ * the top-level day/items stay a copy of ProManaged IT's list, so an older file and a call with no brand still work.
+ */
+function pm_social_trends(string $brand = 'promanaged'): array
 {
     $d = pm_load('social_trends', fn() => []);
-    if (($d['day'] ?? '') !== '' && strtotime((string)$d['day']) > time() - 6 * 86400) {
-        return $d;
+    $e = (array)($d['brands'][$brand] ?? ($brand === 'promanaged' ? $d : []));
+    if (($e['day'] ?? '') !== '' && !empty($e['items']) && strtotime((string)$e['day']) > time() - 6 * 86400) {
+        return ['day' => (string)$e['day'], 'items' => array_values((array)$e['items'])];
     }
     return [];
 }
 
-/** Weekly job: one AI call listing what Malawian businesses care about this week. Zero per-brand cost (shared file). */
+/** [system, user] for one brand's weekly trend call: business trends for ProManaged IT, travel and season trends for Travel Malawi. */
+function pm_trend_prompt(string $brand): array
+{
+    $rules = ' One short line each, factual, no speculation, nothing political or sensitive. Reply with JSON only.';
+    $system = $brand === 'travel'
+        ? "You are the Trend radar for Travel Malawi, a direct-booking site for independent stays in Malawi. From current Malawian tourism news and seasons, list up to 6 things travellers and stay owners are talking about THIS week: festivals and events, school holidays, the rainy or dry season, lake and weather conditions, flights, roads and borders, fuel prices, wildlife and birding seasons." . $rules
+        : "You are the Trend radar for a small IT and marketing business in Malawi. From current Malawian news and seasons, list up to 6 things small businesses (and their customers) are talking about THIS week — events, weather, fuel or currency moves, school terms, football, farming or tourism seasons." . $rules;
+    return [$system, 'Return JSON: {"items":["...", "..."]}'];
+}
+
+/** Weekly job: one AI call per brand listing what its audience cares about this week (Monday, or when the list has gone stale). */
 function pm_jobg_trends(): string
 {
     $d = pm_load('social_trends', fn() => []);
-    if (($d['day'] ?? '') === date('Y-m-d')) {
-        return 'trends already refreshed today';
+    $today = date('Y-m-d');
+    $due = [];
+    $fresh = 0;
+    $doneToday = 0;
+    foreach (['promanaged', 'travel'] as $b) {
+        $day = (string)($d['brands'][$b]['day'] ?? ($b === 'promanaged' ? ($d['day'] ?? '') : ''));
+        if ($day === $today) {
+            $doneToday++;
+        } elseif ((int)date('N') !== 1 && $day !== '' && strtotime($day) > time() - 6 * 86400) {
+            $fresh++;
+        } else {
+            $due[] = $b;
+        }
     }
-    if ((int)date('N') !== 1 && strtotime((string)($d['day'] ?? '')) > time() - 6 * 86400) {
-        return 'trends are still fresh';
+    if (!$due) {
+        return $doneToday === 2 ? 'trends already refreshed today' : 'trends are still fresh';
     }
-    $system = "You are the Trend radar for a small IT and marketing business in Malawi. From current Malawian news and seasons, list up to 6 things small businesses (and their customers) are talking about THIS week — events, weather, fuel or currency moves, school terms, football, farming or tourism seasons. One short line each, factual, no speculation, nothing political or sensitive. Reply with JSON only.";
-    try {
-        $out = pm_agent_json(pm_claude($system, 'Return JSON: {"items":["...", "..."]}', false, 700));
-    } catch (Throwable $e) {
-        return 'trends: ' . $e->getMessage();
+    $stored = [];
+    $errors = [];
+    foreach ($due as $b) {
+        [$system, $user] = pm_trend_prompt($b);
+        try {
+            $out = pm_agent_json(pm_claude($system, $user, false, 700));
+        } catch (Throwable $e) {
+            $errors[] = $b . ': ' . $e->getMessage();
+            continue;
+        }
+        $items = array_values(array_filter(array_map('strval', (array)($out['items'] ?? [])), fn($i) => $i !== ''));
+        $items = array_slice(array_map(fn($i) => mb_substr($i, 0, 120), $items), 0, 6);
+        if ($items) {
+            $stored[$b] = $items;
+        }
     }
-    $items = array_values(array_filter(array_map('strval', (array)($out['items'] ?? [])), fn($i) => $i !== ''));
-    $items = array_slice(array_map(fn($i) => mb_substr($i, 0, 120), $items), 0, 6);
-    pm_save('social_trends', ['day' => date('Y-m-d'), 'items' => $items]);
-    return $items ? count($items) . ' trend(s) stored for the planner' : 'trends: nothing usable returned';
+    if ($stored) {
+        pm_update('social_trends', function (array $d) use ($stored, $today) {
+            foreach ($stored as $b => $items) {
+                $d['brands'][$b] = ['day' => $today, 'items' => $items];
+            }
+            $pro = (array)($d['brands']['promanaged'] ?? []);
+            if ($pro) {
+                $d['day'] = $pro['day'];
+                $d['items'] = $pro['items'];
+            }
+            return $d;
+        }, fn() => []);
+    }
+    $msg = $stored ? implode(', ', array_map(fn($b, $i) => count($i) . ' ' . ($b === 'travel' ? 'Travel Malawi' : 'ProManaged IT'), array_keys($stored), $stored)) . ' trend(s) stored for the planners' : 'trends: nothing usable returned';
+    return $errors ? $msg . ' (' . implode('; ', $errors) . ')' : $msg;
 }
 
-/** One compact line for the planner prompt; '' when nothing is fresh. */
-function pm_trend_line(): string
+/** One compact line for a brand's planner prompt; '' when nothing is fresh. */
+function pm_trend_line(string $brand = 'promanaged'): string
 {
-    $t = pm_social_trends();
-    return $t ? 'This week in Malawi: ' . implode(' | ', array_slice($t['items'], 0, 3)) : '';
+    $t = pm_social_trends($brand);
+    return $t ? ($brand === 'travel' ? 'This week for travel in Malawi: ' : 'This week in Malawi: ') . implode(' | ', array_slice($t['items'], 0, 3)) : '';
 }
 
 /* ---------------- S03 · auto-repurposing ---------------- */
@@ -85,7 +131,24 @@ function pm_repurpose_candidates(string $brand): array
     return array_slice($out, 0, 1);
 }
 
-/** Deterministic re-cuts of a winner: a story, a 3-slide carousel and a trimmed text post. No AI. */
+/**
+ * C2-A12: the picture style a re-cut of a winner should use. A carousel always opens with the cover card. A story re-draws the winner's own
+ * headline on the owner's photo when there is one (and on the plain headline card when the winner was the photo card), so the same idea reads as a new picture.
+ */
+function pm_recut_layout(array $orig, string $kind): string
+{
+    if ($kind === 'carousel') {
+        return 'cover';
+    }
+    $cur = (string)($orig['layout'] ?? '');
+    if ($cur === '' && function_exists('pm_card_layout_for')) {
+        $cur = pm_card_layout_for($orig);
+    }
+    $photo = !empty($orig['asset_id']) && function_exists('pm_social_asset_find') && pm_social_asset_find((string)$orig['asset_id']);
+    return $cur === 'photo' || !$photo ? 'headline' : 'photo';
+}
+
+/** Deterministic re-cuts of a winner: a story and a 3-slide carousel carrying the winner's own picture words and photo, and a trimmed text post. No AI. */
 function pm_repurpose_make(array $orig, int $i): ?array
 {
     $cap = trim((string)($orig['caption'] ?? ''));
@@ -94,6 +157,20 @@ function pm_repurpose_make(array $orig, int $i): ?array
     $base = ['id' => bin2hex(random_bytes(10)), 'brand' => $orig['brand'] ?? 'promanaged', 'status' => 'draft', 'pillar' => $orig['pillar'] ?? 'Tip/How-to',
         'cta' => $orig['cta'] ?? '', 'proof_id' => $orig['proof_id'] ?? '', 'hashtags' => [], 'media' => '', 'fb_id' => '', 'error' => '', 'ig' => '', 'tries' => 0,
         'retry_at' => '', 'lint' => [], 'created' => date('Y-m-d H:i'), 'by' => 'repurpose', 'repurposed_from' => $orig['id']];
+    foreach (['segment', 'audience', 'hook_pattern'] as $k) { // who the post speaks to travels with it
+        if (!empty($orig[$k])) {
+            $base[$k] = $orig[$k];
+        }
+    }
+    if ($kind !== 'text' && trim((string)($orig['headline'] ?? '')) !== '') { // the winner's picture: same words and photo, re-cut in a new layout
+        foreach (['headline', 'sub', 'alt', 'asset_id'] as $k) {
+            if (!empty($orig[$k])) {
+                $base[$k] = $orig[$k];
+            }
+        }
+        $base['layout'] = pm_recut_layout($orig, $kind);
+        $base['repurposed_image'] = (string)(($orig['layout'] ?? '') ?: (function_exists('pm_card_layout_for') ? pm_card_layout_for($orig) : ''));
+    }
     if ($kind === 'story') {
         $words = preg_split('/\s+/', $cap) ?: [];
         $text = implode(' ', array_slice($words, 0, 40));
@@ -135,6 +212,12 @@ function pm_job_repurpose(string $brand): string
             $why = function_exists('pm_social_lint_post') ? pm_social_lint_post($new) : [];
             $new = function_exists('pm_social_resolve') ? pm_social_resolve($new, $why) : $new;
             pm_social_add_planned([$new], pm_social_auto($brand));
+            if (!empty($new['repurposed_image'])) { // draw the re-cut now so the owner sees the new picture in the draft at once
+                try {
+                    $new['format'] === 'carousel' && function_exists('pm_card_slides') ? pm_card_slides($new, '4x5') : (function_exists('pm_card_render') ? pm_card_render($new, 'story') : null);
+                } catch (Throwable) {
+                }
+            }
             $made++;
         }
     }
@@ -367,7 +450,7 @@ function pm_plan_learnings(string $brand): string
             $parts[] = 'Proven mix (do more of): ' . implode(', ', array_slice($top, 0, 3));
         }
     }
-    $t = pm_trend_line();
+    $t = pm_trend_line($brand);
     if ($t !== '') {
         $parts[] = $t;
     }
@@ -381,8 +464,8 @@ function pm_plan_learnings(string $brand): string
     return implode(' ', $parts);
 }
 
-/** Plan-screen card: why this week's mix is what it is (the owner-visible explanation). */
-function pm_panel_plan_card_strategy(string $vb, array $ctx = []): string
+/** Plan-screen card, shown once at the top (it was a per-post slot, so it repeated under every post): why this week's mix is what it is. */
+function pm_panel_plan_top_strategy(string $vb, array $ctx = []): string
 {
     $line = pm_plan_learnings($vb);
     $h = '<div class="card sx-card" style="padding:12px 16px"><b style="font-size:13px">Why this week\'s mix</b><p style="margin:6px 0 0;font-size:13px;color:var(--muted,#667085)">'

@@ -48,6 +48,8 @@ $agentLog = pm_load('agent_log', fn() => []);
 $hid = fn($n, $v) => '<input type="hidden" name="' . $n . '" value="' . pm_h((string)$v) . '">';
 $post = fn($id, $do, $extra = '') => '<input type="hidden" name="csrf" value="' . $csrf . '"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="' . $do . '">'
     . $hid('rs', $filter) . $hid('rt', $ftype) . ($focusId !== '' ? $hid('rl', '1') : '') . ($id !== '' ? $hid('id', $id) : '') . $extra;
+require_once __DIR__ . '/view_drafts.php';
+$waBiz = pm_wa_biz_cfg()['ready'];
 @set_time_limit(120);
 $dir = pm_director_brief();
 $ds = $dir['stats'];
@@ -167,6 +169,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
     <span class="who"><b><?= pm_h($l['name']) ?></b><small><?= pm_h($l['type']) ?> · <?= pm_h($l['city']) ?></small></span>
     <span class="tags">
       <?php if ($hasReply): ?><span class="pill warn">reply waiting</span><?php elseif ($waiting($l)): ?><span class="pill warn">they wrote</span><?php elseif ($which === 'followup'): ?><span class="pill warn">follow-up ready</span><?php endif; ?>
+      <?php foreach (pm_lead_open_drafts($l) as $od): ?><span class="pill warn"><?= ['winback' => 'win-back ready', 'postsign' => 'thank-you asks ready', 'reverify' => 'contact re-checked'][$od] ?></span><?php endforeach; ?>
       <?php if (!empty($l['snooze_until']) && $l['snooze_until'] >= date('Y-m-d')): ?><span class="pill" title="No follow-ups until then">paused to <?= pm_h(date('j M', strtotime($l['snooze_until']))) ?></span><?php endif; ?>
       <?php if (!empty($l['email_bad'])): ?><span class="pill warn" title="<?= pm_h((string)$l['email_bad']) ?> bounced: find another contact">email bounced</span><?php endif; ?>
       <?php if (!empty($l['view_count'])): ?><span class="pill hot" title="They opened the proposal page">opened proposal</span><?php endif; ?>
@@ -211,6 +214,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
         <form method="post" class="inline"><?= $post($id, 'note') ?><input type="text" name="text" placeholder="Add a note"><button class="btn small">Add</button></form>
       </div>
       <div>
+        <?= pm_view_lead_drafts($l, $csrf, $post, $hid) ?>
         <?php if ($hasReply): $rp = $l['reply_draft']; $rpMail = (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL); $rpWa = pm_wa_link($l, ''); $rpWaText = (string)($rp['whatsapp'] ?? ''); ?>
         <form method="post" class="replybox"><?= $post($id, 'save_reply') ?>
           <b>Their reply is waiting</b><?php if (!empty($rp['next_step'])): ?><span class="hint"> Next: <?= pm_h($rp['next_step']) ?></span><?php endif; ?>
@@ -223,6 +227,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
           <textarea name="whatsapp" rows="2" aria-label="Reply on WhatsApp"><?= pm_h($rpWaText) ?></textarea><?php endif; ?>
           <div class="btns"><button class="btn small">Save</button>
             <?php if ($rpMail && trim((string)($rp['body'] ?? '')) !== ''): ?><button class="btn small primary" formaction="?tab=agents" name="do" value="send_reply" onclick="return confirm('Send this reply now?')">Send reply</button><?php endif; ?>
+            <?php if ($waBiz && trim($rpWaText) !== '' && pm_wa_biz_window_open($l)): ?><button class="btn small primary" formaction="?tab=agents" name="do" value="send_reply_wa" onclick="return confirm('Send this answer on WhatsApp now?')">Send on WhatsApp Business</button><?php endif; ?>
             <?php if ($rpWa !== ''): ?><a class="btn small" data-wa-log data-id="<?= pm_h($id) ?>" data-csrf="<?= pm_h($csrf) ?>" data-url="<?= pm_h($rpWa) ?>" href="<?= pm_h($rpWa) ?>" target="_blank" rel="noopener noreferrer">Reply on WhatsApp</a><?php endif; ?></div>
         </form>
         <?php endif; ?>
@@ -306,7 +311,8 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
       <div><label>Follow up after (days)</label><input type="number" name="cfg[followup_days]" value="<?= (int)$acfg['followup_days'] ?>"></div>
       <div><label>Follow-ups at most</label><input type="number" name="cfg[max_followups]" value="<?= (int)$acfg['max_followups'] ?>"></div>
       <div><label>Agents at once</label><input type="number" name="cfg[parallel]" value="<?= (int)$acfg['parallel'] ?>"></div>
-      <div><label>Replies</label><select name="cfg[reply_mode]"><option value="draft" <?= $acfg['reply_mode'] === 'draft' ? 'selected' : '' ?>>Draft for my approval</option><option value="auto" <?= $acfg['reply_mode'] === 'auto' ? 'selected' : '' ?>>Auto-send simple, safe replies</option></select></div>
+      <div><label>Email replies</label><select name="cfg[reply_mode]"><option value="draft" <?= $acfg['reply_mode'] === 'draft' ? 'selected' : '' ?>>Draft for my approval</option><option value="auto" <?= $acfg['reply_mode'] === 'auto' ? 'selected' : '' ?>>Auto-send simple, safe replies</option></select></div>
+      <div><label>WhatsApp Business answers<?= $waBiz ? '' : ' (off until WA_BIZ keys are in .env)' ?></label><select name="cfg[wa_reply_mode]"><option value="auto" <?= ($acfg['wa_reply_mode'] ?? 'auto') === 'auto' ? 'selected' : '' ?>>Answer simple questions by themselves</option><option value="draft" <?= ($acfg['wa_reply_mode'] ?? 'auto') === 'draft' ? 'selected' : '' ?>>Draft for my approval</option></select></div>
       <div><label>Daily AI budget (tokens; 0 = none)</label><input type="number" name="cfg[daily_token_budget]" value="<?= (int)$acfg['daily_token_budget'] ?>"></div>
       <div><label>Quality</label><select name="cfg[quality]"><option value="economy" <?= $acfg['quality'] === 'economy' ? 'selected' : '' ?>>Economy (cheapest)</option><option value="balanced" <?= $acfg['quality'] === 'balanced' ? 'selected' : '' ?>>Balanced</option></select></div>
       <div><label>Gemini model</label><select name="cfg[gemini_model]"><option value="economy" <?= $acfg['gemini_model'] === 'economy' ? 'selected' : '' ?>>Economy (recommended)</option><option value="auto" <?= $acfg['gemini_model'] === 'auto' ? 'selected' : '' ?>>Spread across the newest 3</option>
@@ -328,6 +334,15 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
     <li><b>Follow-up</b> nudges quiet leads. <b>Reply agent</b> answers replies. <b>Director</b> sets the day's strategy.</li>
   </ul>
   <p class="hint">Searching with <?= pm_provider(true) === 'gemini' ? 'Gemini' : 'Claude' ?>, writing with <?= pm_provider(false) === 'gemini' ? 'Gemini' : 'Claude' ?>. To run every morning without opening the app, schedule <code>schedule_agents.bat</code>.</p>
+
+  <?php $arch = array_filter(function_exists('pm_leads_archive') ? pm_leads_archive() : [], fn($x) => ($x['brand'] ?? 'promanaged') === pm_brand()); if ($arch): uasort($arch, fn($a, $b) => strcmp((string)($b['archived_at'] ?? ''), (string)($a['archived_at'] ?? ''))); ?>
+  <h3>Archive <span class="muted">· <?= count($arch) ?> lead<?= count($arch) === 1 ? '' : 's' ?></span></h3>
+  <p class="hint">Leads untouched for 12 months move here to keep your lists fast. Nothing is deleted: restore any of them.</p>
+  <?php foreach (array_slice($arch, 0, 12, true) as $aid => $al): ?>
+    <form method="post" class="task"><?= $post((string)$aid, 'restore_lead') ?><span><b><?= pm_h((string)$al['name']) ?></b> <span class="muted">· <?= pm_h((string)($al['city'] ?? '')) ?> · <?= pm_h(PM_LEAD_STATUSES[$al['status'] ?? ''] ?? (string)($al['status'] ?? '')) ?> · archived <?= pm_h(substr((string)($al['archived_at'] ?? ''), 0, 10)) ?></span></span><button class="btn small" style="margin-left:auto;width:auto;height:30px;border-radius:8px;line-height:1">Restore</button></form>
+  <?php endforeach; ?>
+  <?php if (count($arch) > 12): ?><p class="hint">And <?= count($arch) - 12 ?> older ones in data/leads_archive.json.</p><?php endif; ?>
+  <?php endif; ?>
 
   <h3>Activity</h3>
   <?php if (!$agentLog): ?><p class="hint">Nothing yet.</p><?php endif; ?>

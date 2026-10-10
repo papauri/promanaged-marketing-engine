@@ -115,6 +115,8 @@ $brandCards = function (string $b) use ($settings, $vb): void {
     <?php endforeach; ?>
   </div>
 
+  <?php function_exists('pm_view_setup_health') && pm_view_setup_health(); // C2-G01: what is connected and what to add ?>
+
   <form method="post" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="settings">
     <?php $brandCards('promanaged'); $brandCards('travel'); ?>

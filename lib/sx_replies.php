@@ -38,7 +38,7 @@ function pm_inb_wa_link(string $brand, string $text = ''): string
 
 /* ---------------- intents ---------------- */
 
-const PM_REPLY_INTENTS = [
+const PM_COMMENT_INTENTS = [
     'price' => '/\b(price|prices|pricing|how much|cost|costs|tariffs?|rates?|charges?|fees?|mtengo|zingati|ndi zingati|bei)\b/iu',
     'availability' => '/\b(availab\w*|book|booking|bookings|booked|reserve|reservation|rooms?|vacan\w*|tonight|this weekend|check.?in)\b/iu',
     'location' => '/\b(where|location|located|address|directions?|how do (i|we) get|ili kuti|ali kuti|muli kuti|pali kuti|kuli kuti)\b/iu',
@@ -119,7 +119,7 @@ const PM_REPLY_PRIVATE_LINE = [
 /** The first intent a text matches ('' when none). Order: price, availability, location, interested, thanks. */
 function pm_reply_intent(string $text): string
 {
-    foreach (PM_REPLY_INTENTS as $k => $re) {
+    foreach (PM_COMMENT_INTENTS as $k => $re) {
         if (preg_match($re, $text)) {
             return $k;
         }

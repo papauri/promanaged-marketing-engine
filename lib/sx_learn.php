@@ -149,39 +149,76 @@ function pm_email_exp_arm(string $leadId, string $brand): string
     return (crc32($brand . '|' . $leadId) % 2 === 0) ? 'A' : 'B';
 }
 
-/** Weekly job: compare reply rates of sent first emails by arm; keep the winning style example for the Writer. */
-function pm_jobg_email_exp(): string
+/** Tallies sent/replied per arm and the latest subject per arm from rows {arm, subject, replied}. Returns [counts, examples]. */
+function pm_exp_tally(array $rows): array
 {
-    $leads = pm_load('leads', fn() => []);
     $n = ['A' => [0, 0], 'B' => [0, 0]];
     $ex = ['A' => '', 'B' => ''];
-    foreach ($leads as $l) {
-        $arm = (string)($l['email_arm'] ?? '');
-        if ($arm === '' || empty($l['sent']) || empty($l['drafts']['email_subject'])) {
+    foreach ($rows as $r) {
+        $arm = (string)($r['arm'] ?? '');
+        if (!isset($n[$arm]) || trim((string)($r['subject'] ?? '')) === '') {
             continue;
         }
         $n[$arm][0]++;
-        if (pm_lead_replied($l)) {
-            $n[$arm][1]++;
+        $n[$arm][1] += !empty($r['replied']) ? 1 : 0;
+        $ex[$arm] = (string)$r['subject'];
+    }
+    return [$n, $ex];
+}
+
+/**
+ * Judges a subject experiment from its tallies. status: few (not enough sends), none (no clear winner) or win. A winner needs both arms, $min sends in all
+ * and a real edge: two more replies than the other arm and a different reply rate.
+ */
+function pm_exp_judge(array $n, array $ex, int $min = 20): array
+{
+    if ($n['A'][0] + $n['B'][0] < $min || $n['A'][0] === 0 || $n['B'][0] === 0) {
+        return ['status' => 'few', 'figures' => ['A' => $n['A'], 'B' => $n['B']]];
+    }
+    $ra = $n['A'][1] / $n['A'][0];
+    $rb = $n['B'][1] / $n['B'][0];
+    $winner = $rb > $ra ? 'B' : 'A';
+    $other = $winner === 'A' ? 'B' : 'A';
+    if ($n[$winner][1] >= $n[$other][1] + 2 && $ra !== $rb) {
+        return ['status' => 'win', 'winner' => $winner, 'example' => mb_substr($ex[$winner], 0, 90), 'figures' => ['A' => $n['A'], 'B' => $n['B']],
+            'text' => 'arm ' . $winner . ' wins (' . round(100 * $ra) . '% vs ' . round(100 * $rb) . '% replies)'];
+    }
+    return ['status' => 'none', 'figures' => ['A' => $n['A'], 'B' => $n['B']]];
+}
+
+/** Weekly job: compare reply rates by subject arm for sent first emails AND follow-ups; keep each winning style example for the Writer and the Follow-up agent. */
+function pm_jobg_email_exp(): string
+{
+    $leads = pm_load('leads', fn() => []);
+    $rows = [];
+    foreach ($leads as $l) {
+        if (!empty($l['email_arm']) && !empty($l['sent']) && !empty($l['drafts']['email_subject'])) {
+            $rows[] = ['arm' => (string)$l['email_arm'], 'subject' => (string)$l['drafts']['email_subject'], 'replied' => pm_lead_replied($l)];
         }
-        $ex[$arm] = (string)$l['drafts']['email_subject'];
     }
     $store = pm_load('email_exp', fn() => []);
+    [$n, $ex] = pm_exp_tally($rows);
+    $v = pm_exp_judge($n, $ex, 20);
     $msg = 'not enough sent emails for a subject verdict';
-    if ($n['A'][0] + $n['B'][0] >= 20 && $n['A'][0] > 0 && $n['B'][0] > 0) {
-        $ra = $n['A'][1] / $n['A'][0];
-        $rb = $n['B'][1] / $n['B'][0];
-        $winner = $rb > $ra ? 'B' : 'A';
-        $other = $winner === 'A' ? 'B' : 'A';
-        if ($n[$winner][1] >= $n[$other][1] + 2 && $ra !== $rb) { // a real, not imagined, edge
-            $store['winner'] = $winner;
-            $store['example'] = mb_substr($ex[$winner], 0, 90);
-            $store['at'] = date('Y-m-d');
-            $store['figures'] = ['A' => $n['A'], 'B' => $n['B']];
-            $msg = 'subject experiment: arm ' . $winner . ' wins (' . round(100 * $ra) . '% vs ' . round(100 * $rb) . '% replies)';
-        } else {
-            $msg = 'subject experiment: no clear winner yet';
-        }
+    if ($v['status'] === 'win') {
+        $store['winner'] = $v['winner'];
+        $store['example'] = $v['example'];
+        $store['at'] = date('Y-m-d');
+        $store['figures'] = $v['figures'];
+        $msg = 'subject experiment: ' . $v['text'];
+    } elseif ($v['status'] === 'none') {
+        $msg = 'subject experiment: no clear winner yet';
+    }
+    // follow-ups: a smaller pool, so a smaller bar (12 sends), judged the same way
+    [$fn, $fex] = pm_exp_tally(function_exists('pm_followup_exp_rows') ? pm_followup_exp_rows($leads) : []);
+    $fv = pm_exp_judge($fn, $fex, 12);
+    if ($fv['status'] === 'win') {
+        $store['followup'] = ['winner' => $fv['winner'], 'example' => $fv['example'], 'at' => date('Y-m-d'), 'figures' => $fv['figures']];
+        $msg .= '; follow-ups: ' . $fv['text'];
+    } elseif ($fv['status'] === 'none') {
+        $msg .= '; follow-ups: no clear winner yet';
+    } elseif ($fn['A'][0] + $fn['B'][0] > 0) {
+        $msg .= '; follow-ups: ' . ($fn['A'][0] + $fn['B'][0]) . ' sent so far, not enough for a verdict';
     }
     pm_save('email_exp', $store);
     return $msg;
@@ -293,8 +330,10 @@ function pm_postsign_due(array $leads, int $max = 3): array
 function pm_agent_postsign(array $leads): array
 {
     $s = pm_settings();
+    $reviewAsk = pm_google_review_link(pm_brand()) !== '' ? 'a polite Google review request; the review link is added under your text by the system, so do not write any link yourself'
+        : 'a polite Google review request that says the owner will send the link separately';
     $system = pm_agents_company_brief('tiny') . "\nYou are the Post-sign agent for {$s['company_name']}. The client just signed. Write three SHORT messages, each its own paragraph, in plain text: "
-        . "(1) \"testimonial\": ask if we may quote a line about what the system improved for them; (2) \"review\": a polite Google review request that says the owner will send the link separately; "
+        . "(1) \"testimonial\": ask if we may quote a line about what the system improved for them; (2) \"review\": $reviewAsk; "
         . "(3) \"referral\": ask whether another business they know could use the same help. Warm and light, no pressure, no prices, no discounts, no guilt. " . PM_AGENT_RULES;
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'contact' => (string)($l['contact'] ?? '')], $leads);
     return pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
@@ -509,13 +548,23 @@ function pm_lead_forget(string $id): array
     $done = [];
     $leads = pm_leads();
     $l = $leads[$id] ?? null;
-    if (!$l) {
+    $archived = function_exists('pm_leads_archive') ? (pm_leads_archive()[$id] ?? null) : null; // an archived lead can be forgotten too
+    if (!$l && !$archived) {
         return ['ok' => false, 'msg' => 'No such lead.', 'done' => []];
     }
-    $name = (string)($l['name'] ?? '');
-    unset($leads[$id]);
-    pm_leads_save($leads);
-    $done[] = 'lead removed';
+    $name = (string)(($l ?? $archived)['name'] ?? '');
+    if ($l) {
+        unset($leads[$id]);
+        pm_leads_save($leads);
+        $done[] = 'lead removed';
+    }
+    if ($archived) {
+        pm_update('leads_archive', function (array $a) use ($id) {
+            unset($a[$id]);
+            return $a;
+        }, fn() => []);
+        $done[] = 'archived copy removed';
+    }
     $norm = fn($n) => preg_replace('/[^a-z0-9]+/', '', strtolower((string)$n));
     pm_update('history', function (array $h) use ($norm, $name, &$done) {
         foreach ($h as &$row) {

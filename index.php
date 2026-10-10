@@ -11,6 +11,7 @@ require __DIR__ . '/lib/pdf.php';
 require __DIR__ . '/lib/mail.php';
 require __DIR__ . '/lib/agents.php';
 require __DIR__ . '/lib/engage.php';
+require_once __DIR__ . '/lib/wa_biz.php'; // WhatsApp Business: approved answers and campaigns are sent from here (off without keys in .env)
 require __DIR__ . '/lib/social_growth.php';
 require __DIR__ . '/lib/social_modules.php'; // Social extension registry + every lib/sx_*.php module
 
@@ -464,6 +465,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $r = function_exists('pm_lead_forget') ? pm_lead_forget($id) : ['ok' => false, 'msg' => 'Not available.'];
             pm_redirect('agents', $r['msg'], $r['ok'] ? 'ok' : 'err');
         }
+        if ($do === 'restore_lead' && $id !== '') { // MARKETING.md C2-G02: bring a lead back from the archive
+            [$okR, $msgR] = function_exists('pm_lead_unarchive') ? pm_lead_unarchive($id) : [false, 'Not available.'];
+            pm_redirect('agents' . ($okR ? '&status=all#l' . $id : ''), $msgR, $okR ? 'ok' : 'err');
+        }
         if ($do === 'export') { // MARKETING.md MG-G03: JSON export (no secrets)
             $json = function_exists('pm_data_export') ? pm_data_export(pm_brand()) : '{}';
             header('Content-Type: application/json; charset=utf-8');
@@ -481,6 +486,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $c['quality'] = ($_POST['cfg']['quality'] ?? '') === 'balanced' ? 'balanced' : 'economy';
             $gm = (string)($_POST['cfg']['gemini_model'] ?? 'economy');
             $c['reply_mode'] = ($_POST['cfg']['reply_mode'] ?? '') === 'auto' ? 'auto' : 'draft';
+            $c['wa_reply_mode'] = ($_POST['cfg']['wa_reply_mode'] ?? '') === 'draft' ? 'draft' : 'auto';
             $c['gemini_model'] = ($gm === 'auto' || $gm === 'economy' || preg_match('/^gemini-[a-z0-9.\-]+$/', $gm)) ? $gm : 'economy';
             foreach (['new_per_day' => [1, 50], 'scouts_per_day' => [1, 12], 'send_cap' => [0, 50], 'wa_cap' => [0, 150], 'followup_days' => [1, 30], 'max_followups' => [0, 5], 'parallel' => [1, 6]] as $k => [$lo, $hi]) {
                 $c[$k] = max($lo, min($hi, (int)($_POST['cfg'][$k] ?? $c[$k])));
@@ -491,6 +497,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $raw = pm_load('agents_config', 'pm_agents_default_config');
             if (pm_brand() === 'travel') { // Travel Malawi keeps its own targets and limits; the AI settings are shared
                 $raw['reply_mode'] = $c['reply_mode'];
+                $raw['wa_reply_mode'] = $c['wa_reply_mode'];
                 $raw['gemini_model'] = $c['gemini_model'];
                 $raw['parallel'] = $c['parallel'];
                 $raw['daily_token_budget'] = $c['daily_token_budget'];
@@ -799,6 +806,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pm_lead_note($leads[$id], 'Reply sent to ' . $lead['email']);
             pm_leads_save($leads);
             $back('Reply sent to ' . $lead['name'] . '.');
+        }
+        if ($do === 'send_reply_wa') { // C2-A04: an approved, drafted WhatsApp answer goes out through the Business API (inside the 24-hour window)
+            $txt = trim((string)($_POST['whatsapp'] ?? ($lead['reply_draft']['whatsapp'] ?? '')));
+            [$okW, $msgW] = pm_wa_biz_send_approved($leads[$id], $txt);
+            $okW && pm_leads_save($leads);
+            $back($msgW, $okW ? 'ok' : 'err');
+        }
+        if (in_array($do, ['save_winback', 'send_winback', 'discard_winback', 'winback_wa_sent'], true)) { // C2-A01: the win-back draft, reviewed by the owner
+            $wb = (array)($lead['winback_draft'] ?? []);
+            if ($do !== 'discard_winback' && isset($_POST['email_body'])) {
+                $wb = ['email_subject' => trim((string)($_POST['email_subject'] ?? '')), 'email_body' => trim((string)$_POST['email_body']), 'whatsapp' => trim((string)($_POST['whatsapp'] ?? ''))];
+                $leads[$id]['winback_draft'] = $wb;
+            }
+            if ($do === 'save_winback') {
+                pm_leads_save($leads);
+                $back('Win-back draft saved.');
+            }
+            if ($do === 'discard_winback') {
+                unset($leads[$id]['winback_draft']);
+                $leads[$id]['winback_at'] = date('Y-m-d'); // not drafted again for 90 days
+                pm_lead_note($leads[$id], 'Win-back draft discarded');
+                pm_leads_save($leads);
+                $back('Win-back draft discarded.');
+            }
+            if ($do === 'winback_wa_sent') {
+                $now = date('Y-m-d H:i');
+                $leads[$id]['wa_sent'][] = $now;
+                $leads[$id]['thread'][] = ['dir' => 'out', 'at' => $now, 'text' => mb_substr((string)($wb['whatsapp'] ?? ''), 0, 1500), 'ch' => 'wa'];
+                $leads[$id]['last_contacted'] = $leads[$id]['last_out'] = $leads[$id]['winback_sent_at'] = $now;
+                $leads[$id]['status'] = 'contacted';
+                $leads[$id]['followups'] = (int)$acfg['max_followups'];
+                unset($leads[$id]['winback_draft']);
+                pm_lead_note($leads[$id], 'Win-back WhatsApp sent');
+                pm_leads_save($leads);
+                $back('Logged the win-back WhatsApp to ' . $lead['name'] . '. The lead is back in play.');
+            }
+            $res = pm_send_first($leads, $id, 'winback_draft');
+            if (empty($res['ok'])) {
+                pm_leads_save($leads); // keep the edits even when the send was refused
+            }
+            $back((string)$res['msg'], !empty($res['ok']) ? 'ok' : 'err');
+        }
+        if (in_array($do, ['save_postsign', 'postsign_send', 'postsign_done'], true)) { // C2-A01: testimonial, review and referral asks after a signed deal
+            $ps = (array)($lead['postsign'] ?? []);
+            foreach (['testimonial', 'review', 'referral'] as $k) {
+                if (isset($_POST['ps_' . $k])) {
+                    $ps[$k] = trim((string)$_POST['ps_' . $k]);
+                }
+            }
+            $leads[$id]['postsign'] = $ps;
+            if ($do === 'postsign_done') {
+                $leads[$id]['postsign_done'] = date('Y-m-d');
+                pm_lead_note($leads[$id], 'Post-sign asks handled');
+                pm_leads_save($leads);
+                $back('Marked the thank-you asks as handled.');
+            }
+            if ($do === 'save_postsign') {
+                pm_leads_save($leads);
+                $back('Saved.');
+            }
+            $res = pm_send_postsign($leads, $id, (string)($_POST['which'] ?? ''));
+            if (empty($res['ok'])) {
+                pm_leads_save($leads); // keep the edits even when the send was refused
+            }
+            $back((string)$res['msg'], !empty($res['ok']) ? 'ok' : 'err');
+        }
+        if ($do === 'reverify_seen') {
+            $leads[$id]['reverify']['seen'] = true;
+            pm_leads_save($leads);
+            $back();
         }
         if ($do === 'research') {
             @set_time_limit(180);

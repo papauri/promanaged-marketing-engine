@@ -48,6 +48,7 @@ function pm_sx_rows(string $brand): array
         }
         $m = $p['metrics']['d7'] ?? null;
         $man = (array)($p['manual'] ?? []);
+        $xn = function_exists('pm_x_numbers') ? pm_x_numbers($p) : null; // C2-A06: numbers the owner typed in for X
         $src = 'api';
         if (is_array($m)) {
             if (($p['metrics_src'] ?? '') === 'manual' && !empty($man['facebook'])) { // owner fills what the API would not give
@@ -62,6 +63,9 @@ function pm_sx_rows(string $brand): array
             $m = array_map('intval', array_intersect_key($man['facebook'], array_flip(['reactions', 'comments', 'shares', 'saves', 'clicks'])));
             $m['reach'] = isset($man['facebook']['views']) ? (int)$man['facebook']['views'] : null;
             $src = 'manual';
+        } elseif ($xn) { // nothing else scores this post: the X numbers do (marked as entered by the owner, from X)
+            $m = $xn;
+            $src = 'x';
         } else {
             $pending++;
             continue;
@@ -90,7 +94,8 @@ function pm_sx_rows(string $brand): array
             'cta' => (string)($p['cta'] ?? ''), 'format' => (string)($p['format'] ?? ''), 'layout' => (string)($p['layout'] ?? ''), 'hook_pattern' => (string)($p['hook_pattern'] ?? ''),
             'hour' => $ts ? date('H', $ts) : '', 'time' => $ts ? date('H:i', $ts) : '', 'dow' => $ts ? (int)date('N', $ts) : 0, 'daypart' => $ts ? pm_sx_daypart((int)date('G', $ts)) : 'other',
             'when' => $ts ? date('Y-m-d', $ts) : '', 'eng' => $eng, 'followers' => $fol, 'per1000' => $fol ? round($eng / $fol * 1000, 1) : null, 'eng_rate' => $fol ? $eng / $fol * 100 : null,
-            'leads' => (int)$lead['leads'], 'won' => (int)$lead['won'], 'src' => $src, 'reach' => $m['reach'] ?? null, 'unplanned' => false, 'exp' => (string)($p['exp'] ?? ''), 'arm' => (string)($p['arm'] ?? '')];
+            'leads' => (int)$lead['leads'], 'won' => (int)$lead['won'], 'src' => $src, 'reach' => $m['reach'] ?? null, 'unplanned' => false, 'exp' => (string)($p['exp'] ?? ''), 'arm' => (string)($p['arm'] ?? ''),
+            'segment' => (string)(($p['segment'] ?? '') ?: (function_exists('pm_sx_segment') ? pm_sx_segment($p, $brand) : '')), 'x_eng' => $xn ? pm_social_eng($xn) : null];
     }
     foreach ((array)(pm_load('social_metrics', fn() => [])['_unplanned'][$brand] ?? []) as $u) { // native Page posts: pillar 'unplanned'
         $ts = (int)strtotime((string)($u['created'] ?? ''));
@@ -98,7 +103,7 @@ function pm_sx_rows(string $brand): array
         $rows[] = ['id' => 'u' . substr(md5((string)($u['created'] ?? '') . ($u['text'] ?? '')), 0, 8), 'headline' => (string)($u['text'] ?? ''), 'pillar' => 'unplanned', 'cta' => '', 'format' => '', 'layout' => '', 'hook_pattern' => '',
             'hour' => $ts ? date('H', $ts) : '', 'time' => $ts ? date('H:i', $ts) : '', 'dow' => $ts ? (int)date('N', $ts) : 0, 'daypart' => $ts ? pm_sx_daypart((int)date('G', $ts)) : 'other',
             'when' => $ts ? date('Y-m-d', $ts) : '', 'eng' => (float)($u['eng'] ?? 0), 'followers' => $fol, 'per1000' => $fol ? round(($u['eng'] ?? 0) / $fol * 1000, 1) : null,
-            'eng_rate' => $fol ? ($u['eng'] ?? 0) / $fol * 100 : null, 'leads' => 0, 'won' => 0, 'src' => 'api', 'reach' => null, 'unplanned' => true, 'exp' => '', 'arm' => ''];
+            'eng_rate' => $fol ? ($u['eng'] ?? 0) / $fol * 100 : null, 'leads' => 0, 'won' => 0, 'src' => 'api', 'reach' => null, 'unplanned' => true, 'exp' => '', 'arm' => '', 'segment' => '', 'x_eng' => null];
     }
     return ['rows' => $rows, 'pending' => $pending];
 }
@@ -157,9 +162,10 @@ function pm_social_scoreboard(string $brand): array
         'enq_per_100' => !empty($fa['fb']) ? round($leads28 / $fa['fb'] * 100, 2) : null, // enquiries from social in 28 days per 100 followers
         'groups' => [], 'top5' => [], 'bottom5' => [], 'heat' => [],
     ];
-    foreach (['pillar', 'cta', 'format', 'layout', 'hook_pattern', 'hour', 'daypart'] as $f) {
-        $sb['groups'][$f] = pm_sx_group($rows, $f, $avg);
+    foreach (['pillar', 'cta', 'format', 'layout', 'hook_pattern', 'hour', 'daypart', 'segment'] as $f) { // segment: the audience a post speaks to (C2-A05)
+        $sb['groups'][$f] = pm_sx_group(array_values(array_filter($rows, fn($r) => $f !== 'segment' || !$r['unplanned'])), $f, $avg);
     }
+    $sb['x'] = function_exists('pm_x_summary') ? ['n' => count(array_filter($rows, fn($r) => $r['x_eng'] !== null)), 'avg' => ($xs = array_filter(array_column($rows, 'x_eng'), fn($v) => $v !== null)) ? round(array_sum($xs) / count($xs), 1) : null] : ['n' => 0, 'avg' => null];
     $wk = [];
     foreach ($rows as $r) {
         $r['weekday'] = $r['dow'] ? PM_SX_DOW[$r['dow']] : '';
@@ -335,6 +341,9 @@ function pm_social_learnings(string $brand): string
         }
         if ($c = $pick('daypart', true)) {
             $parts[] = 'Best time: ' . $c[0] . '.';
+        }
+        if (($c = $pick('segment', true)) && !in_array($c[0], ['All businesses', 'General'], true)) {
+            $parts[] = 'Best audience: ' . $c[0] . '.';
         }
         $avoid = [];
         foreach (['cta', 'format'] as $f) {

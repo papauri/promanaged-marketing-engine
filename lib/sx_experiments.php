@@ -140,6 +140,41 @@ function pm_sx_sd(array $v): float
 }
 
 /**
+ * C2-A09: ends a test before min_posts when one arm is already clearly worse. All of these must hold: each arm has at least 3 scored posts
+ * (and at least half of min_posts), the worse arm averages half or less of the better one, EVERY post of the worse arm scored below EVERY post of the
+ * better arm (no overlap at all), and the gap is at least 2 standard errors. Anything less keeps waiting, because a couple of posts a side can be luck.
+ * Returns the verdict row, or null.
+ */
+function pm_sx_exp_early(array $by, array $fig, int $min = 4): ?array
+{
+    $nA = count($by['A']);
+    $nB = count($by['B']);
+    $need = max(3, (int)ceil($min / 2));
+    if ($nA < $need || $nB < $need) {
+        return null;
+    }
+    $a = array_sum($by['A']) / $nA;
+    $b = array_sum($by['B']) / $nB;
+    $hiArm = $b > $a ? 'B' : 'A';
+    $loArm = $hiArm === 'A' ? 'B' : 'A';
+    $hi = max($a, $b);
+    $lo = min($a, $b);
+    if ($hi <= 0 || $lo > 0.5 * $hi || max($by[$loArm]) >= min($by[$hiArm])) {
+        return null;
+    }
+    $se = sqrt(pm_sx_sd($by['A']) ** 2 / $nA + pm_sx_sd($by['B']) ** 2 / $nB);
+    if (($hi - $lo) < 2 * $se) {
+        return null;
+    }
+    $lH = $fig[$hiArm]['label'];
+    $lL = $fig[$loArm]['label'];
+    $lift = $a > 0 ? round(($b - $a) / $a * 100) : 100;
+    $n = "({$fig['A']['n']} vs {$fig['B']['n']} posts so far, average engagement " . round($a, 1) . ' vs ' . round($b, 1) . ')';
+    return ['verdict' => $hiArm === 'B' ? 'keep' : 'drop', 'figures' => $fig, 'winner' => $hiArm, 'lift' => $lift, 'early' => true,
+        'summary' => "Stopped early: $lL is clearly worse than $lH $n. Every $lL post scored below every $lH post, so $lH is the one to use."];
+}
+
+/**
  * Judges an experiment from the scoreboard rows (7-day numbers only). Returns verdict keep|drop|too early, plain figures and a sentence.
  * B must beat A by at least 15% AND by 1.5 standard errors; anything less is "no clear difference" (drop), because 4 posts a side can be luck.
  */
@@ -170,6 +205,9 @@ function pm_experiment_eval(string $id): array
     $lA = $fig['A']['label'];
     $lB = $fig['B']['label'];
     if (min($fig['A']['n'], $fig['B']['n']) < $min) {
+        if ($early = pm_sx_exp_early($by, $fig, $min)) { // C2-A09: one arm is already clearly worse
+            return $early;
+        }
         return ['verdict' => 'too early', 'figures' => $fig, 'winner' => '',
             'summary' => "Too early: $lA has {$fig['A']['n']} scored post(s), $lB has {$fig['B']['n']}; each needs $min with 7-day numbers."];
     }
@@ -220,6 +258,7 @@ function pm_job_experiments(string $brand): string
                 $rows[$i]['verdict'] = $ev['verdict'] === 'too early' ? 'inconclusive' : $ev['verdict'];
                 $rows[$i]['figures'] = $ev['figures'];
                 $rows[$i]['end'] = date('Y-m-d');
+                $rows[$i]['early'] = !empty($ev['early']);
                 $rows[$i]['learning'] = $ev['verdict'] === 'too early' ? '' : $e['arms']['A']['label'] . ' vs ' . $e['arms']['B']['label'] . ': ' . $ev['summary'];
             }
         }

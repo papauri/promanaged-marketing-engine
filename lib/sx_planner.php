@@ -193,7 +193,7 @@ function pm_sx_offline_copy(array $slot, string $brand): array
             $r = ['caption' => pm_giveaway_text($brand, $g), 'headline' => 'Win ' . pm_sx_clip((string)($g['prize'] ?? ''), 50), 'sub' => 'Comment to enter. Closes ' . date('j F', strtotime((string)($g['end'] ?? 'today'))), 'hook' => 'giveaway'];
             break;
     }
-    $r += ['sub' => '', 'slides' => [], 'headline' => $s['topic'], 'caption' => ''];
+    $r += ['sub' => '', 'slides' => [], 'headline' => $s['topic'], 'caption' => '', 'hook' => 'plain']; // every template names its hook (the bank's ledger records it)
     return $r;
 }
 
@@ -346,6 +346,7 @@ function pm_sx_row(array $slot, array $copy, string $brand, int $i, bool $offlin
         $p['layout'] = 'headline';
     }
     $p['alt'] = trim($headline . ' ' . $sub);
+    $p['segment'] = function_exists('pm_sx_segment') ? pm_sx_segment($p, $brand) : ''; // C2-A05: the audience this post speaks to
     return $p;
 }
 

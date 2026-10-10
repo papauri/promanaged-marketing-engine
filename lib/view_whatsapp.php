@@ -13,6 +13,7 @@ $sent = pm_wa_sent_today(pm_leads());
 $cap = (int)$acfg['wa_cap'];
 $left = max(0, $cap - $sent);
 $bname = $vb === 'travel' ? $settings['travel']['company_name'] : 'ProManaged IT';
+$waBiz = pm_wa_biz_cfg()['ready'];
 // Leads that wrote to us and have not been answered (replied, or a customer / lost lead who wrote again), oldest first
 $wrote = array_values(array_filter(pm_leads(), fn($x) => ($x['brand'] ?? 'promanaged') === $vb && ($x['status'] ?? '') !== 'optout' && (($x['status'] ?? '') === 'replied' || !empty($x['awaiting_reply_since']))));
 usort($wrote, fn($a, $b) => strcmp((string)($a['awaiting_reply_since'] ?? $a['last_reply'] ?? ''), (string)($b['awaiting_reply_since'] ?? $b['last_reply'] ?? '')));
@@ -35,13 +36,15 @@ usort($wrote, fn($a, $b) => strcmp((string)($a['awaiting_reply_since'] ?? $a['la
     <?php if ($lastIn !== ''): ?><p class="hint in"><b>They wrote:</b> <?= nl2br(pm_h(mb_substr($lastIn, 0, 400))) ?></p><?php endif; ?>
     <?php if (!empty($rp['next_step'])): ?><p class="hint">Next: <?= pm_h($rp['next_step']) ?></p><?php endif; ?>
     <?php if (!empty($rp['needs_human'])): ?><p class="hint warnt">Needs your judgement before you answer.</p><?php endif; ?>
+    <form method="post"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="send_reply_wa"><?= $hid('id', $l['id']) . $hid('rl', '1') . $hid('bt', 'whatsapp') ?>
     <label class="hint">Your answer on WhatsApp <?= $waDraft === '' ? '(none drafted yet: paste their message below, or write it)' : '(drafted: edit it, then send)' ?></label>
     <textarea name="whatsapp" rows="3" aria-label="Answer"><?= pm_h($waDraft) ?></textarea>
     <div class="btns">
-      <?php if ($waUrl !== ''): ?><a class="btn primary" data-wa-log data-id="<?= pm_h($l['id']) ?>" data-csrf="<?= pm_h($csrf) ?>" data-url="<?= pm_h($waUrl) ?>" href="<?= pm_h($waUrl) ?>" target="_blank" rel="noopener noreferrer">Open WhatsApp</a>
+      <?php if ($waBiz && pm_wa_biz_window_open($l)): ?><button class="btn primary" onclick="return confirm('Send this answer on WhatsApp now?')">Send on WhatsApp Business</button><?php endif; ?>
+      <?php if ($waUrl !== ''): ?><a class="btn<?= $waBiz && pm_wa_biz_window_open($l) ? '' : ' primary' ?>" data-wa-log data-id="<?= pm_h($l['id']) ?>" data-csrf="<?= pm_h($csrf) ?>" data-url="<?= pm_h($waUrl) ?>" href="<?= pm_h($waUrl) ?>" target="_blank" rel="noopener noreferrer">Open WhatsApp</a>
       <?php else: ?><span class="hint">No mobile number for this lead: answer by email from the lead.</span><?php endif; ?>
       <button type="button" class="btn small" data-copy-from="textarea[name=whatsapp]">Copy</button>
-    </div>
+    </div></form>
     <details class="aibox"><summary>Paste what they wrote, get a drafted answer</summary>
       <form method="post"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="paste_reply">
         <?= $hid('id', $l['id']) . $hid('rl', '1') . $hid('bt', 'whatsapp') . $hid('ch', 'wa') ?>
@@ -85,6 +88,8 @@ usort($wrote, fn($a, $b) => strcmp((string)($a['awaiting_reply_since'] ?? $a['la
   <?php endforeach; ?>
   <p class="hint">When they reply, paste their message under <b>They replied</b> above (or in the lead under <b>More → Paste their reply</b>): the AI classifies it and drafts your answer.</p>
 </details>
+
+<?php function_exists('pm_view_wa_campaigns') && pm_view_wa_campaigns($vb, (string)$csrf); // C2-A07: scheduled batches, approved first ?>
 
 <script>
 (function () {
