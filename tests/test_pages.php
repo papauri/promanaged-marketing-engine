@@ -100,18 +100,56 @@ foreach (['promanaged', 'travel'] as $b) {
 pm_t_eq(php_problems($log), [], 'and PHP logged no warning doing it');
 
 echo "\nSuggestions while typing in the find boxes\n";
-[$code, $body, , $head] = http("$base?suggest=blend&brand=promanaged");
+[$code, $body, , $head] = http("$base?names=blend&brand=promanaged");
 $sj = json_decode($body, true);
 pm_t_assert($code === 200 && str_contains($head, 'application/json') && !empty($sj['rows']) && str_contains($sj['rows'][0]['name'], 'Blend') && str_contains($sj['rows'][0]['href'], 'lead='), 'typing a few letters returns the matching leads as JSON, and a lead of the business on screen opens it');
-[$code, $body] = http("$base?suggest=blend&mode=web&brand=promanaged");
+[$code, $body] = http("$base?names=blend&mode=web&brand=promanaged");
 pm_t_assert($code === 200 && json_decode($body, true) === ['rows' => []], 'the web part answers quietly with nothing when the AI is not set up');
-pm_t_eq(json_decode(http("$base?suggest=" . urlencode('zzzz nothing') . '&brand=travel')[1], true), ['rows' => []], 'and nothing matching gives an empty list');
+pm_t_eq(json_decode(http("$base?names=" . urlencode('zzzz nothing') . '&brand=travel')[1], true), ['rows' => []], 'and nothing matching gives an empty list');
 [, $html] = http("$base?tab=agents&brand=promanaged");
-pm_t_assert(str_contains($html, 'name="name" required data-suggest data-web="1"') && str_contains($html, 'Start typing: it suggests businesses you already know'), 'the Leads search box has the type-ahead and says what it does');
+pm_t_assert(str_contains($html, 'name="biz" required data-suggest data-web="1" autocomplete="off"') && str_contains($html, 'Start typing: it suggests businesses you already know'), 'the Leads search box has the type-ahead and says what it does');
 [, $html] = http("$base?tab=proposal&brand=promanaged");
 pm_t_assert(str_contains($html, 'data-suggest data-web="1"'), 'so does the find-and-prepare-a-proposal box');
 [, $js] = http("http://127.0.0.1:$port/assets/ui.js");
-pm_t_assert(str_contains($js, "'?suggest='") && str_contains($js, 'aria-activedescendant') && str_contains($js, 'From a web search'), 'the script that does it is served');
+pm_t_assert(str_contains($js, "'?names='") && str_contains($js, 'aria-activedescendant') && str_contains($js, 'From a web search'), 'the script that does it is served');
+[$code, $body] = http("$base?suggest=blend&brand=promanaged");
+pm_t_assert($code === 200 && !empty(json_decode($body, true)['rows']), 'a page cached from before still gets its answers (the old parameter name works)');
+[$code, $body] = http($base, ['csrf' => csrf_of((string)http("$base?tab=agents&brand=promanaged")[1]), 'action' => 'agents', 'do' => 'lookup', 'brand' => 'promanaged', 'biz' => '', 'city' => '']);
+[, $html] = http("$base?tab=agents&brand=promanaged");
+pm_t_assert($code === 302 && str_contains($html, 'Type the business name'), 'the find form posts the field as "biz" now, and an empty one says what to do');
+// the hosted case: a visitor from the internet, signed in or signed out (the test server above is always "local")
+$probe = $T['tmp'] . '/hosted_probe.php';
+file_put_contents($probe, <<<'PROBE'
+<?php
+chdir($argv[1]);
+file_put_contents(getenv('PM_ENV_FILE'), "APP_PASSWORD=secret-pass\nAPP_URL=https://app.example.test\n");
+$_SERVER['REMOTE_ADDR'] = '203.0.113.9'; $_SERVER['REQUEST_METHOD'] = 'GET'; $_SERVER['HTTP_HOST'] = 'app.example.test'; $_SERVER['SCRIPT_NAME'] = '/index.php';
+$_GET = ['names' => $argv[3], 'brand' => 'promanaged'];
+@session_save_path(getenv('TEMP'));
+@session_id('probe' . getmypid());
+@session_start();
+if ($argv[2] === 'in') { $_SESSION['pm_auth'] = true; }
+ob_start();
+register_shutdown_function(function () { echo "
+#CODE:" . (int)http_response_code(); }); // the route ends the script with exit, so this is the last thing printed
+@include 'index.php';
+PROBE);
+$run = function (string $who, string $q) use ($probe, $T, $root) {
+    $env = ['PM_DATA_DIR' => $T['data'], 'PM_OUT_DIR' => $T['out'], 'PM_ENV_FILE' => $T['tmp'] . '/hosted.env', 'SystemRoot' => getenv('SystemRoot') ?: 'C:\Windows', 'PATH' => getenv('PATH'), 'TEMP' => $T['tmp'], 'TMP' => $T['tmp'], 'PM_TEST' => '1'];
+    $p = proc_open([PHP_BINARY, $probe, $root, $who, $q], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $root, $env);
+    $out = stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    proc_close($p);
+    [$body, $code] = array_pad(explode("
+#CODE:", (string)$out, 2), 2, '0');
+    return ['out' => $body, 'code' => (int)$code];
+};
+$in = $run('in', 'blend');
+$bodyIn = json_decode((string)$in['out'], true);
+pm_t_assert(!empty($bodyIn['rows']) && str_contains($bodyIn['rows'][0]['name'], 'Blend'), 'signed in on a website, the suggestions come back as JSON');
+$outR = $run('out', 'blend');
+pm_t_assert(trim((string)$outR['out']) === '{"error":"signin","rows":[]}' && $outR['code'] === 401, 'signed out, the box gets a clear "signed in" answer it can show, not a login page it cannot read: ' . substr((string)$outR['out'], 0, 80));
 pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
 
 echo "\nThe shared shell\n";

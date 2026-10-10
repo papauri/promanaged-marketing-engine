@@ -56,7 +56,7 @@
       var b = form && form.querySelector('[name=brand]');
       return b && b.value ? b.value : (new URLSearchParams(location.search).get('brand') || '');
     }
-    function url(q, mode) { return '?suggest=' + encodeURIComponent(q) + '&mode=' + mode + '&brand=' + encodeURIComponent(brand()); }
+    function url(q, mode) { return '?names=' + encodeURIComponent(q) + '&mode=' + mode + '&brand=' + encodeURIComponent(brand()); }
     function close() {
       list.hidden = true;
       active = -1;
@@ -128,12 +128,19 @@
       close();
       inp.focus();
     }
+    function problem(kind) {
+      return kind === 'auth' ? 'Your session has ended. Reload the page and sign in again.' : 'Suggestions could not load. Reload the page, or press Find to search anyway.';
+    }
     function ask(q, mode, ctl, done) {
       if (!window.fetch) return;
       fetch(url(q, mode), { credentials: 'same-origin', signal: ctl.signal, headers: { Accept: 'application/json' } })
-        .then(function (r) { return r.ok ? r.json() : { rows: [] }; })
-        .then(function (j) { if (inp.value.trim() === q) done((j && j.rows) || []); })
-        .catch(function () { if (inp.value.trim() === q) done(null); });
+        .then(function (r) {
+          if (r.status === 401 || r.status === 403) { var a = new Error('auth'); a.kind = 'auth'; throw a; }
+          if (!r.ok) { var h = new Error('http'); h.kind = 'http'; throw h; }
+          return r.json();
+        })
+        .then(function (j) { if (inp.value.trim() === q) done((j && j.rows) || [], ''); })
+        .catch(function (e) { if (inp.value.trim() === q) done(null, e && e.kind ? e.kind : 'net'); });
     }
     inp.addEventListener('input', function () {
       var q = inp.value.trim();
@@ -146,15 +153,19 @@
       if (q.length < 2) { local = []; render(); return; }
       tL = setTimeout(function () {
         cL = window.AbortController ? new AbortController() : { abort: function () {}, signal: undefined };
-        ask(q, 'local', cL, function (rows) { local = rows || []; render(); });
+        ask(q, 'local', cL, function (rows, err) { local = rows || []; if (err) status = problem(err); render(); });
       }, 120);
-      if (inp.dataset.web && q.length >= 4) {
+      if (inp.dataset.web && q.length >= 3) {
         tW = setTimeout(function () {
           cW = window.AbortController ? new AbortController() : { abort: function () {}, signal: undefined };
           status = 'Searching the web…';
           render();
-          ask(q, 'web', cW, function (rows) { web = rows || []; status = rows === null ? 'The web search did not answer.' : (web.length ? '' : 'Nothing more found on the web.'); render(); });
-        }, 800);
+          ask(q, 'web', cW, function (rows, err) {
+            web = rows || [];
+            status = err ? problem(err) : (web.length ? '' : (local.length ? 'Nothing more found on the web.' : 'Nothing found yet. Press Find to search the web for this exact name.'));
+            render();
+          });
+        }, 500);
       }
     });
     inp.addEventListener('keydown', function (e) {

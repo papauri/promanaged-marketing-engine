@@ -63,7 +63,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
 <!-- 1. Find a business -->
 <div class="card find">
   <form method="post" class="findrow"><?= $post('', 'lookup') ?><?= $hid('brand', pm_brand()) ?>
-    <input type="text" name="name" required data-suggest data-web="1" placeholder="Find a business by name, <?= pm_brand() === 'travel' ? 'e.g. Mufasa Eco Lodge' : (pm_brand_is_custom(pm_brand()) ? '' : 'e.g. Sunbird Capital Hotel') ?>" aria-label="Business name">
+    <input type="text" name="biz" required data-suggest data-web="1" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Find a business by name, <?= pm_brand() === 'travel' ? 'e.g. Mufasa Eco Lodge' : (pm_brand_is_custom(pm_brand()) ? '' : 'e.g. Sunbird Capital Hotel') ?>" aria-label="Business name">
     <input type="text" name="city" placeholder="City (optional)" aria-label="City" class="narrow">
     <button class="btn">Find</button>
     <button class="btn primary" name="proposal" value="1">Find + proposal</button>

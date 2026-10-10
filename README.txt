@@ -228,9 +228,11 @@ EMAIL WORKS ON YOUR PC BUT NOT FROM THE SERVER
 SUGGESTIONS WHILE YOU TYPE (lib/suggest.php, assets/ui.js)
   The "Find a business" boxes (Leads, and Proposals > find a business) suggest as you type. At once and free: businesses you already know across every
   business in the app (leads, archived leads, businesses you sent a proposal to, existing clients), best match first; a lead of the business on screen
-  opens that lead, anything else fills the box. After a pause, from 4 letters: one web-grounded AI call for real businesses in Malawi with that name
+  opens that lead, anything else fills the box (a business an earlier web search found is suggested at once next time). After a short pause, from 3 letters: one web-grounded AI call for real businesses in Malawi with that name
   (only places for Travel Malawi), cached for a week and limited to 60 an hour; those are marked "From a web search: check before you use" and only fill
-  the box, because the usual Find step still checks them. Arrow keys, Enter and Escape work. No AI key: only the first part.
+  the box, because the usual Find step still checks them. Arrow keys, Enter and Escape work. No AI key: only the first part. If it shows nothing on a website,
+  open /index.php?names=sun&brand=promanaged while signed in: it should print JSON; a 401 means the session ended (the box says so), and no page change after an
+  update means the server still has the old files (update it, then Ctrl+F5).
 
 THE ONE-PAGE OFFER (businesses added in the app)
   They have no proposals or price list, so each has a one-page PDF instead: what it does, what it offers, true facts, a free first step and how to reach

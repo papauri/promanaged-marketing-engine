@@ -6,7 +6,7 @@
  * existing clients), best match first. A lead of the business on screen opens that lead; anything else fills the box so a normal search can run.
  * Then, after a short pause and only when the typed text is long enough: a web search (one AI call, cached for a week, limited per hour) for real businesses in Malawi
  * whose name matches. Those are labelled as coming from the web, are never saved by themselves, and only fill the box: the usual Find step still checks them.
- * Served by index.php as JSON: ?suggest=<text>&mode=local|web&brand=<id>.
+ * Served by index.php as JSON: ?names=<text>&mode=local|web&brand=<id> (401 with {"error":"signin"} when the session has ended).
  */
 
 /** Lower-case letters and digits separated by single spaces, so "SUNBIRD cap." and "Sunbird Capital" compare. */
@@ -48,7 +48,7 @@ function pm_suggest_rank(string $q, string $name): ?int
 }
 
 /** Every business we already know by name: [['name','city','type','status','brand','src' lead|archive|proposal|client,'id','score']]. */
-function pm_suggest_pool(): array
+function pm_suggest_pool(bool $withSeen = true): array
 {
     $rows = [];
     $add = function (array $l, string $id, string $src) use (&$rows): void {
@@ -73,6 +73,14 @@ function pm_suggest_pool(): array
             $add(['name' => $h['business'], 'city' => '', 'brand' => 'promanaged'], '', 'proposal');
         }
     }
+    foreach ($withSeen ? (array)pm_load('suggest_cache', fn() => []) : [] as $key => $hit) { // what an earlier web search found, so typing it again is instant
+        $b = pm_brand_norm(strstr((string)$key, '|', true) ?: '');
+        foreach ((array)($hit['rows'] ?? []) as $w) {
+            if (is_array($w) && trim((string)($w['name'] ?? '')) !== '') {
+                $add(['name' => $w['name'], 'city' => (string)($w['city'] ?? ''), 'type' => (string)($w['type'] ?? ''), 'brand' => $b], '', 'seen');
+            }
+        }
+    }
     foreach (pm_brand_ids() as $b) {
         foreach ((array)(pm_agents_config($b)['existing_clients'] ?? []) as $c) {
             if (is_string($c) && trim($c) !== '') {
@@ -93,10 +101,12 @@ function pm_suggest_meta(array $r, string $brand): string
         $bits[] = 'Archived lead' . ($r['brand'] === $brand ? '' : ' of ' . pm_brand_name($r['brand']));
     } elseif ($r['src'] === 'proposal') {
         $bits[] = 'You sent a proposal';
+    } elseif ($r['src'] === 'seen') {
+        $bits[] = 'Found on the web before';
     } else {
         $bits[] = 'Existing client' . ($r['brand'] === $brand ? '' : ' of ' . pm_brand_name($r['brand']));
     }
-    foreach ([$r['city'], $r['type'], in_array($r['src'], ['lead'], true) ? str_replace('_', ' ', $r['status']) : ''] as $x) {
+    foreach ([$r['city'], $r['type'], $r['src'] === 'lead' ? str_replace('_', ' ', $r['status']) : ''] as $x) {
         if ($x !== '') {
             $bits[] = $x;
         }
@@ -106,7 +116,7 @@ function pm_suggest_meta(array $r, string $brand): string
 
 /**
  * The businesses we already know that match what was typed, best first (at most $limit). [['name','city','meta','href']]; href is set for a lead of $brand
- * (opens it), empty for the rest (they fill the box).
+ * (opens it), empty for the rest (they fill the box). A business an earlier web search found is suggested at once next time ('seen').
  */
 function pm_suggest_local(string $q, string $brand, int $limit = 8): array
 {
@@ -114,7 +124,7 @@ function pm_suggest_local(string $q, string $brand, int $limit = 8): array
     if (mb_strlen($q) < 2 || mb_strlen($q) > 80) {
         return [];
     }
-    $order = ['lead' => 0, 'archive' => 2, 'proposal' => 3, 'client' => 3];
+    $order = ['lead' => 0, 'archive' => 2, 'proposal' => 3, 'client' => 3, 'seen' => 4];
     $best = [];
     foreach (pm_suggest_pool() as $r) {
         $rank = pm_suggest_rank($q, $r['name']);
@@ -193,7 +203,7 @@ function pm_suggest_web(string $q, string $brand): array
         pm_save('suggest_cache', array_slice($cache, 0, 300, true));
     }
     $known = [];
-    foreach (pm_suggest_pool() as $p) {
+    foreach (pm_suggest_pool(false) as $p) { // what is really ours; the memory of earlier searches is not a reason to hide a search's own answer
         $known[pm_suggest_norm($p['name'])] = true;
     }
     $out = [];

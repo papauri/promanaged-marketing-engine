@@ -30,6 +30,11 @@ if (!$isLocal) {
         exit;
     }
     if (empty($_SESSION['pm_auth'])) {
+        if (isset($_GET['names']) || isset($_GET['suggest'])) { // the type-ahead asks in the background: say "signed out" in a way it can show, not with a login page
+            http_response_code(401);
+            header('Content-Type: application/json; charset=utf-8');
+            exit('{"error":"signin","rows":[]}');
+        }
         $bad = false;
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login_password'])) {
             usleep(400000); // slow down guessing
@@ -209,14 +214,15 @@ if (isset($_GET['sslides']) && preg_match('/^[a-f0-9]{20}$/', (string)$_GET['ssl
     exit;
 }
 // ---------- Suggestions while typing in a "find a business" box (JSON; local = what we already know, web = one cached web search) ----------
-if (isset($_GET['suggest']) && is_string($_GET['suggest'])) {
+$sgText = $_GET['names'] ?? $_GET['suggest'] ?? null; // "names" is the current parameter; "suggest" is what an older cached page still sends
+if (is_string($sgText)) {
     $sgBrand = pm_brand_valid((string)($_GET['brand'] ?? '')) ? (string)$_GET['brand'] : pm_brand_norm($_SESSION['abrand'] ?? '');
     session_write_close(); // a slow web search must not freeze the user's other pages
     pm_brand_set($sgBrand);
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
     @set_time_limit(90);
-    $sgRows = ($_GET['mode'] ?? '') === 'web' ? pm_suggest_web($_GET['suggest'], $sgBrand) : pm_suggest_local($_GET['suggest'], $sgBrand);
+    $sgRows = ($_GET['mode'] ?? '') === 'web' ? pm_suggest_web($sgText, $sgBrand) : pm_suggest_local($sgText, $sgBrand);
     echo json_encode(['rows' => $sgRows], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -576,7 +582,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['abrand'] = $b;
             $settings = pm_settings();
             $acfg = pm_agents_config();
-            $name = trim((string)($_POST['name'] ?? ''));
+            $name = trim((string)($_POST['biz'] ?? $_POST['name'] ?? '')); // "biz" is the field now; "name" is what an older page still posts
             $city = trim((string)($_POST['city'] ?? ''));
             if ($name === '') {
                 $back('Type the business name.', 'err');
@@ -1960,7 +1966,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'vb' 
     <form method="post" style="margin-top:10px"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="lookup"><input type="hidden" name="proposal" value="1">
       <div class="row">
         <div><label>For</label><select name="brand"><?php foreach (array_filter(pm_brand_ids(), fn($x) => !empty(pm_brand_profile($x)['proposals'])) as $bid): ?><option value="<?= pm_h($bid) ?>"<?= $bid === $vb ? ' selected' : '' ?>><?= pm_h(pm_brand_title($settings, $bid)) ?></option><?php endforeach; ?></select></div>
-        <div><label>Business name *</label><input type="text" name="name" required data-suggest data-web="1"></div>
+        <div><label>Business name *</label><input type="text" name="biz" required data-suggest data-web="1" autocomplete="off"></div>
         <div><label>City (helps)</label><input type="text" name="city"></div>
       </div>
       <div class="btns" style="display:flex;gap:8px;margin-top:10px"><button class="btn small primary" style="width:auto">Find it and prepare the proposal</button></div>

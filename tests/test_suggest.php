@@ -19,7 +19,7 @@ function t(string $name, callable $fn): void
     }
 }
 
-$mk = fn(string $id, string $brand, string $name, string $city, array $x = []) => $x + ['id' => $id, 'brand' => $brand, 'name' => $name, 'type' => 'hotel', 'city' => $city, 'status' => 'drafted', 'score' => 70];
+$GLOBALS['mkLead'] = $mk = fn(string $id, string $brand, string $name, string $city, array $x = []) => $x + ['id' => $id, 'brand' => $brand, 'name' => $name, 'type' => 'hotel', 'city' => $city, 'status' => 'drafted', 'score' => 70];
 pm_save('leads', [
     'a1' => $mk('a1', 'promanaged', 'Sunbird Capital Hotel', 'Lilongwe', ['score' => 90]),
     'a2' => $mk('a2', 'promanaged', 'The Sunset Lodge', 'Mangochi', ['score' => 60]),
@@ -106,6 +106,17 @@ t('The web search: real names that match, held to the same rules, cached, limite
     }
     pm_t_assert($calls >= 40 && $calls <= 60, "no more than 60 web searches an hour ($calls made of 70 tried)");
     $GLOBALS['PM_AI_STUB'] = null;
+});
+
+t('A business a web search found once is suggested at once next time, without asking again', function () {
+    $r = pm_suggest_local('kuthen', 'promanaged');
+    $by = array_column($r, null, 'name');
+    pm_t_assert(isset($by['Kuthengo Lodge']) && $by['Kuthengo Lodge']['meta'] === 'Found on the web before · Mangochi · lodge' && $by['Kuthengo Lodge']['href'] === '', 'it comes from what was found before, labelled so, and only fills the box: ' . json_encode($r));
+    pm_t_eq(count(array_keys(array_column($r, 'name'), 'Kuthengo Lodge', true)), 1, 'once, even though two searches found it');
+    pm_save('leads', ['k1' => $GLOBALS['mkLead']('k1', 'promanaged', 'Kuthengo Lodge', 'Mangochi')] + pm_leads());
+    $r = pm_suggest_local('kuthen', 'promanaged');
+    $by = array_column($r, null, 'name');
+    pm_t_assert($by['Kuthengo Lodge']['href'] !== '' && str_starts_with($by['Kuthengo Lodge']['meta'], 'Your lead'), 'and once it is your lead, the lead wins over the memory of the search');
 });
 
 pm_t_done();
