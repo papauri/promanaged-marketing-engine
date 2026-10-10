@@ -342,6 +342,74 @@ function pm_fb_best_times(string $brand): array
 
 /* ---------------- the daily engagement playbook: who, when, where, how ---------------- */
 
+/**
+ * The same playbook on a new day: what was done is dropped, what is still open stays (and is said to be carried over), so the screen is never a copy of yesterday's.
+ * The same day returns it as it is. No AI.
+ */
+function pm_playbook_carry(array $pb, string $today): array
+{
+    if (($pb['day'] ?? '') === $today) {
+        return $pb;
+    }
+    $open = array_values(array_filter((array)($pb['tasks'] ?? []), fn($t) => empty($t['done'])));
+    foreach ($open as $i => &$t) {
+        $t['n'] = $i;
+    }
+    unset($t);
+    $pb['carried'] = count($open);
+    $pb['carried_from'] = (string)($pb['day'] ?? '');
+    $pb['tasks'] = $open;
+    $pb['day'] = $today;
+    if (!$open) {
+        $pb['focus'] = 'Nothing new today: everything from the last playbook is done, and nobody new has commented, messaged or gone quiet.';
+        $pb['moves'] = [];
+    }
+    return $pb;
+}
+
+/** Makes sure the playbook is today's: carries it over or writes a new one when the people or leads changed (one AI call at most a day). Returns what it did. */
+function pm_playbook_ensure(string $brand): string
+{
+    if (!pm_social_cfg($brand)['ready']) {
+        return 'no Page connected';
+    }
+    $pb = (array)(pm_load('engage_playbook', fn() => [])[$brand] ?? []);
+    if (($pb['day'] ?? '') === date('Y-m-d')) {
+        return 'current';
+    }
+    if (time() - (int)($pb['tried'] ?? 0) < 3600) {
+        return 'tried recently';
+    }
+    pm_update('engage_playbook', function (array $all) use ($brand) {
+        $all[$brand]['tried'] = time();
+        return $all;
+    }, fn() => []);
+    try {
+        $new = pm_agent_engage_playbook($brand);
+        return count($new['tasks']) . ' task(s)' . (!empty($new['carried']) ? ', ' . (int)$new['carried'] . ' carried over' : '');
+    } catch (Throwable $e) {
+        if (str_starts_with($e->getMessage(), 'Nobody to engage')) { // a quiet day is still today's playbook
+            pm_update('engage_playbook', function (array $all) use ($brand) {
+                $all[$brand] = ['at' => date('Y-m-d H:i'), 'day' => date('Y-m-d'), 'sig' => '', 'focus' => 'Nobody to engage today: no new comments, messages or warm leads.', 'tasks' => [], 'moves' => [], 'times' => pm_fb_best_times($brand)];
+                return $all;
+            }, fn() => []);
+            return 'quiet day';
+        }
+        return 'could not: ' . mb_substr($e->getMessage(), 0, 100);
+    }
+}
+
+/** Scheduler: the playbook is refreshed each morning on its own (it used to wait for the hourly autopilot, which is off when the scheduler is not installed or autopilot is off). */
+function pm_job_playbook(string $brand): string
+{
+    $h = (int)date('G');
+    if ($h < 6 || $h > 18) {
+        return '';
+    }
+    $r = pm_playbook_ensure($brand);
+    return in_array($r, ['current', 'no Page connected', 'tried recently'], true) ? '' : 'playbook ' . $r;
+}
+
 function pm_agent_engage_playbook(string $brand, bool $force = false): array
 {
     pm_brand_set($brand);
@@ -365,10 +433,11 @@ function pm_agent_engage_playbook(string $brand, bool $force = false): array
     $times = pm_fb_best_times($brand);
     $posts = pm_fb_posts($brand, 5)['posts'];
     // same people, same leads, same stage as last time: reuse the playbook (no AI call)
-    $sig = md5(json_encode([array_map(fn($p) => [$p['id'], $p['commented'], $p['messaged'], $p['unanswered']], $crowd), array_map(fn($h) => [$h['lead_id'], $h['status'], $h['last']], $hot)]));
+    $age = fn(string $at) => (int)min(12, intdiv((int)max(0, time() - (strtotime($at) ?: time())), 259200)); // a lead that has been quiet for another three days is new news
+    $sig = md5(json_encode([array_map(fn($p) => [$p['id'], $p['commented'], $p['messaged'], $p['unanswered']], $crowd), array_map(fn($h) => [$h['lead_id'], $h['status'], $h['last'], $age((string)$h['last'])], $hot)]));
     $prev = pm_load('engage_playbook', fn() => [])[$brand] ?? null;
     if (!$force && $prev && ($prev['sig'] ?? '') === $sig && strtotime((string)$prev['at']) > time() - 3 * 86400) {
-        $prev['day'] = date('Y-m-d');
+        $prev = pm_playbook_carry($prev, date('Y-m-d')); // same people, same leads: nothing new to write, so no AI call
         pm_update('engage_playbook', function (array $all) use ($brand, $prev) {
             $all[$brand] = $prev;
             return $all;

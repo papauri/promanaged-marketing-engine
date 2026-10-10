@@ -768,6 +768,12 @@ try {
             pm_director_brief(true);
         } catch (Throwable) {
         }
+        try { // and the engagement playbook (reused when the people and leads are the same)
+            if (pm_social_cfg($brand)['ready']) {
+                pm_agent_engage_playbook($brand);
+            }
+        } catch (Throwable) {
+        }
     }
     pm_run_state(['state' => 'done', 'started' => $run['started'], 'finished' => date('Y-m-d H:i:s'), 'stats' => $stats, 'beat' => time()]);
 } catch (Throwable $e) {

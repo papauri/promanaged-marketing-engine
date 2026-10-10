@@ -17,6 +17,10 @@ $chan = ['reply_comment' => 'Reply to their comment', 'messenger' => 'Messenger'
 <?php endif; ?>
 <?php if (!$sc['ready']): ?>
 <?php elseif ($view === 'growth'):
+    try {
+        pm_playbook_ensure($vb); // a playbook from a past day is brought up to date now (carried over, or written again if the people changed)
+    } catch (Throwable) {
+    }
     $pb = pm_load('engage_playbook', fn() => [])[$vb] ?? null;
     $lvl = pm_autopilot_level($vb);
     $ap = pm_load('autopilot', fn() => [])[$vb]['at'] ?? 0;
@@ -75,7 +79,8 @@ $chan = ['reply_comment' => 'Reply to their comment', 'messenger' => 'Messenger'
     </div>
     <?php if (!$pb): ?><p class="hint">Who to engage today, when, where and with which words: built from everyone who reacted, commented or messaged, plus your warm leads. One AI call.</p>
     <?php else: ?>
-      <?php if ($pb['day'] !== date('Y-m-d')): ?><p class="hint warnt">This playbook is from <?= pm_h($pb['day']) ?>. Make today's.</p><?php endif; ?>
+      <?php if ($pb['day'] !== date('Y-m-d')): ?><p class="hint warnt">This playbook is from <?= pm_h($pb['day']) ?>. Make today's.</p><?php elseif (!empty($pb['carried_from'])): ?><p class="hint">Brought up to date this morning: <?= (int)($pb['carried'] ?? 0) ?> task<?= (int)($pb['carried'] ?? 0) === 1 ? '' : 's' ?> still open from <?= pm_h(date('j M', strtotime((string)$pb['carried_from']))) ?> <?= (int)($pb['carried'] ?? 0) ? '(what was done is gone)' : '' ?>; nobody new has needed a message.</p><?php endif; ?>
+      <?php if (!$pb['tasks']): ?><p class="hint">No tasks today.</p><?php endif; ?>
       <?php if ($pb['focus']): ?><p class="lead"><?= pm_h($pb['focus']) ?></p><?php endif; ?>
       <p class="hint">Best times: <?= $pb['times']['hours'] ? pm_h(implode(', ', array_map(fn($h) => sprintf('%02d:00', $h), $pb['times']['hours']))) . ' · ' : '' ?><?= pm_h($pb['times']['note']) ?></p>
       <?php foreach ($pb['tasks'] as $t): ?>
