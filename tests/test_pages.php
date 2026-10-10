@@ -527,6 +527,34 @@ pm_t_assert($code === 302 && str_contains($html, 'The AI needs a key'), 'polishi
 pm_t_assert(pm_settings()['phone'] === '0999 111 222', 'a request without the right token changes nothing');
 pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
 
+echo "\nSocial > Studio\n";
+[$code, $html] = http("$base?tab=social&view=studio&brand=promanaged");
+$csrf9 = csrf_of($html);
+pm_t_assert($code === 200 && str_contains($html, 'Cover studio for') && str_contains($html, 'Surprise me') && str_contains($html, 'Dusk over the lake') && str_contains($html, '?studio=cover'), 'the screen loads with the styles and previews');
+[$code, $body, , $head] = http("$base?studio=cover&b=promanaged&id=new&w=410&h=214&t=facebook");
+pm_t_assert($code === 200 && str_contains($head, 'image/png') && str_starts_with($body, "\x89PNG") && getimagesizefromstring($body)[0] === 410 && getimagesizefromstring($body)[1] === 214, 'a cover is drawn on request at the size asked for');
+[, $bodyB] = http("$base?studio=cover&b=promanaged&id=new&w=410&h=214&t=facebook&style=dusk");
+pm_t_assert($bodyB !== $body && str_starts_with($bodyB, "\x89PNG"), 'a style given in the address draws that style (the gallery thumbnails)');
+[$code, $bodyP, , $head] = http("$base?studio=profile&b=promanaged&id=new&w=180&pstyle=ring");
+pm_t_assert($code === 200 && getimagesizefromstring($bodyP)[0] === 180 && getimagesizefromstring($bodyP)[1] === 180, 'a profile picture is square');
+[$code, , , $head] = http("$base?studio=cover&b=promanaged&id=new&w=1640&h=856&t=facebook&dl=1");
+pm_t_assert($code === 200 && str_contains($head, 'Content-Disposition: attachment') && str_contains($head, 'ProManagedIT-facebook-1640x856.png'), 'a download is named after the business and the place');
+foreach (['id=zzzz', 'id=new&w=9000', 'id=new&w=10', 'id=../etc', 'id=new&w=3200&h=3200', 'id=ABCDEF012345'] as $bad) {
+    pm_t_eq(http("$base?studio=cover&b=promanaged&h=300&w=500&" . $bad)[0], 404, "a bad request ($bad) is refused");
+}
+pm_t_eq(http("$base?studio=cover&b=nobody&id=new&w=400&h=200")[0], 404, 'an unknown business is refused');
+[$code, , $loc] = http($base, ['csrf' => $csrf9, 'action' => 'social_ext', 'do' => 'studio', 'd' => 'new', 'op' => 'shuffle']);
+pm_t_assert($code === 302 && preg_match('/view=studio&d=[a-f0-9]{12}/', (string)$loc) === 1 && count(pm_studio_store('promanaged')['drafts']) >= 1, 'Surprise me over the web makes a draft and opens it');
+[$code] = http($base, ['csrf' => $csrf9, 'action' => 'social_ext', 'do' => 'studio_use', 'd' => 'new']);
+pm_t_assert($code === 302 && pm_studio_saved('promanaged') !== null && getimagesize(pm_kit_dir('promanaged') . '/cover-1640x856.png')[0] === 1640, 'Use saves it and draws the kit');
+[, $html] = http("$base?tab=social&view=studio&brand=promanaged");
+pm_t_assert(str_contains($html, 'In use everywhere now:') && str_contains($html, 'Back to the classic cover') && str_contains($html, 'You are looking at the saved design.'), 'the screen says which design is in use');
+[$code] = http($base, ['csrf' => 'wrong', 'action' => 'social_ext', 'do' => 'studio_reset', 'd' => 'saved']);
+pm_t_assert(pm_studio_saved('promanaged') !== null, 'a request without the right token changes nothing');
+[$code] = http($base, ['csrf' => $csrf9, 'action' => 'social_ext', 'do' => 'studio_reset', 'd' => 'saved']);
+pm_t_assert($code === 302 && pm_studio_saved('promanaged') === null, 'and the classic cover can be brought back');
+pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
+
 echo "\nThe WhatsApp webhook: one address for every connected number\n";
 $wa = "http://127.0.0.1:$port/wa.php";
 pm_t_eq(http($wa)[0], 404, 'with no business connected the webhook does not exist');

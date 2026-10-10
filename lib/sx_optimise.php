@@ -333,10 +333,14 @@ function pm_opt_check_facebook(string $brand, array $f, array $st): array
     $has = fn($k) => trim((string)($pg[$k] ?? '')) !== '';
     $logo = is_file(PM_ROOT . '/' . pm_brand_asset($brand, 'logo'));
     $pic = !empty($pg['picture']['data']['url']) && empty($pg['picture']['data']['is_silhouette']);
+    $design = function_exists('pm_studio_saved') ? pm_studio_saved($brand) : null;
+    $designNote = $design ? 'Drawn from your Studio design (' . (PM_SD_STYLES[$design['style']] ?? 'custom') . ').' : 'No design chosen yet, so the classic one is used. Choose one in the Studio first for something much better.';
+    $it[] = pm_opt_it('facebook', 'fb_design', 'A designed profile picture and cover', $design ? 'ok' : 'weak', 2, 'A styled cover with your words says "established business" before anyone reads a post.',
+        ['how' => 'go', 'link' => '?tab=social&view=studio', 'link_label' => 'Open the Studio', 'note' => $design ? 'Saved design: ' . (PM_SD_STYLES[$design['style']] ?? '') . '.' : 'Eleven styles, your colours and words, drawn by code. "Surprise me" or "New idea from the AI" make new ones.']);
     $it[] = pm_opt_it('facebook', 'fb_picture', 'Profile picture', $pic ? 'ok' : 'missing', 3, 'The logo is how people recognise the Page in every search and comment.',
-        $logo ? ['how' => 'api', 'bulk' => true, 'button' => 'Make it from the logo and set it', 'note' => 'Built from your logo in the branding kit.'] : ['how' => 'go', 'link' => '?tab=social&view=accounts', 'link_label' => 'Add a logo first']);
+        $logo || $design ? ['how' => 'api', 'bulk' => true, 'button' => 'Set it on Facebook', 'note' => $designNote] : ['how' => 'go', 'link' => '?tab=social&view=studio', 'link_label' => 'Open the Studio', 'note' => 'Add a logo in Accounts & branding, or use a monogram from the Studio.']);
     $it[] = pm_opt_it('facebook', 'fb_cover', 'Cover picture', !empty($pg['cover']['source']) ? 'ok' : 'missing', 2, 'The big picture on top: say what you do in one look.',
-        ['how' => 'api', 'bulk' => true, 'button' => 'Make it and set it', 'note' => 'Built from the cover wording and hero photo in Accounts & branding.']);
+        ['how' => 'api', 'bulk' => true, 'button' => 'Set it on Facebook', 'note' => $designNote]);
     $bios = pm_bio_pack($brand);
     [$aboutP, $aboutAi] = pm_opt_pick($brand, 'fb_about', (string)($bios['facebook']['text'] ?? ''), 255, $st, $f);
     $it[] = pm_opt_it('facebook', 'fb_about', 'Short intro', mb_strlen((string)($pg['about'] ?? '')) >= 25 ? 'ok' : ($has('about') ? 'weak' : 'missing'), 3, 'The line under the Page name in search results.',

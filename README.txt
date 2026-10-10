@@ -241,6 +241,19 @@ FOLLOW-UPS WITH AI, AND TODAY'S STRATEGY (lib/followups.php, lib/director.php)
   are drafted, drafts to read, approved and waiting) and is written again by itself after each agent run, after you press "Draft N follow-ups", and when that
   work moves (at most every 90 minutes), so it no longer repeats yesterday's advice. "Refresh strategy" still rewrites it at once.
 
+SOCIAL > STUDIO: DESIGNED PROFILE PICTURES AND COVERS (lib/sx_studio.php, lib/view_social_studio.php)
+  Not generated pictures: every cover and profile picture is DESIGNED BY CODE (GD) from a small design: a style, four colours, a texture and your words (a quiet name
+  line, a headline, a supporting line, up to three contact items). Eleven cover styles (Aurora, Dusk over the lake, Lake waves, Rings, Blueprint, Facets, Diamonds,
+  Spotlight, Ribbons, Minimal, and Your photo when you have uploaded one), five profile styles (logo on a plate, monogram, glow ring, bold tile, aurora), twelve colour
+  sets (three from the business's own colour), and the writing is placed inside the part of each platform's picture that is always shown (the Facebook cover keeps its
+  lower left clear for the profile picture; LinkedIn and X keep clear of their avatar; YouTube and Stories centre it). Every size is drawn exactly as the platform wants
+  it: Facebook, LinkedIn, X, YouTube, Google, a 1200x630 link preview, a Story/Status background, and profile pictures for every platform. A logo with a see-through
+  background, or a logo on a plain tile, is used as a clean white or coloured mark; the monogram (PM, TM ...) is the fallback.
+  "Surprise me" re-rolls the style, colours and arrangement in code (no AI). "New idea from the AI" is ONE small call that art-directs a design (style, colours,
+  texture, words); code draws it, and any words that add a number, link, boast or claim are not used (the look still is). "Use this design everywhere" saves it as the
+  business's design: the branding kit (Accounts & branding), downloads and "Set on Facebook" then all come from it; "Back to the classic cover" undoes it. Earlier
+  designs are kept in a strip to bring back. Pictures are cached under data/brandkit/<id>/studio/ (old ones are cleared by themselves).
+
 SOCIAL > OPTIMISE: FIX EVERY CHANNEL FROM ONE SCREEN (lib/sx_optimise.php, lib/view_social_optimise.php)
   One checklist per channel (Business details, Facebook Page, Instagram, WhatsApp Business, Google Business Profile; X, LinkedIn, TikTok and YouTube when you tick
   them under "Channels you use"), scored out of 100, with a page-health score for the whole business that is kept day by day. It is all worked out in CODE, no AI:

@@ -89,6 +89,7 @@ $stepHtml = fn(string $t): string => preg_match('/^([^:]{3,48}):\s(.+)$/su', $t,
 
   <div class="card">
     <h2>Branding for every profile</h2>
+    <p class="hint" style="margin-top:0">Want something far better than a plain colour with words? <a href="?tab=social&amp;view=studio"><b>Open the Studio</b></a>: eleven styles, your colours and words, and a new design with one press (or from the AI). What you choose there is used for every picture below.<?= function_exists('pm_studio_saved') && pm_studio_saved($vb) ? ' <b>A Studio design is in use now</b>, so the pictures below come from it.' : '' ?></p>
     <div class="split">
       <div>
         <label>Cover headline</label><input type="text" name="cover_head" value="<?= pm_h($cfg['cover_head']) ?>">

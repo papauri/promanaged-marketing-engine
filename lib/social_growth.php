@@ -22,7 +22,7 @@ function pm_social_nav(string $on): string
 {
     $tabs = function_exists('pm_social_tabs') ? pm_social_tabs()
         : ['' => 'Plan', 'leadposts' => 'Lead posts', 'growth' => 'Growth', 'page' => 'Page', 'inbox' => 'Inbox', 'cleanup' => 'Clean-up', 'ads' => 'Ads', 'audit' => 'Audit', 'accounts' => 'Accounts &amp; branding'];
-    $sub = ['' => 'Plan posts, approve them and watch what goes out.', 'leadposts' => 'Bold posts with a button and a keyword that bring in client details. Free and unlimited.', 'content' => 'What posts can be about: ideas, hashtags, key dates and places.', 'channels' => 'Where else to post, and today\'s hand-post tasks.', 'optimise' => 'Fix what is missing on every channel, one press at a time.',
+    $sub = ['' => 'Plan posts, approve them and watch what goes out.', 'leadposts' => 'Bold posts with a button and a keyword that bring in client details. Free and unlimited.', 'content' => 'What posts can be about: ideas, hashtags, key dates and places.', 'channels' => 'Where else to post, and today\'s hand-post tasks.', 'optimise' => 'Fix what is missing on every channel, one press at a time.', 'studio' => 'Design the profile pictures and covers: styles, colours and words, made by code.',
         'growth' => 'Turn comments and messages into customers.', 'results' => 'What worked, what it cost, and what to do next.', 'page' => 'How the Facebook Page looks to visitors.',
         'inbox' => 'Messages and comments waiting for an answer.', 'cleanup' => 'Tidy old posts and comments on the Page.', 'ads' => 'Small targeted ads, always created paused.',
         'audit' => 'A health check of the Page.', 'accounts' => 'Connect Facebook and the other channels, and make the pictures.'];

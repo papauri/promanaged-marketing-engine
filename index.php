@@ -173,6 +173,43 @@ if (isset($_GET['kit']) && pm_brand_valid((string)($_GET['b'] ?? '')) && preg_ma
     exit;
 }
 
+// ---------- Cover studio pictures (drawn by code, cached) ----------
+if (isset($_GET['studio']) && in_array($_GET['studio'], ['cover', 'profile'], true)) {
+    $sb = (string)($_GET['b'] ?? '');
+    if (!pm_brand_valid($sb)) {
+        http_response_code(404);
+        exit;
+    }
+    $sid = (string)($_GET['id'] ?? 'new');
+    $sw = (int)($_GET['w'] ?? 800);
+    $sh = $_GET['studio'] === 'profile' ? $sw : (int)($_GET['h'] ?? 420);
+    if (!preg_match('/^([a-f0-9]{12}|saved|new)$/', $sid) || $sw < 64 || $sh < 64 || $sw > 3200 || $sh > 3200 || $sw * $sh > 6000000) {
+        http_response_code(404);
+        exit;
+    }
+    pm_brand_set($sb);
+    $spec = pm_studio_get($sb, $sid);
+    if (!empty($_GET['style']) && isset(PM_SD_STYLES[(string)$_GET['style']])) { // a style gallery thumbnail: this design in another style
+        $spec['style'] = (string)$_GET['style'];
+    }
+    if (!empty($_GET['pstyle']) && isset(PM_SD_PSTYLES[(string)$_GET['pstyle']])) {
+        $spec['pstyle'] = (string)$_GET['pstyle'];
+    }
+    $tk = preg_match('/^[a-z]{1,12}$/', (string)($_GET['t'] ?? '')) ? (string)$_GET['t'] : '';
+    $sf = pm_studio_for_target($sb, $spec, (string)$_GET['studio'], $sw, $sh, $tk);
+    if ($sf === '') {
+        http_response_code(503);
+        exit;
+    }
+    header('Content-Type: image/png');
+    header('Cache-Control: private, max-age=600');
+    if (isset($_GET['dl'])) {
+        header('Content-Disposition: attachment; filename="' . preg_replace('/[^A-Za-z0-9]/', '', pm_brand_name($sb)) . '-' . ($tk !== '' ? $tk : $_GET['studio']) . '-' . $sw . 'x' . $sh . '.png"');
+    }
+    readfile($sf);
+    exit;
+}
+
 // ---------- Social post pictures ----------
 if (isset($_GET['simg']) && preg_match('/^[a-f0-9]{20}$/', (string)$_GET['simg'])) {
     $sf = pm_social_img_file((string)$_GET['simg'], (string)($_GET['size'] ?? 'sq'), (int)($_GET['slide'] ?? 0)); // unknown sizes fall back to the square
