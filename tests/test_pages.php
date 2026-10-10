@@ -380,6 +380,37 @@ pm_t_assert($code === 302 && str_contains($loc, 'brand=travel') && str_contains(
 pm_t_assert($code === 302 && (str_contains($html, 'Travel Malawi mail: could not log in') || str_contains($html, 'Travel Malawi: no mail server is set up yet')), 'checking the mail login always answers, in words');
 pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
 
+echo "\nThe Travel Malawi first email: Settings and the Leads screen\n";
+[, $html] = http("$base?tab=settings&brand=travel");
+$csrf4 = csrf_of($html);
+pm_t_assert(str_contains($html, 'First email to a stay') && str_contains($html, 'name="s[travel][host_email][steps]"') && str_contains($html, '1. Go to https://ulendomalawi.com') && str_contains($html, 'It passes the wording rules') && str_contains($html, 'Shall I send you the host starter guide?'),
+    'Settings shows the standard wording, a sample email with its word count, and says it passes the rules');
+$heForm = ['csrf' => $csrf4, 'action' => 'settings', 's' => ['company_name' => 'ProManaged IT', 'currency' => 'MWK', 'ref_prefix' => 'PM', 'travel' => ['company_name' => 'Travel Malawi', 'host_email' => ['intro' => 'We list stays.', 'benefits_title' => 'Why:', 'benefits' => "One\nTwo", 'steps_title' => 'Steps:',
+    'steps' => "Open {link}.\nWait.", 'link' => 'https://ulendomalawi.com', 'free' => 'No fee.', 'why' => 'Because we are new.', 'closing' => 'Interested?']]]];
+http($base, $heForm);
+$he = (array)(pm_load('settings', fn() => [])['travel']['host_email'] ?? []);
+pm_t_assert($he['why'] === 'Because we are new.' && $he['steps'] === ['Open {link}.', 'Wait.'] && $he['benefits'] === ['One', 'Two'] && $he['link'] === 'https://ulendomalawi.com' && $he['closing'] === 'Interested?', 'the wording saves, one line per item');
+[, $html] = http("$base?tab=settings&brand=travel");
+pm_t_assert(str_contains($html, 'Because we are new.') && str_contains($html, '1. Open https://ulendomalawi.com.'), 'and the sample email shows it');
+http($base, ['csrf' => $csrf4, 'action' => 'settings', 's' => $heForm['s'] + [], 'nothing' => '1'] + ['s' => ['company_name' => 'ProManaged IT', 'currency' => 'MWK', 'ref_prefix' => 'PM', 'travel' => ['company_name' => 'Travel Malawi']]]);
+pm_t_eq((array)(pm_load('settings', fn() => [])['travel']['host_email'] ?? []) === $he, true, 'a save that does not mention the wording leaves it as it was');
+
+pm_save('leads', ['tm1' => array_replace($mkl('tm1', 'travel', []), ['status' => 'drafted', 'drafts' => ['email_subject' => 'Old', 'email_body' => 'Hello, we would love to list you on Travel Malawi for free.', 'whatsapp' => 'wa']]),
+    'tm2' => array_replace($mkl('tm2', 'travel', []), ['status' => 'drafted', 'drafts' => ['email_subject' => 'Old', 'email_body' => 'Hello, another old email that nobody edits.', 'whatsapp' => 'wa']])]);
+[, $html] = http("$base?tab=agents&brand=travel");
+pm_t_assert(str_contains($html, "Travel Malawi's emails have a new standard format") && str_contains($html, '2 unsent drafts are still in the old format') && str_contains($html, 'Redraft 2 emails in the new format'), 'the Leads screen says how many unsent drafts are in the old format and offers the redraft');
+$csrf5 = csrf_of($html);
+[$code] = http($base, ['csrf' => $csrf5, 'action' => 'agents', 'do' => 'tm_rewrite']);
+[, $html] = http("$base?tab=agents&brand=travel");
+pm_t_assert($code === 302 && str_contains($html, 'The AI needs a key'), 'the redraft says plainly that it needs the AI key (there is none in the test), and changes nothing: ' . $code . ' ' . substr(strip_tags((string)(preg_match('/class="flash[^"]*">(.*?)<\/div>/s', $html, $fm3) ? $fm3[1] : 'no flash')), 0, 160));
+[$code] = http($base, ['csrf' => $csrf5, 'action' => 'agents', 'do' => 'save_draft', 'id' => 'tm1', 'which' => 'drafts', 'email_subject' => 'Old', 'email_body' => 'Hello, I changed this by hand.', 'whatsapp' => 'wa']);
+[$code2] = http($base, ['csrf' => $csrf5, 'action' => 'agents', 'do' => 'save_draft', 'id' => 'tm2', 'which' => 'drafts', 'email_subject' => 'Old', 'email_body' => 'Hello, another old email that nobody edits.', 'whatsapp' => 'wa']);
+$ld = pm_load('leads', fn() => []);
+pm_t_assert(!empty($ld['tm1']['drafts']['edited_at']) && empty($ld['tm2']['drafts']['edited_at']), 'a draft changed by hand is marked, one saved unchanged is not');
+[, $html] = http("$base?tab=agents&brand=travel");
+pm_t_assert(str_contains($html, '1 unsent draft is still in the old format') && str_contains($html, 'edited by hand (1)'), 'and the Leads screen then leaves the edited one out of the redraft, saying so');
+pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
+
 echo "\nThe WhatsApp webhook: one address for every connected number\n";
 $wa = "http://127.0.0.1:$port/wa.php";
 pm_t_eq(http($wa)[0], 404, 'with no business connected the webhook does not exist');

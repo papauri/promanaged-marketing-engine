@@ -77,6 +77,29 @@ $brandCards = function (string $b) use ($settings, $vb): void {
       </div>
     </div>
 
+    <?php if ($tr): $he = pm_tm_email_cfg(); $hk = pm_tm_email_check(); $hn = fn(string $k) => 's[travel][host_email][' . $k . ']'; ?>
+    <div class="card" <?= $hide ?> data-fold="closed"><h2><?= pm_h($name) ?> · First email to a stay</h2>
+      <p class="hint" style="margin-top:0">Every first email to a stay opens with a line the AI writes for that place, then this text, which is the same for all of them. Write only what is true: nothing here is checked against the platform. Use <code>{link}</code> in a step where the link goes (one link is allowed in an email).</p>
+      <label>What Travel Malawi is</label><textarea name="<?= $hn('intro') ?>" rows="2"><?= pm_h((string)$he['intro']) ?></textarea>
+      <div class="row">
+        <div><label>Heading for what a host gets</label><input type="text" name="<?= $hn('benefits_title') ?>" value="<?= pm_h((string)$he['benefits_title']) ?>"></div>
+        <div><label>Heading for the steps</label><input type="text" name="<?= $hn('steps_title') ?>" value="<?= pm_h((string)$he['steps_title']) ?>"></div>
+        <div><label>The link</label><input type="text" name="<?= $hn('link') ?>" value="<?= pm_h((string)$he['link']) ?>" placeholder="https://ulendomalawi.com"></div>
+      </div>
+      <div class="row">
+        <div><label>What a host gets (one per line)</label><textarea name="<?= $hn('benefits') ?>" rows="4"><?= pm_h(implode("\n", $he['benefits'])) ?></textarea></div>
+        <div><label>The set-up steps (one per line)</label><textarea name="<?= $hn('steps') ?>" rows="4"><?= pm_h(implode("\n", $he['steps'])) ?></textarea></div>
+      </div>
+      <div class="row">
+        <div><label>That it is free</label><input type="text" name="<?= $hn('free') ?>" value="<?= pm_h((string)$he['free']) ?>"></div>
+        <div><label>Why it is free (leave empty to say nothing)</label><input type="text" name="<?= $hn('why') ?>" value="<?= pm_h((string)$he['why']) ?>"></div>
+        <div><label>The question at the end</label><input type="text" name="<?= $hn('closing') ?>" value="<?= pm_h((string)$he['closing']) ?>"></div>
+      </div>
+      <p class="hint <?= $hk['problems'] ? 'warnt' : '' ?>">With a sample opening it is <b><?= (int)$hk['words'] ?></b> words (first emails may be 20 to 190).<?= $hk['problems'] ? ' Fix before it can be sent: ' . pm_h(implode(' ', $hk['problems'])) : ' It passes the wording rules.' ?> Saved wording applies to new drafts; "Redraft" on the Leads screen applies it to unsent ones.</p>
+      <details class="more"><summary>See a sample email</summary><pre style="white-space:pre-wrap;font:13px/1.5 inherit;margin:8px 0 0"><?= pm_h($hk['subject'] . "\n\n" . $hk['body']) ?></pre></details>
+    </div>
+    <?php endif; ?>
+
     <?php $soc = pm_social_cfg($b); $pre = $tr ? 'TM_' : ''; ?>
     <div class="card" <?= $hide ?> data-fold="closed"><h2><?= pm_h($name) ?> · Social media</h2>
       <p class="hint" style="margin-top:0">Facebook: <b><?= $soc['ready'] ? 'connected' : 'not connected' ?></b> · Instagram: <b><?= $soc['ig_id'] !== '' ? 'linked' : 'not linked' ?></b> · LinkedIn: <b><?= pm_linkedin_cfg($b)['ready'] ? 'connected' : 'not connected' ?></b>.

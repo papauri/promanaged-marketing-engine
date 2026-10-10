@@ -338,6 +338,7 @@ function pm_claude(string $system, string $user, bool $web = false, int $maxToke
 }
 require_once __DIR__ . '/sx_learn.php';
 require_once __DIR__ . '/sx_harvest.php';
+require_once __DIR__ . '/tm_email.php';
 
 /* ---------------- Spend control: every call is counted against a daily token budget ---------------- */
 
@@ -959,6 +960,9 @@ function pm_sender_name(): string
 /** WRITER: first email and WhatsApp in our voice. */
 function pm_agent_write(array $leads): array
 {
+    if (pm_brand() === 'travel') { // a personal opening + the standard Travel Malawi text (lib/tm_email.php)
+        return pm_tm_write($leads);
+    }
     $s = pm_settings();
     $tpl = pm_template();
     $ask = pm_brand() === 'travel'

@@ -121,6 +121,10 @@ accepted by being made; they are logged in the Done log below, not in the regist
 
 ## 6 · Done log
 
+### Owner request in chat, 2026-10-11 — Travel Malawi first emails with the real benefits, the link, the set-up steps, free and why
+
+- The Travel Malawi writer now makes a greeting, one AI-written personal opening, and a standard text from the owner's own wording (`lib/tm_email.php`, Settings > Travel Malawi > First email to a stay): what the platform is, what a host gets, three set-up steps with the link to ulendomalawi.com, that it is free for now, and why. The reason ("building the platform together with our first hosts") and the steps were chosen by the owner; the benefits are only facts already in the brain. Held to the same lint as any first email (one plain link, no prices, 20 to 190 words; sample is about 165). A bulk "Redraft" rewrites unsent old-format drafts and never touches approved, hand-edited (now marked `edited_at`) or sent ones.
+
 ### Owner request in chat, 2026-10-11 — "finish the not-done items, and use AI to learn the business and who to target" (`e756c78`)
 
 - **Per-business channels** (C4-A01, C4-A02): WhatsApp Business and X read only the business's own keys (`pm_brand_env`); one webhook, the number decides the business; per-business templates and Setup-health rows; calls checked with the Meta app secret when set. A real gap found on the way: `pm_inb_unmatched_add` never existed, so a message from an unknown number was silently dropped while the app said it was "logged". Now someone new who writes becomes that business's lead (an offer keyword gets the owner's own reply, no AI; anything else a draft for the owner, never auto-sent to a stranger), a number that said STOP is never a new lead, the owner is told, and an AI failure no longer loses the message. The webhook now loads the mail and social code, so the owner is also told when WhatsApp needs a person (it could not be before).

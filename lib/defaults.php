@@ -35,9 +35,9 @@ function pm_default_settings(): array
         // Travel Malawi: a separate brand that speaks for itself (stays only). Used when a package or lead belongs to it.
         'travel' => [
             'company_name' => 'Travel Malawi', 'tagline' => 'Direct bookings for independent stays across Malawi', 'address' => 'Malawi',
-            'phone' => '', 'email' => '', 'website' => '', 'signatory_name' => '', 'signatory_title' => 'Founder',
+            'phone' => '', 'email' => '', 'website' => 'ulendomalawi.com', 'signatory_name' => '', 'signatory_title' => 'Founder',
             'accent_color' => '#047857', 'from_email' => '', // blank = send from the same mailbox, shown as "Travel Malawi"
-            'link_url' => 'https://travel-malawi.ai.studio', 'link_on' => true, // shown in Travel Malawi emails and WhatsApp messages
+            'link_url' => 'https://ulendomalawi.com', 'link_on' => true, // shown in Travel Malawi emails and WhatsApp messages
             'charging' => false,  // OFF while onboarding is free. Tick it in Settings (or per proposal) when you start charging.
             'ref_prefix' => 'TM', 'next_ref' => 1,
             'online_signing' => true, 'esign_tags' => true,

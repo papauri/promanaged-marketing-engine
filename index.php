@@ -758,6 +758,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pm_leads_save($leads);
             $back("Added $name. The next agent run will qualify it and draft a message.");
         }
+        if ($do === 'tm_rewrite') { // redraft the unsent Travel Malawi emails in the new format (hand-edited and approved ones are left alone)
+            if (pm_brand() !== 'travel') {
+                $back('This is for Travel Malawi.', 'err');
+            }
+            if (!pm_agents_ready()) {
+                $back('The AI needs a key in .env first.', 'err');
+            }
+            @set_time_limit(300);
+            $rw = pm_tm_rewrite_drafts();
+            $back($rw['rewritten'] . ' email' . ($rw['rewritten'] === 1 ? '' : 's') . ' redrafted in the new format' . ($rw['failed'] ? ', ' . $rw['failed'] . ' could not be (try again)' : '') . '. Read them before you approve.', $rw['failed'] ? 'err' : 'ok');
+        }
         if (!$lead) {
             $back('That lead was not found.', 'err');
         }
@@ -766,7 +777,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $acfg = pm_agents_config();
         if ($do === 'save_draft') {
             $key = ($_POST['which'] ?? '') === 'followup' ? 'followup_draft' : 'drafts';
+            $oldBody = trim((string)($lead[$key]['email_body'] ?? ''));
             $leads[$id][$key] = ['email_subject' => trim((string)$_POST['email_subject']), 'email_body' => trim((string)$_POST['email_body']), 'whatsapp' => trim((string)$_POST['whatsapp'])];
+            if ($key === 'drafts' && $oldBody !== '' && ($oldBody !== $leads[$id][$key]['email_body'] || !empty($lead[$key]['edited_at']))) {
+                $leads[$id][$key]['edited_at'] = (string)($lead[$key]['edited_at'] ?? '') ?: date('Y-m-d H:i'); // written by hand: a bulk redraft never overwrites it
+            }
             foreach (['email', 'phone', 'contact'] as $f) {
                 $leads[$id][$f] = trim((string)($_POST[$f] ?? $lead[$f] ?? ''));
             }
@@ -1793,6 +1808,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 imagesavealpha($timg, true);
                 imagepng($timg, PM_ROOT . '/assets/travel_signature.png');
             }
+        }
+        if (!empty($tin['host_email']) && is_array($tin['host_email'])) { // the standard part of the first email to a stay
+            $he = $tin['host_email'];
+            $heLines = fn($v) => array_slice(array_values(array_filter(array_map(fn($x) => mb_substr(trim($x), 0, 240), preg_split('/\R/', (string)$v) ?: []))), 0, 6);
+            $tv['host_email'] = ['intro' => mb_substr(trim((string)($he['intro'] ?? '')), 0, 400), 'benefits_title' => mb_substr(trim((string)($he['benefits_title'] ?? '')), 0, 60), 'benefits' => $heLines($he['benefits'] ?? ''),
+                'steps_title' => mb_substr(trim((string)($he['steps_title'] ?? '')), 0, 60), 'steps' => $heLines($he['steps'] ?? ''), 'link' => pm_clean_url((string)($he['link'] ?? '')) ?: PM_TM_LINK,
+                'free' => mb_substr(trim((string)($he['free'] ?? '')), 0, 240), 'why' => mb_substr(trim((string)($he['why'] ?? '')), 0, 300), 'closing' => mb_substr(trim((string)($he['closing'] ?? '')), 0, 200)];
         }
         $tv['company_name'] = $tv['company_name'] ?: 'Travel Malawi';
         $tv['accent_color'] = preg_match('/^#[0-9a-fA-F]{6}$/', (string)($tin['accent_color'] ?? '')) ? $tin['accent_color'] : ($tv['accent_color'] ?? '#047857');

@@ -72,6 +72,14 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
   <form method="post" style="display:inline"><?= $post('', 'export') ?><button class="btn" title="Download all leads of this business as JSON (no mail server details)">Export</button></form>
 </div>
 
+<?php if (pm_brand() === 'travel'): $tmAll = pm_leads(); $tmTodo = pm_tm_rewrite_candidates($tmAll); $tmKept = pm_tm_rewrite_kept($tmAll); if ($tmTodo): ?>
+<div class="card nofold" id="tmformat">
+  <b>Travel Malawi's emails have a new standard format.</b> It opens with a line written for that place, then says what Travel Malawi is, what a host gets, the set-up steps with the link to <?= pm_h(preg_replace('#^https?://#', '', (string)pm_tm_email_cfg()['link'])) ?>, and that it is free for now and why. You can change the wording in <a href="?tab=settings&amp;brand=travel">Settings</a>.
+  <p class="hint" style="margin:6px 0 0"><?= count($tmTodo) ?> unsent draft<?= count($tmTodo) === 1 ? ' is' : 's are' ?> still in the old format.<?= $tmKept['approved'] + $tmKept['edited'] ? ' Emails you approved (' . (int)$tmKept['approved'] . ') or edited by hand (' . (int)$tmKept['edited'] . ') are left alone.' : '' ?> Redrafting uses about one AI call for every six emails and never sends anything.</p>
+  <form method="post" class="btns"><?= $post('', 'tm_rewrite') ?><button class="btn primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?>>Redraft <?= count($tmTodo) ?> email<?= count($tmTodo) === 1 ? '' : 's' ?> in the new format</button></form>
+</div>
+<?php endif; endif; ?>
+
 <!-- 2. Run the agents + progress -->
 <div class="card runbar" id="runbar" data-running="<?= $running ? '1' : '0' ?>">
   <div class="runtop">

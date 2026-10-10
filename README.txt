@@ -217,6 +217,15 @@ ONE WHATSAPP NUMBER AND ONE X ACCOUNT PER BUSINESS
   an offer's keyword) and you are told. A keyword gets the owner's own reply words for that offer (no AI); anything else gets an answer drafted for you,
   never sent to a stranger by itself. The owner is told when the AI cannot draft one, and the message is still kept.
 
+THE TRAVEL MALAWI FIRST EMAIL (lib/tm_email.php)
+  A first email to a stay is a greeting, ONE personal opening the AI writes for that place (who is writing, and how we came across them: no numbers, prices
+  or links allowed), then a standard text that is the same for every stay: what Travel Malawi is, what a host gets, the set-up steps with the link to
+  https://ulendomalawi.com, that it is free for now, and why. That text is the owner's own wording in Settings > Travel Malawi > "First email to a stay" (the
+  starting text uses only facts the app already holds; the reason for not charging is "we are building the platform together with our first hosts", edit it
+  there), with a sample email, its word count and whether it passes the wording rules (one plain link, no prices, no spam words, 20 to 190 words). Leads >
+  Travel Malawi shows how many unsent drafts are still in the old format and a "Redraft" button (one AI call per six emails, never sends); drafts that are
+  approved, sent or edited by hand are left alone.
+
 EMAIL WORKS ON YOUR PC BUT NOT FROM THE SERVER
   Settings > the business > "Check the mail login" (also "Test now" in Setup health) logs in without sending, and when it fails says why and what to do:
   it tries the usual ports (465, 587, 25) from the server and tells you which one opens. The commonest cause on a website host is that it BLOCKS outgoing
