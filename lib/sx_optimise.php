@@ -289,7 +289,7 @@ function pm_opt_wa_profile(string $brand, ?array $set = null): array
 function pm_opt_it(string $ch, string $key, string $title, string $state, int $weight, string $why, array $o = []): array
 {
     return array_replace(['channel' => $ch, 'key' => $key, 'title' => $title, 'state' => $state, 'weight' => $weight, 'why' => $why, 'current' => '', 'proposal' => '', 'how' => 'manual', 'input' => 'none',
-        'limit' => 0, 'link' => '', 'link_label' => '', 'button' => '', 'bulk' => false, 'tick' => '', 'ai' => false, 'note' => '', 'options' => []], $o);
+        'limit' => 0, 'link' => '', 'link_label' => '', 'button' => '', 'bulk' => false, 'tick' => '', 'ai' => false, 'note' => '', 'options' => [], 'do' => 'opt_apply'], $o);
 }
 
 /** Done ticks for manual items live with the other ticks (data/social_channels.json). */
@@ -884,6 +884,67 @@ function pm_opt_polish(string $brand): array
     return [count($keep), count($items), count($keep) . ' of ' . count($items) . ' texts were reworded. The ones that added a claim or went over the limit were thrown away.'];
 }
 
+/* ---------------- one suggestion as a card (used by Optimise and by the Audit) ---------------- */
+
+function pm_opt_hours_grid(array $h): string
+{
+    $o = '<div class="opt-hours">';
+    foreach (PM_OPT_DAYS as $d => $label) {
+        $v = $h[$d] ?? null;
+        $o .= '<div><label class="check"><input type="checkbox" name="hr[' . $d . '][on]" value="1" ' . ($v ? 'checked' : '') . '> ' . pm_h($label) . '</label>'
+            . '<input type="time" name="hr[' . $d . '][from]" value="' . pm_h($v[0] ?? '08:00') . '" aria-label="' . pm_h($label) . ' opens"> to '
+            . '<input type="time" name="hr[' . $d . '][to]" value="' . pm_h($v[1] ?? '17:00') . '" aria-label="' . pm_h($label) . ' closes"></div>';
+    }
+    return $o . '</div>';
+}
+
+/** The card for one suggestion: what is wrong, what it is now, the text to apply (editable), and the button. $back = 'audit' sends the owner back to the Audit afterwards. */
+function pm_opt_item_html(array $i, string $vb, string $csrf, string $back = ''): string
+{
+    $fx = fn(string $do, string $extra = '') => '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="' . pm_h($do) . '">'
+        . ($back !== '' ? '<input type="hidden" name="back" value="' . pm_h($back) . '">' : '') . $extra;
+    $hid = fn(string $n, string $v) => '<input type="hidden" name="' . pm_h($n) . '" value="' . pm_h($v) . '">';
+    $cp = fn(string $text, string $label = 'Copy') => '<button type="button" class="btn small" data-copy="' . pm_h($text) . '">' . pm_h($label) . '</button>';
+    [$lab, $cls] = ['missing' => ['Missing', 'bad'], 'weak' => ['Could be better', 'warn'], 'ok' => ['Good', 'ok']][$i['state']];
+    $h = '<div class="sx-card opt-it" id="i-' . pm_h($i['key']) . '"><div class="sxh"><span class="sx-chip ' . $cls . '">' . $lab . '</span> <b>' . pm_h($i['title']) . '</b>'
+        . ($i['ai'] ? ' <span class="sx-chip" title="Reworded by the AI from your facts; checked for new claims, numbers and links">AI</span>' : '') . ' <span class="muted">· ' . pm_h($i['why']) . '</span></div>';
+    if ($i['current'] !== '') {
+        $h .= '<p class="hint" style="margin:6px 0 0">Now: ' . pm_h(mb_substr($i['current'], 0, 300)) . '</p>';
+    }
+    if ($i['note'] !== '') {
+        $h .= '<p class="hint" style="margin:4px 0 0">' . pm_h($i['note']) . '</p>';
+    }
+    $link = $i['link'] !== '' ? '<a class="btn small" href="' . pm_h($i['link']) . '" ' . (str_starts_with($i['link'], 'http') ? 'target="_blank" rel="noopener noreferrer"' : '') . '>' . pm_h($i['link_label'] ?: 'Open') . '</a>' : '';
+    if (in_array($i['how'], ['api', 'app'], true)) {
+        $h .= '<form method="post" class="opt-form">' . $fx((string)$i['do'], $hid('key', $i['key']));
+        if ($i['input'] === 'hours') {
+            $h .= pm_opt_hours_grid(pm_opt_hours($vb));
+        } elseif ($i['input'] === 'textarea') {
+            $h .= '<textarea name="val[' . pm_h($i['key']) . ']" rows="' . (int)($i['rows'] ?? 3) . '" maxlength="' . (int)$i['limit'] . '" aria-label="' . pm_h($i['title']) . '">' . pm_h($i['proposal']) . '</textarea>'
+                . '<span class="sx-chip">' . mb_strlen($i['proposal']) . '/' . (int)$i['limit'] . '</span>';
+        } elseif ($i['input'] === 'select') {
+            $h .= '<select name="val[' . pm_h($i['key']) . ']" aria-label="' . pm_h($i['title']) . '">';
+            foreach ($i['options'] as $v => $l) {
+                $h .= '<option value="' . pm_h($v) . '" ' . ($v === $i['proposal'] ? 'selected' : '') . '>' . pm_h($l) . '</option>';
+            }
+            $h .= '</select>';
+        } elseif ($i['input'] === 'text') {
+            $h .= '<input type="text" name="val[' . pm_h($i['key']) . ']" value="' . pm_h($i['proposal']) . '" maxlength="' . (int)$i['limit'] . '" aria-label="' . pm_h($i['title']) . '" placeholder="Type it here" autocomplete="off">';
+        } else {
+            $h .= '<p class="hint" style="margin:6px 0 0">' . pm_h($i['proposal']) . '</p>';
+        }
+        return $h . '<div class="btns"><button class="btn small primary">' . pm_h($i['button'] ?: 'Apply') . '</button>' . (in_array($i['input'], ['text', 'textarea'], true) && $i['proposal'] !== '' ? $cp($i['proposal']) : '') . $link . '</div></form></div>';
+    }
+    if ($i['proposal'] !== '') {
+        $h .= '<pre class="opt-pre">' . pm_h($i['proposal']) . '</pre>';
+    }
+    $h .= '<div class="sxb">' . ($i['proposal'] !== '' ? $cp($i['proposal']) : '') . $link;
+    if ($i['tick'] !== '') {
+        $h .= '<form method="post" class="inl">' . $fx('opt_done', $hid('tick', $i['tick'])) . '<button class="btn small primary">I did it</button></form>';
+    }
+    return $h . '</div></div>';
+}
+
 /* ---------------- form handlers (POST action=social_ext&do=...) ---------------- */
 
 function pm_do_opt_apply(string $vb): array
@@ -891,7 +952,7 @@ function pm_do_opt_apply(string $vb): array
     $key = preg_replace('/[^a-z0-9_]/', '', (string)($_POST['key'] ?? ''));
     $val = $_POST['val'][$key] ?? '';
     [$ok, $m] = pm_opt_apply($vb, $key, is_scalar($val) ? (string)$val : '', (array)($_POST['hr'] ?? []));
-    return ['msg' => $m, 'kind' => $ok ? 'ok' : 'err', 'to' => 'social&view=optimise#c-' . pm_opt_anchor($key)];
+    return ['msg' => $m, 'kind' => $ok ? 'ok' : 'err', 'to' => ($_POST['back'] ?? '') === 'audit' ? 'social&view=audit#i-' . $key : 'social&view=optimise#c-' . pm_opt_anchor($key)];
 }
 
 function pm_opt_anchor(string $key): string
@@ -933,7 +994,7 @@ function pm_do_opt_done(string $vb): array
         }
         return $c;
     });
-    return ['msg' => $undo ? '"' . $allowed[$tick] . '" is back on the list.' : '"' . $allowed[$tick] . '" ticked off.', 'kind' => 'ok', 'to' => 'social&view=optimise'];
+    return ['msg' => $undo ? '"' . $allowed[$tick] . '" is back on the list.' : '"' . $allowed[$tick] . '" ticked off.', 'kind' => 'ok', 'to' => ($_POST['back'] ?? '') === 'audit' ? 'social&view=audit' : 'social&view=optimise'];
 }
 
 function pm_do_opt_use(string $vb): array

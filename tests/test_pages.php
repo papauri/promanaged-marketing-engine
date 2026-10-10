@@ -501,6 +501,7 @@ pm_t_assert($code === 302 && $gs['gp1']['drafts']['email_subject'] === 'Rooms ne
 pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
 
 echo "\nSocial > Optimise\n";
+pm_save('page_opt', ['none' => []]); // (a copy of the real data may already hold hours the owner saved)
 [$code, $html] = http("$base?tab=social&view=optimise&brand=promanaged");
 $csrf8 = csrf_of($html);
 pm_t_assert($code === 200 && str_contains($html, 'page health') && str_contains($html, 'id="c-business"') && str_contains($html, 'id="c-facebook"') && str_contains($html, 'id="c-google"') && str_contains($html, 'Optimise'), 'the screen loads with a card per channel and is in the Social menu');
@@ -528,6 +529,7 @@ pm_t_assert(pm_settings()['phone'] === '0999 111 222', 'a request without the ri
 pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
 
 echo "\nSocial > Studio\n";
+pm_save('cover_studio', ['none' => []]);
 [$code, $html] = http("$base?tab=social&view=studio&brand=promanaged");
 $csrf9 = csrf_of($html);
 pm_t_assert($code === 200 && str_contains($html, 'Cover studio for') && str_contains($html, 'Surprise me') && str_contains($html, 'Dusk over the lake') && str_contains($html, '?studio=cover'), 'the screen loads with the styles and previews');

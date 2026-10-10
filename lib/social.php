@@ -632,6 +632,9 @@ const PM_SOCIAL_UNSENT = ['draft', 'approved', 'needs_edit', 'needs_video', 'rev
 /** Hours (HH:MM) to post at: this Page's own best times when known, else the Malawi habits. */
 function pm_social_hours(string $brand): array
 {
+    if (function_exists('pm_aa_times') && ($ov = pm_aa_times($brand))) {
+        return $ov; // the owner chose them (Audit > When new posts go out)
+    }
     if (function_exists('pm_social_slots')) {
         try {
             $t = array_values(array_unique(array_column((array)pm_social_slots($brand), 'time')));
@@ -660,6 +663,9 @@ function pm_social_default_time(string $brand, int $dow, int $i = 0): string
 /** Time (HH:MM) for the $i-th post on $date: from the measured slots when there are any (that weekday's first, else cycling through them), else the habits. */
 function pm_social_time_for(string $brand, string $date, int $i = 0, ?array $slots = null): string
 {
+    if (function_exists('pm_aa_times') && ($ov = pm_aa_times($brand))) {
+        return $ov[$i % count($ov)];
+    }
     if ($slots === null) {
         $slots = [];
         if (function_exists('pm_social_slots')) {
@@ -1161,7 +1167,7 @@ function pm_agent_social_reply(array $c): string
 {
     $s = pm_settings();
     $system = pm_agents_company_brief('tiny') . "\nYou reply to comments on {$s['company_name']}'s Facebook Page. 1 to 3 short sentences, warm and human, in the commenter's language if it is clear. "
-        . "Answer only from the facts. For prices or details, invite them to send a WhatsApp or private message. Never promise times or results. No hashtags. Reply JSON only: {\"reply\":\"\"}";
+        . "Answer only from the facts. For prices or details, invite them to send a WhatsApp or private message. Never promise times or results. No hashtags." . (function_exists('pm_aa_reply_style_line') ? pm_aa_reply_style_line(pm_brand()) : '') . " Reply JSON only: {\"reply\":\"\"}";
     $out = pm_agent_json(pm_claude($system, json_encode(['post' => $c['post'], 'commenter' => $c['from'], 'comment' => $c['message']], JSON_UNESCAPED_UNICODE), false, 400, 'write'));
     return trim((string)(is_array($out) ? ($out['reply'] ?? '') : ''));
 }

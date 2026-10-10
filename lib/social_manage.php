@@ -499,7 +499,7 @@ function pm_fb_audit_data(string $brand): array
         $hours[(int)date('G', $t)][] = $eng;
         $type = $p['picture'] !== '' ? ($p['type'] === 'added_video' ? 'video' : 'picture') : 'text';
         $byType[$type][] = $eng;
-        $sample[] = ['when' => date('D j M H:i', $t), 'type' => $type, 'text' => mb_substr($p['message'], 0, 220), 'reactions' => $p['reactions'], 'comments' => $p['comments'], 'shares' => $p['shares']];
+        $sample[] = ['id' => (string)$p['id'], 'when' => date('D j M H:i', $t), 'type' => $type, 'text' => mb_substr($p['message'], 0, 220), 'reactions' => $p['reactions'], 'comments' => $p['comments'], 'shares' => $p['shares']];
         if ($p['comments'] > 0 && $i < 10) {
             foreach (pm_fb_comments($brand, $p['id'])['comments'] as $cm) {
                 if ($cm['ours']) {
@@ -538,11 +538,14 @@ function pm_agent_page_audit(string $brand): array
         . "For a small new Page, judge against what is realistic for a small Malawian business, not big brands. "
         . "Give: what is working (max 3), the most important fixes in priority order (max 6, each a concrete action someone can do this week), a verdict on each of up to 6 recent posts (why it did or did not work, and how to improve it), "
         . "the best days, times and formats to post based on the data (say 'not enough data yet' if so), a judgement of the tone of the Page's replies with an improved example if needed, and 3 post ideas for next week. "
+        . "Give every fix a kind from this list: about, description, hours, phone, website, email, cover, picture, posting, replies, messages, cta, formats, pin, reviews, timing, other. "
+        . "When the kind is about or description, give in text the exact wording to put there, written only from the facts given (about up to 100 characters, description up to 250). "
+        . "For each post verdict give the post's id. For replies, also give style_rule: one sentence on how our replies should sound. Ideas are one short sentence each, a post the business could really write from its facts. "
         . "Never invent numbers. Reply JSON only.";
     $user = json_encode($data, JSON_UNESCAPED_UNICODE)
-        . "\nJSON: {\"score\":0,\"scores\":{\"profile\":0,\"consistency\":0,\"content\":0,\"engagement\":0,\"responsiveness\":0},\"headline\":\"one sentence\",\"working\":[],\"fixes\":[{\"action\":\"\",\"why\":\"\"}],"
-        . "\"posts\":[{\"post\":\"first words of the post\",\"verdict\":\"\",\"improve\":\"\"}],\"timing\":\"\",\"replies\":{\"verdict\":\"\",\"better_example\":\"\"},\"ideas\":[]}";
-    $out = pm_agent_json(pm_claude($system, $user, false, 3000, 'write'));
+        . "\nJSON: {\"score\":0,\"scores\":{\"profile\":0,\"consistency\":0,\"content\":0,\"engagement\":0,\"responsiveness\":0},\"headline\":\"one sentence\",\"working\":[],\"fixes\":[{\"action\":\"\",\"why\":\"\",\"kind\":\"\",\"text\":\"\"}],"
+        . "\"posts\":[{\"id\":\"\",\"post\":\"first words of the post\",\"verdict\":\"\",\"improve\":\"\"}],\"timing\":\"\",\"replies\":{\"verdict\":\"\",\"better_example\":\"\",\"style_rule\":\"\"},\"ideas\":[]}";
+    $out = pm_agent_json(pm_claude($system, $user, false, 3800, 'write'));
     if (!is_array($out) || !isset($out['score'])) {
         throw new RuntimeException('The audit did not come back complete. Try again.');
     }

@@ -241,6 +241,22 @@ FOLLOW-UPS WITH AI, AND TODAY'S STRATEGY (lib/followups.php, lib/director.php)
   are drafted, drafts to read, approved and waiting) and is written again by itself after each agent run, after you press "Draft N follow-ups", and when that
   work moves (at most every 90 minutes), so it no longer repeats yesterday's advice. "Refresh strategy" still rewrites it at once.
 
+SOCIAL > AUDIT: EVERY FINDING CAN BE ACTED ON (lib/sx_audit_actions.php, lib/view_social_page.php)
+  The AI audit (one call) now also labels each fix with a kind (about, description, hours, phone, website, email, cover, picture, posting, replies, messages, cta, formats,
+  pin, reviews, timing) and, for the intro and description, offers wording; it names each post by id, gives a one-sentence reply style, and lists ideas. The Audit screen turns
+  all of it into actions:
+    - "Change the channel settings" (worked out from the Page's own numbers, no AI, and shown even before the audit is run): the weekly posting goal, the hours new posts go out
+      (the planner then uses YOUR hours instead of its own; "Use the automatic times" undoes it), the mix of post themes (themes that get more reactions than average get more room,
+      never below 5), which channels post by themselves (Instagram linked but off; LinkedIn on but not connected), and how replies sound (added to every reply the AI drafts).
+      Each shows what it is now and what is suggested; you can edit the value; "Apply the N safe suggestions" does the safe ones at once.
+    - "Fix these first": each fix shows the same card as Optimise (intro, description, hours, phone, website, cover, picture, "fill the calendar") with the AI's own wording filled
+      in, but only when that wording passes the facts-only guard (an invented number or boast is not used); replies, Messenger, enquiries and pictures-and-video link to the screen
+      that fixes them; a fix with no screen has "Show me how (AI)" (one small call that gives 3 to 5 plain steps).
+    - "Post by post": "Rewrite with AI" (one small call, facts only, no new numbers or boasts) gives an editable better version; "Save to Facebook" replaces that post's text
+      (the usual Page-edit safety checks apply). "Edit by hand" opens the post.
+    - "Ideas for next week": "Add to content ideas" puts the idea in the idea bank so the planner writes a post from it.
+  Everything applied is added to the apply log shown on Optimise. Every other channel's profile is on Social > Optimise (the Audit links to it with each channel's score).
+
 SOCIAL > STUDIO: DESIGNED PROFILE PICTURES AND COVERS (lib/sx_studio.php, lib/view_social_studio.php)
   Not generated pictures: every cover and profile picture is DESIGNED BY CODE (GD) from a small design: a style, four colours, a texture and your words (a quiet name
   line, a headline, a supporting line, up to three contact items). Eleven cover styles (Aurora, Dusk over the lake, Lake waves, Rings, Blueprint, Facets, Diamonds,

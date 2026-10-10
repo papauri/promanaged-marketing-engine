@@ -28,59 +28,7 @@ foreach ($run['channels'] as $c) {
     }
 }
 $confirmAll = "Apply these now?\n\n" . implode("\n", array_slice($bulk, 0, 14)) . "\n\nPosts are added as drafts. Nothing is published.";
-$stateLab = ['missing' => ['Missing', 'bad'], 'weak' => ['Could be better', 'warn'], 'ok' => ['Good', 'ok']];
-$cp = fn(string $text, string $label = 'Copy') => '<button type="button" class="btn small" data-copy="' . pm_h($text) . '">' . pm_h($label) . '</button>';
-$hoursGrid = function (array $h, string $key): string {
-    $o = '<div class="opt-hours">';
-    foreach (PM_OPT_DAYS as $d => $label) {
-        $v = $h[$d] ?? null;
-        $o .= '<div><label class="check"><input type="checkbox" name="hr[' . $d . '][on]" value="1" ' . ($v ? 'checked' : '') . '> ' . pm_h($label) . '</label>'
-            . '<input type="time" name="hr[' . $d . '][from]" value="' . pm_h($v[0] ?? '08:00') . '" aria-label="' . pm_h($label) . ' opens"> to '
-            . '<input type="time" name="hr[' . $d . '][to]" value="' . pm_h($v[1] ?? '17:00') . '" aria-label="' . pm_h($label) . ' closes"></div>';
-    }
-    return $o . '</div>';
-};
-$item = function (array $i) use ($fx, $hid, $cp, $stateLab, $hoursGrid, $vb, $st): string {
-    [$lab, $cls] = $stateLab[$i['state']];
-    $h = '<div class="sx-card opt-it" id="i-' . pm_h($i['key']) . '"><div class="sxh"><span class="sx-chip ' . $cls . '">' . $lab . '</span> <b>' . pm_h($i['title']) . '</b>'
-        . ($i['ai'] ? ' <span class="sx-chip" title="Reworded by the AI from your facts; checked for new claims, numbers and links">AI-polished</span>' : '') . ' <span class="muted">· ' . pm_h($i['why']) . '</span></div>';
-    if ($i['current'] !== '') {
-        $h .= '<p class="hint" style="margin:6px 0 0">Now: ' . pm_h(mb_substr($i['current'], 0, 300)) . '</p>';
-    }
-    if ($i['note'] !== '') {
-        $h .= '<p class="hint" style="margin:4px 0 0">' . pm_h($i['note']) . '</p>';
-    }
-    $link = $i['link'] !== '' ? '<a class="btn small" href="' . pm_h($i['link']) . '" ' . (str_starts_with($i['link'], 'http') ? 'target="_blank" rel="noopener noreferrer"' : '') . '>' . pm_h($i['link_label'] ?: 'Open') . '</a>' : '';
-    if (in_array($i['how'], ['api', 'app'], true)) {
-        $h .= '<form method="post" class="opt-form">' . $fx('opt_apply', $hid('key', $i['key']));
-        if ($i['input'] === 'hours') {
-            $h .= $hoursGrid(pm_opt_hours($vb), $i['key']);
-        } elseif ($i['input'] === 'textarea') {
-            $h .= '<textarea name="val[' . pm_h($i['key']) . ']" rows="3" maxlength="' . (int)$i['limit'] . '" aria-label="' . pm_h($i['title']) . '">' . pm_h($i['proposal']) . '</textarea>'
-                . '<span class="sx-chip">' . mb_strlen($i['proposal']) . '/' . (int)$i['limit'] . '</span>';
-        } elseif ($i['input'] === 'select') {
-            $h .= '<select name="val[' . pm_h($i['key']) . ']" aria-label="' . pm_h($i['title']) . '">';
-            foreach ($i['options'] as $v => $l) {
-                $h .= '<option value="' . pm_h($v) . '" ' . ($v === $i['proposal'] ? 'selected' : '') . '>' . pm_h($l) . '</option>';
-            }
-            $h .= '</select>';
-        } elseif ($i['input'] === 'text') {
-            $h .= '<input type="text" name="val[' . pm_h($i['key']) . ']" value="' . pm_h($i['proposal']) . '" maxlength="' . (int)$i['limit'] . '" aria-label="' . pm_h($i['title']) . '" placeholder="Type it here" autocomplete="off">';
-        } else {
-            $h .= '<p class="hint" style="margin:6px 0 0">' . pm_h($i['proposal']) . '</p>';
-        }
-        $h .= '<div class="btns"><button class="btn small primary">' . pm_h($i['button'] ?: 'Apply') . '</button>' . (in_array($i['input'], ['text', 'textarea'], true) && $i['proposal'] !== '' ? $cp($i['proposal']) : '') . $link . '</div></form>';
-        return $h . '</div>';
-    }
-    if ($i['proposal'] !== '') {
-        $h .= '<pre class="opt-pre">' . pm_h($i['proposal']) . '</pre>';
-    }
-    $h .= '<div class="sxb">' . ($i['proposal'] !== '' ? $cp($i['proposal']) : '') . $link;
-    if ($i['tick'] !== '') {
-        $h .= '<form method="post" class="inl">' . $fx('opt_done', $hid('tick', $i['tick'])) . '<button class="btn small primary">I did it</button></form>';
-    }
-    return $h . '</div></div>';
-};
+$item = fn(array $i): string => pm_opt_item_html($i, $vb, $csrf);
 ?>
 <?= pm_social_nav('optimise') ?>
 <style>

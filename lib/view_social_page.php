@@ -95,11 +95,34 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
   <?php endforeach; ?>
 
 <?php elseif ($sc['ready'] && $view === 'audit'):
-    $au = pm_load('page_audit', fn() => [])[$vb] ?? null; ?>
+    $au = pm_load('page_audit', fn() => [])[$vb] ?? null;
+    $au = is_array($au) ? $au : null;
+    $data = pm_aa_data($vb, $au);
+    $setItems = pm_aa_settings_items($vb, $au, $data);
+    $st = pm_opt_store($vb);
+    $item = fn(array $i): string => pm_opt_item_html($i, $vb, $csrf, 'audit');
+    $aa = fn(string $do, string $extra = '') => '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="' . pm_h($do) . '">' . $extra;
+    $bulkN = count(array_filter($setItems, fn($i) => $i['state'] !== 'ok' && $i['bulk']));
+    $kindLabel = ['about' => 'Facebook intro', 'description' => 'Page description', 'hours' => 'Opening hours', 'phone' => 'Phone', 'website' => 'Website', 'email' => 'Email', 'cover' => 'Cover', 'picture' => 'Profile picture',
+        'posting' => 'Posting rhythm', 'replies' => 'Replies', 'messages' => 'Messenger', 'cta' => 'Enquiries', 'formats' => 'Pictures and video', 'pin' => 'Pinned post', 'reviews' => 'Reviews', 'timing' => 'Posting times', 'other' => 'Other'];
+    $ideaTexts = array_map(fn($x) => trim((string)($x['text'] ?? '')), (array)pm_bank_get($vb)['ideas']); ?>
+  <style>
+  .opt-it{margin:8px 0}.opt-it .sxh{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.opt-it input[type=text],.opt-it textarea,.opt-it select{width:100%;margin-top:6px}
+  .opt-pre{white-space:pre-wrap;word-break:break-word;margin:8px 0;padding:9px 11px;background:var(--bg,#f6f7f8);border-radius:8px;font:13px/1.45 -apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+  .opt-hours>div{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0}.opt-hours .check{min-width:130px}.opt-hours input[type=time]{width:auto}
+  .opt-chans{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0}.opt-chans a{text-decoration:none}
+  .aa-fix{margin:10px 0}.aa-fix>.sxh{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.aa-fix .opt-it{margin:8px 0 0;box-shadow:none}.aa-post textarea{width:100%}
+  </style>
   <div class="card">
     <form method="post" class="findrow"><?= $fp('audit') ?><button class="btn primary"><?= $au ? 'Audit the Page again' : 'Audit the Page' ?></button>
-      <span class="hint">Judges the profile, posting rhythm, every recent post, engagement and the tone of our replies. One AI call (about 3,000 tokens). The planner learns from it.</span></form>
+      <span class="hint">Judges the profile, posting rhythm, every recent post, engagement and the tone of our replies. One AI call (about 3,500 tokens). Every finding below can be acted on from this page, and the planner learns from it.</span></form>
+    <?php if (!$au): ?><p class="hint" style="margin:8px 0 0">The settings suggestions just below come from the Page's own numbers and need no AI, so they are here already. The AI audit adds a prioritised fix list, a verdict on each post and ideas.</p><?php endif; ?>
   </div>
+  <?php $lastOpt = (array)($st['last'] ?? []); if (!empty($lastOpt['channels'])): ?>
+  <div class="card"><b>Every channel</b> <span class="muted">· from Optimise, <?= pm_h(date('j M H:i', strtotime((string)$lastOpt['at']))) ?> · page health <?= (int)$lastOpt['score'] ?>%</span>
+    <div class="opt-chans"><?php foreach ((array)$lastOpt['channels'] as $chk => $chs): ?><a href="?tab=social&amp;view=optimise#c-<?= pm_h($chk) ?>" class="sx-chip <?= $chs === null ? '' : ($chs >= 85 ? 'ok' : ($chs >= 55 ? 'warn' : 'bad')) ?>"><?= pm_h(PM_OPT_CHANNELS[$chk] ?? $chk) ?><?= $chs === null ? ' · not connected' : ' ' . (int)$chs . '%' ?></a><?php endforeach; ?></div>
+    <p class="hint" style="margin:8px 0 0">Open a channel to fix what is missing on it: profile details, pictures, and the texts to copy for the platforms that do not let apps edit.</p></div>
+  <?php endif; ?>
   <?php if ($au): $sc2 = (array)($au['scores'] ?? []); ?>
   <div class="kpis audit">
     <div><b><?= (int)$au['score'] ?>/100</b><span>overall · <?= pm_h($au['at']) ?></span></div>
@@ -107,14 +130,81 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
       <div><b><?= (int)($sc2[$k] ?? 0) ?></b><span><?= $l ?></span></div>
     <?php endforeach; ?>
   </div>
+  <div class="card"><p class="lead" style="margin:0"><?= pm_h((string)($au['headline'] ?? '')) ?></p>
+    <?php if (!empty($au['working'])): ?><h3>What is working</h3><ul><?php foreach ($au['working'] as $w): ?><li><?= pm_h($w) ?></li><?php endforeach; ?></ul><?php endif; ?></div>
+  <?php endif; ?>
+
+  <div class="card" id="settings">
+    <h2>Change the channel settings</h2>
+    <p class="hint" style="margin-top:0">Worked out from the Page's own numbers<?= $au ? ' and the audit' : '' ?>, with no AI. Each shows what it is now and what is suggested; edit the value if you like, then apply it.<?= $bulkN ? '' : ' Nothing is waiting to be changed in one go.' ?></p>
+    <?php if ($bulkN): ?><form method="post" class="inl"><?= $aa('aa_all') ?><button class="btn small primary">Apply the <?= $bulkN ?> safe suggestion<?= $bulkN === 1 ? '' : 's' ?></button></form><?php endif; ?>
+    <?php foreach ($setItems as $i): ?><?= $item($i) ?><?php endforeach; ?>
+    <?php if (!$setItems): ?><p class="hint">The Page could not be read, so there is nothing to suggest yet.</p><?php endif; ?>
+    <p class="hint">Profile details (intro, hours, phone, cover) are on <a href="?tab=social&amp;view=optimise">Optimise</a>, and the cover and picture designs on the <a href="?tab=social&amp;view=studio">Studio</a>.</p>
+  </div>
+
+  <?php if ($au && !empty($au['fixes'])): ?>
+  <div class="card" id="fixes">
+    <h2>Fix these first</h2>
+    <p class="hint" style="margin-top:0">The audit's list, in order. A fix that can be applied has its button right here; the others open the screen that fixes them, or can show the steps.</p>
+    <?php foreach ($au['fixes'] as $n => $fx0): $fix = is_array($fx0) ? $fx0 : ['action' => (string)$fx0]; $card = pm_aa_fix_card($vb, $fix, $setItems);
+        $howto = (array)(($st['howto'] ?? [])[md5((string)($fix['action'] ?? $n))]['steps'] ?? []); ?>
+    <div class="sx-card aa-fix" id="fix<?= (int)$n ?>">
+      <div class="sxh"><b><?= (int)$n + 1 ?>. <?= pm_h((string)($fix['action'] ?? '')) ?></b><span class="sx-chip"><?= pm_h($kindLabel[$card['kind']] ?? 'Other') ?></span></div>
+      <?php if (!empty($fix['why'])): ?><p class="hint" style="margin:4px 0 0"><?= pm_h((string)$fix['why']) ?></p><?php endif; ?>
+      <?php if ($card['item'] && $card['item']['state'] === 'ok'): ?><p style="margin:8px 0 0"><span class="sx-chip ok">Already done</span> <span class="muted"><?= pm_h(mb_substr((string)$card['item']['title'] . ($card['item']['current'] !== '' ? ': ' . $card['item']['current'] : ''), 0, 160)) ?></span></p>
+      <?php elseif ($card['item']): ?><?= $item($card['item']) ?>
+      <?php else: ?>
+        <?php if ($howto): ?><ol class="steps" style="margin:8px 0 0"><?php foreach ($howto as $stp): ?><li><?= pm_h($stp) ?></li><?php endforeach; ?></ol>
+        <?php else: ?><form method="post" class="inl" style="margin-top:8px"><?= $aa('aa_howto', $hid('n', (string)$n)) ?><button class="btn small" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?>>Show me how (AI)</button></form><?php endif; ?>
+      <?php endif; ?>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+
+  <?php if ($au && !empty($au['posts'])): ?>
+  <div class="card" id="posts">
+    <h2>Post by post</h2>
+    <p class="hint" style="margin-top:0">"Rewrite with AI" makes one small call: a better version of that post that follows the audit's note, using only what the post and your facts already say. Read it, edit it, and save it to Facebook when you are happy.</p>
+    <?php foreach ($au['posts'] as $pp): $post = pm_aa_post_for($vb, (array)$pp); $pid = $post['id'] ?? ''; $rw = $pid !== '' ? (array)(($st['rewrites'] ?? [])[$pid] ?? []) : []; ?>
+    <div class="sx-card aa-post" id="p<?= pm_h($pid) ?>">
+      <div class="sxh"><b><?= pm_h(mb_substr((string)($pp['post'] ?? ''), 0, 70)) ?>…</b><?php if ($post): ?><span class="muted"><?= (int)$post['reactions'] ?> ♥ · <?= (int)$post['comments'] ?> 💬 · <?= (int)$post['shares'] ?> ↗</span><?php endif; ?></div>
+      <p style="margin:6px 0 0"><?= pm_h((string)($pp['verdict'] ?? '')) ?></p>
+      <?php if (!empty($pp['improve'])): ?><p class="hint" style="margin:4px 0 0">Improve: <?= pm_h((string)$pp['improve']) ?></p><?php endif; ?>
+      <?php if (!$post): ?><p class="hint">This post is no longer in the latest posts on the Page.</p>
+      <?php elseif ($rw): ?>
+        <form method="post"><?= $aa('aa_post_save', $hid('post', $pid)) ?>
+          <label class="hint">New version (written <?= pm_h($rw['at']) ?>; edit it as you like)</label>
+          <textarea name="text" rows="6"><?= pm_h($rw['text']) ?></textarea>
+          <details class="more"><summary class="hint" style="cursor:pointer">The post as it is now</summary><pre class="opt-pre"><?= pm_h($post['message']) ?></pre></details>
+          <div class="btns"><button class="btn small primary" onclick="return confirm('Replace the text of this post on Facebook now?')">Save to Facebook</button><a class="btn small" href="<?= pm_h($post['url']) ?>" target="_blank" rel="noopener noreferrer">Open on Facebook</a></div></form>
+      <?php else: ?>
+        <form method="post" class="inl" style="margin-top:8px"><?= $aa('aa_rewrite', $hid('post', $pid) . $hid('improve', (string)($pp['improve'] ?? $pp['verdict'] ?? ''))) ?><button class="btn small" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?>>Rewrite with AI</button></form>
+        <a class="btn small" style="margin-top:8px" href="?tab=social&amp;view=page&amp;post=<?= pm_h($pid) ?>#p<?= pm_h($pid) ?>">Edit by hand</a>
+      <?php endif; ?>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+
+  <?php if ($au && (!empty($au['replies']['verdict']) || !empty($au['timing']))): ?>
   <div class="card">
-    <p class="lead"><?= pm_h((string)($au['headline'] ?? '')) ?></p>
-    <?php if (!empty($au['fixes'])): ?><h3>Fix these first</h3><ol><?php foreach ($au['fixes'] as $f): ?><li><b><?= pm_h(is_array($f) ? ($f['action'] ?? '') : $f) ?></b><?php if (is_array($f) && !empty($f['why'])): ?> <span class="muted">· <?= pm_h($f['why']) ?></span><?php endif; ?></li><?php endforeach; ?></ol><?php endif; ?>
-    <?php if (!empty($au['working'])): ?><h3>What is working</h3><ul><?php foreach ($au['working'] as $w): ?><li><?= pm_h($w) ?></li><?php endforeach; ?></ul><?php endif; ?>
-    <?php if (!empty($au['timing'])): ?><h3>When and what to post</h3><p><?= pm_h($au['timing']) ?></p><?php endif; ?>
-    <?php if (!empty($au['replies']['verdict'])): ?><h3>Our replies</h3><p><?= pm_h($au['replies']['verdict']) ?></p><?php if (!empty($au['replies']['better_example'])): ?><p class="hint">Better: “<?= pm_h($au['replies']['better_example']) ?>”</p><?php endif; ?><?php endif; ?>
-    <?php if (!empty($au['posts'])): ?><h3>Post by post</h3><?php foreach ($au['posts'] as $pp): ?><p><b><?= pm_h(mb_substr((string)($pp['post'] ?? ''), 0, 60)) ?>…</b> <?= pm_h((string)($pp['verdict'] ?? '')) ?><?php if (!empty($pp['improve'])): ?> <span class="muted">· Improve: <?= pm_h($pp['improve']) ?></span><?php endif; ?></p><?php endforeach; ?><?php endif; ?>
-    <?php if (!empty($au['ideas'])): ?><h3>Ideas for next week</h3><ul><?php foreach ($au['ideas'] as $i): ?><li><?= pm_h(is_array($i) ? implode(' · ', $i) : $i) ?></li><?php endforeach; ?></ul><?php endif; ?>
+    <?php if (!empty($au['replies']['verdict'])): ?><h3 style="margin-top:0">Our replies</h3><p><?= pm_h($au['replies']['verdict']) ?></p><?php if (!empty($au['replies']['better_example'])): ?><p class="hint">Better: “<?= pm_h($au['replies']['better_example']) ?>” <button type="button" class="btn small" data-copy="<?= pm_h($au['replies']['better_example']) ?>">Copy</button> · set the style under "Change the channel settings" above.</p><?php endif; ?><?php endif; ?>
+    <?php if (!empty($au['timing'])): ?><h3>When and what to post</h3><p><?= pm_h($au['timing']) ?></p><p class="hint">The times can be changed under "Change the channel settings" above.</p><?php endif; ?>
+  </div>
+  <?php endif; ?>
+
+  <?php if ($au && !empty($au['ideas'])): ?>
+  <div class="card" id="ideas">
+    <h2>Ideas for next week</h2>
+    <p class="hint" style="margin-top:0">"Add to content ideas" puts an idea in your idea bank (Content): the planner writes a post from it in the next plan.</p>
+    <?php foreach ($au['ideas'] as $n => $idea):
+        $txt = trim(is_array($idea) ? implode(' - ', array_filter(array_map('strval', array_values($idea)))) : (string)$idea);
+        if ($txt === '') { continue; }
+        $in = in_array(mb_substr($txt, 0, 240), $ideaTexts, true);
+        echo $item(pm_opt_it('audit', 'idea_' . (int)$n, 'Idea ' . ((int)$n + 1), $in ? 'ok' : 'weak', 1, '', ['do' => 'aa_apply', 'how' => 'app', 'input' => 'textarea', 'proposal' => mb_substr($txt, 0, 240), 'limit' => 240, 'rows' => 2, 'button' => 'Add to content ideas', 'current' => $in ? 'Already in your content ideas' : '']));
+    endforeach; ?>
   </div>
   <?php endif; ?>
 <?php endif; ?>
