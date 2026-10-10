@@ -217,6 +217,13 @@ ONE WHATSAPP NUMBER AND ONE X ACCOUNT PER BUSINESS
   an offer's keyword) and you are told. A keyword gets the owner's own reply words for that offer (no AI); anything else gets an answer drafted for you,
   never sent to a stranger by itself. The owner is told when the AI cannot draft one, and the message is still kept.
 
+SUGGESTIONS WHILE YOU TYPE (lib/suggest.php, assets/ui.js)
+  The "Find a business" boxes (Leads, and Proposals > find a business) suggest as you type. At once and free: businesses you already know across every
+  business in the app (leads, archived leads, businesses you sent a proposal to, existing clients), best match first; a lead of the business on screen
+  opens that lead, anything else fills the box. After a pause, from 4 letters: one web-grounded AI call for real businesses in Malawi with that name
+  (only places for Travel Malawi), cached for a week and limited to 60 an hour; those are marked "From a web search: check before you use" and only fill
+  the box, because the usual Find step still checks them. Arrow keys, Enter and Escape work. No AI key: only the first part.
+
 THE ONE-PAGE OFFER (businesses added in the app)
   They have no proposals or price list, so each has a one-page PDF instead: what it does, what it offers, true facts, a free first step and how to reach
   it, in its colour and logo, made only from its own words and with no prices (a claim or a price is flagged). Settings > the business downloads it; on a

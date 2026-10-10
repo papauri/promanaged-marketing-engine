@@ -63,11 +63,12 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
 <!-- 1. Find a business -->
 <div class="card find">
   <form method="post" class="findrow"><?= $post('', 'lookup') ?><?= $hid('brand', pm_brand()) ?>
-    <input type="text" name="name" required placeholder="Find a business by name, <?= pm_brand() === 'travel' ? 'e.g. Mufasa Eco Lodge' : (pm_brand_is_custom(pm_brand()) ? '' : 'e.g. Sunbird Capital Hotel') ?>" aria-label="Business name">
+    <input type="text" name="name" required data-suggest data-web="1" placeholder="Find a business by name, <?= pm_brand() === 'travel' ? 'e.g. Mufasa Eco Lodge' : (pm_brand_is_custom(pm_brand()) ? '' : 'e.g. Sunbird Capital Hotel') ?>" aria-label="Business name">
     <input type="text" name="city" placeholder="City (optional)" aria-label="City" class="narrow">
     <button class="btn">Find</button>
     <button class="btn primary" name="proposal" value="1">Find + proposal</button>
   </form>
+  <p class="hint" style="margin:6px 0 0">Start typing: it suggests businesses you already know, then ones a web search finds (those are marked, and only fill the box).</p>
   <form method="post" style="display:inline"><?= $post('', 'export') ?><button class="btn" title="Download all leads of this business as JSON (no mail server details)">Export</button></form>
 </div>
 

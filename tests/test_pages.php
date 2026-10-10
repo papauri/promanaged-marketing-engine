@@ -99,6 +99,21 @@ foreach (['promanaged', 'travel'] as $b) {
 }
 pm_t_eq(php_problems($log), [], 'and PHP logged no warning doing it');
 
+echo "\nSuggestions while typing in the find boxes\n";
+[$code, $body, , $head] = http("$base?suggest=blend&brand=promanaged");
+$sj = json_decode($body, true);
+pm_t_assert($code === 200 && str_contains($head, 'application/json') && !empty($sj['rows']) && str_contains($sj['rows'][0]['name'], 'Blend') && str_contains($sj['rows'][0]['href'], 'lead='), 'typing a few letters returns the matching leads as JSON, and a lead of the business on screen opens it');
+[$code, $body] = http("$base?suggest=blend&mode=web&brand=promanaged");
+pm_t_assert($code === 200 && json_decode($body, true) === ['rows' => []], 'the web part answers quietly with nothing when the AI is not set up');
+pm_t_eq(json_decode(http("$base?suggest=" . urlencode('zzzz nothing') . '&brand=travel')[1], true), ['rows' => []], 'and nothing matching gives an empty list');
+[, $html] = http("$base?tab=agents&brand=promanaged");
+pm_t_assert(str_contains($html, 'name="name" required data-suggest data-web="1"') && str_contains($html, 'Start typing: it suggests businesses you already know'), 'the Leads search box has the type-ahead and says what it does');
+[, $html] = http("$base?tab=proposal&brand=promanaged");
+pm_t_assert(str_contains($html, 'data-suggest data-web="1"'), 'so does the find-and-prepare-a-proposal box');
+[, $js] = http("http://127.0.0.1:$port/assets/ui.js");
+pm_t_assert(str_contains($js, "'?suggest='") && str_contains($js, 'aria-activedescendant') && str_contains($js, 'From a web search'), 'the script that does it is served');
+pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
+
 echo "\nThe shared shell\n";
 [, $html] = http("$base?tab=social&view=results&brand=promanaged");
 pm_t_assert(substr_count($html, 'class="topbar"') === 1 && str_contains($html, 'class="tabs"') && str_contains($html, 'class="pagehead"') && !str_contains($html, 'filters subnav'), 'a Social screen has one top bar, one tab bar and one page head');

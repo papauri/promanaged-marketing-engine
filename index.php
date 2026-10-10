@@ -208,6 +208,19 @@ if (isset($_GET['sslides']) && preg_match('/^[a-f0-9]{20}$/', (string)$_GET['ssl
     @unlink($ztmp);
     exit;
 }
+// ---------- Suggestions while typing in a "find a business" box (JSON; local = what we already know, web = one cached web search) ----------
+if (isset($_GET['suggest']) && is_string($_GET['suggest'])) {
+    $sgBrand = pm_brand_valid((string)($_GET['brand'] ?? '')) ? (string)$_GET['brand'] : pm_brand_norm($_SESSION['abrand'] ?? '');
+    session_write_close(); // a slow web search must not freeze the user's other pages
+    pm_brand_set($sgBrand);
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    @set_time_limit(90);
+    $sgRows = ($_GET['mode'] ?? '') === 'web' ? pm_suggest_web($_GET['suggest'], $sgBrand) : pm_suggest_local($_GET['suggest'], $sgBrand);
+    echo json_encode(['rows' => $sgRows], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     // Scheduled posts go out when the app is in use too (throttled), unless the scheduler (cron) ran in the last 5 minutes.
     // The session is released first: a slow publish must not freeze every other page of this user.
@@ -1971,7 +1984,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'vb' 
     <form method="post" style="margin-top:10px"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="lookup"><input type="hidden" name="proposal" value="1">
       <div class="row">
         <div><label>For</label><select name="brand"><?php foreach (array_filter(pm_brand_ids(), fn($x) => !empty(pm_brand_profile($x)['proposals'])) as $bid): ?><option value="<?= pm_h($bid) ?>"<?= $bid === $vb ? ' selected' : '' ?>><?= pm_h(pm_brand_title($settings, $bid)) ?></option><?php endforeach; ?></select></div>
-        <div><label>Business name *</label><input type="text" name="name" required></div>
+        <div><label>Business name *</label><input type="text" name="name" required data-suggest data-web="1"></div>
         <div><label>City (helps)</label><input type="text" name="city"></div>
       </div>
       <div class="btns" style="display:flex;gap:8px;margin-top:10px"><button class="btn small primary" style="width:auto">Find it and prepare the proposal</button></div>

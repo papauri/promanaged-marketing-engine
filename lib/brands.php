@@ -15,6 +15,7 @@
 
 require_once __DIR__ . '/brand_study.php'; // reading a business's website and learning who to target
 require_once __DIR__ . '/onepager.php'; // the one-page offer that replaces a proposal for an added business
+require_once __DIR__ . '/suggest.php'; // suggestions while typing in the "find a business" boxes
 
 const PM_BUILTIN_BRANDS = ['promanaged' => 'ProManaged IT', 'travel' => 'Travel Malawi'];
 const PM_BRAND_RESERVED = ['promanaged', 'travel', 'default', 'all', 'brands', 'new', 'settings', 'tm', 'pm', 'shared', 'none', 'other'];

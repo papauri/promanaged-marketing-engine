@@ -110,6 +110,18 @@ label.check { display:flex; gap:8px; align-items:center; font-size:13px; font-we
 .findrow select { width:auto; flex:1 1 180px; }
 .findrow input[type=date] { width:auto; }
 .card.find { padding:12px; }
+/* type-ahead for "find a business" (assets/ui.js) */
+.suggest { position:relative; }
+.findrow .suggest { flex:1 1 280px; }
+.findrow .suggest input[type=text] { width:100%; }
+.suglist { position:absolute; z-index:40; left:0; right:0; top:calc(100% + 4px); margin:0; padding:4px; list-style:none; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 10px 28px rgba(0,0,0,.14); max-height:360px; overflow:auto; }
+.suglist[hidden] { display:none; }
+.suglist li { padding:7px 10px; border-radius:6px; cursor:pointer; }
+.suglist li b { display:block; font-weight:600; color:var(--ink); }
+.suglist li small { display:block; color:var(--muted); font-size:12px; }
+.suglist li.on, .suglist li[role=option]:hover { background:color-mix(in srgb, var(--accent, #1f6feb) 10%, #fff); }
+.suglist li.head { cursor:default; padding:6px 10px 2px; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+.suglist li.note { cursor:default; color:var(--muted); font-size:12px; font-style:italic; }
 .runbar { padding:14px 18px; }
 .runtop { display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; }
 .runtop b { display:block; font-size:15px; }
