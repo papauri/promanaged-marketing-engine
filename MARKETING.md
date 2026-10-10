@@ -81,39 +81,47 @@ A fresh session must be able to resume purely from this file + the code. Never i
 
 ---
 
-## 5 · Improvement register — cycle 2 (all PROPOSED until the owner accepts)
+## 5 · Improvement register — cycle 2
+
+> **Accepted 2026-10-10** by the owner ("implement marketing md"): all 16 rows were accepted and built, and are `DONE` below.
 
 ### 5.1 Agents, replies and outreach
 
 | ID | Suggestion | Where | Done when | Status |
 |---|---|---|---|---|
-| C2-A01 | Surface the new agents' drafts in the UI: win-back and post-sign drafts with review/send buttons, re-verified contact results, plus daily-plan tasks for all three | `lib/view_agents.php`, `lib/agents.php` `pm_daily_plan` | Owner can review and send win-back/post-sign drafts from the lead card; tasks appear in Today; tests green | PROPOSED |
-| C2-A02 | Re-qualify when research lands: a fresh score + package once `research` is stored (capped per run) | `run_agents.php` or a `pm_job_requalify` | Researched leads get a refreshed score/package within one run; tests green | PROPOSED |
-| C2-A03 | Extend subject A/B to follow-up emails (arms stored like `email_arm`, evaluated by `pm_jobg_email_exp`) | `lib/sx_learn.php`, `run_agents.php` | Follow-ups carry an arm; eval covers both first and follow-up sends; tests green | PROPOSED |
-| C2-A04 | Review-before-send mode for auto-replies: a setting that turns email/WhatsApp auto-answers into drafts the owner approves | `lib/engage.php`, `lib/wa_biz.php`, a settings switch | Draft-only mode works for both channels; default stays auto-with-escalation; tests green | PROPOSED |
-| C2-A05 | Segment-tagged posts: stamp `audience` on every planned post and break the scoreboard engagement down by segment | `lib/sx_planner.php`, `lib/sx_scorecard.php` | Posts carry the segment they speak to; scoreboard shows per-segment numbers; tests green | PROPOSED |
-| C2-A06 | X metrics: manual entry (likes, reposts, replies) like other manual channels, shown in Results | `lib/sx_manual.php` or `lib/sx_boost.php` + Results view | Owner can type X numbers per post; they score the post; tests green | PROPOSED |
-| C2-A07 | WhatsApp outbound campaign drafts: scheduled message batches with the same approval gate, STOP and daily-limit guardrails (only when WA Business is connected) | new module + a screen | Drafts queue for owner approval; sends respect STOP and caps; tests green | PROPOSED |
-| C2-A08 | Post-sign review asks automatically include the business's Google review link from settings | `lib/sx_learn.php` `pm_agent_postsign` + settings | Review draft carries the configured link; tests green | PROPOSED |
-| C2-A09 | Early-stop experiments: end a test early when one arm is already clearly worse, before min_posts | `lib/sx_experiments.php` | Clearly-losing arm stops early with a verdict; tests green | PROPOSED |
-| C2-A10 | Partnership radar: one weekly AI call listing local pages/influencers worth collaborating with (draft-only DM suggestions) | new job in `lib/sx_boost.php` | Weekly suggestions stored and shown in Plan; linted; tests green | PROPOSED |
-| C2-A11 | Per-brand trend radar: tourism/season trends for Travel Malawi, business trends for ProManaged | `pm_jobg_trends` split per brand | Each brand's planner gets its own trend line; tests green | PROPOSED |
-| C2-A12 | Repurpose the winning image, not just the text: re-render the top performer's card in other layouts (story/carousel cards) | `lib/sx_boost.php` + `lib/sx_cards.php` | A winner's picture is re-cut into at least one new card layout as a draft; tests green | PROPOSED |
+| C2-A01 | Surface the new agents' drafts in the UI: win-back and post-sign drafts with review/send buttons, re-verified contact results, plus daily-plan tasks for all three | `lib/view_agents.php`, `lib/agents.php` `pm_daily_plan` | Owner can review and send win-back/post-sign drafts from the lead card; tasks appear in Today; tests green | DONE 2026-10-10 · 95af670 |
+| C2-A02 | Re-qualify when research lands: a fresh score + package once `research` is stored (capped per run) | `run_agents.php` or a `pm_job_requalify` | Researched leads get a refreshed score/package within one run; tests green | DONE 2026-10-10 · 95af670 |
+| C2-A03 | Extend subject A/B to follow-up emails (arms stored like `email_arm`, evaluated by `pm_jobg_email_exp`) | `lib/sx_learn.php`, `run_agents.php` | Follow-ups carry an arm; eval covers both first and follow-up sends; tests green | DONE 2026-10-10 · 95af670 |
+| C2-A04 | Review-before-send mode for auto-replies: a setting that turns email/WhatsApp auto-answers into drafts the owner approves | `lib/engage.php`, `lib/wa_biz.php`, a settings switch | Draft-only mode works for both channels; default stays auto-with-escalation; tests green | DONE 2026-10-10 · 95af670 |
+| C2-A05 | Segment-tagged posts: stamp `audience` on every planned post and break the scoreboard engagement down by segment | `lib/sx_planner.php`, `lib/sx_scorecard.php` | Posts carry the segment they speak to; scoreboard shows per-segment numbers; tests green | DONE 2026-10-10 · 95af670 |
+| C2-A06 | X metrics: manual entry (likes, reposts, replies) like other manual channels, shown in Results | `lib/sx_manual.php` or `lib/sx_boost.php` + Results view | Owner can type X numbers per post; they score the post; tests green | DONE 2026-10-10 · 95af670 |
+| C2-A07 | WhatsApp outbound campaign drafts: scheduled message batches with the same approval gate, STOP and daily-limit guardrails (only when WA Business is connected) | new module + a screen | Drafts queue for owner approval; sends respect STOP and caps; tests green | DONE 2026-10-10 · 95af670 |
+| C2-A08 | Post-sign review asks automatically include the business's Google review link from settings | `lib/sx_learn.php` `pm_agent_postsign` + settings | Review draft carries the configured link; tests green | DONE 2026-10-10 · 95af670 |
+| C2-A09 | Early-stop experiments: end a test early when one arm is already clearly worse, before min_posts | `lib/sx_experiments.php` | Clearly-losing arm stops early with a verdict; tests green | DONE 2026-10-10 · 95af670 |
+| C2-A10 | Partnership radar: one weekly AI call listing local pages/influencers worth collaborating with (draft-only DM suggestions) | new job in `lib/sx_boost.php` | Weekly suggestions stored and shown in Plan; linted; tests green | DONE 2026-10-10 · 95af670 |
+| C2-A11 | Per-brand trend radar: tourism/season trends for Travel Malawi, business trends for ProManaged | `pm_jobg_trends` split per brand | Each brand's planner gets its own trend line; tests green | DONE 2026-10-10 · 95af670 |
+| C2-A12 | Repurpose the winning image, not just the text: re-render the top performer's card in other layouts (story/carousel cards) | `lib/sx_boost.php` + `lib/sx_cards.php` | A winner's picture is re-cut into at least one new card layout as a draft; tests green | DONE 2026-10-10 · 95af670 |
 
 ### 5.2 Trust, ops and housekeeping
 
 | ID | Suggestion | Where | Done when | Status |
 |---|---|---|---|---|
-| C2-G01 | Setup-health panel: one glance at which channels are configured (SMTP, FB, IG, LI, X, WA, IMAP, CRON_KEY, APP_URL) and what to add | `lib/view_settings.php` or a new panel | A panel lists every channel's ready/not-ready state; tests green | PROPOSED |
-| C2-G02 | Lead archiving: auto-archive leads untouched for 12 months so lists stay fast and clean | `lib/agents.php` + a `pm_job_archiving` | Old leads move to an archive file, recoverable, out of the main lists; tests green | PROPOSED |
-| C2-G03 | Housekeeping job: clear stale `agent_jobs` files, old rate-limit files and temp uploads | new `pm_jobg_housekeeping` | Old temp files are removed on a schedule, nothing live is touched; tests green | PROPOSED |
-| C2-G04 | Weekly data archive: zip `data/*.json` (no secrets) to a dated archive with retention | new `pm_jobg_archive` | Weekly archive lands in a safe folder, 8 weeks kept; tests green | PROPOSED |
+| C2-G01 | Setup-health panel: one glance at which channels are configured (SMTP, FB, IG, LI, X, WA, IMAP, CRON_KEY, APP_URL) and what to add | `lib/view_settings.php` or a new panel | A panel lists every channel's ready/not-ready state; tests green | DONE 2026-10-10 · 95af670 |
+| C2-G02 | Lead archiving: auto-archive leads untouched for 12 months so lists stay fast and clean | `lib/agents.php` + a `pm_job_archiving` | Old leads move to an archive file, recoverable, out of the main lists; tests green | DONE 2026-10-10 · 95af670 |
+| C2-G03 | Housekeeping job: clear stale `agent_jobs` files, old rate-limit files and temp uploads | new `pm_jobg_housekeeping` | Old temp files are removed on a schedule, nothing live is touched; tests green | DONE 2026-10-10 · 95af670 |
+| C2-G04 | Weekly data archive: zip `data/*.json` (no secrets) to a dated archive with retention | new `pm_jobg_archive` | Weekly archive lands in a safe folder, 8 weeks kept; tests green | DONE 2026-10-10 · 95af670 |
 
 ---
 
-## 6 · Done log — cycle 1 (history)
+## 6 · Done log
 
-Shipped 2026-10-10 in `cb8cf50` (register a8aa216): 24 accepted rows — outcome-weighted scouting, watcher, re-verify, engagement follow-ups, subject A/B, Director weights, win-back, post-sign, unified inbox, research queue, provider failover, planner learning + strategy panel, trend radar, repurposing, custom experiments, proactive drafts, ads hints, X posting, audience segments, shared learnings, WA Business responder, deliverability checks, adaptive caps, forget/export. Skipped by owner: MG-M01, MG-M02. Tests: 105 + 190 + 164, all green.
+### Cycle 2 — shipped 2026-10-10 in `95af670`
+
+All 16 rows (C2-A01 … C2-A12, C2-G01 … C2-G04). Decisions worth knowing: the two subject arms (A statement, B question) now really differ, so the subject experiment compares something (cycle 1 only labelled arms); X numbers are typed in, never read from X; an experiment may stop early only with 3+ posts a side, a worse arm at half or less, and no overlap; archiving never touches clients or "do not contact" leads; the weekly archive is a zip when php-zip exists, else a `.json.gz` (php-zip is not installed on the dev machine, so only the gzip path ran in tests). Fixes found on the way: `PM_REPLY_INTENTS` was defined in both `engage.php` and `sx_replies.php` (email intents vs comment intents), so whichever loaded second silently broke; the price lint matched the em dash in a "— Company" sign-off; template copies had no `hook`; the Plan strategy panel repeated under every post (moved to the once-only `plan_top` slot). Tests: cycle 2 237 + channels 164 + measure 190 + marketing 105. `test_measure` also reads copies of real `data/` files, so a few follower/focus checks can differ with live data (same on the previous commit).
+
+### Cycle 1 — shipped 2026-10-10 in `cb8cf50` (register a8aa216)
+
+24 accepted rows — outcome-weighted scouting, watcher, re-verify, engagement follow-ups, subject A/B, Director weights, win-back, post-sign, unified inbox, research queue, provider failover, planner learning + strategy panel, trend radar, repurposing, custom experiments, proactive drafts, ads hints, X posting, audience segments, shared learnings, WA Business responder, deliverability checks, adaptive caps, forget/export. Skipped by owner: MG-M01, MG-M02. Tests: 105 + 190 + 164, all green.
 
 *When every cycle-2 row is DONE, wipe this file and write cycle 3 from the new inventory.*
 
