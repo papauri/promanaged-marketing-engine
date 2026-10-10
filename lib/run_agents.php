@@ -17,7 +17,7 @@ set_time_limit(0);
 
 $pos = array_values(array_filter(array_slice($argv, 1), fn($a) => !str_starts_with($a, '--')));
 $dry = in_array('--dry', $argv, true);
-$brand = (($pos[0] ?? '') === 'travel') ? 'travel' : 'promanaged';
+$brand = pm_brand_norm($pos[0] ?? '');
 pm_brand_set($brand);
 $only = (string)($pos[1] ?? ''); // "names": only look for owner and manager names on the leads already in the list
 
@@ -94,7 +94,7 @@ function pm_run_fail(string $msg, array $run, array $stats, ?callable $save): vo
     pm_agent_log('Swarm', 'Run failed during "' . ($run['phase'] ?? '?') . '": ' . $msg, true);
     if (function_exists('pm_notify_owner')) {
         try {
-            pm_notify_owner('Agent run failed (' . (pm_brand() === 'travel' ? 'Travel Malawi' : 'ProManaged IT') . ')', 'The daily agent run stopped during "' . ($run['phase'] ?? '?') . '": ' . $msg . "\nLeads found so far were saved.");
+            pm_notify_owner('Agent run failed (' . (pm_brand_name(pm_brand())) . ')', 'The daily agent run stopped during "' . ($run['phase'] ?? '?') . '": ' . $msg . "\nLeads found so far were saved.");
         } catch (Throwable $e) {
         }
     }
@@ -314,10 +314,12 @@ try {
                             $cand = ['name' => trim((string)$b['name']), 'city' => $c, 'brand' => $brand, 'type' => $sector,
                                 'website' => (string)($b['website'] ?? ''), 'phone' => (string)($b['phone'] ?? ''), 'email' => (string)($b['email'] ?? '')];
                             $dupe = pm_lead_find_dupe($pool, $cand, $brand);
-                            $ob = $brand === 'travel' ? 'promanaged' : 'travel';
-                            if ($dupe === null && ($o = pm_lead_find_dupe($pool, $cand, $ob)) !== null) { // the other brand has it: still a lead here, flagged both ways
-                                $alsoIn = $ob;
-                                $all[$o]['also_in'] = $brand;
+                            foreach (array_diff(pm_brand_ids(), [$brand]) as $ob) { // another business has it: still a lead here, flagged both ways
+                                if ($dupe === null && ($o = pm_lead_find_dupe($pool, $cand, $ob)) !== null) {
+                                    $alsoIn = $ob;
+                                    $all[$o]['also_in'] = $brand;
+                                    break;
+                                }
                             }
                         } catch (Throwable $e) {
                             $dupe = null;
@@ -333,7 +335,7 @@ try {
                     if ($stats['added'] >= $bs['room']) {
                         continue;
                     }
-                    if ($brand === 'promanaged' && array_filter((array)($cfg['existing_clients'] ?? []), fn($x) => $x !== '' && stripos((string)$b['name'], (string)$x) !== false)) {
+                    if ($brand !== 'travel' && array_filter((array)($cfg['existing_clients'] ?? []), fn($x) => $x !== '' && stripos((string)$b['name'], (string)$x) !== false)) {
                         continue; // already our client
                     }
                     $leads[$id] = [
@@ -377,7 +379,7 @@ try {
                         }
                         continue;
                     }
-                    if ($brand === 'promanaged' && array_filter((array)($cfg['existing_clients'] ?? []), fn($x) => $x !== '' && stripos((string)$b['name'], (string)$x) !== false)) {
+                    if ($brand !== 'travel' && array_filter((array)($cfg['existing_clients'] ?? []), fn($x) => $x !== '' && stripos((string)$b['name'], (string)$x) !== false)) {
                         continue;
                     }
                     $id = pm_lead_id(trim((string)$b['name']), $c, $brand);
@@ -513,7 +515,11 @@ try {
                     continue;
                 }
                 $leads[$id]['score'] = max(0, min(100, (int)($q['score'] ?? 0)));
-                $leads[$id]['package'] = $brand === 'travel' ? pm_onboarding_index() : (int)($q['package'] ?? 0);
+                if ($brand === 'travel') { // packages and proposals belong to the two businesses that have a price list
+                    $leads[$id]['package'] = pm_onboarding_index();
+                } elseif (!pm_brand_is_custom($brand)) {
+                    $leads[$id]['package'] = (int)($q['package'] ?? 0);
+                }
                 $leads[$id]['pain'] = (string)($q['pain'] ?? '');
                 $leads[$id]['offering'] = pm_clean_offering($q['offering'] ?? '') ?: ($leads[$id]['offering'] ?? '');
                 $leads[$id]['reason'] = (string)($q['reason'] ?? '');
@@ -620,7 +626,7 @@ try {
     $cold = $hold ? [] : array_values(array_filter($leads, fn($l) => in_array($l['status'], ['drafted', 'qualified'], true) && ($l['score'] ?? 0) >= 75 && empty($l['proposal_ai'])));
     usort($cold, fn($a, $b) => $b['score'] <=> $a['score']);
     $prep = array_slice(array_merge($hand, $cold), 0, $slots);
-    if (($cfg['enabled']['proposals'] ?? true) && $prep) {
+    if (($cfg['enabled']['proposals'] ?? true) && !empty(pm_brand_profile($brand)['proposals']) && $prep) {
         $progress('Proposal agents tailoring ' . count($prep) . ' proposals');
         $tpl = pm_template();
         $jobs = array_map(function ($l) use ($tpl, $brand) {

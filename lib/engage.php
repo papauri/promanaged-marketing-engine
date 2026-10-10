@@ -312,6 +312,16 @@ function pm_funnel_mark(string $leadId, string $email, string $business, string 
 function pm_imap_settings(string $brand = 'promanaged'): array
 {
     $e = pm_env();
+    if (pm_brand_is_custom($brand)) { // an added business: its own .env keys, else the mailbox typed in its settings
+        $p = pm_brand_env_prefix($brand);
+        $sm = (array)pm_brand_setting($brand, 'smtp', []);
+        $im = (array)pm_brand_setting($brand, 'imap', []);
+        return [
+            'host' => $e[$p . 'IMAP_HOST'] ?? $e[$p . 'SMTP_HOST'] ?? (trim((string)($im['host'] ?? '')) ?: (string)($sm['host'] ?? '')),
+            'port' => (int)($e[$p . 'IMAP_PORT'] ?? ($im['port'] ?? 993)), 'secure' => strtolower($e[$p . 'IMAP_SECURE'] ?? ($im['secure'] ?? 'ssl')),
+            'user' => $e[$p . 'IMAP_USER'] ?? $e[$p . 'SMTP_USER'] ?? (string)($sm['username'] ?? ''), 'pass' => $e[$p . 'IMAP_PASS'] ?? $e[$p . 'SMTP_PASS'] ?? (string)($sm['password'] ?? ''),
+        ];
+    }
     $p = $brand === 'travel' && pm_tm_smtp_from_env() ? 'TM_' : '';
     return [
         'host' => $e[$p . 'IMAP_HOST'] ?? $e[$p . 'SMTP_HOST'] ?? '', 'port' => (int)($e[$p . 'IMAP_PORT'] ?? 993), 'secure' => strtolower($e[$p . 'IMAP_SECURE'] ?? 'ssl'),
@@ -323,7 +333,7 @@ function pm_imap_settings(string $brand = 'promanaged'): array
 function pm_imap_boxes(): array
 {
     $boxes = [];
-    foreach (['promanaged', 'travel'] as $b) {
+    foreach (pm_brand_ids() as $b) {
         $c = pm_imap_settings($b);
         if ($c['host'] !== '' && $c['user'] !== '' && $c['pass'] !== '') {
             $boxes[strtolower($c['host'] . '|' . $c['user'])] = $c;
@@ -685,7 +695,7 @@ function pm_own_addresses(): array
 {
     $own = [];
     $was = pm_brand();
-    foreach (['promanaged', 'travel'] as $b) {
+    foreach (pm_brand_ids() as $b) {
         pm_brand_set($b);
         $s = pm_settings();
         foreach ([$s['smtp']['from_email'] ?? '', $s['smtp']['username'] ?? '', $s['email'] ?? ''] as $a) {
@@ -694,7 +704,13 @@ function pm_own_addresses(): array
     }
     pm_brand_set($was);
     $e = pm_env();
-    foreach (['SMTP_USER', 'SMTP_FROM', 'TM_SMTP_USER', 'TM_SMTP_FROM', 'IMAP_USER', 'TM_IMAP_USER'] as $k) {
+    $ownKeys = [];
+    foreach (pm_brand_ids() as $ob) {
+        foreach (['SMTP_USER', 'SMTP_FROM', 'IMAP_USER'] as $ok) {
+            $ownKeys[] = pm_brand_env_prefix($ob) . $ok;
+        }
+    }
+    foreach ($ownKeys as $k) {
         $own[] = strtolower(trim((string)($e[$k] ?? '')));
     }
     return array_values(array_filter(array_unique($own)));

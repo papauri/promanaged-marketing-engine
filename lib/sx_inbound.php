@@ -242,7 +242,7 @@ function pm_classify_audience(string $text): string
 /** Adds a traveller request to data/traveller_demand.json (never the host funnel). Returns the stored row. */
 function pm_traveller_demand_add(array $d): array
 {
-    $brand = ($d['brand'] ?? 'travel') === 'travel' ? 'travel' : 'promanaged';
+    $brand = pm_brand_norm($d['brand'] ?? 'travel');
     $clip = fn($v, int $n) => mb_substr(trim(preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', '', (string)$v)), 0, $n);
     $row = ['id' => (string)($d['id'] ?? substr(md5($brand . '|' . ($d['contact'] ?? '') . '|' . ($d['msg'] ?? '') . '|' . date('Y-m-d') . '|' . random_int(1, PHP_INT_MAX)), 0, 12)),
         'brand' => $brand, 'created' => date('Y-m-d H:i'), 'name' => $clip($d['name'] ?? '', 80), 'contact' => $clip($d['contact'] ?? '', 120), 'town' => $clip($d['town'] ?? '', 60),

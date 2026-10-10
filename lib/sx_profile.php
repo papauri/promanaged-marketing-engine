@@ -122,7 +122,7 @@ function pm_bio_pack(string $brand): array
         $who = $who !== '' ? 'For ' . lcfirst($who) : '';
         $wa = trim((string)($s['phone'] ?? ''));
         $cta = function_exists('pm_magnet_keyword_line') ? trim((string)pm_magnet_keyword_line($brand)) : '';
-        if ($cta === '') {
+        if ($cta === '' && !pm_brand_is_custom($brand)) {
             $cta = $brand === 'travel' ? 'Send HOST on WhatsApp to list your stay' : 'Send CHECK on WhatsApp for a free website check';
         }
         $cta = rtrim($cta, '. ');

@@ -161,6 +161,11 @@ function pm_sx_offline_copy(array $slot, string $brand): array
         case 'magnet':
             $line = $f[0];
             $more = array_slice($f, 1, 2);
+            if (pm_brand_is_custom($brand)) { // the business's own free first step, in its own words
+                $mg = trim((string)pm_brand_profile($brand)['magnet']);
+                $r = ['caption' => pm_sx_join([$s['topic'] . '?', $more ? implode(' ', array_map('pm_sx_end', $more)) : '', pm_sx_end($line)]), 'headline' => pm_sx_clip($s['topic'], 50), 'sub' => pm_sx_clip(rtrim($line, '.'), 100), 'hook' => 'magnet'];
+                break;
+            }
             $open = $brand === 'travel'
                 ? ['Run an independent lodge, guest house or B&B in Malawi?', 'Want guests to find you and book you directly?', 'Is your stay easy for travellers to find?']
                 : ['Not sure how your website looks to a customer?', 'Do customers find you online?', 'Wondering what your website is missing?'];
@@ -185,7 +190,7 @@ function pm_sx_offline_copy(array $slot, string $brand): array
             break;
         case 'occasion':
             $fact = pm_sx_end($f[0]);
-            $tail = $brand === 'travel' ? 'A good moment to think about a short stay.' : 'A good moment to check your stock, your prices and your opening hours.';
+            $tail = $brand === 'travel' ? 'A good moment to think about a short stay.' : (pm_brand_is_custom($brand) ? '' : 'A good moment to check your stock, your prices and your opening hours.');
             $r = ['caption' => pm_sx_join([$fact, $tail, $cta]), 'headline' => $s['topic'], 'sub' => rtrim($f[0], '.') === $s['topic'] ? '' : pm_sx_clip(rtrim($f[0], '.'), 100), 'hook' => 'occasion'];
             break;
         case 'giveaway':
@@ -199,8 +204,11 @@ function pm_sx_offline_copy(array $slot, string $brand): array
 
 /* ---------------- AI copy ---------------- */
 
-function pm_sx_cta_instruction(string $cta): string
+function pm_sx_cta_instruction(string $cta, string $brand = ''): string
 {
+    if ($brand !== '' && pm_brand_is_custom($brand) && $cta === 'check') {
+        return 'invite them to send the keyword on WhatsApp, exactly as the facts say';
+    }
     return ['comment' => 'end with one short question readers can answer in a comment', 'save' => 'invite them to save the post', 'share' => 'invite them to share it with someone who needs it',
         'tag' => 'invite them to tag a friend who would enjoy it (no prize, no giveaway)', 'whatsapp' => 'invite them to send a WhatsApp message (no number, it is added later)',
         'check' => 'invite them to send the word CHECK on WhatsApp, as the facts say', 'host' => 'invite hosts to send the word HOST on WhatsApp, as the facts say'][$cta] ?? 'end with a gentle invitation';
@@ -216,7 +224,7 @@ function pm_sx_slot_needs_ai(array $slot): bool
 function pm_sx_prompt(string $brand, string $company, string $brief, array $items, string $start, string $learn): array
 {
     $travel = $brand === 'travel';
-    $system = $brief . "\nYou write short social posts for $company in Malawi" . ($travel ? ' for lodge, guest house, B&B and safari camp owners, and for travellers' : ' for small business owners') . ".\n"
+    $system = $brief . "\nYou write short social posts for $company in Malawi" . ($travel ? ' for lodge, guest house, B&B and safari camp owners, and for travellers' : (pm_brand_is_custom($brand) ? ' for ' . (rtrim(trim((string)(pm_brain($brand)['audience'] ?? '')), '.') ?: 'our customers') : ' for small business owners')) . ".\n"
         . "Write one post for each item. Per post: caption of 25 to 70 words in plain, warm English, one idea. Use ONLY the facts given for that post. Never invent numbers, names, places, prices, results, guarantees, response times or claims like best, cheapest, fastest, leading, number one. "
         . "Say Kwacha amounts only if a fact gives one. Say free or no commission only if a fact says so. No hashtags, links, emoji or phone numbers. Do not start with Hello or the business name. "
         . "Follow the item's hook pattern, audience and cta. headline: at most 7 words (printed on the picture). sub: at most 12 words. "
@@ -453,7 +461,7 @@ function pm_sx_build(string $brand, int $n, string $start, string $focus, bool $
         foreach ($aiIdx as $i) {
             $slot = $slots[$i];
             $it = ['i' => $i, 'pillar' => $slot['pillar'], 'hook' => pm_sx_hook_patterns()[$slot['hook_pattern']][0] ?? '', 'audience' => $slot['audience'], 'format' => $slot['format'],
-                'cta' => pm_sx_cta_instruction((string)$slot['cta']), 'topic' => $slot['seed']['topic'], 'facts' => array_slice($slot['seed']['facts'], 0, 6)];
+                'cta' => pm_sx_cta_instruction((string)$slot['cta'], $brand), 'topic' => $slot['seed']['topic'], 'facts' => array_slice($slot['seed']['facts'], 0, 6)];
             if ($slot['format'] === 'carousel' && empty($slot['seed']['items'])) {
                 $it['slides'] = 'write 2 to 4 slides';
             } elseif (!empty($slot['seed']['items'])) {

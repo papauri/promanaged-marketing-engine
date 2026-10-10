@@ -61,9 +61,9 @@ $settings = pm_settings();
 $tpl = pm_template();
 $tab = $_GET['tab'] ?? 'agents';
 if (isset($_GET['brand'])) {
-    $_SESSION['abrand'] = $_GET['brand'] === 'travel' ? 'travel' : 'promanaged';
+    $_SESSION['abrand'] = pm_brand_norm($_GET['brand']);
 }
-$vb = ($_SESSION['abrand'] ?? 'promanaged') === 'travel' ? 'travel' : 'promanaged'; // which brand's screens to show
+$vb = pm_brand_norm($_SESSION['abrand'] ?? 'promanaged'); // which brand's screens to show
 $GLOBALS['PM_WHO'] = (string)($_SESSION['who'] ?? ''); // which team member is working (for notes and ownership)
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
@@ -84,6 +84,8 @@ function pm_next_ref(array $s, bool $consume): string
         $stored = pm_load('settings', 'pm_default_settings');
         if (pm_brand() === 'travel') {
             $stored['travel']['next_ref'] = (int)$s['next_ref'] + 1;
+        } elseif (pm_brand_is_custom(pm_brand())) {
+            $stored['brands'][pm_brand()]['next_ref'] = (int)$s['next_ref'] + 1;
         } else {
             $stored['next_ref'] = (int)$s['next_ref'] + 1;
         }
@@ -152,7 +154,7 @@ function pm_tpl_for(array $settings, array $tpl, array $p): array
 }
 
 // ---------- Branding kit pictures (download) ----------
-if (isset($_GET['kit']) && preg_match('/^(promanaged|travel)$/', (string)($_GET['b'] ?? '')) && preg_match('/^(profile-\d+|cover-\d+x\d+)\.png$/', (string)$_GET['kit'])) {
+if (isset($_GET['kit']) && pm_brand_valid((string)($_GET['b'] ?? '')) && preg_match('/^(profile-\d+|cover-\d+x\d+)\.png$/', (string)$_GET['kit'])) {
     $kf = pm_kit_dir($_GET['b']) . '/' . $_GET['kit'];
     if (!is_file($kf)) {
         http_response_code(404);
@@ -160,7 +162,7 @@ if (isset($_GET['kit']) && preg_match('/^(promanaged|travel)$/', (string)($_GET[
     }
     header('Content-Type: image/png');
     if (isset($_GET['dl'])) {
-        header('Content-Disposition: attachment; filename="' . ($_GET['b'] === 'travel' ? 'TravelMalawi' : 'ProManagedIT') . '-' . $_GET['kit'] . '"');
+        header('Content-Disposition: attachment; filename="' . preg_replace('/[^A-Za-z0-9]/', '', pm_brand_name((string)$_GET['b'])) . '-' . $_GET['kit'] . '"');
     }
     readfile($kf);
     exit;
@@ -222,7 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
 // ---------- Link thumbnail (data/ is private, so it is served here) ----------
 if (isset($_GET['thumb'])) {
-    $tf = pm_link_thumb_path($_GET['thumb'] === 'travel' ? 'travel' : 'promanaged');
+    $tf = pm_link_thumb_path(pm_brand_norm($_GET['thumb']));
     if (!is_file($tf)) {
         http_response_code(404);
         exit;
@@ -495,23 +497,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $c['enabled'][$k] = !empty($_POST['cfg']['enabled'][$k]);
             }
             $raw = pm_load('agents_config', 'pm_agents_default_config');
-            if (pm_brand() === 'travel') { // Travel Malawi keeps its own targets and limits; the AI settings are shared
+            if (pm_brand() !== 'promanaged') { // another business keeps its own targets and limits; the AI settings are shared
                 $raw['reply_mode'] = $c['reply_mode'];
                 $raw['wa_reply_mode'] = $c['wa_reply_mode'];
                 $raw['gemini_model'] = $c['gemini_model'];
                 $raw['parallel'] = $c['parallel'];
                 $raw['daily_token_budget'] = $c['daily_token_budget'];
                 $raw['quality'] = $c['quality'];
-                $raw['travel'] = array_intersect_key($c, array_flip(['sectors', 'cities', 'new_per_day', 'scouts_per_day', 'send_cap', 'wa_cap', 'followup_days', 'max_followups', 'proposals_per_day', 'enabled']));
+                $own = ['sectors', 'cities', 'new_per_day', 'scouts_per_day', 'send_cap', 'wa_cap', 'followup_days', 'max_followups', 'proposals_per_day', 'enabled'];
+                if (pm_brand_is_custom(pm_brand())) {
+                    $own = array_merge($own, ['offerings', 'existing_clients']);
+                    $c['existing_clients'] = array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($_POST['cfg']['existing_clients'] ?? '')))));
+                }
+                $raw[pm_brand()] = array_intersect_key($c, array_flip($own));
                 pm_save('agents_config', $raw);
             } else {
-                $c['travel'] = $raw['travel'] ?? [];
+                foreach (pm_brands_custom(true) + ['travel' => 1] as $ob => $_unused) { // the other businesses' own blocks are kept as they are
+                    if (isset($raw[$ob])) {
+                        $c[$ob] = $raw[$ob];
+                    }
+                }
                 pm_save('agents_config', $c);
             }
             $back('Agent settings saved.');
         }
         if ($do === 'lookup') {
-            $b = in_array($_POST['brand'] ?? '', ['travel', 'promanaged'], true) ? $_POST['brand'] : pm_brand();
+            $b = pm_brand_valid((string)($_POST['brand'] ?? '')) ? (string)$_POST['brand'] : pm_brand();
+            if (!empty($_POST['proposal']) && empty(pm_brand_profile($b)['proposals'])) { // proposals use ProManaged IT's own wording and terms
+                pm_redirect('proposal', pm_brand_name($b) . ' has no proposal template yet. Use the Agents screen to find and message the business instead.', 'err');
+            }
             pm_brand_set($b);
             $_SESSION['abrand'] = $b;
             $settings = pm_settings();
@@ -561,7 +575,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $nowLead['pain'] = (string)($r['pain'] ?? '');
             $nowLead['reason'] = (string)($r['reason'] ?? '');
             $maxPk = count($tpl['packages']) - 1;
-            $nowLead['package'] = $b === 'travel' ? pm_onboarding_index() : max(0, min($maxPk, (int)($r['package'] ?? 0)));
+            if ($b === 'travel') {
+                $nowLead['package'] = pm_onboarding_index();
+            } elseif (!pm_brand_is_custom($b)) {
+                $nowLead['package'] = max(0, min($maxPk, (int)($r['package'] ?? 0)));
+            }
             if (in_array($nowLead['status'], ['new'], true)) {
                 $nowLead['status'] = 'qualified';
             }
@@ -585,7 +603,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
             pm_leads_save($leads);
             $_SESSION['draft'] = pm_lead_to_draft($leads[$nid]);
-            pm_redirect('proposal', 'Found ' . $nowLead['name'] . ' and tailored a proposal for ' . ($b === 'travel' ? 'Travel Malawi' : 'ProManaged IT') . '. Read it, edit anything below, preview the PDF, then send.');
+            pm_redirect('proposal', 'Found ' . $nowLead['name'] . ' and tailored a proposal for ' . (pm_brand_name($b)) . '. Read it, edit anything below, preview the PDF, then send.');
         }
         if ($do === 'director') {
             @set_time_limit(120);
@@ -1176,7 +1194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 pm_env_set(['FB_USER_TOKEN' => $longTok]); // for ads (about 60 days)
             }
             $_SESSION['fb_pages'] = array_map(fn($p) => ['id' => $p['id'], 'name' => $p['name'], 'token' => $p['access_token']], $pages);
-            pm_redirect('social&view=accounts', count($pages) . ' Page(s) found. Choose which one belongs to ' . ($vb === 'travel' ? 'Travel Malawi' : 'ProManaged IT') . '.');
+            pm_redirect('social&view=accounts', count($pages) . ' Page(s) found. Choose which one belongs to ' . (pm_brand_name($vb)) . '.');
         }
         if ($do === 'connect_pick') {
             $pick = null;
@@ -1188,7 +1206,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$pick) {
                 pm_redirect('social&view=accounts', 'Choose a Page.', 'err');
             }
-            $pre = $vb === 'travel' ? 'TM_' : '';
+            $pre = pm_brand_env_prefix($vb);
             pm_env_set([$pre . 'FB_PAGE_ID' => $pick['id'], $pre . 'FB_PAGE_TOKEN' => $pick['token']]);
             // Instagram account linked to the Page, if any
             [$okI, $dI] = pm_graph('GET', $pick['id'], ['fields' => 'instagram_business_account'], $pick['token']);
@@ -1317,7 +1335,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 pm_redirect($to, $m, $ok ? 'ok' : 'err');
             }
             if ($do === 'ads_account') {
-                pm_env_set([($vb === 'travel' ? 'TM_' : '') . 'FB_AD_ACCOUNT_ID' => preg_replace('/\D/', '', (string)($_POST['acct'] ?? ''))]);
+                pm_env_set([(pm_brand_env_prefix($vb)) . 'FB_AD_ACCOUNT_ID' => preg_replace('/\D/', '', (string)($_POST['acct'] ?? ''))]);
                 pm_redirect($to, 'Ad account connected.');
             }
             if ($do === 'ads_plan') {
@@ -1335,7 +1353,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'social_check') {
-        $b = ($_POST['brand'] ?? '') === 'travel' ? 'travel' : 'promanaged';
+        $b = pm_brand_norm($_POST['brand'] ?? '');
         $pg = pm_social_page($b, true);
         pm_redirect('settings&brand=' . $b, !empty($pg['ok']) ? 'Connected to the Facebook Page "' . $pg['name'] . '" (' . number_format($pg['followers']) . ' followers).' : 'Facebook: ' . ($pg['error'] ?? 'not connected'), !empty($pg['ok']) ? 'ok' : 'err');
     }
@@ -1347,18 +1365,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'link_refresh') {
-        $b = ($_POST['brand'] ?? '') === 'travel' ? 'travel' : 'promanaged';
+        $b = pm_brand_norm($_POST['brand'] ?? '');
         $m = pm_link_refresh($b);
         pm_redirect('settings&brand=' . $b, $m['url'] === '' ? 'Add a link first.' : ($m['ok'] ? 'Preview updated from ' . $m['url'] . '.' : 'Could not read ' . $m['url'] . '. Check the address.'), $m['ok'] ? 'ok' : 'err');
     }
 
     if ($action === 'smtp_check') { // log in to the mail server without sending anything
-        $b = ($_POST['brand'] ?? '') === 'travel' ? 'travel' : 'promanaged';
+        $b = pm_brand_norm($_POST['brand'] ?? '');
         pm_brand_set($b);
         $ss = pm_settings();
         $sm = $ss['smtp'];
         if (trim($sm['host']) === '' || trim($sm['username']) === '') {
-            pm_redirect('settings&brand=' . $b, ($b === 'travel' ? 'Travel Malawi' : 'ProManaged IT') . ': no mail server is set up yet.', 'err');
+            pm_redirect('settings&brand=' . $b, (pm_brand_name($b)) . ': no mail server is set up yet.', 'err');
         }
         try {
             $mm = new PHPMailer\PHPMailer\PHPMailer(true);
@@ -1373,9 +1391,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $ok = $mm->smtpConnect();
             $mm->smtpClose();
         } catch (Throwable $e) {
-            pm_redirect('settings&brand=' . $b, ($b === 'travel' ? 'Travel Malawi' : 'ProManaged IT') . ' mail: could not log in. ' . $e->getMessage(), 'err');
+            pm_redirect('settings&brand=' . $b, (pm_brand_name($b)) . ' mail: could not log in. ' . $e->getMessage(), 'err');
         }
-        pm_redirect('settings&brand=' . $b, ($b === 'travel' ? 'Travel Malawi' : 'ProManaged IT') . ' mail: logged in to ' . $sm['host'] . ' as ' . $sm['username'] . '. Nothing was sent.');
+        pm_redirect('settings&brand=' . $b, (pm_brand_name($b)) . ' mail: logged in to ' . $sm['host'] . ' as ' . $sm['username'] . '. Nothing was sent.');
     }
 
     if ($action === 'lines') {
@@ -1676,18 +1694,18 @@ details summary { cursor:pointer; color:var(--muted); font-size:13px; margin-top
 @media (max-width:900px) { .layout { grid-template-columns:1fr; } .sticky { position:static; } }
 </style>
 <link rel="stylesheet" href="assets/app.css?v=<?= @filemtime(PM_ROOT . '/assets/app.css') ?>">
-<?php if ($vb === 'travel'): ?><link rel="icon" href="assets/travel_favicon.png"><style>:root{--accent:<?= pm_h($settings['travel']['accent_color'] ?? '#047857') ?>}</style><?php endif; ?>
+<?php if ($vb !== 'promanaged'): ?><?php if (is_file(PM_ROOT . '/' . pm_brand_asset($vb, 'favicon'))): ?><link rel="icon" href="<?= pm_h(pm_brand_asset($vb, 'favicon')) ?>"><?php endif; ?><style>:root{--accent:<?= pm_h(pm_brand_block($settings, $vb)['accent_color'] ?? '#047857') ?>}</style><?php endif; ?>
 </head>
 <body>
 <?php
-$hdrLogo = $vb === 'travel' ? 'assets/travel_logo.png' : 'assets/logo.png';
-$hdrName = $vb === 'travel' ? $settings['travel']['company_name'] : $settings['company_name'];
+$hdrLogo = pm_brand_asset($vb, 'logo');
+$hdrName = $vb === 'promanaged' ? $settings['company_name'] : pm_brand_title($settings, $vb);
 $team = array_values(array_filter((array)($settings['team'] ?? [])));
 ?>
 <header><div class="bar">
-  <img class="<?= $vb === 'travel' ? 'sq' : '' ?>" src="<?= $hdrLogo ?>?v=<?= @filemtime(PM_ROOT . '/' . $hdrLogo) ?>" alt="">
+  <?php if (is_file(PM_ROOT . '/' . $hdrLogo)): ?><img class="<?= $vb === 'travel' ? 'sq' : '' ?>" src="<?= pm_h($hdrLogo) ?>?v=<?= @filemtime(PM_ROOT . '/' . $hdrLogo) ?>" alt=""><?php endif; ?>
   <span class="name"><?= pm_h($hdrName) ?></span>
-  <span class="brandsw"><a href="?tab=<?= pm_h($tab) ?>&brand=promanaged" class="<?= $vb === 'promanaged' ? 'on' : '' ?>">ProManaged IT</a><a href="?tab=<?= pm_h($tab) ?>&brand=travel" class="<?= $vb === 'travel' ? 'on' : '' ?>">Travel Malawi</a></span>
+  <span class="brandsw"><?php foreach (pm_brand_ids() as $bid): ?><a href="?tab=<?= pm_h($tab) ?>&brand=<?= pm_h($bid) ?>" class="<?= $vb === $bid ? 'on' : '' ?>"><?= pm_h($bid === 'promanaged' ? PM_BUILTIN_BRANDS['promanaged'] : pm_brand_title($settings, $bid)) ?></a><?php endforeach; ?><a href="?tab=business&new=1" title="Add another business">+</a></span>
   <?php $hbAge = pm_social_heartbeat_age(); $hbMin = $hbAge === null ? 0 : intdiv($hbAge, 60);
   $hbTxt = $hbAge === null ? 'Scheduler has not run yet' : 'Scheduler last ran ' . ($hbMin >= 120 ? intdiv($hbMin, 60) . ' h' : $hbMin . ' min') . ' ago'; ?>
   <a class="sx-chip <?= $hbAge === null || $hbAge >= 2700 ? ($hbAge !== null && $hbAge >= 7200 ? 'bad' : 'warn') : 'ok' ?>" href="?tab=social&view=accounts" title="Posts go out when the scheduler runs (every 15 to 30 minutes), or when the app is open. See README: SOCIAL."><?= pm_h($hbTxt) ?></a>
@@ -1707,7 +1725,7 @@ $team = array_values(array_filter((array)($settings['team'] ?? [])));
   <details class="card" style="padding:14px 20px"><summary style="margin:0;font-weight:600;color:var(--ink)">Find a business by name and prepare its proposal</summary>
     <form method="post" style="margin-top:10px"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="lookup"><input type="hidden" name="proposal" value="1">
       <div class="row">
-        <div><label>For</label><select name="brand"><option value="promanaged">ProManaged IT</option><option value="travel">Travel Malawi (stays)</option></select></div>
+        <div><label>For</label><select name="brand"><?php foreach (array_filter(pm_brand_ids(), fn($x) => !empty(pm_brand_profile($x)['proposals'])) as $bid): ?><option value="<?= pm_h($bid) ?>"<?= $bid === $vb ? ' selected' : '' ?>><?= pm_h(pm_brand_title($settings, $bid)) ?></option><?php endforeach; ?></select></div>
         <div><label>Business name *</label><input type="text" name="name" required></div>
         <div><label>City (helps)</label><input type="text" name="city"></div>
       </div>
@@ -2019,7 +2037,7 @@ $team = array_values(array_filter((array)($settings['team'] ?? [])));
   <p class="sub">Every proposal you downloaded or emailed. Open the PDF, or load it back into the form to send an updated version.</p>
   <div class="card">
   <?php $history = array_filter($history, fn($h) => pm_brand_of_type((string)($tpl['packages'][(int)($h['proposal']['package'] ?? -1)]['type'] ?? '')) === $vb); ?>
-  <?php if (!$history): ?><p class="muted">No <?= $vb === 'travel' ? 'Travel Malawi' : 'ProManaged IT' ?> proposals yet.</p><?php else: ?>
+  <?php if (!$history): ?><p class="muted">No <?= pm_h(pm_brand_name($vb)) ?> proposals yet.</p><?php else: ?>
     <table class="grid hist"><thead><tr><th>Reference</th><th>Date</th><th>Client</th><th>Package</th><th style="text-align:right">Setup</th><th style="text-align:right">Monthly</th><th>Status</th><th></th></tr></thead><tbody>
     <?php foreach ($history as $i => $h): ?>
       <tr><td><b><?= pm_h($h['ref']) ?></b></td><td class="muted"><?= pm_h($h['when']) ?></td>

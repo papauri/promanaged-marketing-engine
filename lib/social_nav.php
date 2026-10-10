@@ -83,7 +83,7 @@ function pm_social_banner(): string
         $down = (array)(pm_social_state()['auth_down'] ?? []);
         $b = pm_brand();
         if (!empty($down[$b])) {
-            $h .= '<div class="flash err sx-banner"><b>Publishing is paused for ' . pm_h($b === 'travel' ? 'Travel Malawi' : 'ProManaged IT') . '.</b> '
+            $h .= '<div class="flash err sx-banner"><b>Publishing is paused for ' . pm_h(pm_brand_name($b)) . '.</b> '
                 . pm_h((string)($down[$b]['msg'] ?? 'The Facebook access token is no longer valid.')) . ' Approved posts wait safely. Make a new Page token in <a href="?tab=social&amp;view=accounts">Accounts</a>; posting resumes by itself.</div>';
         }
     } catch (Throwable) {

@@ -1,7 +1,7 @@
 <?php
 /** Social > Channels: hand-post tasks, Status pack, Film day, community groups, share kits, profile health and bios, Google pack, catalogue. Nothing here posts by itself. */
 pm_brand_set($vb);
-$bname = $vb === 'travel' ? ($settings['travel']['company_name'] ?? 'Travel Malawi') : 'ProManaged IT';
+$bname = pm_brand_title($settings, $vb);
 $cfg = pm_channels_cfg($vb);
 $tasks = pm_manual_tasks($vb, 7);
 $fx = fn(string $do, string $extra = '') => pm_ch_form($do) . $extra;

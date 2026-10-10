@@ -188,7 +188,7 @@ function pm_inb_lead_replied(string $brand, string $fromId): void
     }
     try {
         $leads = pm_leads();
-        $lb = $brand === 'travel' ? 'travel' : 'promanaged';
+        $lb = pm_brand_norm($brand);
         $hit = false;
         foreach ($leads as $k => $l) {
             if (($l['brand'] ?? 'promanaged') === $lb && ($l['fb_from_id'] ?? '') === $fromId && empty($l['first_reply_at'])) {

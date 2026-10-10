@@ -216,6 +216,15 @@ function pm_agents_extra_defaults(): array
 /** Content pillars [['name','weight']]. Used when the owner has not saved their own list in Accounts. */
 function pm_default_pillars(string $brand): array
 {
+    if (pm_brand_is_custom($brand)) { // the questionnaire's list, else a plain starter set
+        $own = [];
+        foreach ((array)(pm_brand_profile($brand)['pillars'] ?? pm_brand_setting($brand, 'profile', [])['pillars'] ?? []) as $r) {
+            if (trim((string)($r['name'] ?? '')) !== '') {
+                $own[] = ['name' => (string)$r['name'], 'weight' => max(5, (int)($r['weight'] ?? 15))];
+            }
+        }
+        return $own ?: [['name' => 'Tip/How-to', 'weight' => 30], ['name' => 'Proof', 'weight' => 20], ['name' => 'Behind the scenes', 'weight' => 15], ['name' => 'Offer', 'weight' => 20], ['name' => 'Question', 'weight' => 15]];
+    }
     $p = $brand === 'travel'
         ? ['Destination/inspiration' => 35, 'Host tips' => 20, 'Stay spotlight' => 20, 'Practical travel info' => 15, 'Offer' => 10, 'Host sign-up' => 10, 'Guest tips' => 15]
         : ['Tip/How-to' => 30, 'Local problem story' => 20, 'Proof' => 15, 'Behind the scenes' => 15, 'Offer' => 20, 'Free check' => 10];
@@ -225,6 +234,12 @@ function pm_default_pillars(string $brand): array
 /** Hashtag bank: local places, niche words and per-pillar tags. Rotated so the same set is not repeated every post. */
 function pm_default_bank_tags(string $brand): array
 {
+    if (pm_brand_is_custom($brand)) { // built from the business's own name and cities; nothing borrowed from the other businesses
+        $tag = fn(string $w) => '#' . str_replace(' ', '', ucwords(preg_replace('/[^A-Za-z0-9 ]+/', '', $w)));
+        $cities = array_map($tag, array_slice(pm_agents_config($brand)['cities'] ?? [], 0, 4));
+        $own = $tag(pm_brand_name($brand));
+        return ['local' => array_values(array_unique(array_merge(['#Malawi'], $cities))), 'niche' => $own !== '#' ? [$own] : [], 'pillar' => ['_default' => []]];
+    }
     if ($brand === 'travel') {
         return ['local' => ['#Malawi', '#LakeMalawi', '#Lilongwe', '#Blantyre', '#Mzuzu'],
             'niche' => ['#MalawiTravel', '#LakeMalawiStays', '#MalawiLodges', '#VisitMalawi', '#WarmHeartOfAfrica', '#TravelMalawi'],
@@ -242,6 +257,9 @@ function pm_default_bank_tags(string $brand): array
 /** Starter ideas: general, number-free advice the owner can build on. Switch off in the Content tab. [pillar name => [texts]] */
 function pm_default_ideas(string $brand): array
 {
+    if (pm_brand_is_custom($brand)) {
+        return []; // starter ideas are written for the two original businesses; a new one writes its own in Content
+    }
     if ($brand === 'travel') {
         return [
             'Host tips' => [

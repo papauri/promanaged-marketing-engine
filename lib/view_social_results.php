@@ -4,7 +4,7 @@
  * no AI is used to build this page. Figures typed in by you are labelled as yours; gaps are shown as gaps.
  */
 pm_brand_set($vb);
-$bname = $vb === 'travel' ? ($settings['travel']['company_name'] ?? 'Travel Malawi') : 'ProManaged IT';
+$bname = pm_brand_title($settings, $vb);
 $sc = pm_social_cfg($vb);
 $sb = pm_social_scoreboard($vb);
 $g = pm_social_goals($vb);

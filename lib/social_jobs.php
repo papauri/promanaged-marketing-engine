@@ -29,7 +29,7 @@ function pm_social_run_jobs(int $budget = 0, string $by = ''): string
     $out = [];
     $was = pm_brand();
     $over = fn() => $budget > 0 && time() - $t0 >= $budget;
-    foreach (['promanaged', 'travel'] as $b) {
+    foreach (pm_brand_ids() as $b) {
         pm_brand_set($b);
         foreach (pm_social_registered('pm_job_') as $fn) {
             if ($over()) {
@@ -85,7 +85,7 @@ function pm_social_cycle(int $budget = 0, string $by = ''): string
     } catch (Throwable $e) {
         $out[] = 'publish: ' . $e->getMessage();
     }
-    foreach (['promanaged', 'travel'] as $b) { // independent of the Facebook token: drafts can be made before a Page is connected
+    foreach (pm_brand_ids() as $b) { // independent of the Facebook token: drafts can be made before a Page is connected
         if ($over()) {
             break;
         }
@@ -102,7 +102,7 @@ function pm_social_cycle(int $budget = 0, string $by = ''): string
     } catch (Throwable $e) {
         $out[] = 'alert: ' . $e->getMessage();
     }
-    foreach (['promanaged', 'travel'] as $b) {
+    foreach (pm_brand_ids() as $b) {
         if ($over()) {
             break;
         }

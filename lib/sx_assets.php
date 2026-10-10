@@ -82,7 +82,7 @@ function pm_sx_asset_clean(array $in, array $base = []): array
     $exp = (string)($in['expires'] ?? ($base['expires'] ?? ''));
     $row = $base + ['uses' => [], 'created' => date('Y-m-d H:i')];
     return [
-        'id' => (string)$row['id'], 'brand' => ($in['brand'] ?? $base['brand'] ?? 'promanaged') === 'travel' ? 'travel' : 'promanaged', 'file' => (string)$row['file'], 'orig_name' => (string)($row['orig_name'] ?? ''),
+        'id' => (string)$row['id'], 'brand' => pm_brand_norm($in['brand'] ?? $base['brand'] ?? 'promanaged'), 'file' => (string)$row['file'], 'orig_name' => (string)($row['orig_name'] ?? ''),
         'credit' => mb_substr(trim((string)($in['credit'] ?? ($base['credit'] ?? ''))), 0, 80), 'consent' => !empty($in['consent'] ?? ($base['consent'] ?? false)),
         'consent_note' => mb_substr(trim((string)($in['consent_note'] ?? ($base['consent_note'] ?? ''))), 0, 200), 'owner' => mb_substr(trim((string)($in['owner'] ?? ($base['owner'] ?? ''))), 0, 80),
         'note' => mb_substr(trim((string)($in['note'] ?? ($base['note'] ?? ''))), 0, 300),

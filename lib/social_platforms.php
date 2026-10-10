@@ -137,7 +137,11 @@ function pm_platforms(): array
 function pm_social_settings(string $brand): array
 {
     $s = pm_load('settings', 'pm_default_settings');
-    $c = (array)(($brand === 'travel' ? ($s['travel']['social'] ?? []) : ($s['social'] ?? [])));
+    $c = (array)(pm_brand_block($s, $brand)['social'] ?? []);
+    if (pm_brand_is_custom($brand)) {
+        $tag = trim((string)(pm_brand_block($s, $brand)['tagline'] ?? ''));
+        return array_replace_recursive(['cover_head' => $tag !== '' ? $tag : pm_brand_name($brand), 'cover_line' => '', 'channels' => ['facebook' => true, 'instagram' => true, 'linkedin' => false]], $c);
+    }
     $def = $brand === 'travel'
         ? ['cover_head' => "Book Malawi's independent stays, direct.", 'cover_line' => 'Free for hosts · no commission · guests pay you directly', 'channels' => ['facebook' => true, 'instagram' => true, 'linkedin' => false]]
         : ['cover_head' => 'Business systems, built and supported in Malawi.', 'cover_line' => 'Software · websites · computer equipment · IT support', 'channels' => ['facebook' => true, 'instagram' => true, 'linkedin' => true]];
@@ -149,6 +153,8 @@ function pm_social_settings_save(string $brand, array $c): void
     pm_update('settings', function (array $s) use ($brand, $c) { // under the lock: other settings saved meanwhile are kept
         if ($brand === 'travel') {
             $s['travel']['social'] = $c;
+        } elseif (pm_brand_is_custom($brand)) {
+            $s['brands'][$brand]['social'] = $c;
         } else {
             $s['social'] = $c;
         }
@@ -176,7 +182,7 @@ function pm_social_pillars_save(string $brand, array $rows): void
 
 function pm_kit_dir(string $brand): string
 {
-    $d = PM_DATA . '/brandkit/' . ($brand === 'travel' ? 'travel' : 'promanaged');
+    $d = PM_DATA . '/brandkit/' . (pm_brand_norm($brand));
     if (!is_dir($d)) {
         mkdir($d, 0775, true);
     }
@@ -187,7 +193,7 @@ function pm_kit_dir(string $brand): string
 function pm_hero_path(string $brand): string
 {
     foreach (['jpg', 'png'] as $x) {
-        $f = PM_ROOT . '/assets/' . ($brand === 'travel' ? 'travel' : 'promanaged') . "_hero.$x";
+        $f = PM_ROOT . '/assets/' . (pm_brand_norm($brand)) . "_hero.$x";
         if (is_file($f)) {
             return $f;
         }
@@ -200,7 +206,7 @@ function pm_hero_path(string $brand): string
 function pm_kit_profile(string $brand, int $size): string
 {
     $im = imagecreatetruecolor($size, $size);
-    $logo = PM_ROOT . ($brand === 'travel' ? '/assets/travel_logo.png' : '/assets/logo.png');
+    $logo = PM_ROOT . '/' . pm_brand_asset($brand, 'logo');
     $li = is_file($logo) ? @imagecreatefrompng($logo) : false;
     if ($brand === 'travel' && $li) { // the TM mark is already a square tile
         imagecopyresampled($im, $li, 0, 0, 0, 0, $size, $size, imagesx($li), imagesy($li));
@@ -333,7 +339,7 @@ function pm_fb_apply(string $brand, string $which): array
 function pm_linkedin_cfg(string $brand): array
 {
     $e = pm_env();
-    $p = $brand === 'travel' ? 'TM_' : '';
+    $p = pm_brand_env_prefix($brand);
     $c = ['org' => preg_replace('/\D/', '', (string)($e[$p . 'LI_ORG_ID'] ?? '')), 'token' => trim((string)($e[$p . 'LI_TOKEN'] ?? ''))];
     $c['ready'] = $c['org'] !== '' && $c['token'] !== '';
     return $c;
@@ -343,7 +349,7 @@ function pm_linkedin_cfg(string $brand): array
 function pm_li_version(string $brand = ''): string
 {
     $e = pm_env();
-    $v = trim((string)($e[($brand === 'travel' ? 'TM_' : '') . 'LI_API_VERSION'] ?? $e['LI_API_VERSION'] ?? ''));
+    $v = trim((string)($e[(pm_brand_env_prefix($brand)) . 'LI_API_VERSION'] ?? $e['LI_API_VERSION'] ?? ''));
     return preg_match('/^\d{6}$/', $v) ? $v : PM_LI_API_VERSION;
 }
 

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/defaults.php';
 require_once __DIR__ . '/lines.php';
 require_once __DIR__ . '/links.php';
+require_once __DIR__ . '/brands.php';
 date_default_timezone_set('Africa/Blantyre');
 
 define('PM_ROOT', dirname(__DIR__));
@@ -158,7 +159,7 @@ function pm_smtp_from_env(): bool
 
 /* ---------------- Brands: ProManaged IT (default) and Travel Malawi ---------------- */
 
-function pm_brand_set(string $b): void { $GLOBALS['PM_BRAND'] = $b === 'travel' ? 'travel' : 'promanaged'; }
+function pm_brand_set(string $b): void { $GLOBALS['PM_BRAND'] = pm_brand_norm($b); }
 function pm_brand(): string { return $GLOBALS['PM_BRAND'] ?? 'promanaged'; }
 function pm_brand_of_type(string $type): string { return $type === 'onboarding' ? 'travel' : 'promanaged'; }
 function pm_set_free(bool $f): void { $GLOBALS['PM_FREE'] = $f; }
@@ -168,12 +169,12 @@ function pm_set_from(bool $f): void { $GLOBALS['PM_FROM'] = $f; } // quotations 
 /** Each business signs its own agreements: Travel Malawi never uses ProManaged's signature. */
 function pm_signature_path(): string
 {
-    return PM_ROOT . (pm_brand() === 'travel' ? '/assets/travel_signature.png' : '/assets/signature.png');
+    return PM_ROOT . '/' . pm_brand_asset(pm_brand(), 'signature');
 }
 
 function pm_logo_path(): string
 {
-    $f = PM_ROOT . (pm_brand() === 'travel' ? '/assets/travel_logo.png' : '/assets/logo.png');
+    $f = PM_ROOT . '/' . pm_brand_asset(pm_brand(), 'logo');
     return is_file($f) ? $f : '';
 }
 
@@ -250,6 +251,9 @@ function pm_settings(): array
         $s['smtp']['from_name'] = $e['SMTP_FROM_NAME'] ?? $s['smtp']['from_name'];
     }
     $s['travel'] = array_replace(pm_default_settings()['travel'], (array)($stored['travel'] ?? []));
+    foreach (pm_brands_custom() as $bid => $brow) { // each added business keeps its own block, filled out with defaults
+        $s['brands'][$bid] = array_replace_recursive(pm_brand_default_block($bid, (string)($brow['name'] ?? $bid)), (array)($stored['brands'][$bid] ?? []));
+    }
     if (pm_brand() === 'travel') { // speak as Travel Malawi: name, contact details, colour, sender name
         $t = $s['travel'];
         foreach (['company_name', 'tagline', 'accent_color', 'ref_prefix'] as $k) {
@@ -291,6 +295,42 @@ function pm_settings(): array
             $s['smtp']['from_email'] = $e['TM_SMTP_FROM'] ?? ($e['TM_SMTP_USER'] ?? $s['smtp']['from_email']);
             $s['smtp']['from_name'] = $e['TM_SMTP_FROM_NAME'] ?? $s['smtp']['from_name'];
         }
+    } elseif (pm_brand_is_custom(pm_brand())) { // speak as an added business: its name, its details, its mailbox. Never fall back to ProManaged's.
+        $b = pm_brand();
+        $t = $s['brands'][$b];
+        foreach (['company_name', 'tagline', 'accent_color', 'ref_prefix'] as $k) {
+            if (trim((string)($t[$k] ?? '')) !== '') {
+                $s[$k] = $t[$k];
+            }
+        }
+        foreach (['address', 'phone', 'email', 'website', 'signatory_name', 'signatory_title'] as $k) {
+            $s[$k] = trim((string)($t[$k] ?? ''));
+        }
+        if ($s['website'] === '' && trim((string)($t['link_url'] ?? '')) !== '') {
+            $s['website'] = preg_replace('#^https?://#i', '', rtrim((string)$t['link_url'], '/'));
+        }
+        $s['next_ref'] = (int)($t['next_ref'] ?? 1);
+        $s['online_signing'] = false;
+        $s['esign_tags'] = false;
+        $ts = (array)($t['smtp'] ?? []);
+        $s['smtp'] = ['host' => '', 'port' => 465, 'encryption' => 'ssl', 'username' => '', 'password' => '', 'from_email' => '', 'from_name' => '', 'bcc_self' => !empty($ts['bcc_self'])];
+        $p = pm_brand_env_prefix($b);
+        if (($e[$p . 'SMTP_HOST'] ?? '') !== '') { // a mailbox given in .env wins, like the other businesses
+            $sec = strtolower($e[$p . 'SMTP_SECURE'] ?? 'ssl');
+            $s['smtp'] = ['host' => $e[$p . 'SMTP_HOST'], 'port' => (int)($e[$p . 'SMTP_PORT'] ?? 465), 'encryption' => in_array($sec, ['ssl', 'tls'], true) ? $sec : 'none',
+                'username' => $e[$p . 'SMTP_USER'] ?? '', 'password' => $e[$p . 'SMTP_PASS'] ?? '', 'from_email' => $e[$p . 'SMTP_FROM'] ?? ($e[$p . 'SMTP_USER'] ?? ''),
+                'from_name' => $e[$p . 'SMTP_FROM_NAME'] ?? '', 'bcc_self' => !empty($ts['bcc_self'])];
+        } else {
+            foreach (['host', 'username', 'password', 'from_email'] as $k) {
+                $s['smtp'][$k] = (string)($ts[$k] ?? '');
+            }
+            $s['smtp']['port'] = (int)($ts['port'] ?? 465);
+            $s['smtp']['encryption'] = in_array($ts['encryption'] ?? '', ['ssl', 'tls', 'none'], true) ? $ts['encryption'] : 'ssl';
+        }
+        if ($s['smtp']['from_email'] === '') {
+            $s['smtp']['from_email'] = (string)($t['email'] ?? '');
+        }
+        $s['smtp']['from_name'] = trim((string)($s['smtp']['from_name'] ?? '')) ?: trim((string)($ts['from_name'] ?? '')) ?: (string)$s['company_name'];
     }
     return $s;
 }

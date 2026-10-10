@@ -113,7 +113,7 @@ function pm_wac_skip_reason(array $lead, array $leads, array $cfg): string
     if ($email !== '' && pm_suppressed($leads, $email, (string)($lead['id'] ?? ''))) {
         return 'that company asked us to stop';
     }
-    if (($lead['brand'] ?? 'promanaged') === 'promanaged' && array_filter((array)($cfg['existing_clients'] ?? []), fn($x) => $x !== '' && stripos((string)($lead['name'] ?? ''), (string)$x) !== false)) {
+    if (($lead['brand'] ?? 'promanaged') !== 'travel' && array_filter((array)($cfg['existing_clients'] ?? []), fn($x) => $x !== '' && stripos((string)($lead['name'] ?? ''), (string)$x) !== false)) {
         return 'already a client we look after personally';
     }
     foreach ((array)($lead['wa_sent'] ?? []) as $at) {

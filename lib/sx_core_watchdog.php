@@ -9,7 +9,7 @@
 function pm_job_watchdog(string $brand): string
 {
     $out = [];
-    $label = ($brand === 'travel' ? 'Travel Malawi' : 'ProManaged IT') . ': ';
+    $label = (pm_brand_name($brand)) . ': ';
     $c = pm_social_cfg($brand);
     // posts that need a person
     foreach (pm_social_posts() as $p) {

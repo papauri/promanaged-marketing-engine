@@ -12,7 +12,7 @@ if ($wtype !== '') { $queue = array_values(array_filter($queue, fn($q) => strtol
 $sent = pm_wa_sent_today(pm_leads());
 $cap = (int)$acfg['wa_cap'];
 $left = max(0, $cap - $sent);
-$bname = $vb === 'travel' ? $settings['travel']['company_name'] : 'ProManaged IT';
+$bname = pm_brand_title($settings, $vb);
 $waBiz = pm_wa_biz_cfg()['ready'];
 // Leads that wrote to us and have not been answered (replied, or a customer / lost lead who wrote again), oldest first
 $wrote = array_values(array_filter(pm_leads(), fn($x) => ($x['brand'] ?? 'promanaged') === $vb && ($x['status'] ?? '') !== 'optout' && (($x['status'] ?? '') === 'replied' || !empty($x['awaiting_reply_since']))));

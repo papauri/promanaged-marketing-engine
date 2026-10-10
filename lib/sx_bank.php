@@ -9,7 +9,7 @@ const PM_SX_SEED_GAP_DAYS = 45;   // a seed is not reused inside this window
 const PM_SX_HOOK_GAP_DAYS = 14;   // nor a hook pattern
 const PM_SX_WINDOW_DAYS = 28;     // rolling window for the pillar deficit
 
-function pm_sx_brand(string $b): string { return $b === 'travel' ? 'travel' : 'promanaged'; }
+function pm_sx_brand(string $b): string { return pm_brand_norm($b); }
 
 /* ---------------- storage ---------------- */
 
@@ -90,7 +90,7 @@ function pm_sx_pillar_class(string $name): string
     $n = strtolower($name);
     foreach ([
         'giveaway' => '/giveaway|competition/', 'proof' => '/proof|testimonial|review|client stor/', 'offer' => '/offer|special|promo|discount/',
-        'spotlight' => '/spotlight|featured stay|stay of the/', 'freecheck' => '/free (website )?check|free audit|free look/', 'hostsignup' => '/host sign|sign-?up|list your|become a host/',
+        'spotlight' => '/spotlight|featured stay|stay of the/', 'freecheck' => '/free (website )?check|free audit|free look|free (quote|estimate|trial|consult|assessment|sample|demo|first)/', 'hostsignup' => '/host sign|sign-?up|list your|become a host/',
         'guesttips' => '/guest tip|traveller tip|traveler tip/', 'hosttips' => '/host tip|owner tip|hosting/', 'destination' => '/destination|inspiration|place|where to go/',
         'practical' => '/practical|travel info|getting there|how to get/', 'behind' => '/behind|our team|how we work|about us/', 'story' => '/story|problem|case study/',
     ] as $class => $re) {
@@ -241,6 +241,9 @@ function pm_sx_magnet_line(string $brand): string
     }
     if ($brand === 'travel') {
         return pm_sx_charging('travel') ? 'Send HOST on WhatsApp and we will help you list your stay.' : 'Send HOST on WhatsApp to list your stay free.';
+    }
+    if (pm_brand_is_custom($brand)) {
+        return '';
     }
     return 'Send CHECK on WhatsApp and we will look at your website for free.';
 }
@@ -446,6 +449,10 @@ function pm_sx_bank_build(string $brand, string $start): array
     $angles = $brand === 'travel'
         ? ['List your stay with Travel Malawi', 'Direct bookings for independent stays', 'Put your lodge in front of travellers']
         : ['A closer look at your website', 'Do customers find you online?', 'Not sure what your website is missing?'];
+    if (pm_brand_is_custom($brand)) { // the business's own free first step; with none set up there is nothing to invite people to
+        $mg = trim((string)pm_brand_profile($brand)['magnet']);
+        $angles = $mg !== '' && $line !== '' ? ['Get ' . $mg, 'Not sure where to start?', 'Ask us a question'] : [];
+    }
     $extraFacts = $brand === 'travel' ? array_filter(preg_split('/\R/', (string)(pm_brain($brand)['facts'] ?? '')) ?: [], fn($l) => preg_match('/free|commission|pay the property|dashboard|control their own/i', $l)) : [];
     foreach ($angles as $k => $a) {
         $add(pm_sx_seed($brand, 'magnet', "magnet$k", $a, array_merge([$line], array_slice(array_values($extraFacts), 0, 3)), $hint, $brand === 'travel' ? 'host' : ''));

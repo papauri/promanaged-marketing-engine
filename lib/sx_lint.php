@@ -7,7 +7,7 @@
 function pm_sx_brand_names(string $brand): array
 {
     $s = pm_load('settings', 'pm_default_settings');
-    return array_values(array_unique(array_filter([$brand === 'travel' ? (string)($s['travel']['company_name'] ?? 'Travel Malawi') : (string)($s['company_name'] ?? 'ProManaged IT'), $brand === 'travel' ? 'Travel Malawi' : 'ProManaged IT'])));
+    return array_values(array_unique(array_filter([pm_brand_title($s, $brand), pm_brand_name($brand)])));
 }
 
 /** Every piece of text the reader will see (caption, picture words, slides, spoken and on-screen video text). */
@@ -31,7 +31,7 @@ function pm_sx_post_texts(array $p): array
 /** The facts a post may rely on: its own (stored on the post), else its seed's, else the Marketing brain and the owner's ideas. */
 function pm_sx_post_facts(array $p): array
 {
-    $brand = ($p['brand'] ?? 'promanaged') === 'travel' ? 'travel' : 'promanaged';
+    $brand = pm_brand_norm($p['brand'] ?? 'promanaged');
     $facts = array_map('strval', (array)($p['facts'] ?? []));
     if (!$facts && !empty($p['seed']) && function_exists('pm_sx_seed_find')) {
         $s = pm_sx_seed_find($brand, (string)$p['seed'], !empty($p['occasion_date']) ? date('Y-m-d', strtotime($p['occasion_date'] . ' -30 days')) : null);
@@ -89,7 +89,7 @@ function pm_lint_ext(array $p, string $channel = 'facebook', ?array $pool = null
     $out = [];
     $block = function (string $m) use (&$out) { $out[] = ['sev' => 'block', 'msg' => $m]; };
     $warn = function (string $m) use (&$out) { $out[] = ['sev' => 'warn', 'msg' => $m]; };
-    $brand = ($p['brand'] ?? 'promanaged') === 'travel' ? 'travel' : 'promanaged';
+    $brand = pm_brand_norm($p['brand'] ?? 'promanaged');
     $today = date('Y-m-d');
     $texts = pm_sx_post_texts($p);
     $caption = $texts['caption'] ?? '';

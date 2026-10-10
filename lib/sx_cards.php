@@ -825,7 +825,7 @@ function pm_card_special(string $brand, string $kind, array $spec, string $size 
     if (!pm_card_gd_ok() || !in_array($kind, ['featured', 'badge', 'shot', 'storyboard'], true)) {
         return '';
     }
-    $brand = $brand === 'travel' ? 'travel' : 'promanaged';
+    $brand = pm_brand_norm($brand);
     if ($kind === 'storyboard') {
         $size = 'story';
     } elseif (!isset(pm_card_sizes()[$size])) {
@@ -921,7 +921,7 @@ function pm_card_badge(string $brand, string $file): string
         $c = ['im' => $im, 'f' => $f, 's' => 1.0];
         pm_card_rrect($c, 40, 40, $W - 40, $W - 40, 120, $accent);
         $head = $brand === 'travel' ? 'Listed with' : 'Powered by';
-        $name = $brand === 'travel' ? 'Travel Malawi' : 'ProManaged IT';
+        $name = pm_brand_name($brand);
         $hp = 60;
         $hw = pm_card_tw($f['sans'], $hp, $head);
         pm_card_draw($c, [$head], $f['sans'], $hp, $on, (int)(($W - $hw) / 2), 330, 1.2);

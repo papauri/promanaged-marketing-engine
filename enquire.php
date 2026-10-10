@@ -15,10 +15,11 @@ header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 @set_time_limit(90);
 
-$brand = (($_GET['b'] ?? $_POST['b'] ?? '') === 'travel') ? 'travel' : 'promanaged';
+$brand = pm_brand_norm($_GET['b'] ?? $_POST['b'] ?? '');
+$custom = pm_brand_is_custom($brand);
 pm_brand_set($brand);
 $mode = (string)($_GET['mode'] ?? '');
-$mode = $mode === 'check' || ($mode === 'host' && $brand === 'travel') ? $mode : '';
+$mode = ($mode === 'check' && !$custom) || ($mode === 'host' && $brand === 'travel') ? $mode : '';
 $src = substr(preg_replace('/[^a-z0-9_.-]/i', '', (string)($_GET['src'] ?? $_GET['ref'] ?? $_POST['src'] ?? '')), 0, 40);
 $embed = !empty($_GET['embed']);
 $s = pm_settings();
@@ -46,9 +47,9 @@ function pm_e_guard(string $ctx): string
 function pm_e_page(string $title, string $body, int $code = 200): never
 {
     global $s, $co, $tr, $embed, $brand;
+    $logo = pm_brand_asset($brand, 'logo');
     http_response_code($code);
     $accent = preg_match('/^#[0-9a-fA-F]{6}$/', (string)($s['accent_color'] ?? '')) ? $s['accent_color'] : '#17375E';
-    $logo = $tr ? 'assets/travel_logo.png' : 'assets/logo.png';
     echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . pm_h($title . ' · ' . $co) . '</title><style>'
         . ':root{--ink:#14161a;--muted:#6b7078;--line:#e4e6e9;--soft:#f6f7f9;--accent:' . $accent . '}*{box-sizing:border-box}'
         . 'body{margin:0;background:' . ($embed ? '#fff' : 'var(--soft)') . ';color:var(--ink);font:16px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}'
@@ -187,7 +188,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $errHtml = $err !== '' ? '<div class="err">' . pm_h($err) . '</div>' : '';
 $v = fn(string $k) => (string)($in[$k] ?? '');
-$qs = fn(array $extra = []) => 'enquire.php?' . http_build_query(array_filter(['b' => $tr ? 'travel' : '', 'src' => $src, 'embed' => $embed ? '1' : ''] + $extra));
+$qs = fn(array $extra = []) => 'enquire.php?' . http_build_query(array_filter(['b' => $brand !== 'promanaged' ? $brand : '', 'src' => $src, 'embed' => $embed ? '1' : ''] + $extra));
 
 if ($act === 'check' && $facts === null || $act === 'check' && $_SERVER['REQUEST_METHOD'] !== 'POST') { // check mode: ask for the address
     pm_e_page('Free website check', '<div class="card"><h1>Free website check</h1><p class="lead">Type your website address. We look at the home page and tell you plainly what we find: speed, phones, WhatsApp, contact and booking. It is done by software on the page as it is today, nothing is invented.</p>'
@@ -211,7 +212,7 @@ if ($act === 'checklead') { // a failed check-lead post: back to a fresh check
 
 $title = $act === 'host' ? 'List your stay with Travel Malawi' : ($tr ? 'Ask Travel Malawi about a stay' : 'Tell us what you need');
 $lead = $act === 'host' ? 'Tell us about your lodge, guest house or camp. A member of our team will contact you to talk about getting it listed.'
-    : ($tr ? 'Planning a trip to Malawi? Ask us about a stay and a person will reply.' : 'Software, websites, IT support and hardware for Malawian businesses. Send a few lines and a person will reply to you.');
+    : ($tr ? 'Planning a trip to Malawi? Ask us about a stay and a person will reply.' : ($custom ? (trim(rtrim((string)(pm_brain($brand)['about'] ?? ''), '.')) !== '' ? rtrim((string)pm_brain($brand)['about'], '.') . '. ' : '') . 'Send a few lines and a person will reply to you.' : 'Software, websites, IT support and hardware for Malawian businesses. Send a few lines and a person will reply to you.'));
 $form = pm_e_guard("$brand|$act");
 if ($act === 'host') {
     $types = ['Lodge', 'Guest house', 'Bed and breakfast', 'Hotel', 'Safari camp', 'Cottage or chalet', 'Hostel', 'Other'];
@@ -226,7 +227,7 @@ if ($act === 'host') {
         . pm_e_field('Your website', 'website', $v('website'), ['max' => 200]) . pm_e_field($tr ? 'What would you like to know?' : 'What do you need?', 'message', $v('message'), ['area' => true, 'required' => true]);
 }
 $alts = $tr ? '<a href="' . pm_h($qs(['mode' => $act === 'host' ? '' : 'host'])) . '">' . ($act === 'host' ? 'Looking for a stay instead?' : 'Own a lodge or guest house? List it with us') . '</a>'
-    : '<a href="' . pm_h($qs(['mode' => 'check'])) . '">Not ready to write? Try the free website check</a>';
+    : ($custom ? '' : '<a href="' . pm_h($qs(['mode' => 'check'])) . '">Not ready to write? Try the free website check</a>');
 pm_e_page($title, '<div class="card"><h1>' . pm_h($title) . '</h1><p class="lead">' . pm_h($lead) . '</p>' . $errHtml
     . '<form method="post" action="' . pm_h($qs($act === 'host' ? ['mode' => 'host'] : [])) . '">' . $form . '<button class="btn">Send</button>'
     . '<p class="small">We use your details only to reply to you. Give us a phone number or an email so we can.</p></form></div><p class="alt">' . $alts . '</p>');

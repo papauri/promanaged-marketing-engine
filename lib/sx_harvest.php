@@ -58,7 +58,7 @@ function pm_followup_exp_rows(array $leads): array
 function pm_email_exp_followup_example(string $brand): string
 {
     $f = (array)(pm_load('email_exp', fn() => [])['followup'] ?? []);
-    return empty($f['example']) ? '' : 'Follow-up subjects that get replies in ' . ($brand === 'travel' ? 'Travel Malawi' : 'ProManaged IT') . ' look like this: "' . $f['example'] . '". Mirror its shape.';
+    return empty($f['example']) ? '' : 'Follow-up subjects that get replies in ' . (pm_brand_name($brand)) . ' look like this: "' . $f['example'] . '". Mirror its shape.';
 }
 
 /* ---------------- C2-A02 · re-qualify once research lands ---------------- */
@@ -92,7 +92,7 @@ function pm_apply_requalify(array &$lead, array $q, string $brand): string
     $oldPkg = $lead['package'] ?? null;
     if ($brand === 'travel') {
         $lead['package'] = pm_onboarding_index();
-    } elseif (isset($q['package']) && is_numeric($q['package'])) {
+    } elseif (!pm_brand_is_custom($brand) && isset($q['package']) && is_numeric($q['package'])) {
         $max = max(0, count((array)(pm_template()['packages'] ?? [])) - 1);
         $lead['package'] = max(0, min($max, (int)$q['package']));
     }
@@ -141,7 +141,7 @@ function pm_reply_mode(string $ch = 'email'): string
 function pm_google_review_link(string $brand): string
 {
     $all = pm_load('social_channels', fn() => []);
-    $u = trim((string)($all[$brand === 'travel' ? 'travel' : 'promanaged']['google_review_url'] ?? ''));
+    $u = trim((string)($all[pm_brand_norm($brand)]['google_review_url'] ?? ''));
     return preg_match('#^https://[^\s<>"\']{4,280}$#i', $u) ? $u : '';
 }
 

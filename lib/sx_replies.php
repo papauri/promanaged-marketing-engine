@@ -19,7 +19,7 @@ function pm_inb_as(string $brand, callable $fn): mixed
     }
 }
 
-function pm_inb_label(string $brand): string { return $brand === 'travel' ? 'Travel Malawi' : 'ProManaged IT'; }
+function pm_inb_label(string $brand): string { return pm_brand_name($brand); }
 
 /** The brand's WhatsApp number as digits ('' when none, or a landline). */
 function pm_inb_wa_digits(string $brand): string
@@ -47,6 +47,34 @@ const PM_COMMENT_INTENTS = [
 ];
 
 const PM_REPLY_VARIANTS = [
+    // an added business: no claim about how it prices, where it is or what it does that its owner did not write
+    'custom' => [
+        'price' => [
+            '{hi}thanks for asking. Send us a message with what you need and a person will come back to you with the details. {wa}',
+            '{hi}good question. Tell us a little about what you have in mind and we will reply personally. {wa}',
+            '{hi}thank you for your interest. The quickest way to get the details is a short message to us. {wa}',
+        ],
+        'interested' => [
+            '{hi}thank you for your interest. Tell us what you need and a person will take it from there. {wa}',
+            '{hi}great to hear from you. Send us a message and we will reply. {wa}',
+            '{hi}thanks for reaching out. We would be glad to share the details. {wa}',
+        ],
+        'location' => [
+            '{hi}thanks for asking. {loc}Message us and we will share the details. {wa}',
+            '{hi}good question. {loc}Send us a message and we will help. {wa}',
+            '{hi}thank you. {loc}Message us and a person will reply. {wa}',
+        ],
+        'availability' => [
+            '{hi}thanks for asking. Tell us what you need and when, and we will get back to you. {wa}',
+            '{hi}happy to help. Send us a message with the details and we will reply. {wa}',
+            '{hi}thank you. Message us and we will agree a time that suits you. {wa}',
+        ],
+        'thanks' => [
+            '{hi}thank you, we appreciate it.',
+            '{hi}zikomo, we are glad you like it.',
+            '{hi}thanks for the kind words.',
+        ],
+    ],
     'promanaged' => [
         'price' => [
             '{hi}thanks for asking. We price each business individually, so we start by understanding what you need. {wa}',
@@ -150,9 +178,9 @@ function pm_inb_fill(string $brand, string $tpl, string $first): string
  */
 function pm_reply_template(string $brand, string $text, string $first = ''): ?array
 {
-    $brand = $brand === 'travel' ? 'travel' : 'promanaged';
+    $brand = pm_brand_norm($brand);
     $intent = pm_reply_intent($text);
-    $vars = PM_REPLY_VARIANTS[$brand][$intent] ?? null;
+    $vars = PM_REPLY_VARIANTS[pm_brand_is_custom($brand) ? 'custom' : $brand][$intent] ?? null;
     if ($intent === '' || !$vars) {
         return null;
     }
@@ -168,7 +196,7 @@ function pm_reply_template(string $brand, string $text, string $first = ''): ?ar
 /** Private (Messenger / Instagram DM) first line for a commenter: greeting, one answer line, WhatsApp link. No prices. */
 function pm_reply_private_text(string $brand, string $text, string $first = ''): string
 {
-    $brand = $brand === 'travel' ? 'travel' : 'promanaged';
+    $brand = pm_brand_norm($brand);
     $intent = pm_reply_intent($text);
     $line = PM_REPLY_PRIVATE_LINE[$intent] ?? PM_REPLY_PRIVATE_LINE[''];
     $wa = pm_inb_wa_link($brand);
@@ -190,7 +218,7 @@ function pm_reply_lint(string $text, string $brand, string $mode = 'reply'): arr
     if ($t === '') {
         return ['Empty text.'];
     }
-    $brand = $brand === 'travel' ? 'travel' : 'promanaged';
+    $brand = pm_brand_norm($brand);
     return (array)pm_inb_as($brand, function () use ($t, $brand, $mode) {
         $why = [];
         $phone = substr(pm_inb_wa_digits($brand) ?: preg_replace('/\D/', '', (string)(pm_settings()['phone'] ?? '')), -9);

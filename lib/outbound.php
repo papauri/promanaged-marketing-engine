@@ -104,7 +104,7 @@ function pm_lead_keys(array $l): array
 /** Id of an existing lead of the same brand sharing any key with $cand, else null. Names alone never match. */
 function pm_lead_find_dupe(array $leads, array $cand, string $brand): ?string
 {
-    $brand = $brand === 'travel' ? 'travel' : 'promanaged';
+    $brand = pm_brand_norm($brand);
     $ck = pm_lead_keys($cand);
     if (!$ck) {
         return null;
@@ -722,7 +722,7 @@ function pm_web_clean(mixed $v, int $max): string
  */
 function pm_web_lead(array $d): array
 {
-    $brand = ($d['brand'] ?? '') === 'travel' ? 'travel' : 'promanaged';
+    $brand = pm_brand_norm($d['brand'] ?? '');
     $now = date('Y-m-d H:i');
     $leads = pm_leads();
     $biz = pm_web_clean(($d['business'] ?? '') ?: ($d['name'] ?? '') ?: 'Website enquiry', 100);

@@ -73,6 +73,17 @@ function pm_onboarding_index(): int
 function pm_agents_config(?string $brand = null): array
 {
     $brand ??= pm_brand();
+    if (pm_brand_is_custom($brand)) { // an added business: its own targets and limits; the AI settings and parallelism are shared
+        $base = pm_agents_config('promanaged');
+        $stored = (array)(pm_load('agents_config', 'pm_agents_default_config')[$brand] ?? []);
+        $t = array_replace_recursive(pm_brand_agent_defaults($brand), $stored);
+        foreach (['sectors', 'cities', 'offerings', 'existing_clients'] as $k) {
+            if (isset($stored[$k]) && is_array($stored[$k])) {
+                $t[$k] = array_values($stored[$k]);
+            }
+        }
+        return array_replace($base, $t);
+    }
     if ($brand === 'travel') {
         $base = pm_agents_config('promanaged');
         $stored = (array)(pm_load('agents_config', 'pm_agents_default_config')['travel'] ?? []);
@@ -203,7 +214,7 @@ function pm_leads_save(array $leads): void
 function pm_lead_id(string $name, string $city, string $brand = 'promanaged'): string
 {
     $n = strtolower(preg_replace('/\b(hotel|lodge|ltd|limited|the|restaurant|bar|gym|&|and)\b|[^a-z0-9]+/i', '', $name));
-    return substr(md5(($brand === 'travel' ? 'travel|' : '') . $n . '|' . strtolower(trim($city))), 0, 12);
+    return substr(md5(($brand !== 'promanaged' ? $brand . '|' : '') . $n . '|' . strtolower(trim($city))), 0, 12);
 }
 
 function pm_lead_note(array &$lead, string $text): void
@@ -235,7 +246,7 @@ function pm_log_push(string $name, array $row, int $keep, ?int $days = null): vo
 /** Routine lines go to agent_log (last 300). Failures also go to agent_errors (60 days) so they stay visible. $error null = detect from the text. */
 function pm_agent_log(string $agent, string $msg, ?bool $error = null): void
 {
-    $row = ['at' => date('Y-m-d H:i:s'), 'agent' => $agent, 'msg' => (pm_brand() === 'travel' ? '[Travel Malawi] ' : '') . $msg];
+    $row = ['at' => date('Y-m-d H:i:s'), 'agent' => $agent, 'msg' => (pm_brand() !== 'promanaged' ? '[' . pm_brand_name(pm_brand()) . '] ' : '') . $msg];
     $error ??= (bool)preg_match('/\b(fail(ed|ure)?|could not|error|time[sd]? ?out|crash(ed)?|stalled|unparseable|exception|stopped)\b/i', $msg) && !preg_match('/\b0 errors\b/i', $msg);
     pm_log_push('agent_log', $row, 300);
     if ($error) {
@@ -250,9 +261,15 @@ function pm_agent_errors_recent(int $days = 3): array
     return array_values(array_filter(pm_load('agent_errors', fn() => []), fn($r) => ($r['at'] ?? '') >= $min));
 }
 
+/** The file holding a business's agent-run state (ProManaged keeps its original name). */
+function pm_run_state_file(string $brand): string
+{
+    return $brand === 'promanaged' ? 'agent_run.json' : 'agent_run_' . $brand . '.json';
+}
+
 function pm_run_state(?array $set = null): array
 {
-    $f = PM_DATA . (pm_brand() === 'travel' ? '/agent_run_travel.json' : '/agent_run.json');
+    $f = PM_DATA . '/' . pm_run_state_file(pm_brand());
     if ($set !== null) {
         file_put_contents($f, json_encode($set, JSON_PRETTY_PRINT), LOCK_EX);
         return $set;
@@ -273,7 +290,9 @@ function pm_run_stale_check(string $dir = ''): string
     $dir = $dir !== '' ? $dir : PM_DATA;
     $hours = max(1, (int)(pm_agents_config('promanaged')['run_stale_hours'] ?? 36));
     $msgs = [];
-    foreach (['promanaged' => ['agent_run.json', 'ProManaged IT'], 'travel' => ['agent_run_travel.json', 'Travel Malawi']] as [$file, $name]) {
+    foreach (pm_brand_ids() as $rb) {
+        $file = pm_run_state_file($rb);
+        $name = pm_brand_name($rb);
         $f = "$dir/$file";
         $r = is_file($f) ? json_decode((string)file_get_contents($f), true) : null;
         if (!is_array($r)) {
@@ -723,6 +742,9 @@ function pm_agent_list(mixed $out): array
 /** The default "marketing brain" for a business: what the AI knows and may say. Editable in Settings, so the app can market any business. */
 function pm_brain_defaults(string $brand): array
 {
+    if (pm_brand_is_custom($brand)) { // set from the questionnaire; empty until the owner writes it
+        return ['about' => '', 'facts' => '', 'audience' => '', 'voice' => PM_BRAND_VOICES['friendly'], 'never' => 'Never promise results, prices, deadlines or anything not in the facts.'];
+    }
     if ($brand === 'travel') {
         return [
             'about' => 'A direct booking platform connecting travellers with independent lodges, B&Bs, cottages, guest houses and safari camps across Malawi (stays only).',
@@ -745,7 +767,7 @@ function pm_brain(string $brand = ''): array
 {
     $brand = $brand ?: pm_brand();
     $s = pm_load('settings', 'pm_default_settings');
-    $saved = (array)($brand === 'travel' ? ($s['travel']['brain'] ?? []) : ($s['brain'] ?? []));
+    $saved = (array)(pm_brand_block($s, $brand)['brain'] ?? []);
     return array_replace(pm_brain_defaults($brand), array_filter($saved, fn($v) => trim((string)$v) !== ''));
 }
 
@@ -765,7 +787,13 @@ function pm_agents_company_brief(string $level = 'short'): string
     if ($level === 'tiny') {
         return $core;
     }
-$cfg = pm_agents_config();
+    $cfg = pm_agents_config();
+    if (pm_brand_is_custom(pm_brand())) { // no price list or pain-point library: what it offers, in its own words
+        return $core . ($cfg['offerings'] ? "
+What we offer:
+- " . implode("
+- ", $cfg['offerings']) : '');
+    }
     $off = implode("\n- ", $cfg['offerings']);
     $out = $core . "\nWhat we sell:\n- $off";
     if ($level === 'short') {
@@ -811,13 +839,17 @@ function pm_agent_scout(string $sector, string $city, int $want, array $knownNam
     if (pm_brand() === 'travel') {
         $system = pm_agents_company_brief('short') . "\nYou are the Scout. Web-search for real, trading independent stays in {$city}, Malawi: {$label}. Prefer ones that gain from direct bookings "
             . "(mostly on third-party sites, phone/WhatsApp-only, no or outdated website). Exclude chains and non-stays. Only include stays that publish enquiry contacts. " . PM_AGENT_RULES;
+    } elseif (pm_brand_is_custom(pm_brand())) {
+        $system = pm_agents_company_brief('short') . "\nYou are the Scout. Web-search for real, trading {$label} in {$city}, Malawi, that could genuinely use what we offer. "
+            . "Look for something published that shows a real fit or need (their website or social pages, news, hiring or expansion). Skip chains and anyone outside Malawi. "
+            . "Note which of our offerings fits best. Only include those that publish business contacts. " . PM_AGENT_RULES;
     } else {
         $system = pm_agents_company_brief('short') . "\nYou are the Scout. Web-search for real, trading organisations in {$city}, Malawi: {$label}, that show a genuine need for something we do "
             . "(paper/WhatsApp/spreadsheet operations, no or outdated website, agent-only bookings, no booking/POS/stock system, ageing IT, hiring IT/admin, expanding). "
             . "Note the best-fit offering. Only include those that publish business contacts. " . PM_AGENT_RULES;
     }
     $user = "Find up to {$want}. Skip these (already known): " . implode('; ', array_slice(array_map(fn($n) => preg_replace('/ \(.*$/', '', $n), $knownNames), -80)) . "\n"
-        . 'JSON array of {"name","type":"kind of business in 2-3 words","city","address","website","phone","email","contact":"owner, founder, managing director or manager if a page of the business itself names one, else empty","contact_title":"their role","contact_source":"URL of the page that names them","facebook":"Facebook page URL or empty","instagram":"Instagram URL or empty","social_gaps":["what is missing or weak online: no website, no Facebook page, page inactive since a year, few reviews, no way to book or enquire online"],"evidence":["one factual observation + source URL"],"need_signals":["why they need us"],"offering":"build, source or support"}';
+        . 'JSON array of {"name","type":"kind of business in 2-3 words","city","address","website","phone","email","contact":"owner, founder, managing director or manager if a page of the business itself names one, else empty","contact_title":"their role","contact_source":"URL of the page that names them","facebook":"Facebook page URL or empty","instagram":"Instagram URL or empty","social_gaps":["what is missing or weak online: no website, no Facebook page, page inactive since a year, few reviews, no way to book or enquire online"],"evidence":["one factual observation + source URL"],"need_signals":["why they need us"],"offering":"' . (pm_brand_is_custom(pm_brand()) ? 'the name of the offering that fits, or empty' : 'build, source or support') . '"}';
     $out = pm_agent_list(pm_agent_json(pm_claude($system, $user, true, 2500)));
     return array_values(array_filter($out, fn($x) => is_array($x) && !empty($x['name'])));
 }
@@ -884,6 +916,10 @@ function pm_agent_qualify(array $leads): array
     if (pm_brand() === 'travel') {
         $system = pm_agents_company_brief('tiny') . "\nYou are the Qualifier. Score each stay 0-100 on how likely it wants a free direct-booking listing: independent, genuine, reachable, reliant on agents/phone/WhatsApp or little online presence. "
             . "Above 70 needs concrete evidence. When an item has research, re-score it from what was found (previous_score is the old number): confirmed facts may raise or lower it. " . PM_AGENT_RULES;
+    } elseif (pm_brand_is_custom(pm_brand())) {
+        $system = pm_agents_company_brief('short') . "\nYou are the Qualifier. Score each lead 0-100 on how well it fits what we offer and how likely it is to buy (size, reachable decision maker, a visible need). Be sceptical: above 70 needs concrete evidence. "
+            . "Pick the offering that fits and the single best need to lead with. When an item has research, re-score it from what was found (previous_score is the old number): confirmed facts may raise or lower it. "
+            . pm_learn_qualifier_line(pm_brand()) . PM_AGENT_RULES;
     } else {
         $system = pm_agents_company_brief('full') . "\nYou are the Qualifier. Score each lead 0-100 on need and ability to pay (size, manual processes, reachable decision maker, package fit). Be sceptical: above 70 needs concrete evidence. "
             . "Pick the package index and the best pain point/need; the package must match what they need. When an item has research, re-score it from what was found (previous_score is the old number): confirmed facts may raise or lower it. "
@@ -893,7 +929,9 @@ function pm_agent_qualify(array $leads): array
         'signals' => array_slice($l['need_signals'] ?? [], 0, 2), 'reachable' => !empty($l['email']) || !empty($l['phone'])]
         + (!empty($l['research']) ? ['research' => pm_research_brief($l), 'previous_score' => (int)($l['score'] ?? 0)] : []), $leads);
     return pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
-        . "\nJSON array of {\"id\",\"score\",\"package\":index,\"offering\":\"build, source or support\",\"pain\":\"pain point/need to lead with\",\"reason\":\"one short sentence\",\"skip\":false}", false, 2500)));
+        . (pm_brand_is_custom(pm_brand())
+            ? "\nJSON array of {\"id\",\"score\",\"offering\":\"name of the offering that fits\",\"pain\":\"the need to lead with\",\"reason\":\"one short sentence\",\"skip\":false}"
+            : "\nJSON array of {\"id\",\"score\",\"package\":index,\"offering\":\"build, source or support\",\"pain\":\"pain point/need to lead with\",\"reason\":\"one short sentence\",\"skip\":false}"), false, 2500)));
 }
 
 /** The rules for every first email: short, specific, exciting, honest, no prices. */
@@ -971,6 +1009,10 @@ function pm_agent_lookup(string $name, string $city = ''): ?array
         $system = pm_agents_company_brief('tiny') . "\nYou are the Researcher. Web-search for one specific place to stay in Malawi and report what is publicly known. "
             . "If it is not a place to stay, or you cannot find it, return {\"found\":false}. Score 0-100 how likely it wants a free direct-booking listing. Package index is given above. " . PM_AGENT_RULES;
         $pk = pm_onboarding_index();
+    } elseif (pm_brand_is_custom(pm_brand())) {
+        $system = pm_agents_company_brief('short') . "\nYou are the Researcher. Web-search for one specific organisation in Malawi and report what is publicly known. "
+            . "If you cannot find it, return {\"found\":false}. Pick the offering that fits what they do, the need to lead with, and score 0-100 how likely they need what we offer. " . PM_AGENT_RULES;
+        $pk = '';
     } else {
         $system = pm_agents_company_brief('full') . "\nYou are the Researcher. Web-search for one specific organisation in Malawi and report what is publicly known. "
             . "If you cannot find it, return {\"found\":false}. Choose the package that fits what they do, the pain point to lead with, and score 0-100 how likely they need and can afford us. " . PM_AGENT_RULES;
@@ -1192,7 +1234,7 @@ function pm_wa_queue(array $leads): array
         if (($l['brand'] ?? 'promanaged') !== pm_brand() || in_array($l['status'] ?? '', ['optout', 'lost', 'won', 'replied', 'proposal'], true) || pm_lead_snoozed($l)) {
             continue;
         }
-        if (pm_brand() === 'promanaged' && array_filter((array)($cfg['existing_clients'] ?? []), fn($x) => $x !== '' && stripos((string)$l['name'], (string)$x) !== false)) {
+        if (pm_brand() !== 'travel' && array_filter((array)($cfg['existing_clients'] ?? []), fn($x) => $x !== '' && stripos((string)$l['name'], (string)$x) !== false)) {
             continue; // already our client
         }
         [$num] = pm_wa_best($l);
@@ -1238,10 +1280,12 @@ function pm_wa_queue(array $leads): array
 /** Short replies the team can paste into a chat. No prices, no promises. */
 function pm_wa_quick_replies(): array
 {
-    $b = pm_brand() === 'travel' ? 'Travel Malawi' : 'ProManaged IT';
+    $b = pm_brand_name(pm_brand());
     $what = pm_brand() === 'travel'
         ? 'Travel Malawi is a direct booking site for independent stays in Malawi. Guests book you directly, you keep your rate, and requests reach you on WhatsApp. Listing is free for now.'
-        : 'We build software and websites, source computers and equipment, and provide IT support for Malawian businesses. I can send a one-page plan for your business.';
+        : (pm_brand_is_custom(pm_brand())
+            ? trim((string)(pm_brain()['about'] ?? '')) . ' I can send a short note on how we could help your business.'
+            : 'We build software and websites, source computers and equipment, and provide IT support for Malawian businesses. I can send a one-page plan for your business.');
     return [
         'What is this?' => "Thanks for asking. $what",
         'How much?' => 'Fair question. It depends on what you need, so I would rather give you an exact figure than a guess. Can I send you a short plan for your business? ' . (pm_brand() === 'travel' ? 'Listing is free for now.' : ''),
@@ -1290,6 +1334,16 @@ function pm_lead_group(array $l): string
         return 'Facebook enquiries';
     }
     $travel = ($l['brand'] ?? '') === 'travel';
+    if (pm_brand_is_custom((string)($l['brand'] ?? ''))) { // an added business groups by its own target types
+        foreach (pm_agents_config((string)$l['brand'])['sectors'] as $sec) {
+            foreach (preg_split('/[^\p{L}]+/u', mb_strtolower((string)$sec)) as $w) {
+                if (mb_strlen($w) >= 4 && preg_match('/' . preg_quote(rtrim($w, 's'), '/') . '/u', $t)) {
+                    return mb_convert_case((string)$sec, MB_CASE_TITLE);
+                }
+            }
+        }
+        return 'Other';
+    }
     $map = $travel ? [
         'Safari & eco camps' => 'safari|eco|camp|bush|wildlife',
         'Lakeshore & beach' => 'lake|beach|island',
@@ -1361,7 +1415,8 @@ function pm_daily_plan(array $leads, array $cfg): array
     };
     $cap = max(0, $cfg['send_cap'] - pm_sent_today($leads));
     // existing ProManaged clients are never cold-pitched: they get a check-in that looks for the next job instead
-    $isClient = fn($l) => (bool)array_filter((array)(pm_agents_config('promanaged')['existing_clients'] ?? []), fn($x) => $x !== '' && stripos((string)$l['name'], (string)$x) !== false);
+    $clients = (array)(pm_agents_config(pm_brand_is_custom(pm_brand()) ? pm_brand() : 'promanaged')['existing_clients'] ?? []); // an added business has its own clients
+    $isClient = fn($l) => (bool)array_filter($clients, fn($x) => $x !== '' && stripos((string)$l['name'], (string)$x) !== false);
     foreach ($leads as $l) {
         if ($isClient($l) && !in_array($l['status'] ?? '', ['won', 'lost', 'optout'], true)) {
             $add('upsell', pm_brand() === 'travel'
@@ -1564,7 +1619,7 @@ function pm_lead_resolve(array $leads, string $leadId, string $email, string $bu
     }
     $business = trim($business);
     if ($business !== '') {
-        foreach (array_unique([$brand, $brand === 'travel' ? 'promanaged' : 'travel']) as $b) {
+        foreach (array_unique(array_merge([$brand], pm_brand_ids())) as $b) {
             $id = pm_lead_id($business, $city, $b);
             if (isset($leads[$id])) {
                 return $id;

@@ -14,8 +14,8 @@ $spill = ['approved' => 'hot', 'failed' => 'warn', 'needs_edit' => 'warn', 'need
 $slabel = ['needs_edit' => 'Needs an edit', 'needs_video' => 'Needs video', 'needs_check' => 'Check the Page', 'publishing' => 'Posting now', 'review' => 'Waiting for approval', 'needs_asset' => 'Needs a photo', 'expired' => 'Expired'];
 $done = array_reverse(array_filter($all, fn($p) => $p['status'] === 'published'), true);
 $recent = $sc['ready'] ? pm_social_recent($vb) : ['posts' => [], 'open_comments' => [], 'error' => ''];
-$auto = !empty(($vb === 'travel' ? $settings['travel'] : $settings)['social_auto']);
-$bname = $vb === 'travel' ? $settings['travel']['company_name'] : 'ProManaged IT';
+$auto = !empty(pm_brand_block($settings, $vb)['social_auto']);
+$bname = pm_brand_title($settings, $vb);
 $canApprove = pm_social_can_approve();
 $sp = fn($do, $extra = '') => '<input type="hidden" name="csrf" value="' . $csrf . '"><input type="hidden" name="action" value="social"><input type="hidden" name="do" value="' . $do . '">' . $extra;
 $hid = fn($n, $v) => '<input type="hidden" name="' . $n . '" value="' . pm_h((string)$v) . '">';

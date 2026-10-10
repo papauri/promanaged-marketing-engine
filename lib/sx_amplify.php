@@ -33,6 +33,21 @@ function pm_sx_segment(array $p, string $brand = ''): string
         return $a === 'host' ? 'Hosts' : ($a === 'guest' ? 'Travellers' : 'General');
     }
     $text = implode(' ', array_filter([(string)($p['headline'] ?? ''), (string)($p['sub'] ?? ''), (string)($p['caption'] ?? ''), implode(' ', array_map('strval', (array)($p['facts'] ?? [])))]));
+    if (pm_brand_is_custom($brand)) { // an added business: its own target types are the segments
+        $top = 0;
+        $best = 'All customers';
+        foreach (pm_agents_config($brand)['sectors'] as $sec) {
+            $n = 0;
+            foreach (preg_split('/[^\p{L}]+/u', mb_strtolower((string)$sec)) as $w) {
+                $n += mb_strlen($w) >= 4 ? preg_match_all('/' . preg_quote(rtrim($w, 's'), '/') . '/iu', $text) : 0;
+            }
+            if ($n > $top) {
+                $top = $n;
+                $best = mb_convert_case((string)$sec, MB_CASE_TITLE);
+            }
+        }
+        return $best;
+    }
     $best = 'All businesses';
     $top = 0;
     foreach (PM_SX_SEGMENT_WORDS as $seg => $re) {
@@ -173,7 +188,7 @@ function pm_jobg_partners(): string
 {
     $made = 0;
     $was = pm_brand();
-    foreach (['promanaged', 'travel'] as $b) {
+    foreach (pm_brand_ids() as $b) {
         $d = (array)(pm_load('partners', fn() => [])[$b] ?? []);
         $day = (string)($d['day'] ?? '');
         if ($day === date('Y-m-d') || ((int)date('N') !== 1 && $day !== '' && strtotime($day) > time() - 6 * 86400)) {
@@ -181,9 +196,11 @@ function pm_jobg_partners(): string
         }
         pm_brand_set($b);
         $s = pm_settings();
-        $who = $b === 'travel'
+        $who = pm_brand_is_custom($b)
+            ? 'Malawian pages, groups, associations and communities whose members or followers include ' . (rtrim(trim((string)(pm_brain($b)['audience'] ?? '')), '.') ?: 'our customers')
+            : ($b === 'travel'
             ? 'Malawian travel bloggers, tourism and lake pages, guesthouse and lodge associations, local photographers and community groups that travellers or stay owners follow'
-            : 'Malawian business groups, small-business and tech communities, local entrepreneurs and business pages, associations and chambers whose members could use IT help';
+            : 'Malawian business groups, small-business and tech communities, local entrepreneurs and business pages, associations and chambers whose members could use IT help');
         $system = pm_agents_company_brief('tiny') . "\nYou are the Partnership radar for {$s['company_name']}. Web-search for up to 5 real $who that could be good to collaborate with (cross-posts, a guest tip, a shout-out swap). "
             . 'Report ONLY pages you actually found while searching: the exact page name as it appears, and its address (https) from the search. Never invent a page, a name or a follower number. '
             . 'For each, write one short, warm, honest direct message (30 to 70 words) the owner could send by hand: say who we are, why we like their page, and one specific idea. '

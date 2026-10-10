@@ -3,7 +3,7 @@
 pm_brand_set($vb);
 $view = (string)($_GET['view'] ?? 'growth');
 pm_fb_judge_if_stale($vb);
-$bname = $vb === 'travel' ? $settings['travel']['company_name'] : 'ProManaged IT';
+$bname = pm_brand_title($settings, $vb);
 $sc = pm_social_cfg($vb);
 $fg = fn($do, $extra = '') => '<input type="hidden" name="csrf" value="' . $csrf . '"><input type="hidden" name="action" value="fbg"><input type="hidden" name="do" value="' . $do . '"><input type="hidden" name="view" value="' . pm_h($view) . '">' . $extra;
 $chan = ['reply_comment' => 'Reply to their comment', 'messenger' => 'Messenger', 'whatsapp' => 'WhatsApp', 'call' => 'Call', 'comment_on_their_page' => 'Comment on their Page', 'email' => 'Email'];

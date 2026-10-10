@@ -15,7 +15,7 @@ require_once __DIR__ . '/links.php';
 function pm_brand_site(string $brand): string
 {
     $s = pm_settings();
-    return pm_link_cfg($brand)['url'] ?: pm_clean_url((string)(($brand === 'travel' ? ($s['travel']['website'] ?? '') : ($s['website'] ?? ''))));
+    return pm_link_cfg($brand)['url'] ?: pm_clean_url((string)(pm_brand_block($s, $brand)['website'] ?? ''));
 }
 
 function pm_social_nav(string $on): string
@@ -234,7 +234,7 @@ function pm_fb_people(string $brand): array
 function pm_fb_capture_buyers(string $brand, ?array $people = null): int
 {
     $people ??= pm_fb_people($brand);
-    $lb = $brand === 'travel' ? 'travel' : 'promanaged';
+    $lb = pm_brand_norm($brand);
     $judgedBuyers = [];
     foreach ((array)(pm_load('fb_judged', fn() => [])[$brand] ?? []) as $k) {
         if (($k['verdict'] ?? '') === 'buyer') {
@@ -343,7 +343,7 @@ function pm_agent_engage_playbook(string $brand, bool $force = false): array
     $people = pm_fb_people($brand);
     pm_fb_capture_buyers($brand, $people);
     $crowd = array_slice(array_values(array_filter($people, fn($p) => !$p['spam'])), 0, 10);
-    $lb = $brand === 'travel' ? 'travel' : 'promanaged';
+    $lb = pm_brand_norm($brand);
     $hot = [];
     foreach (pm_leads() as $l) {
         if (($l['brand'] ?? 'promanaged') !== $lb || in_array($l['status'], ['won', 'lost', 'optout', 'new'], true) || ($l['source'] ?? '') === 'facebook') {
@@ -495,7 +495,7 @@ function pm_page_profile_apply(string $brand, string $about, string $description
 function pm_ads_cfg(string $brand): array
 {
     $e = pm_env();
-    $p = $brand === 'travel' ? 'TM_' : '';
+    $p = pm_brand_env_prefix($brand);
     $acct = preg_replace('/\D/', '', (string)($e[$p . 'FB_AD_ACCOUNT_ID'] ?? ''));
     $tok = trim((string)($e['FB_USER_TOKEN'] ?? ''));
     return ['account' => $acct, 'token' => $tok, 'ready' => $acct !== '' && $tok !== ''];
@@ -1315,7 +1315,7 @@ function pm_social_today(string $brand): array
     $sug = pm_fb_suggestions($brand);
     $ib = pm_fb_inbox($brand);
     $waiting = array_filter($ib['threads'], fn($t) => $t['waiting']);
-    $posts = array_filter(pm_social_posts(), fn($p) => ($p['brand'] ?? 'promanaged') === ($brand === 'travel' ? 'travel' : 'promanaged'));
+    $posts = array_filter(pm_social_posts(), fn($p) => ($p['brand'] ?? 'promanaged') === (pm_brand_norm($brand)));
     $queued = array_filter($posts, fn($p) => in_array($p['status'] ?? '', ['approved', 'scheduled'], true) && strtotime((string)($p['when'] ?? '')) > time() - 3600);
     $drafts = array_filter($posts, fn($p) => ($p['status'] ?? '') === 'draft');
     $last = pm_fb_posts($brand, 1)['posts'][0]['at'] ?? '';

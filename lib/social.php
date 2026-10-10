@@ -13,7 +13,7 @@ function pm_social_cfg(string $brand = ''): array
 {
     $brand = $brand ?: pm_brand();
     $e = pm_env();
-    $p = $brand === 'travel' ? 'TM_' : '';
+    $p = pm_brand_env_prefix($brand);
     $c = ['page_id' => trim((string)($e[$p . 'FB_PAGE_ID'] ?? '')), 'token' => trim((string)($e[$p . 'FB_PAGE_TOKEN'] ?? '')), 'ig_id' => trim((string)($e[$p . 'IG_USER_ID'] ?? ''))];
     $c['ready'] = $c['page_id'] !== '' && $c['token'] !== '';
     return $c;
@@ -310,7 +310,7 @@ function pm_social_state_set(callable $fn): void { pm_update('social_state', fn(
 function pm_social_auto(string $brand): bool
 {
     $s = pm_load('settings', 'pm_default_settings');
-    return !empty(($brand === 'travel' ? ($s['travel'] ?? []) : $s)['social_auto']);
+    return !empty(pm_brand_block($s, $brand)['social_auto']);
 }
 
 /* ---------------- who may do what, post log, media paths, alerts ---------------- */
@@ -482,7 +482,7 @@ function pm_social_parse_post_url(string $url, string $pageId = ''): array
 function pm_social_readiness(string $brand): array
 {
     $c = pm_social_cfg($brand);
-    $set = $brand === 'travel' ? '?tab=settings&brand=travel' : '?tab=settings';
+    $set = $brand === 'promanaged' ? '?tab=settings' : '?tab=settings&brand=' . $brand;
     $acc = '?tab=social&view=accounts';
     $link = pm_link_cfg($brand);
     $gd = pm_social_gd_info();
@@ -602,7 +602,7 @@ function pm_social_proof_request(array $lead): void
     if ($lid === '') {
         return;
     }
-    $brand = ($lead['brand'] ?? 'promanaged') === 'travel' ? 'travel' : 'promanaged';
+    $brand = pm_brand_norm($lead['brand'] ?? 'promanaged');
     pm_update('social_proof', function (array $rows) use ($lead, $lid, $brand) {
         $has = [];
         foreach ($rows as $r) {
@@ -983,8 +983,21 @@ const PM_SOCIAL_FOCUS = [
     'awareness' => 'Show what we do', 'story' => 'Real-life problems and how they are solved', 'check' => 'Free website check / host sign-up',
 ];
 
+/** Who the Page's posts are for, in a few words (the plan prompt). */
+function pm_social_audience_line(string $brand): string
+{
+    if (pm_brand_is_custom($brand)) {
+        $a = trim((string)(pm_brain($brand)['audience'] ?? ''));
+        return ($a !== '' ? rtrim($a, '.') : 'our customers') . ' in Malawi';
+    }
+    return 'small business owners in Malawi';
+}
+
 function pm_social_default_pillars(string $brand): array
 {
+    if (pm_brand_is_custom($brand)) {
+        return pm_default_pillars($brand);
+    }
     $p = $brand === 'travel'
         ? ['Destination/inspiration' => 35, 'Host tips' => 20, 'Stay spotlight' => 20, 'Practical travel info' => 15, 'Offer' => 10]
         : ['Tip/How-to' => 30, 'Local problem story' => 20, 'Proof' => 15, 'Behind the scenes' => 15, 'Offer' => 20];
@@ -1043,7 +1056,7 @@ function pm_social_plan_prompt(array $o): array
     $travel = ($o['brand'] ?? '') === 'travel';
     $hours = $o['hours'] ?: ['07:30', '12:30', '18:30'];
     $proof = array_map(fn($r) => ['proof_id' => $r['id'], 'type' => $r['type'], 'text' => $r['text'], 'client' => $r['client_name'] ?? '', 'ends' => $r['expires'] ?? ''], (array)($o['proof'] ?? []));
-    $system = ($o['brief'] ?? '') . "\nYou are the social media manager for {$o['company']}'s Facebook Page, writing for small business owners in Malawi"
+    $system = ($o['brief'] ?? '') . "\nYou are the social media manager for {$o['company']}'s Facebook Page, writing for " . pm_social_audience_line($o['brand'] ?? '') . ""
         . ($travel ? ' who run lodges, guest houses, B&Bs, cottages and safari camps, and for travellers who want to book them directly' : '') . ".\n"
         . "Plan exactly $n posts. Plan exactly this pillar mix for $n posts: " . implode(', ', $mix) . ". Put the pillar name in \"pillar\" (exactly as written). Goal: {$o['angle']}. "
         . "Formats: mostly \"image\" (a branded picture with a headline), at most one \"reel\" (a 20 to 30 second script someone films on a phone) and a short \"text\" status. "
@@ -1466,8 +1479,8 @@ function pm_social_fail(array &$p, string $msg): string
 {
     $k = pm_social_err_kind($msg);
     $p['error'] = $msg;
-    $b = ($p['brand'] ?? 'promanaged') === 'travel' ? 'travel' : 'promanaged';
-    $label = ($b === 'travel' ? 'Travel Malawi' : 'ProManaged IT') . ': ';
+    $b = pm_brand_norm($p['brand'] ?? 'promanaged');
+    $label = (pm_brand_name($b)) . ': ';
     $cap = mb_substr((string)($p['caption'] ?? ''), 0, 80);
     if ($k === 'transient') {
         $p['tries'] = (int)($p['tries'] ?? 0) + 1;
@@ -1730,7 +1743,7 @@ function pm_social_publish(array &$p): array
     $igOn = !empty($ch['instagram']) && $c['ig_id'] !== '' && $c['token'] !== '';
     if (!$fbOn && !$li && !$igOn) {
         $p['status'] = 'failed';
-        $p['error'] = 'No social account is connected for ' . ($p['brand'] === 'travel' ? 'Travel Malawi' : 'ProManaged IT') . ' yet (Social > Accounts & branding).';
+        $p['error'] = 'No social account is connected for ' . (pm_brand_name($p['brand'])) . ' yet (Social > Accounts & branding).';
         return [false, $p['error']];
     }
     $media = pm_social_has_media($p) ? pm_social_media($p) : '';

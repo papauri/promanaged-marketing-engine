@@ -114,7 +114,7 @@ function pm_outcome_weights_fresh(string $brand, int $maxAgeDays = 7): array
 function pm_jobg_outcome_weights(): string
 {
     $out = [];
-    foreach (['promanaged', 'travel'] as $b) {
+    foreach (pm_brand_ids() as $b) {
         $w = pm_outcome_weights_fresh($b);
         $top = $w['sector'] ?? [];
         arsort($top);
@@ -228,7 +228,7 @@ function pm_jobg_email_exp(): string
 function pm_email_exp_example(string $brand): string
 {
     $d = pm_load('email_exp', fn() => []);
-    return empty($d['example']) ? '' : 'Subjects that get replies in ' . ($brand === 'travel' ? 'Travel Malawi' : 'ProManaged IT') . ' look like this: "' . $d['example'] . '". Mirror its shape and length for the next emails.';
+    return empty($d['example']) ? '' : 'Subjects that get replies in ' . (pm_brand_name($brand)) . ' look like this: "' . $d['example'] . '". Mirror its shape and length for the next emails.';
 }
 
 /* ---------------- MG-A02 · source-diverse scouts + watcher ---------------- */
@@ -246,12 +246,14 @@ function pm_agent_watch(string $brand, array $knownNames): array
     $travel = $brand === 'travel';
     $who = $travel
         ? 'independent stays in Malawi that went online, reopened or started taking direct bookings in the last few weeks'
-        : 'Malawi businesses with a fresh signal: a new website, a hiring advert for admin or IT, a reopening, or a shop moving its operations online';
+        : (pm_brand_is_custom($brand)
+            ? 'Malawi organisations that fit what we offer and show a fresh signal: a new website, a hiring advert, a reopening, an expansion or a move online'
+            : 'Malawi businesses with a fresh signal: a new website, a hiring advert for admin or IT, a reopening, or a shop moving its operations online');
     $system = pm_agents_company_brief('short') . "\nYou are the Watcher. Web-search for $who. Report only NEW signals a normal sweep may have missed; skip anything already known. "
         . "Each result needs a factual observation with its source URL. " . PM_AGENT_RULES;
     $user = "Skip these (already known): " . implode('; ', array_slice(array_map(fn($n) => preg_replace('/ \(.*$/', '', $n), $knownNames), -80)) . "\n"
         . 'JSON array of {"name","type":"kind of business in 2-3 words","city","website","phone","email","facebook","social_gaps":["what is missing or weak online"],'
-        . '"evidence":["one factual observation + source URL"],"need_signals":["why they may need us"],"offering":"build, source or support"} — at most 4 items.';
+        . '"evidence":["one factual observation + source URL"],"need_signals":["why they may need us"],"offering":"' . ($travel || pm_brand_is_custom($brand) ? 'the offering that fits, or empty' : 'build, source or support') . '"} — at most 4 items.';
     $out = pm_agent_list(pm_agent_json(pm_claude($system, $user, true, 2000)));
     return array_values(array_filter($out, fn($x) => is_array($x) && !empty($x['name'])));
 }
@@ -388,7 +390,7 @@ function pm_lead_fb_threads(array $lead, array $threads): array
 function pm_jobg_thread_sync(): string
 {
     $n = 0;
-    foreach (['promanaged', 'travel'] as $b) {
+    foreach (pm_brand_ids() as $b) {
         if (!function_exists('pm_fb_inbox') || !pm_social_cfg($b)['ready']) {
             continue;
         }
@@ -639,7 +641,7 @@ function pm_shared_learnings_promote(string $text): bool
 function pm_jobg_learnings_share(): string
 {
     $n = 0;
-    foreach (['promanaged', 'travel'] as $b) {
+    foreach (pm_brand_ids() as $b) {
         foreach (pm_experiments($b) as $e) {
             if (($e['status'] ?? '') !== 'done' || ($e['verdict'] ?? '') !== 'keep' || empty($e['learning'])) {
                 continue;

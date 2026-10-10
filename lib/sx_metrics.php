@@ -136,7 +136,7 @@ function pm_sx_li_stats(string $brand, string $urn): ?array
         return is_array($r) ? $r : null;
     }
     $e = pm_env();
-    $pre = $brand === 'travel' ? 'TM_' : '';
+    $pre = pm_brand_env_prefix($brand);
     if (getenv('PM_TEST') || ($e[$pre . 'LI_ORG_STATS'] ?? $e['LI_ORG_STATS'] ?? '') !== '1' || !function_exists('pm_linkedin_cfg')) {
         return null;
     }

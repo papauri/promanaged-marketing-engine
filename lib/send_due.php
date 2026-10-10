@@ -38,7 +38,7 @@ if ($br['blocked']) {
 }
 
 $cands = [];
-foreach (['promanaged', 'travel'] as $b) {
+foreach (pm_brand_ids() as $b) {
     pm_brand_set($b);
     if (pm_sent_today($leads) >= pm_effective_send_cap(pm_agents_config())) {
         continue; // today's (warm-up) limit for this brand is used up

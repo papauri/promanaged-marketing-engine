@@ -25,6 +25,10 @@ function pm_social_trends(string $brand = 'promanaged'): array
 function pm_trend_prompt(string $brand): array
 {
     $rules = ' One short line each, factual, no speculation, nothing political or sensitive. Reply with JSON only.';
+    if (pm_brand_is_custom($brand)) {
+        $br = pm_brain($brand);
+        return ["You are the Trend radar for " . pm_brand_name($brand) . ', ' . rtrim(trim((string)($br['about'] ?? 'a small business')), '.') . ". From current Malawian news and seasons, list up to 6 things its customers (" . (rtrim(trim((string)($br['audience'] ?? '')), '.') ?: 'people and businesses') . ') are talking about THIS week: events, weather, fuel or currency moves, school terms, seasons.' . $rules, 'Return JSON: {"items":["...", "..."]}'];
+    }
     $system = $brand === 'travel'
         ? "You are the Trend radar for Travel Malawi, a direct-booking site for independent stays in Malawi. From current Malawian tourism news and seasons, list up to 6 things travellers and stay owners are talking about THIS week: festivals and events, school holidays, the rainy or dry season, lake and weather conditions, flights, roads and borders, fuel prices, wildlife and birding seasons." . $rules
         : "You are the Trend radar for a small IT and marketing business in Malawi. From current Malawian news and seasons, list up to 6 things small businesses (and their customers) are talking about THIS week — events, weather, fuel or currency moves, school terms, football, farming or tourism seasons." . $rules;
@@ -39,7 +43,7 @@ function pm_jobg_trends(): string
     $due = [];
     $fresh = 0;
     $doneToday = 0;
-    foreach (['promanaged', 'travel'] as $b) {
+    foreach (pm_brand_ids() as $b) {
         $day = (string)($d['brands'][$b]['day'] ?? ($b === 'promanaged' ? ($d['day'] ?? '') : ''));
         if ($day === $today) {
             $doneToday++;
@@ -81,7 +85,7 @@ function pm_jobg_trends(): string
             return $d;
         }, fn() => []);
     }
-    $msg = $stored ? implode(', ', array_map(fn($b, $i) => count($i) . ' ' . ($b === 'travel' ? 'Travel Malawi' : 'ProManaged IT'), array_keys($stored), $stored)) . ' trend(s) stored for the planners' : 'trends: nothing usable returned';
+    $msg = $stored ? implode(', ', array_map(fn($b, $i) => count($i) . ' ' . (pm_brand_name($b)), array_keys($stored), $stored)) . ' trend(s) stored for the planners' : 'trends: nothing usable returned';
     return $errors ? $msg . ' (' . implode('; ', $errors) . ')' : $msg;
 }
 
@@ -240,7 +244,7 @@ function pm_proactive(string $brand): array
 function pm_jobg_proactive(): string
 {
     $made = 0;
-    foreach (['promanaged', 'travel'] as $b) {
+    foreach (pm_brand_ids() as $b) {
         $d = pm_load('proactive', fn() => []);
         if (($d[$b]['day'] ?? '') === date('Y-m-d')) {
             continue;

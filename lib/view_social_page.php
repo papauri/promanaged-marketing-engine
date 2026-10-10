@@ -5,7 +5,7 @@ $view = (string)($_GET['view'] ?? 'page');
 if ($view === 'page') {
     pm_fb_judge_if_stale($vb);
 }
-$bname = $vb === 'travel' ? $settings['travel']['company_name'] : 'ProManaged IT';
+$bname = pm_brand_title($settings, $vb);
 $sc = pm_social_cfg($vb);
 $fp = fn($do, $extra = '') => '<input type="hidden" name="csrf" value="' . $csrf . '"><input type="hidden" name="action" value="fbm"><input type="hidden" name="do" value="' . $do . '"><input type="hidden" name="view" value="' . pm_h($view) . '">' . $extra;
 $hid = fn($n, $v) => '<input type="hidden" name="' . $n . '" value="' . pm_h((string)$v) . '">';

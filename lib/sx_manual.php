@@ -240,7 +240,7 @@ function pm_job_manual_alert(string $brand): string
     if (!$send) {
         return '';
     }
-    pm_social_notify(($brand === 'travel' ? 'Travel Malawi' : 'ProManaged IT') . ': ' . count($late) . ' hand-posts overdue', implode("\n", array_map(fn($x) => $x['label'] . ' · ' . $x['headline'] . ' · due ' . $x['when'], array_slice($late, 0, 8))));
+    pm_social_notify((pm_brand_name($brand)) . ': ' . count($late) . ' hand-posts overdue', implode("\n", array_map(fn($x) => $x['label'] . ' · ' . $x['headline'] . ' · due ' . $x['when'], array_slice($late, 0, 8))));
     return count($late) . ' overdue hand-posts: owner alerted';
 }
 
@@ -297,6 +297,9 @@ function pm_status_idea(string $brand, string $date): array
         if ($brand === 'travel') {
             return ['kind' => 'question', 'label' => 'A question', 'text' => "Question for you: which part of Malawi should we show next? Reply here and tell us.", 'note' => ''];
         }
+        if (pm_brand_is_custom($brand)) {
+            return ['kind' => 'question', 'label' => 'A question', 'text' => "Question for you: what would you like to hear more about from $co? Reply here and tell us.", 'note' => ''];
+        }
         $pains = function_exists('pm_template') ? (array)(pm_template()['pain_points'] ?? []) : [];
         $pain = $pains ? trim((string)($pains[intdiv($n, 4) % count($pains)]['pain'] ?? '')) : '';
         return ['kind' => 'question', 'label' => 'A question', 'text' => $pain !== '' ? "Does this sound like your business: $pain\nReply YES and we will share a simple fix." : "What is the biggest IT headache in your business this week?\nReply here and tell us.", 'note' => ''];
@@ -308,7 +311,7 @@ function pm_ch_company(string $brand): string
 {
     $prev = pm_brand();
     pm_brand_set($brand);
-    $n = (string)(pm_settings()['company_name'] ?? ($brand === 'travel' ? 'Travel Malawi' : 'ProManaged IT'));
+    $n = (string)(pm_settings()['company_name'] ?? (pm_brand_name($brand)));
     pm_brand_set($prev);
     return $n;
 }
@@ -623,12 +626,12 @@ function pm_host_kit_cards(array $kit): array
     $row = $kit['row'];
     $brand = pm_ch_brand((string)$p['brand']);
     $travel = $brand === 'travel';
-    $link = function_exists('pm_enquire_url') ? (string)pm_enquire_url($brand, $travel ? 'host' : 'check', ($travel ? 'host-' : 'client-') . $row['id']) : '';
+    $link = function_exists('pm_enquire_url') ? (string)pm_enquire_url($brand, $travel ? 'host' : (pm_brand_is_custom($brand) ? '' : 'check'), ($travel ? 'host-' : 'client-') . $row['id']) : '';
     $feat = $badge = '';
     if (function_exists('pm_card_special')) {
         $f = pm_card_special($brand, 'featured', ['name' => (string)($row['client_name'] ?? ''), 'headline' => (string)($p['headline'] ?? ''), 'handle' => (string)($row['ig_handle'] ?? '')], 'sq');
         $feat = is_string($f) ? pm_ch_data_uri($f) : '';
-        $b = pm_card_special($brand, 'badge', ['text' => $travel ? 'Listed with Travel Malawi' : 'Powered by ProManaged IT', 'link' => $link], 'sq');
+        $b = pm_card_special($brand, 'badge', ['text' => $travel ? 'Listed with Travel Malawi' : 'Powered by ' . pm_brand_name($brand), 'link' => $link], 'sq');
         $badge = is_string($b) ? pm_ch_data_uri($b) : '';
     }
     return ['featured' => $feat, 'badge' => $badge, 'link' => $link];

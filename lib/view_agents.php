@@ -4,9 +4,9 @@
  * Layout, top to bottom: brand switch, find-a-business, run + progress, numbers, today's tasks, leads, then a "More" fold.
  */
 $bsel = (string)($_GET['brand'] ?? ($_SESSION['abrand'] ?? 'promanaged'));
-$_SESSION['abrand'] = $bsel === 'travel' ? 'travel' : 'promanaged';
+$_SESSION['abrand'] = pm_brand_norm($bsel);
 pm_brand_set($_SESSION['abrand']);
-$bname = pm_brand() === 'travel' ? pm_settings()['travel']['company_name'] : 'ProManaged IT';
+$bname = pm_brand_title(pm_settings(), pm_brand());
 $acfg = pm_agents_config();
 $leadsAll = array_filter(pm_leads(), fn($l) => ($l['brand'] ?? 'promanaged') === pm_brand());
 $run = pm_run_state();
@@ -62,7 +62,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
 <!-- 1. Find a business -->
 <div class="card find">
   <form method="post" class="findrow"><?= $post('', 'lookup') ?><?= $hid('brand', pm_brand()) ?>
-    <input type="text" name="name" required placeholder="Find a business by name, e.g. <?= pm_brand() === 'travel' ? 'Mufasa Eco Lodge' : 'Sunbird Capital Hotel' ?>" aria-label="Business name">
+    <input type="text" name="name" required placeholder="Find a business by name, <?= pm_brand() === 'travel' ? 'e.g. Mufasa Eco Lodge' : (pm_brand_is_custom(pm_brand()) ? '' : 'e.g. Sunbird Capital Hotel') ?>" aria-label="Business name">
     <input type="text" name="city" placeholder="City (optional)" aria-label="City" class="narrow">
     <button class="btn">Find</button>
     <button class="btn primary" name="proposal" value="1">Find + proposal</button>
@@ -299,6 +299,8 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
   <form method="post"><?= $post('', 'config') ?>
     <?php if (pm_brand() !== 'travel'): ?><label>What we sell (one line each, "Name: description")</label>
     <textarea name="cfg[offerings]" rows="4"><?= pm_h(implode("\n", $acfg['offerings'])) ?></textarea><?php endif; ?>
+    <?php if (pm_brand_is_custom(pm_brand())): ?><label>Existing clients (one per line; they are never cold-pitched)</label>
+    <textarea name="cfg[existing_clients]" rows="3"><?= pm_h(implode("\n", (array)($acfg['existing_clients'] ?? []))) ?></textarea><?php endif; ?>
     <div class="row">
       <div><label>Cities to search (comma separated)</label><input type="text" name="cfg[cities]" value="<?= pm_h(implode(', ', $acfg['cities'])) ?>"></div>
       <div><label>Types of business to look for (comma separated)</label><input type="text" name="cfg[sectors]" value="<?= pm_h(implode(', ', $acfg['sectors'])) ?>"></div>

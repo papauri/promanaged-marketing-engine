@@ -18,13 +18,13 @@ function pm_link_cfg(string $brand = ''): array
 {
     $brand = $brand ?: pm_brand();
     $s = pm_settings();
-    $c = $brand === 'travel' ? ($s['travel'] ?? []) : $s;
+    $c = pm_brand_block($s, $brand);
     $url = pm_clean_url((string)($c['link_url'] ?? ''));
     return ['url' => $url, 'on' => $url !== '' && !empty($c['link_on'])];
 }
 
-function pm_link_thumb_path(string $brand): string { return PM_DATA . '/thumbs/' . ($brand === 'travel' ? 'travel' : 'promanaged') . '.img'; }
-function pm_link_meta_file(string $brand): string { return PM_DATA . '/link_' . ($brand === 'travel' ? 'travel' : 'promanaged') . '.json'; }
+function pm_link_thumb_path(string $brand): string { return PM_DATA . '/thumbs/' . (pm_brand_norm($brand)) . '.img'; }
+function pm_link_meta_file(string $brand): string { return PM_DATA . '/link_' . (pm_brand_norm($brand)) . '.json'; }
 
 /** Fetched text (a web page) as clean UTF-8: converts from the declared or Windows-1252 charset and drops invalid bytes. */
 function pm_to_utf8(string $s, string $contentType = ''): string

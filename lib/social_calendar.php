@@ -73,7 +73,7 @@ function pm_malawi_occasions(string $from, string $to, string $brand = ''): arra
     }
     // the owner's own dates ("Dates that matter"): confirmed unless the owner left them unticked
     if (function_exists('pm_bank_get')) {
-        foreach ($brand === '' ? ['promanaged', 'travel'] : [$brand] as $b) {
+        foreach ($brand === '' ? pm_brand_ids() : [$brand] as $b) {
             foreach ((array)(pm_bank_get($b)['dates'] ?? []) as $r) {
                 $d = (string)($r['date'] ?? '');
                 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) || trim((string)($r['label'] ?? '')) === '') {

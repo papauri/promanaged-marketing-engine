@@ -104,13 +104,13 @@ function pm_catalogue_items(string $brand): array
         $tpl = function_exists('pm_template') ? pm_template() : ['packages' => []];
         $stay = function_exists('pm_onboarding_index') ? (int)pm_onboarding_index() : -1;
         foreach ((array)$tpl['packages'] as $i => $pk) {
-            if (($brand === 'travel') !== ($i === $stay)) {
+            if (pm_brand_is_custom($brand) || ($brand === 'travel') !== ($i === $stay)) {
                 continue;
             }
             $items['pkg' . $i] = [trim((string)$pk['name']), trim((string)$pk['name'] . ': ' . (string)($pk['suited'] ?? ''))];
         }
-        if ($brand === 'promanaged' && function_exists('pm_agents_config')) {
-            foreach ((array)(pm_agents_config('promanaged')['offerings'] ?? []) as $i => $o) {
+        if (($brand === 'promanaged' || pm_brand_is_custom($brand)) && function_exists('pm_agents_config')) {
+            foreach ((array)(pm_agents_config($brand)['offerings'] ?? []) as $i => $o) {
                 $o = trim((string)$o);
                 $items['off' . $i] = [trim(explode(':', $o)[0]), $o];
             }

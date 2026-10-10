@@ -562,7 +562,7 @@ function pm_sx_next_actions(string $brand, array $r, array $sb, array $g): array
 /** The report as plain text (also the email body). Manual figures are labelled; gaps are stated. */
 function pm_social_week_text(array $r): string
 {
-    $name = $r['brand'] === 'travel' ? 'Travel Malawi' : 'ProManaged IT';
+    $name = pm_brand_name($r['brand']);
     $n = fn($v) => $v === null ? 'no data' : number_format((float)$v);
     $sg = fn($v) => $v === null ? 'n/a' : ($v >= 0 ? '+' : '') . $v;
     $f = $r['followers'];
@@ -618,7 +618,7 @@ function pm_jobg_report_weekly(): string
     }
     $wk = date('o-\WW', $t);
     $sent = [];
-    foreach (['promanaged', 'travel'] as $b) {
+    foreach (pm_brand_ids() as $b) {
         $was = pm_brand();
         pm_brand_set($b);
         try {
@@ -636,7 +636,7 @@ function pm_jobg_report_weekly(): string
             });
             if ($claimed) {
                 $r = pm_social_week_report($b);
-                pm_social_notify(($b === 'travel' ? 'Travel Malawi' : 'ProManaged IT') . ': social report for the week', pm_social_week_text($r));
+                pm_social_notify((pm_brand_name($b)) . ': social report for the week', pm_social_week_text($r));
                 $sent[] = $b;
             }
         } finally {

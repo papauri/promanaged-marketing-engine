@@ -86,7 +86,7 @@ function pm_attrib_from_request(array $q): array
 /** Leads of a brand created in the last $days days, with the fields the scoreboard and funnel need. */
 function pm_attrib_leads(string $brand, int $days = 90): array
 {
-    $brand = $brand === 'travel' ? 'travel' : 'promanaged';
+    $brand = pm_brand_norm($brand);
     $cut = date('Y-m-d', time() - $days * 86400);
     $out = [];
     foreach (pm_load('leads', fn() => []) as $l) {
@@ -118,7 +118,7 @@ const PM_ENQ_SOURCES = ['post-ref' => ['Our post (I have the code)', 'ref'], 'pa
  */
 function pm_log_enquiry(array $d): array
 {
-    $brand = ($d['brand'] ?? pm_brand()) === 'travel' ? 'travel' : 'promanaged';
+    $brand = pm_brand_norm($d['brand'] ?? pm_brand());
     $clip = fn($v, int $n) => mb_substr(trim(preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', '', (string)$v)), 0, $n);
     $name = $clip($d['name'] ?? '', 80);
     $phone = $clip($d['phone'] ?? '', 40);
@@ -176,7 +176,7 @@ function pm_panel_lead_card_attrib(string $vb, array $ctx = []): string
     if (!$l || (empty($l['src_tag']) && empty($l['source_post']) && !in_array($l['source'] ?? '', ['web', 'facebook', 'instagram', 'social'], true))) {
         return '';
     }
-    $brand = ($l['brand'] ?? 'promanaged') === 'travel' ? 'travel' : 'promanaged';
+    $brand = pm_brand_norm($l['brand'] ?? 'promanaged');
     $posts = array_values(array_filter(pm_social_posts_safe(), fn($p) => ($p['brand'] ?? 'promanaged') === $brand && (!empty($p['fb_id']) || ($p['status'] ?? '') === 'published')));
     usort($posts, fn($a, $b) => strcmp((string)($b['when'] ?? ''), (string)($a['when'] ?? '')));
     $cur = array_values(array_filter($posts, fn($p) => $p['id'] === ($l['source_post'] ?? '')))[0] ?? null;

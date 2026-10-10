@@ -1,11 +1,11 @@
 <?php
 /** Social > Accounts & branding: every platform's status, link, setup steps, and its sized profile and cover pictures. */
 pm_brand_set($vb);
-$bname = $vb === 'travel' ? $settings['travel']['company_name'] : 'ProManaged IT';
+$bname = pm_brand_title($settings, $vb);
 $cfg = pm_social_settings($vb);
 $fb = pm_social_cfg($vb);
 $li = pm_linkedin_cfg($vb);
-$pre = $vb === 'travel' ? 'TM_' : '';
+$pre = pm_brand_env_prefix($vb);
 $hero = pm_hero_path($vb);
 $kitUrl = fn($f, $dl = false) => '?kit=' . urlencode(basename($f)) . '&b=' . $vb . '&v=' . @filemtime($f) . ($dl ? '&dl=1' : '');
 $status = function (string $k) use ($fb, $li, $cfg): array {

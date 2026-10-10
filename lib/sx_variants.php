@@ -19,7 +19,7 @@ const PM_CH_SRC = ['facebook' => 'fb', 'instagram' => 'ig', 'linkedin' => 'li', 
 
 /* ---------------- data/social_channels.json ---------------- */
 
-function pm_ch_brand(string $b): string { return $b === 'travel' ? 'travel' : 'promanaged'; }
+function pm_ch_brand(string $b): string { return pm_brand_norm($b); }
 
 function pm_ch_defaults(): array
 {
@@ -172,7 +172,7 @@ function pm_ch_cta(array $p): string
     $c = (string)($p['cta'] ?? '');
     $travel = ($p['brand'] ?? '') === 'travel';
     return match (true) {
-        $c === 'check', $c === 'host' => ($travel ? 'host' : ($c === 'check' ? 'check' : 'whatsapp')),
+        $c === 'check', $c === 'host' => ($travel ? 'host' : ($c === 'check' && !pm_brand_is_custom((string)($p['brand'] ?? '')) ? 'check' : 'whatsapp')),
         in_array($c, ['comment', 'save', 'share', 'tag'], true) => $c,
         default => 'whatsapp',
     };

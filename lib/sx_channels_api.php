@@ -390,7 +390,7 @@ function pm_job_channels_ig(string $brand): string
 function pm_li_token_days_left(string $brand): ?int
 {
     $e = pm_env();
-    $pre = $brand === 'travel' ? 'TM_' : '';
+    $pre = pm_brand_env_prefix($brand);
     if (trim((string)($e[$pre . 'LI_TOKEN'] ?? '')) === '') {
         return null;
     }

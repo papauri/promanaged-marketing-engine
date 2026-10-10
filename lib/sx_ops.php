@@ -18,10 +18,13 @@ function pm_setup_health(): array
     $row = function (string $key, string $label, string $need, bool $ok, string $detail, string $add) use (&$rows): void {
         $rows[] = ['key' => $key, 'label' => $label, 'need' => $need, 'ok' => $ok, 'detail' => $detail, 'add' => $ok ? '' : $add];
     };
-    $names = ['promanaged' => 'ProManaged IT', 'travel' => 'Travel Malawi'];
+    $names = [];
+    foreach (pm_brand_ids() as $bid) {
+        $names[$bid] = pm_brand_name($bid);
+    }
     $row('ai', 'AI agents', 'required', pm_agents_ready(), pm_agents_ready() ? 'An AI key is set.' : 'No AI key yet, so the agents and the planner cannot write.', pm_agents_missing_key() . '=... in .env');
     foreach ($names as $b => $n) {
-        $p = $b === 'travel' ? 'TM_' : '';
+        $p = pm_brand_env_prefix($b);
         pm_brand_set($b);
         $sm = (array)(pm_settings()['smtp'] ?? []);
         $mailOk = trim((string)($sm['host'] ?? '')) !== '' && trim((string)($sm['username'] ?? '')) !== '';
