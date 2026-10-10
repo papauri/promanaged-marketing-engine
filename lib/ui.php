@@ -15,9 +15,9 @@ function pm_ui_nav(): array
         'whatsapp' => ['label' => 'WhatsApp', 'href' => '?tab=whatsapp', 'tabs' => ['whatsapp']],
         'social' => ['label' => 'Social', 'href' => '?tab=social', 'tabs' => ['social'], 'groups' => [
             'Publish' => ['' => 'Plan', 'leadposts' => 'Lead posts', 'content' => 'Content', 'channels' => 'Channels'],
-            'Grow' => ['growth' => 'Growth', 'inbox' => 'Inbox', 'page' => 'Page', 'cleanup' => 'Clean-up', 'ads' => 'Ads'],
+            'Grow' => ['optimise' => 'Optimise', 'growth' => 'Growth', 'inbox' => 'Inbox', 'page' => 'Page', 'cleanup' => 'Clean-up', 'ads' => 'Ads'],
             'Measure' => ['results' => 'Results', 'audit' => 'Audit'],
-            'Set up' => ['accounts' => 'Accounts & branding'],
+            'Set up' => ['studio' => 'Studio (covers and pictures)', 'accounts' => 'Accounts & branding'],
         ]],
         'proposals' => ['label' => 'Proposals', 'href' => '?tab=proposal', 'tabs' => ['proposal', 'history', 'template'], 'items' => [
             '?tab=proposal' => 'New proposal', '?tab=history' => 'History', '?tab=template' => 'Template and prices']],
