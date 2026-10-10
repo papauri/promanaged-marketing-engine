@@ -48,11 +48,16 @@ function pm_setup_health(): array
         'WA_BIZ_TOKEN, WA_BIZ_PHONE_ID, WA_BIZ_VERIFY in .env (and WA_BIZ_TEMPLATE for campaigns)');
     $cron = pm_env_val('CRON_KEY') !== '';
     $age = function_exists('pm_social_heartbeat_age') ? pm_social_heartbeat_age() : null;
+    $last = function_exists('pm_health_last') ? pm_health_last() : [];
     $row('scheduler', 'Scheduler', 'required', $age !== null && $age < 7200, $age === null ? 'It has never run: scheduled posts and sending only happen while the app is open.' : ($age < 7200 ? 'Last ran ' . max(1, intdiv($age, 60)) . ' minutes ago.' : 'Last ran ' . intdiv($age, 3600) . ' hours ago: check the scheduled task.'),
         'Run schedule_agents.bat once (Windows), or add the cPanel cron line (README: SOCIAL)');
     $row('cron_key', 'Web scheduler key', 'optional', $cron, $cron ? 'CRON_KEY is set: cron.php can be called by the host.' : 'Only needed on a website host (cPanel cron).', 'CRON_KEY=a-long-random-text in .env');
     $url = pm_app_url() !== '';
     $row('app_url', 'Public address', 'required', $url, $url ? pm_app_url() : 'Instagram cannot fetch pictures and clients cannot open links until the app is online.', 'APP_URL=https://your-site in .env');
+    foreach ($rows as $i => $r) { // C3-G02: rows with a check behind them get a Test button and show the last result
+        $rows[$i]['testable'] = pm_health_testable($r);
+        $rows[$i]['last'] = $last[$r['key']] ?? null;
+    }
     return $rows;
 }
 
@@ -79,7 +84,9 @@ function pm_view_setup_health(): void
     foreach ($rows as $r) {
         echo '<tr><td style="white-space:nowrap"><span class="pill ' . ($r['ok'] ? 'hot' : ($r['need'] === 'required' ? 'warn' : '')) . '">' . ($r['ok'] ? 'ready' : ($r['need'] === 'required' ? 'to do' : 'off')) . '</span></td>'
             . '<td><b>' . pm_h($r['label']) . '</b><br><span class="hint" style="margin:0">' . pm_h($r['detail']) . '</span></td>'
-            . '<td>' . ($r['add'] !== '' ? '<span class="hint" style="margin:0">Add: <code>' . pm_h($r['add']) . '</code></span>' : '') . '</td></tr>';
+            . '<td>' . ($r['add'] !== '' ? '<span class="hint" style="margin:0">Add: <code>' . pm_h($r['add']) . '</code></span>' : '')
+            . (!empty($r['testable']) ? '<form method="post" style="display:inline"><input type="hidden" name="csrf" value="' . pm_h((string)($GLOBALS['csrf'] ?? ($_SESSION['csrf'] ?? ''))) . '"><input type="hidden" name="action" value="health_check"><input type="hidden" name="key" value="' . pm_h($r['key']) . '"><button class="btn small">Test now</button></form>' : '')
+            . (!empty($r['last']) ? ' <span class="hint" style="margin:0">Last test ' . pm_h(date('j M H:i', strtotime((string)$r['last']['at']))) . ': ' . (!empty($r['last']['ok']) ? '<b>ok</b>' : '<b style="color:var(--danger)">failed</b>') . ' · ' . pm_h((string)$r['last']['msg']) . '</span>' : '') . '</td></tr>';
     }
     echo '</tbody></table></details>';
 }
@@ -322,4 +329,393 @@ function pm_jobg_archive(): string
         }
     }
     return 'weekly archive saved (' . $n . ' files, ' . basename($path) . ')' . ($gone ? ", $gone old archive(s) removed" : '');
+}
+
+/* ================================================================== cycle 3 ================================================================== */
+
+/* ---------------- C3-G02 · test buttons on the setup-health rows ---------------- */
+
+/** Logs in to the business's mail server without sending anything: [ok, message]. $GLOBALS['PM_SMTP_CHECK_STUB'] (tests) replaces the network. */
+function pm_smtp_login_check(array $sm): array
+{
+    if (trim((string)($sm['host'] ?? '')) === '' || trim((string)($sm['username'] ?? '')) === '') {
+        return [false, 'no mail server is set up yet'];
+    }
+    if (isset($GLOBALS['PM_SMTP_CHECK_STUB']) && is_callable($GLOBALS['PM_SMTP_CHECK_STUB'])) {
+        return $GLOBALS['PM_SMTP_CHECK_STUB']($sm);
+    }
+    if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
+        return [false, 'the mail library is not loaded'];
+    }
+    try {
+        $mm = new PHPMailer\PHPMailer\PHPMailer(true);
+        $mm->isSMTP();
+        $mm->Host = (string)$sm['host'];
+        $mm->Port = (int)$sm['port'];
+        $mm->SMTPAuth = true;
+        $mm->Username = (string)$sm['username'];
+        $mm->Password = (string)$sm['password'];
+        $mm->SMTPSecure = ($sm['encryption'] ?? '') === 'ssl' ? PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS : (($sm['encryption'] ?? '') === 'tls' ? PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS : '');
+        $mm->Timeout = 20;
+        $ok = $mm->smtpConnect();
+        $mm->smtpClose();
+        return $ok ? [true, 'logged in to ' . $sm['host'] . ' as ' . $sm['username'] . '; nothing was sent'] : [false, 'the server did not accept the login'];
+    } catch (Throwable $e) {
+        return [false, mb_substr($e->getMessage(), 0, 200)];
+    }
+}
+
+/**
+ * Runs the check behind one setup-health row: smtp_<business> (mail login), imap_<business> (reply inbox login), fb_<business> (Facebook Page) or wa (WhatsApp Business).
+ * Returns [ok, message] and remembers the answer for the row. Each check only reads or logs in; nothing is posted or sent.
+ */
+function pm_health_check(string $key): array
+{
+    $res = [false, 'There is no check for that.'];
+    $what = (string)strtok($key, '_');
+    $b = (string)substr($key, strlen($what) + 1);
+    $was = pm_brand();
+    try {
+        if (in_array($what, ['smtp', 'imap', 'fb'], true) && !pm_brand_valid($b)) {
+            $res = [false, 'Unknown business.'];
+        } elseif ($what === 'smtp') {
+            pm_brand_set($b);
+            $res = pm_smtp_login_check((array)(pm_settings()['smtp'] ?? []));
+        } elseif ($what === 'imap') {
+            $res = function_exists('pm_imap_login_check') ? pm_imap_login_check(pm_imap_settings($b)) : [false, 'Not available.'];
+        } elseif ($what === 'fb') {
+            $pg = pm_social_page($b, true);
+            $res = !empty($pg['ok']) ? [true, 'connected to the Page "' . $pg['name'] . '" (' . number_format((int)$pg['followers']) . ' followers)'] : [false, (string)($pg['error'] ?? 'not connected')];
+        } elseif ($key === 'wa') {
+            $res = function_exists('pm_wa_biz_check') ? pm_wa_biz_check() : [false, 'Not available.'];
+        }
+    } catch (Throwable $e) {
+        $res = [false, mb_substr($e->getMessage(), 0, 200)];
+    } finally {
+        pm_brand_set($was);
+    }
+    $res = [(bool)$res[0], trim((string)$res[1])];
+    pm_update('health_checks', function (array $all) use ($key, $res) {
+        $all[$key] = ['at' => date('Y-m-d H:i'), 'ok' => $res[0], 'msg' => mb_substr($res[1], 0, 200)];
+        return array_slice($all, -60, null, true);
+    }, fn() => []);
+    return $res;
+}
+
+/** The last test result per row key: key => {at, ok, msg}. */
+function pm_health_last(): array
+{
+    return pm_load('health_checks', fn() => []);
+}
+
+/** Does this setup-health row have a check behind it, and is it set up enough to try? */
+function pm_health_testable(array $row): bool
+{
+    return !empty($row['ok']) && (preg_match('/^(smtp|imap|fb)_/', (string)$row['key']) === 1 || $row['key'] === 'wa');
+}
+
+/* ---------------- C3-G01 · restore one file from a weekly archive ---------------- */
+
+/** The files inside one archive: name => decoded array. '' / unreadable archives give []. */
+function pm_archive_read(string $path): array
+{
+    if (!is_file($path)) {
+        return [];
+    }
+    if (str_ends_with($path, '.zip')) {
+        if (!class_exists('ZipArchive')) {
+            return [];
+        }
+        $z = new ZipArchive();
+        if ($z->open($path) !== true) {
+            return [];
+        }
+        $out = [];
+        for ($i = 0; $i < $z->numFiles; $i++) {
+            $n = (string)$z->getNameIndex($i);
+            if (preg_match('/^[a-z0-9_]+\.json$/', $n) && ($d = json_decode((string)$z->getFromIndex($i), true)) !== null && is_array($d)) {
+                $out[$n] = $d;
+            }
+        }
+        $z->close();
+        return $out;
+    }
+    $j = json_decode((string)@gzdecode((string)file_get_contents($path)), true);
+    $out = [];
+    foreach ((array)($j['files'] ?? []) as $n => $d) {
+        if (preg_match('/^[a-z0-9_]+\.json$/', (string)$n) && is_array($d)) {
+            $out[(string)$n] = $d;
+        }
+    }
+    return $out;
+}
+
+/** The archive file for a name typed or posted: only a file that is really in data/archive (never a path). '' when unknown. */
+function pm_archive_path(string $name): string
+{
+    foreach (array_keys(pm_data_archives()) as $f) {
+        if (basename($f) === $name) {
+            return $f;
+        }
+    }
+    return '';
+}
+
+/** Archives were written without mail logins, secrets and tokens. A restored file keeps the CURRENT value of every such key, so a restore never wipes a login. */
+function pm_restore_keep_secrets(array $current, array $archived): array
+{
+    $secret = fn($k) => is_string($k) && (preg_match('/^(smtp|imap|csrf)$/i', $k) || preg_match('/pass(word|wd)?$|secret|api_?key|access_?token|page_?token|token_secret|^authorization$/i', $k));
+    foreach ($current as $k => $v) {
+        if ($secret($k)) {
+            $archived[$k] = $v;
+        } elseif (is_array($v) && isset($archived[$k]) && is_array($archived[$k])) {
+            $archived[$k] = pm_restore_keep_secrets($v, $archived[$k]);
+        }
+    }
+    return $archived;
+}
+
+/**
+ * Puts ONE file back from a weekly archive. The archive must be one of ours, the file must be inside it. The file being replaced is copied to
+ * data/backup/<name>.before-restore-<time>.json first, so the restore itself can be undone. Returns [ok, message].
+ */
+function pm_archive_restore(string $archiveName, string $file): array
+{
+    $path = pm_archive_path($archiveName);
+    if ($path === '') {
+        return [false, 'That archive is not in the list.'];
+    }
+    if (!preg_match('/^[a-z0-9_]+\.json$/', $file)) {
+        return [false, 'That is not a data file name.'];
+    }
+    $inside = pm_archive_read($path);
+    if (!isset($inside[$file])) {
+        return [false, $file . ' is not in that archive' . (str_ends_with($path, '.zip') && !class_exists('ZipArchive') ? ' (this server cannot open zip files)' : '') . '.'];
+    }
+    $name = substr($file, 0, -5);
+    $cur = PM_DATA . '/' . $file;
+    $kept = '';
+    if (is_file($cur) && filesize($cur) > 0) {
+        $dir = PM_DATA . '/backup';
+        @mkdir($dir, 0775, true);
+        $kept = $dir . '/' . $name . '.before-restore-' . date('YmdHis') . '.json';
+        if (!@copy($cur, $kept)) {
+            return [false, 'Could not back up the current ' . $file . ' first, so nothing was changed.'];
+        }
+    }
+    $curData = is_file($cur) ? (array)(json_decode((string)file_get_contents($cur), true) ?: []) : [];
+    $data = pm_restore_keep_secrets($curData, $inside[$file]);
+    if (!$data && $curData) {
+        return [false, 'The archived copy of ' . $file . ' is empty, so nothing was changed.'];
+    }
+    try {
+        pm_save($name, $data);
+    } catch (Throwable $e) {
+        return [false, 'Could not write ' . $file . ': ' . $e->getMessage()];
+    }
+    return [true, 'Restored ' . $file . ' from the ' . $archiveName . ' archive.' . ($kept !== '' ? ' The file it replaced was kept as ' . basename($kept) . ' in the backup folder.' : '')];
+}
+
+/** The Backups panel of Settings: the archives, a download link and a restore form for each. */
+function pm_view_archives(): void
+{
+    $csrf = (string)($GLOBALS['csrf'] ?? ($_SESSION['csrf'] ?? ''));
+    $arch = pm_data_archives();
+    echo '<details class="card"><summary><b>Backups</b> <span class="pill">' . count($arch) . ' weekly archive' . (count($arch) === 1 ? '' : 's') . '</span></summary>'
+        . '<p class="hint">Every week the app saves a copy of your data (mail logins and keys removed) and keeps the last eight. Download one to keep it somewhere safe, or put a single file back. '
+        . 'Restoring keeps the file it replaces in the backup folder, and never touches your mail logins.</p>';
+    if (!$arch) {
+        echo '<p class="hint">No archive yet: the first one is made by the scheduler within a week.</p></details>';
+        return;
+    }
+    foreach (array_slice($arch, 0, 8, true) as $f => $day) {
+        $names = array_keys(pm_archive_read($f));
+        sort($names);
+        echo '<form method="post" class="task"><input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="archive_restore"><input type="hidden" name="archive" value="' . pm_h(basename($f)) . '">'
+            . '<span><b>' . pm_h(date('j M Y', strtotime($day))) . '</b> <span class="muted">· ' . pm_h(strtoupper(substr(basename($f), strrpos(basename($f), '.') + 1))) . ' · ' . number_format(((int)filesize($f)) / 1024, 0) . ' KB</span></span>'
+            . '<a class="btn small" href="?archive=' . urlencode(basename($f)) . '">Download</a>'
+            . ($names ? '<select name="file" aria-label="File to put back" required><option value="">Put back…</option>' . implode('', array_map(fn($n) => '<option>' . pm_h($n) . '</option>', $names)) . '</select>'
+                . '<label class="check" style="margin:0"><input type="checkbox" name="confirm" value="1" required> I understand</label><button class="btn small danger">Restore that file</button>'
+                : '<span class="hint">Cannot be opened on this server.</span>') . '</form>';
+    }
+    echo '</details>';
+}
+
+/* ---------------- C3-G03 · archive search and bulk restore ---------------- */
+
+/** Archived leads of one business matching a search: by words in the name, the city or the type. Newest archived first, up to $max. */
+function pm_archive_search(string $brand, string $q = '', string $city = '', string $type = '', int $max = 50): array
+{
+    $out = [];
+    $q = mb_strtolower(trim($q));
+    $city = mb_strtolower(trim($city));
+    $type = mb_strtolower(trim($type));
+    foreach (pm_leads_archive() as $id => $l) {
+        if (($l['brand'] ?? 'promanaged') !== $brand) {
+            continue;
+        }
+        $hay = mb_strtolower((string)($l['name'] ?? '') . ' ' . (string)($l['contact'] ?? '') . ' ' . (string)($l['email'] ?? ''));
+        if (($q !== '' && !str_contains($hay, $q)) || ($city !== '' && !str_contains(mb_strtolower((string)($l['city'] ?? '')), $city)) || ($type !== '' && !str_contains(mb_strtolower((string)($l['type'] ?? '')), $type))) {
+            continue;
+        }
+        $out[(string)$id] = $l;
+    }
+    uasort($out, fn($a, $b) => strcmp((string)($b['archived_at'] ?? ''), (string)($a['archived_at'] ?? '')));
+    return array_slice($out, 0, max(1, $max), true);
+}
+
+/** Restores several archived leads at once (each exactly like a single restore). Returns [restored count, message]. */
+function pm_lead_unarchive_many(array $ids): array
+{
+    $ok = 0;
+    $bad = [];
+    foreach (array_slice(array_values(array_unique(array_map('strval', $ids))), 0, 200) as $id) {
+        [$r, $m] = pm_lead_unarchive($id);
+        if ($r) {
+            $ok++;
+        } else {
+            $bad[] = $m;
+        }
+    }
+    return [$ok, $ok ? "$ok lead" . ($ok === 1 ? ' is' : 's are') . ' back in your leads.' . ($bad ? ' ' . count($bad) . ' could not be restored (' . $bad[0] . ')' : '') : ($bad ? $bad[0] : 'Tick the leads to restore first.')];
+}
+
+/* ---------------- C3-G04 · archive old published posts, keeping their numbers ---------------- */
+
+const PM_POST_ARCHIVE_MONTHS = 18;
+
+/** The 7-day engagement of a published post (reactions + comments + shares, or what the scoreboard counts), 0 when unmeasured. */
+function pm_post_archive_eng(array $p): int
+{
+    $m = (array)($p['metrics']['d7'] ?? []);
+    if (!$m) {
+        return 0;
+    }
+    return function_exists('pm_social_eng') ? (int)pm_social_eng($m) : (int)(($m['reactions'] ?? 0) + ($m['comments'] ?? 0) + ($m['shares'] ?? 0));
+}
+
+/** The summary rows kept for archived posts: [brand => [YYYY-MM => ['posts','eng','measured']]] and the archived posts themselves. */
+function pm_posts_archive_data(): array
+{
+    $d = pm_load('social_posts_archive', fn() => ['posts' => [], 'summary' => []]);
+    return ['posts' => (array)($d['posts'] ?? []), 'summary' => (array)($d['summary'] ?? [])];
+}
+
+/** Totals for one business: ['posts','eng','measured','avg','from','to'] over its archived posts, or posts 0. */
+function pm_posts_archive_summary(string $brand): array
+{
+    $n = 0;
+    $eng = 0;
+    $meas = 0;
+    $months = [];
+    foreach ((array)(pm_posts_archive_data()['summary'][$brand] ?? []) as $month => $r) {
+        $n += (int)$r['posts'];
+        $eng += (int)$r['eng'];
+        $meas += (int)$r['measured'];
+        $months[] = (string)$month;
+    }
+    sort($months);
+    return ['posts' => $n, 'eng' => $eng, 'measured' => $meas, 'avg' => $meas ? round($eng / $meas, 1) : null, 'from' => $months[0] ?? '', 'to' => $months ? end($months) : ''];
+}
+
+/** Moves published posts older than 18 months out of social_posts.json. Their numbers stay in a summary row per business and month. Returns the number moved. */
+function pm_posts_archive_run(?int $now = null): int
+{
+    $now ??= time();
+    $cut = date('Y-m-d', strtotime('-' . PM_POST_ARCHIVE_MONTHS . ' months', $now));
+    $move = [];
+    foreach (pm_social_posts() as $p) {
+        $d = substr((string)(($p['published'] ?? '') ?: ($p['when'] ?? '')), 0, 10);
+        if (($p['status'] ?? '') === 'published' && $d !== '' && $d < $cut) {
+            $move[(string)$p['id']] = $p;
+        }
+    }
+    if (!$move) {
+        return 0;
+    }
+    pm_update('social_posts_archive', function (array $a) use ($move) { // safely on disk first ...
+        $a['posts'] = (array)($a['posts'] ?? []);
+        $a['summary'] = (array)($a['summary'] ?? []);
+        foreach ($move as $id => $p) {
+            if (isset($a['posts'][$id])) {
+                continue;
+            }
+            $b = pm_brand_norm($p['brand'] ?? 'promanaged');
+            $m = substr((string)(($p['published'] ?? '') ?: ($p['when'] ?? '')), 0, 7);
+            $r = (array)($a['summary'][$b][$m] ?? ['posts' => 0, 'eng' => 0, 'measured' => 0]);
+            $r['posts']++;
+            $r['eng'] += pm_post_archive_eng($p);
+            $r['measured'] += !empty($p['metrics']['d7']) ? 1 : 0;
+            $a['summary'][$b][$m] = $r;
+            $a['posts'][$id] = $p + ['archived_at' => date('Y-m-d H:i')];
+        }
+        return $a;
+    }, fn() => ['posts' => [], 'summary' => []]);
+    pm_social_update(fn(array $posts) => array_values(array_filter($posts, fn($p) => !isset($move[(string)($p['id'] ?? '')])))); // ... then out of the live file
+    return count($move);
+}
+
+/** Puts archived posts back (all of a business, or one month) and takes them out of the summary. Returns the number restored. */
+function pm_posts_archive_restore(string $brand, string $month = ''): int
+{
+    $back = [];
+    pm_update('social_posts_archive', function (array $a) use ($brand, $month, &$back) {
+        foreach ((array)($a['posts'] ?? []) as $id => $p) {
+            $m = substr((string)(($p['published'] ?? '') ?: ($p['when'] ?? '')), 0, 7);
+            if (pm_brand_norm($p['brand'] ?? 'promanaged') === $brand && ($month === '' || $m === $month)) {
+                $back[$id] = $p;
+                unset($a['posts'][$id]);
+            }
+        }
+        if ($month === '') {
+            unset($a['summary'][$brand]);
+        } else {
+            unset($a['summary'][$brand][$month]);
+        }
+        return $a;
+    }, fn() => ['posts' => [], 'summary' => []]);
+    if ($back) {
+        pm_social_update(function (array $posts) use ($back) {
+            $have = array_column($posts, 'id');
+            foreach ($back as $id => $p) {
+                if (!in_array($id, $have, true)) {
+                    unset($p['archived_at']);
+                    $posts[] = $p;
+                }
+            }
+            return $posts;
+        });
+    }
+    return count($back);
+}
+
+/** Monthly job: old published posts leave the live file. */
+function pm_jobg_posts_archive(): string
+{
+    $st = pm_load('housekeeping', fn() => []);
+    if (($st['posts_archive_month'] ?? '') === date('Y-m')) {
+        return '';
+    }
+    $n = pm_posts_archive_run();
+    pm_update('housekeeping', function (array $s) { $s['posts_archive_month'] = date('Y-m'); return $s; }, fn() => []);
+    return $n ? "$n published post(s) older than " . PM_POST_ARCHIVE_MONTHS . ' months archived (their numbers are kept)' : '';
+}
+
+/** Results-screen note: published posts older than 18 months are archived, and their numbers stay here as a summary. */
+function pm_panel_results_archived(string $vb, array $ctx = []): string
+{
+    $a = pm_posts_archive_summary($vb);
+    if (!$a['posts']) {
+        return '';
+    }
+    $csrf = (string)($GLOBALS['csrf'] ?? ($_SESSION['csrf'] ?? ''));
+    return '<div class="card"><h2>Older posts</h2><p>' . (int)$a['posts'] . ' published post' . ($a['posts'] === 1 ? '' : 's') . ' from ' . pm_h(date('M Y', strtotime($a['from'] . '-01'))) . ' to ' . pm_h(date('M Y', strtotime($a['to'] . '-01')))
+        . ' were archived to keep this screen fast. Their numbers are kept: ' . number_format((int)$a['eng']) . ' engagements in all' . ($a['avg'] !== null ? ', ' . $a['avg'] . ' per measured post' : '') . '.</p>'
+        . '<form method="post"><input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="posts_archive_restore"><button class="btn small" data-confirm="Put all archived posts back in the live list?">Restore them</button></form></div>';
+}
+
+function pm_do_posts_archive_restore(string $vb): array
+{
+    $n = pm_posts_archive_restore($vb);
+    return ['msg' => $n ? "$n archived post(s) are back in the live list." : 'Nothing was archived.', 'kind' => 'ok', 'to' => 'social&view=results'];
 }

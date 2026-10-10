@@ -725,7 +725,9 @@ t('C2-A07 WhatsApp campaigns: approved first, STOP and limits honoured', functio
     putenv('WA_BIZ_PHONE_ID=999');
     putenv('WA_BIZ_VERIFY=v');
     putenv('WA_BIZ_TEMPLATE');
-    $mk = fn($id, $num, $o = []) => mk_lead($o + ['id' => $id, 'status' => 'contacted', 'whatsapp' => $num, 'contact' => 'Person ' . $id, 'name' => 'Biz ' . $id, 'score' => 70]);
+    // cycle 3 (C3-A01): campaigns reach only people who agreed to WhatsApp messages, so these people have agreed
+    $mk = fn($id, $num, $o = []) => mk_lead($o + ['id' => $id, 'status' => 'contacted', 'whatsapp' => $num, 'contact' => 'Person ' . $id, 'name' => 'Biz ' . $id, 'score' => 70,
+        'wa_optin' => ['source' => 'owner', 'at' => date('Y-m-d H:i', time() - 30 * 86400)]]);
     $leads = ['c1' => $mk('c1', '+265 999 100 001'), 'c2' => $mk('c2', '+265 999 100 002', ['score' => 90]), 'c3' => $mk('c3', '+265 999 100 003'),
         'stop' => $mk('stop', '+265 999 100 004', ['status' => 'optout']), 'nonum' => $mk('nonum', '', ['phone' => '']), 'recent' => $mk('recent', '+265 999 100 005', ['wa_sent' => [date('Y-m-d H:i', time() - 2 * 86400)]]),
         'new' => $mk('new', '+265 999 100 006', ['status' => 'new']), 'low' => $mk('low', '+265 999 100 007', ['score' => 10]),

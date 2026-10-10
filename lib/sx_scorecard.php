@@ -161,6 +161,7 @@ function pm_social_scoreboard(string $brand): array
         'eng_rate' => $rates ? round(array_sum($rates) / count($rates), 2) : null, // average engagement per post as % of followers
         'enq_per_100' => !empty($fa['fb']) ? round($leads28 / $fa['fb'] * 100, 2) : null, // enquiries from social in 28 days per 100 followers
         'groups' => [], 'top5' => [], 'bottom5' => [], 'heat' => [],
+        'archived' => function_exists('pm_posts_archive_summary') ? pm_posts_archive_summary($brand) : ['posts' => 0, 'eng' => 0, 'measured' => 0, 'avg' => null, 'from' => '', 'to' => ''], // C3-G04: older posts live on as a summary
     ];
     foreach (['pillar', 'cta', 'format', 'layout', 'hook_pattern', 'hour', 'daypart', 'segment'] as $f) { // segment: the audience a post speaks to (C2-A05)
         $sb['groups'][$f] = pm_sx_group(array_values(array_filter($rows, fn($r) => $f !== 'segment' || !$r['unplanned'])), $f, $avg);

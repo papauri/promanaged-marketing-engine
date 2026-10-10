@@ -403,6 +403,28 @@ try {
         }
     }
 
+    // ---- 1c. Directory scout: public member lists and directories, one town, once a week ----
+    if ($cfg['enabled']['scout'] && !$bs['pause'] && $stats['added'] < $bs['room'] && function_exists('pm_directory_due') && pm_directory_due($brand)) {
+        $progress('Directory scout reading member lists');
+        try {
+            $cities = array_values($cfg['cities']);
+            $dcity = $cities ? $cities[(int)date('W') % count($cities)] : 'Lilongwe';
+            $known = array_slice(array_map(fn($l) => (string)$l['name'], $leads), -200);
+            $rows = pm_directory_clean(pm_agent_directory($brand, $dcity, (array)$cfg['sectors'], $known));
+            $pool = array_replace(function_exists('pm_leads_archive') ? pm_leads_archive() : [], $all, $leads);
+            foreach (pm_directory_leads($rows, $pool, $brand, $cfg, $dcity, $bs['room'] - $stats['added']) as $nid => $nl) {
+                $leads[$nid] = $nl;
+                $stats['added']++;
+                $stats['directory'] = ($stats['directory'] ?? 0) + 1;
+            }
+            pm_agent_log('Directory', "$dcity: " . count($rows) . ' listed, ' . ($stats['directory'] ?? 0) . ' new');
+            $save();
+            pm_directory_mark($brand);
+        } catch (Throwable $e) {
+            pm_agent_log('Directory', 'failed: ' . $e->getMessage(), true);
+        }
+    }
+
     // ---- 2. Contact finders (new leads) ----
     // A search is only paid for when the lead still lacks an email or a named owner/manager (a name makes the message far more likely to be read). Capped for cost.
     // "names" mode skips leads already searched in the last 30 days.
@@ -582,6 +604,17 @@ try {
             $i0 = (string)$l0['id'];
             if (isset($leads[$i0]) && strcmp((string)($leads[$i0]['requalified_at'] ?? ''), (string)($leads[$i0]['research']['at'] ?? '')) < 0) {
                 $leads[$i0]['requalify_tries'] = (int)($leads[$i0]['requalify_tries'] ?? 0) + 1;
+            }
+        }
+        $save();
+    }
+
+    // ---- 3d. Engagement: a proposal opened twice, or a reply, raises the score (rule-based, capped, no AI) ----
+    if (function_exists('pm_engagement_due')) {
+        foreach (pm_engagement_due($leads, 20) as $l0) {
+            $i0 = (string)$l0['id'];
+            if (isset($leads[$i0]) && pm_apply_engagement($leads[$i0]) !== '') {
+                $stats['engaged'] = ($stats['engaged'] ?? 0) + 1;
             }
         }
         $save();

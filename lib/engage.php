@@ -369,6 +369,31 @@ function pm_imap_cmd($fp, string $tag, string $cmd): string
     return $resp;
 }
 
+/** Logs in to a mailbox and out again without reading anything: [ok, message]. $GLOBALS['PM_IMAP_CHECK_STUB'] (tests) replaces the network. */
+function pm_imap_login_check(array $c): array
+{
+    if ($c['host'] === '' || $c['user'] === '' || $c['pass'] === '') {
+        return [false, 'no inbox login is set up yet'];
+    }
+    if (isset($GLOBALS['PM_IMAP_CHECK_STUB']) && is_callable($GLOBALS['PM_IMAP_CHECK_STUB'])) {
+        return $GLOBALS['PM_IMAP_CHECK_STUB']($c);
+    }
+    $scheme = $c['secure'] === 'none' ? 'tcp' : 'ssl';
+    $verify = strtolower(pm_env()['IMAP_VERIFY'] ?? 'on') !== 'off';
+    $ctx = stream_context_create(['ssl' => ['verify_peer' => $verify, 'verify_peer_name' => $verify]]);
+    $fp = @stream_socket_client("$scheme://{$c['host']}:{$c['port']}", $en, $es, 15, STREAM_CLIENT_CONNECT, $ctx);
+    if (!$fp) {
+        return [false, "could not reach {$c['host']}: $es"];
+    }
+    stream_set_timeout($fp, 15);
+    fgets($fp, 4096);
+    $q = fn($v) => '"' . addcslashes($v, '"\\') . '"';
+    $ok = str_contains(pm_imap_cmd($fp, 'a1', 'LOGIN ' . $q($c['user']) . ' ' . $q($c['pass'])), 'a1 OK');
+    pm_imap_cmd($fp, 'z', 'LOGOUT');
+    fclose($fp);
+    return $ok ? [true, 'logged in to ' . $c['host'] . ' as ' . $c['user'] . '; nothing was read'] : [false, 'the mail server refused the login'];
+}
+
 /**
  * Recent messages from the inbox: [{uid, message_id, from_email, from_name, subject, text, auto}].
  * Messages are only peeked, never marked read or deleted.

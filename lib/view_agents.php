@@ -192,6 +192,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
         <?php foreach (array_slice((array)($l['evidence'] ?? []), 0, 3) as $e): ?><p class="hint ev">• <?= preg_replace('#(https?://[^\s<]+)#', '<a href="$1" target="_blank" rel="noopener noreferrer">source</a>', pm_h((string)$e)) ?></p><?php endforeach; ?>
         <p class="hint"><?= pm_h(implode(' · ', array_filter([$l['website'] ?? '', $l['phone'] ?? '', $l['email'] ?? '']))) ?: 'No contact details found yet' ?>
           <?php foreach (['facebook' => 'Facebook', 'instagram' => 'Instagram'] as $sk => $sl): if (!empty($l[$sk]) && preg_match('#^https?://#', $l[$sk])): ?> · <a href="<?= pm_h($l[$sk]) ?>" target="_blank" rel="noopener noreferrer"><?= $sl ?></a><?php endif; endforeach; ?></p>
+        <?php if (trim((string)($l['phone'] ?? '') . (string)($l['whatsapp'] ?? '')) !== ''): ?><p class="hint wa-optin"><?= pm_h(pm_wa_optin_line($l)) ?></p><?php endif; ?>
         <?php if (!empty($l['research'])): $rz = $l['research']; ?>
         <div class="research"><b>What we found</b> <span class="muted">· <?= pm_h($rz['at']) ?></span>
           <?php if (isset($rz['sure']) && !$rz['sure']): ?><p class="hint warnt">The researcher could not confirm it found this exact business online, so only facts our system checked itself are shown.</p><?php elseif (!empty($rz['identity'])): ?><p class="hint">Matched by: <?= pm_h($rz['identity']) ?></p><?php endif; ?>
@@ -268,6 +269,8 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
           <?php if ($l['status'] !== 'lost'): ?><form method="post" class="lostf"><?= $post($id, 'status', $hid('status', 'lost')) ?>
             <select name="lost_reason" aria-label="Why we lost it"><?php foreach (pm_lost_reasons() as $lk => $ll): ?><option value="<?= $lk ?>"><?= pm_h($ll) ?></option><?php endforeach; ?></select><button class="btn small">Lost</button></form><?php endif; ?>
           <?php if (!empty($l['approved_at'])): ?><form method="post"><?= $post($id, 'unapprove_send', $hid('ids[]', $id)) ?><button class="btn small">Take out of the send queue</button></form><?php endif; ?>
+          <?php if (pm_wa_optin($l)): ?><form method="post"><?= $post($id, 'wa_optin_clear') ?><button class="btn small" title="They changed their mind about WhatsApp, but did not say STOP">Remove WhatsApp opt-in</button></form>
+          <?php else: ?><form method="post"><?= $post($id, 'wa_optin') ?><button class="btn small" title="Press only when they told you it is fine to message them on WhatsApp">They agreed to WhatsApp messages</button></form><?php endif; ?>
           <details class="more"><summary class="btn small">Paste their reply</summary>
             <form method="post"><?= $post($id, 'paste_reply') ?><textarea name="text" rows="3" placeholder="Paste what they wrote (WhatsApp or another inbox)"></textarea>
               <select name="ch" aria-label="Where they wrote"><option value="wa">They wrote on WhatsApp</option><option value="email">They wrote by email</option></select><button class="btn small">Draft my answer</button></form></details>
@@ -337,13 +340,22 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
   </ul>
   <p class="hint">Searching with <?= pm_provider(true) === 'gemini' ? 'Gemini' : 'Claude' ?>, writing with <?= pm_provider(false) === 'gemini' ? 'Gemini' : 'Claude' ?>. To run every morning without opening the app, schedule <code>schedule_agents.bat</code>.</p>
 
-  <?php $arch = array_filter(function_exists('pm_leads_archive') ? pm_leads_archive() : [], fn($x) => ($x['brand'] ?? 'promanaged') === pm_brand()); if ($arch): uasort($arch, fn($a, $b) => strcmp((string)($b['archived_at'] ?? ''), (string)($a['archived_at'] ?? ''))); ?>
-  <h3>Archive <span class="muted">· <?= count($arch) ?> lead<?= count($arch) === 1 ? '' : 's' ?></span></h3>
-  <p class="hint">Leads untouched for 12 months move here to keep your lists fast. Nothing is deleted: restore any of them.</p>
-  <?php foreach (array_slice($arch, 0, 12, true) as $aid => $al): ?>
-    <form method="post" class="task"><?= $post((string)$aid, 'restore_lead') ?><span><b><?= pm_h((string)$al['name']) ?></b> <span class="muted">· <?= pm_h((string)($al['city'] ?? '')) ?> · <?= pm_h(PM_LEAD_STATUSES[$al['status'] ?? ''] ?? (string)($al['status'] ?? '')) ?> · archived <?= pm_h(substr((string)($al['archived_at'] ?? ''), 0, 10)) ?></span></span><button class="btn small" style="margin-left:auto;width:auto;height:30px;border-radius:8px;line-height:1">Restore</button></form>
-  <?php endforeach; ?>
-  <?php if (count($arch) > 12): ?><p class="hint">And <?= count($arch) - 12 ?> older ones in data/leads_archive.json.</p><?php endif; ?>
+  <?php $arch = array_filter(function_exists('pm_leads_archive') ? pm_leads_archive() : [], fn($x) => ($x['brand'] ?? 'promanaged') === pm_brand()); if ($arch):
+      $aq = trim((string)($_GET['aq'] ?? '')); $ac = trim((string)($_GET['ac'] ?? '')); $at = trim((string)($_GET['at'] ?? ''));
+      $found = pm_archive_search(pm_brand(), $aq, $ac, $at, 50); ?>
+  <h3 id="archive">Archive <span class="muted">· <?= count($arch) ?> lead<?= count($arch) === 1 ? '' : 's' ?></span></h3>
+  <p class="hint">Leads untouched for 12 months move here to keep your lists fast. Nothing is deleted: find them and restore any of them.</p>
+  <form method="get" class="findrow" data-noload="1"><input type="hidden" name="tab" value="agents">
+    <input type="text" name="aq" value="<?= pm_h($aq) ?>" placeholder="Name, contact or email" aria-label="Search the archive"><input type="text" name="ac" value="<?= pm_h($ac) ?>" placeholder="City" class="narrow" aria-label="City"><input type="text" name="at" value="<?= pm_h($at) ?>" placeholder="Type" class="narrow" aria-label="Type of business">
+    <button class="btn small">Search</button><?php if ($aq . $ac . $at !== ''): ?><a class="btn small" href="?tab=agents#archive">Clear</a><?php endif; ?></form>
+  <?php if (!$found): ?><p class="hint">No archived lead matches.</p><?php else: ?>
+  <form method="post"><?= $post('', 'restore_leads') ?>
+    <?php foreach ($found as $aid => $al): ?>
+      <label class="task" style="cursor:pointer"><input type="checkbox" name="ids[]" value="<?= pm_h((string)$aid) ?>"><span><b><?= pm_h((string)$al['name']) ?></b> <span class="muted">· <?= pm_h((string)($al['city'] ?? '')) ?> · <?= pm_h((string)($al['type'] ?? '')) ?> · <?= pm_h(PM_LEAD_STATUSES[$al['status'] ?? ''] ?? (string)($al['status'] ?? '')) ?> · archived <?= pm_h(substr((string)($al['archived_at'] ?? ''), 0, 10)) ?></span></span></label>
+    <?php endforeach; ?>
+    <div class="btns"><button class="btn small primary">Restore the ticked leads</button><span class="hint"><?= count($found) ?> shown<?= count($arch) > count($found) && $aq . $ac . $at === '' ? ' of ' . count($arch) . ': search to find the others' : '' ?></span></div>
+  </form>
+  <?php endif; ?>
   <?php endif; ?>
 
   <h3>Activity</h3>

@@ -38,6 +38,12 @@ function pm_e_field(string $label, string $name, string $val = '', array $o = []
 }
 
 /** Hidden anti-bot fields: honeypot (people never see it) and the signed token. */
+/** The optional WhatsApp permission box (C3-A01): only a ticked box makes a WhatsApp campaign allowed to reach this person. */
+function pm_e_wa_box(): string
+{
+    return '<div class="f"><label style="display:flex;gap:8px;align-items:flex-start;color:var(--ink)"><input type="checkbox" name="wa_ok" value="1" style="width:auto;margin-top:4px"> <span>You may message me on WhatsApp on this number <span class="opt">(optional)</span></span></label></div>';
+}
+
 function pm_e_guard(string $ctx): string
 {
     return '<div class="hp" aria-hidden="true"><label>Leave this empty</label><input type="text" name="company_site" tabindex="-1" autocomplete="off"></div>'
@@ -88,7 +94,7 @@ function pm_e_contact(array $p): array
 {
     $d = ['name' => pm_web_clean($p['name'] ?? '', 80), 'business' => pm_web_clean($p['business'] ?? '', 100), 'phone' => pm_web_clean($p['phone'] ?? '', 40),
         'email' => strtolower(pm_web_clean($p['email'] ?? '', 120)), 'message' => pm_web_clean($p['message'] ?? '', 1500), 'website' => pm_e_site((string)($p['website'] ?? '')),
-        'city' => pm_web_clean($p['city'] ?? '', 60), 'type' => pm_web_clean($p['type'] ?? '', 40)];
+        'city' => pm_web_clean($p['city'] ?? '', 60), 'type' => pm_web_clean($p['type'] ?? '', 40), 'wa_ok' => !empty($p['wa_ok'])];
     if (trim((string)($p['website'] ?? '')) !== '' && $d['website'] === '') {
         return [$d, 'That website address does not look right. Leave it empty or use something like www.example.com.'];
     }
@@ -203,7 +209,7 @@ if ($act === 'check' && $facts !== null) { // results + offer to fix
         . '<form method="post" action="' . pm_h($qs(['mode' => 'check'])) . '">' . pm_e_guard("$brand|checklead")
         . '<input type="hidden" name="facts" value="' . pm_h(base64_encode($fj)) . '"><input type="hidden" name="fsig" value="' . pm_h(hash_hmac('sha256', 'facts|' . $fj, pm_form_secret())) . '">'
         . pm_e_field('Your name', 'name', '', ['required' => true, 'auto' => 'name', 'max' => 80]) . pm_e_field('Business name', 'business', '', ['max' => 100])
-        . pm_e_field('WhatsApp number', 'phone', '', ['type' => 'tel', 'auto' => 'tel', 'mode' => 'tel', 'max' => 40]) . pm_e_field('Email', 'email', '', ['type' => 'email', 'auto' => 'email'])
+        . pm_e_field('WhatsApp number', 'phone', '', ['type' => 'tel', 'auto' => 'tel', 'mode' => 'tel', 'max' => 40]) . pm_e_wa_box() . pm_e_field('Email', 'email', '', ['type' => 'email', 'auto' => 'email'])
         . '<button class="btn">Yes, contact me</button></form></div>');
 }
 if ($act === 'checklead') { // a failed check-lead post: back to a fresh check
@@ -218,12 +224,12 @@ if ($act === 'host') {
     $types = ['Lodge', 'Guest house', 'Bed and breakfast', 'Hotel', 'Safari camp', 'Cottage or chalet', 'Hostel', 'Other'];
     $form .= pm_e_field('Your name', 'name', $v('name'), ['required' => true, 'auto' => 'name', 'max' => 80]) . pm_e_field('Property name', 'business', $v('business'), ['required' => true, 'max' => 100])
         . '<div class="f"><label>Type of stay</label><select name="type">' . implode('', array_map(fn($t) => '<option' . ($v('type') === $t ? ' selected' : '') . '>' . pm_h($t) . '</option>', $types)) . '</select></div>'
-        . pm_e_field('Town or area', 'city', $v('city'), ['required' => true, 'max' => 60]) . pm_e_field('Phone or WhatsApp', 'phone', $v('phone'), ['type' => 'tel', 'auto' => 'tel', 'mode' => 'tel', 'max' => 40])
+        . pm_e_field('Town or area', 'city', $v('city'), ['required' => true, 'max' => 60]) . pm_e_field('Phone or WhatsApp', 'phone', $v('phone'), ['type' => 'tel', 'auto' => 'tel', 'mode' => 'tel', 'max' => 40]) . pm_e_wa_box()
         . pm_e_field('Email', 'email', $v('email'), ['type' => 'email', 'auto' => 'email']) . pm_e_field('Website or Facebook page', 'website', $v('website'), ['max' => 200])
         . pm_e_field('Anything we should know', 'message', $v('message'), ['area' => true, 'required' => false]);
 } else {
     $form .= pm_e_field('Your name', 'name', $v('name'), ['required' => true, 'auto' => 'name', 'max' => 80]) . pm_e_field('Business name', 'business', $v('business'), ['max' => 100])
-        . pm_e_field('Phone or WhatsApp', 'phone', $v('phone'), ['type' => 'tel', 'auto' => 'tel', 'mode' => 'tel', 'max' => 40]) . pm_e_field('Email', 'email', $v('email'), ['type' => 'email', 'auto' => 'email'])
+        . pm_e_field('Phone or WhatsApp', 'phone', $v('phone'), ['type' => 'tel', 'auto' => 'tel', 'mode' => 'tel', 'max' => 40]) . pm_e_wa_box() . pm_e_field('Email', 'email', $v('email'), ['type' => 'email', 'auto' => 'email'])
         . pm_e_field('Your website', 'website', $v('website'), ['max' => 200]) . pm_e_field($tr ? 'What would you like to know?' : 'What do you need?', 'message', $v('message'), ['area' => true, 'required' => true]);
 }
 $alts = $tr ? '<a href="' . pm_h($qs(['mode' => $act === 'host' ? '' : 'host'])) . '">' . ($act === 'host' ? 'Looking for a stay instead?' : 'Own a lodge or guest house? List it with us') . '</a>'

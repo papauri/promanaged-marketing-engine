@@ -1470,6 +1470,9 @@ function pm_daily_plan(array $leads, array $cfg): array
         } elseif ($st === 'replied' && $out > $replyAt && $replyAt > 0 && ($q = (int)((time() - $out) / 86400)) >= 5 && !$called($l, $out)) {
             $add('call', "Call or WhatsApp $nm" . ($ph ? " on $ph" : '') . ": no answer to our reply for $q days", $id, 3, 'reply-silent');
         }
+        if (!empty($l['engage_at']) && !in_array($st, ['won', 'lost', 'proposal'], true) && $days((string)$l['engage_at']) <= 3 && !($ref > 0 && $ref > $out)) { // C3-A04: they showed interest: first in line
+            $add('call', "Warm lead: $nm " . (string)($l['engage_why'] ?? 'showed interest') . ': reach out today' . ($ph ? " on $ph" : ''), $id, 1, 'warm');
+        }
         if ($st === 'replied' && !empty($l['want_proposal']) && empty($l['proposal_sent_at'])) {
             $add('send', "$nm asked for a proposal: check it and send it", $id, 1, 'want-proposal');
         }

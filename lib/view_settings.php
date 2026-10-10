@@ -116,6 +116,7 @@ $brandCards = function (string $b) use ($settings, $vb): void {
   </div>
 
   <?php function_exists('pm_view_setup_health') && pm_view_setup_health(); // C2-G01: what is connected and what to add ?>
+  <?php function_exists('pm_view_archives') && pm_view_archives(); // C3-G01: weekly backups, download and restore ?>
 
   <form method="post" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="settings">

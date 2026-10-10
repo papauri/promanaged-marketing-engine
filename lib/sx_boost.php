@@ -465,6 +465,9 @@ function pm_plan_learnings(string $brand): string
     if ($a !== '') {
         $parts[] = $a;
     }
+    if (function_exists('pm_sx_segment_boost') && ($sb = pm_sx_segment_boost($brand))) { // C3-A08
+        $parts[] = 'Audience boost: posts for ' . $sb['segment'] . ' averaged ' . $sb['ratio'] . 'x the rest (' . $sb['n'] . ' posts), so up to ' . (int)round($sb['share'] * 100) . '% of this plan speaks to them.';
+    }
     return implode(' ', $parts);
 }
 

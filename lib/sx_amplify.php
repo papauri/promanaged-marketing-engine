@@ -60,6 +60,41 @@ function pm_sx_segment(array $p, string $brand = ''): string
     return $best;
 }
 
+/* ---------------- C3-A08 · plan by the best segment ---------------- */
+
+const PM_SX_SEGMENT_MIN_POSTS = 3;     // scored posts a segment needs before it counts
+const PM_SX_SEGMENT_MIN_RATIO = 1.3;   // ... and how far above the average it must be
+const PM_SX_SEGMENT_MAX_SHARE = 0.4;   // the most of one plan it may take
+
+/**
+ * The audience segment that clearly outperforms: at least 3 scored posts and 1.3 times the average engagement. ['segment','ratio','n','share'] or null.
+ * The planner may give its topics up to 40% of a plan (never more), and the "Why this week's mix" card says so.
+ */
+function pm_sx_segment_boost(string $brand): ?array
+{
+    if (!function_exists('pm_social_scoreboard')) {
+        return null;
+    }
+    $best = null;
+    foreach ((array)(pm_social_scoreboard($brand)['groups']['segment'] ?? []) as $name => $b) {
+        if (in_array($name, ['(none)', 'unplanned', 'All businesses', 'General', 'All customers', 'Other'], true) || (int)$b['n'] < PM_SX_SEGMENT_MIN_POSTS
+            || $b['vs_avg'] === null || (float)$b['vs_avg'] < PM_SX_SEGMENT_MIN_RATIO) {
+            continue;
+        }
+        if ($best === null || (float)$b['vs_avg'] > $best['ratio']) {
+            $best = ['segment' => (string)$name, 'ratio' => (float)$b['vs_avg'], 'n' => (int)$b['n'], 'share' => PM_SX_SEGMENT_MAX_SHARE];
+        }
+    }
+    return $best;
+}
+
+/** The segment a content idea (seed) speaks to, by the same words test as a finished post. */
+function pm_sx_seed_segment(array $seed, string $brand): string
+{
+    return pm_sx_segment(['headline' => (string)($seed['topic'] ?? ''), 'caption' => implode(' ', array_map('strval', (array)($seed['facts'] ?? []))), 'brand' => $brand,
+        'audience' => (string)($seed['audience'] ?? '')], $brand);
+}
+
 /** Job: stamps a missing 'segment' on this brand's older posts (rule-based, no AI). New posts get it when they are planned. */
 function pm_job_segment_stamp(string $brand): string
 {
@@ -153,7 +188,10 @@ function pm_x_summary(string $brand): array
 function pm_partners(string $brand): array
 {
     $d = (array)(pm_load('partners', fn() => [])[$brand] ?? []);
-    return ($d['day'] ?? '') !== '' && strtotime((string)$d['day']) > time() - 8 * 86400 ? (array)($d['rows'] ?? []) : [];
+    if (($d['day'] ?? '') === '' || strtotime((string)$d['day']) <= time() - 8 * 86400) {
+        return [];
+    }
+    return array_map(fn($r) => (array)$r + ['id' => substr(sha1(strtolower((string)($r['url'] ?? ''))), 0, 10), 'status' => '', 'status_at' => ''], (array)($d['rows'] ?? [])); // rows made before C3 get an id from their address
 }
 
 /** Cleans the model's rows: real https links only, linted DMs (no prices, links, spam wording), bounded text. A row that fails any rule is dropped. */
@@ -174,10 +212,92 @@ function pm_partners_clean(array $items): array
         if ($bad || str_word_count($dm) > 90 || preg_match('#https?://|www\.#i', $dm)) {
             continue;
         }
-        $rows[] = ['name' => mb_substr($name, 0, 80), 'kind' => mb_substr(trim((string)($it['kind'] ?? '')), 0, 50), 'url' => $url,
-            'why' => mb_substr(trim((string)($it['why'] ?? '')), 0, 160), 'dm' => $dm];
+        $rows[] = ['id' => substr(sha1(strtolower($url)), 0, 10), 'name' => mb_substr($name, 0, 80), 'kind' => mb_substr(trim((string)($it['kind'] ?? '')), 0, 50), 'url' => $url,
+            'why' => mb_substr(trim((string)($it['why'] ?? '')), 0, 160), 'dm' => $dm, 'status' => '', 'status_at' => ''];
     }
     return array_slice($rows, 0, 5);
+}
+
+/* ---------------- C3-A06 · track partnership outreach, and let the radar learn from it ---------------- */
+
+const PM_PARTNER_STATUSES = ['sent' => 'Sent', 'replied' => 'They replied', 'no' => 'No answer / no'];
+
+/** Past suggestions whose outcome the owner recorded: [{id,name,kind,url,status,status_at}], newest last, 100 at most. */
+function pm_partners_history(string $brand): array
+{
+    return array_values((array)((pm_load('partners', fn() => [])[$brand] ?? [])['history'] ?? []));
+}
+
+/** Records Sent / They replied / No on a suggestion (current or already archived). Returns true when found. */
+function pm_partner_set_status(string $brand, string $id, string $status): bool
+{
+    if (!isset(PM_PARTNER_STATUSES[$status]) || !preg_match('/^[a-f0-9]{10}$/', $id)) {
+        return false;
+    }
+    $found = false;
+    pm_update('partners', function (array $all) use ($brand, $id, $status, &$found) {
+        foreach (['rows', 'history'] as $k) {
+            foreach ((array)($all[$brand][$k] ?? []) as $i => $r) {
+                if (((($r['id'] ?? '') ?: substr(sha1(strtolower((string)($r['url'] ?? ''))), 0, 10))) === $id) { // rows made before ids existed use their address
+                    $all[$brand][$k][$i]['status'] = $status;
+                    $all[$brand][$k][$i]['status_at'] = date('Y-m-d H:i');
+                    $found = true;
+                }
+            }
+        }
+        return $all;
+    }, fn() => []);
+    return $found;
+}
+
+/** The old list's tracked rows join the history; rows nobody acted on are simply dropped. */
+function pm_partners_archive(array $entry): array
+{
+    $hist = (array)($entry['history'] ?? []);
+    $have = array_column($hist, 'id');
+    foreach ((array)($entry['rows'] ?? []) as $r) {
+        if (($r['status'] ?? '') !== '' && !in_array($r['id'] ?? '', $have, true)) {
+            $hist[] = array_intersect_key($r, array_flip(['id', 'name', 'kind', 'url', 'status', 'status_at']));
+        }
+    }
+    return array_slice(array_values($hist), -100);
+}
+
+/**
+ * One line for the radar: which kinds of page answered before and which did not, from what the owner recorded. '' until at least one outcome is known.
+ * "Answered" = They replied. "Did not" = sent or marked No, with no reply. Only kinds seen at least once; the counts are shown, nothing is extrapolated.
+ */
+function pm_partners_learn_line(array $history): string
+{
+    $kinds = [];
+    foreach ($history as $r) {
+        $k = mb_strtolower(trim((string)($r['kind'] ?? '')));
+        if ($k === '' || !in_array($r['status'] ?? '', ['sent', 'replied', 'no'], true)) {
+            continue;
+        }
+        $kinds[$k][0] = ($kinds[$k][0] ?? 0) + 1;
+        $kinds[$k][1] = ($kinds[$k][1] ?? 0) + (($r['status'] ?? '') === 'replied' ? 1 : 0);
+    }
+    $good = [];
+    $bad = [];
+    foreach ($kinds as $k => [$n, $rep]) {
+        if ($rep > 0) {
+            $good[] = "$k ($rep of $n answered)";
+        } elseif ($n >= 2) {
+            $bad[] = "$k (0 of $n answered)";
+        }
+    }
+    if (!$good && !$bad) {
+        return '';
+    }
+    return 'What happened with earlier suggestions: ' . ($good ? 'these kinds of page answered: ' . implode('; ', $good) . '. ' : '') . ($bad ? 'these did not: ' . implode('; ', $bad) . '. ' : '')
+        . 'Prefer the kinds that answered, and do not suggest a kind that did not unless you find a clearly better fit.';
+}
+
+function pm_do_partner_status(string $vb): array
+{
+    $ok = pm_partner_set_status($vb, (string)($_POST['id'] ?? ''), (string)($_POST['status'] ?? ''));
+    return ['msg' => $ok ? 'Saved. The radar will learn from it.' : 'That suggestion was not found.', 'kind' => $ok ? 'ok' : 'err', 'to' => 'social'];
 }
 
 /**
@@ -204,17 +324,18 @@ function pm_jobg_partners(): string
         $system = pm_agents_company_brief('tiny') . "\nYou are the Partnership radar for {$s['company_name']}. Web-search for up to 5 real $who that could be good to collaborate with (cross-posts, a guest tip, a shout-out swap). "
             . 'Report ONLY pages you actually found while searching: the exact page name as it appears, and its address (https) from the search. Never invent a page, a name or a follower number. '
             . 'For each, write one short, warm, honest direct message (30 to 70 words) the owner could send by hand: say who we are, why we like their page, and one specific idea. '
-            . 'No prices, no links, no flattery, no pressure, no promises. ' . PM_AGENT_RULES;
+            . 'No prices, no links, no flattery, no pressure, no promises. ' . ($learn = pm_partners_learn_line($hist = pm_partners_archive($d))) . ' ' . PM_AGENT_RULES;
         $user = 'Return JSON: {"items":[{"name":"","kind":"kind of page","url":"https://...","why":"one short reason","dm":""}]}';
         try {
             $out = pm_agent_json(pm_claude($system, $user, true, 2200));
         } catch (Throwable) {
             continue;
         }
-        $rows = pm_partners_clean((array)($out['items'] ?? []));
+        $seenIds = array_column($hist, 'id');
+        $rows = array_values(array_filter(pm_partners_clean((array)($out['items'] ?? [])), fn($r) => !in_array($r['id'], $seenIds, true))); // a page we already acted on is not suggested again
         if ($rows) {
             pm_update('partners', function (array $all) use ($b, $rows) {
-                $all[$b] = ['day' => date('Y-m-d'), 'rows' => $rows];
+                $all[$b] = ['day' => date('Y-m-d'), 'rows' => $rows, 'history' => pm_partners_archive((array)($all[$b] ?? []))];
                 return $all;
             }, fn() => []);
             $made += count($rows);
@@ -231,6 +352,22 @@ function pm_today_partners(string $brand): array
     return $rows ? [['text' => count($rows) . ' partnership idea(s) waiting: review the drafted messages and send the ones you like by hand', 'href' => '?tab=social', 'urgency' => 0]] : [];
 }
 
+/** Sent / They replied / No: the buttons under a suggestion, and the status it already has. */
+function pm_partner_buttons(string $vb, array $r): string
+{
+    $csrf = (string)($GLOBALS['csrf'] ?? ($_SESSION['csrf'] ?? ''));
+    $cur = (string)($r['status'] ?? '');
+    $h = $cur !== '' ? '<span class="pill ' . ($cur === 'replied' ? 'hot' : '') . '">' . pm_h(PM_PARTNER_STATUSES[$cur] ?? $cur) . '</span>' : '';
+    foreach (PM_PARTNER_STATUSES as $k => $lab) {
+        if ($k === $cur) {
+            continue;
+        }
+        $h .= '<form method="post" style="display:inline"><input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="partner_status">'
+            . '<input type="hidden" name="id" value="' . pm_h((string)($r['id'] ?? '')) . '"><input type="hidden" name="status" value="' . pm_h($k) . '"><button class="btn small">' . pm_h($lab) . '</button></form>';
+    }
+    return $h;
+}
+
 /** Plan-screen card: the radar's suggestions with a Copy button on each drafted message. */
 function pm_panel_plan_top_partners(string $vb, array $ctx = []): string
 {
@@ -243,7 +380,8 @@ function pm_panel_plan_top_partners(string $vb, array $ctx = []): string
         $h .= '<div style="margin-top:10px;font-size:13px"><b>' . pm_h((string)$r['name']) . '</b>' . ($r['kind'] !== '' ? ' <span class="muted">· ' . pm_h((string)$r['kind']) . '</span>' : '')
             . ' <a href="' . pm_h((string)$r['url']) . '" target="_blank" rel="noopener noreferrer">open page</a>'
             . ($r['why'] !== '' ? '<br><span class="muted">' . pm_h((string)$r['why']) . '</span>' : '')
-            . '<div class="msgbox">' . pm_h((string)$r['dm']) . '</div><button type="button" class="btn small" data-copy="' . pm_h((string)$r['dm']) . '">Copy message</button></div>';
+            . '<div class="msgbox">' . pm_h((string)$r['dm']) . '</div><div class="btns"><button type="button" class="btn small" data-copy="' . pm_h((string)$r['dm']) . '">Copy message</button>'
+            . pm_partner_buttons($vb, $r) . '</div></div>';
     }
     return $h . '</div>';
 }

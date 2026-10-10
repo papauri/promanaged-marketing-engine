@@ -184,6 +184,29 @@ if (!function_exists('pm_wa_biz_cfg')) {
         return [false, 'WhatsApp said: ' . ($code ?: 'no answer') . ' ' . mb_substr($raw, 0, 120)];
     }
 
+    /** Asks WhatsApp for the connected number's name: proves the token and number work, sends nothing. [ok, message]. $GLOBALS['PM_WA_CHECK_STUB'] (tests) replaces the network. */
+    function pm_wa_biz_check(): array
+    {
+        $c = pm_wa_biz_cfg();
+        if (!$c['ready']) {
+            return [false, 'WhatsApp Business is not configured.'];
+        }
+        if (isset($GLOBALS['PM_WA_CHECK_STUB']) && is_callable($GLOBALS['PM_WA_CHECK_STUB'])) {
+            return $GLOBALS['PM_WA_CHECK_STUB']($c);
+        }
+        $ch = curl_init('https://graph.facebook.com/v21.0/' . rawurlencode($c['phone_id']) . '?fields=verified_name,display_phone_number');
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $c['token']]]);
+        pm_curl_native_ca($ch);
+        $raw = (string)curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        $j = json_decode($raw, true);
+        if ($code >= 200 && $code < 300 && !empty($j['display_phone_number'])) {
+            return [true, 'connected to ' . $j['display_phone_number'] . (!empty($j['verified_name']) ? ' (' . $j['verified_name'] . ')' : '')];
+        }
+        return [false, 'WhatsApp said: ' . ($code ?: 'no answer') . ' ' . mb_substr((string)($j['error']['message'] ?? $raw), 0, 120)];
+    }
+
     /** True when the lead wrote to us on WhatsApp in the last 24 hours: free-text answers are only allowed then. */
     function pm_wa_biz_window_open(array $lead): bool
     {

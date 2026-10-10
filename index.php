@@ -222,6 +222,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     }
 }
 
+// ---------- Weekly data archive download (C3-G01): only a file from the archive list, never a path ----------
+if (isset($_GET['archive']) && is_string($_GET['archive'])) {
+    $af = pm_archive_path($_GET['archive']);
+    if ($af === '') {
+        http_response_code(404);
+        exit('Not found');
+    }
+    header('Content-Type: ' . (str_ends_with($af, '.zip') ? 'application/zip' : 'application/gzip'));
+    header('Content-Disposition: attachment; filename="' . basename($af) . '"');
+    header('Content-Length: ' . filesize($af));
+    readfile($af);
+    exit;
+}
+
 // ---------- Link thumbnail (data/ is private, so it is served here) ----------
 if (isset($_GET['thumb'])) {
     $tf = pm_link_thumb_path(pm_brand_norm($_GET['thumb']));
@@ -466,6 +480,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($do === 'lead_forget' && $id !== '') { // MARKETING.md MG-G03: privacy
             $r = function_exists('pm_lead_forget') ? pm_lead_forget($id) : ['ok' => false, 'msg' => 'Not available.'];
             pm_redirect('agents', $r['msg'], $r['ok'] ? 'ok' : 'err');
+        }
+        if ($do === 'restore_leads') { // MARKETING.md C3-G03: several archived leads at once
+            [, $msgR] = pm_lead_unarchive_many((array)($_POST['ids'] ?? []));
+            pm_redirect('agents&status=all', $msgR);
         }
         if ($do === 'restore_lead' && $id !== '') { // MARKETING.md C2-G02: bring a lead back from the archive
             [$okR, $msgR] = function_exists('pm_lead_unarchive') ? pm_lead_unarchive($id) : [false, 'Not available.'];
@@ -831,7 +849,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $okW && pm_leads_save($leads);
             $back($msgW, $okW ? 'ok' : 'err');
         }
-        if (in_array($do, ['save_winback', 'send_winback', 'discard_winback', 'winback_wa_sent'], true)) { // C2-A01: the win-back draft, reviewed by the owner
+        if ($do === 'wa_optin' && isset($leads[$id])) { // C3-A01: the owner records that this person agreed to WhatsApp messages
+            $was = pm_wa_optin_record($leads[$id], 'owner');
+            $was && pm_lead_note($leads[$id], 'Recorded: agreed to WhatsApp messages');
+            pm_leads_save($leads);
+            $back($was ? 'Recorded. WhatsApp campaigns may now include ' . $lead['name'] . '.' : 'There is already a WhatsApp opt-in on record.');
+        }
+        if ($do === 'wa_optin_clear' && isset($leads[$id])) {
+            pm_wa_optin_clear($leads[$id]);
+            pm_lead_note($leads[$id], 'WhatsApp opt-in removed: no campaigns until they write again');
+            pm_leads_save($leads);
+            $back('Removed. WhatsApp campaigns will skip ' . $lead['name'] . ' until they write to you again.');
+        }
+        if (in_array($do, ['save_winback', 'send_winback', 'discard_winback', 'winback_wa_sent', 'winback_wa_biz'], true)) { // C2-A01: the win-back draft, reviewed by the owner
             $wb = (array)($lead['winback_draft'] ?? []);
             if ($do !== 'discard_winback' && isset($_POST['email_body'])) {
                 $wb = ['email_subject' => trim((string)($_POST['email_subject'] ?? '')), 'email_body' => trim((string)$_POST['email_body']), 'whatsapp' => trim((string)($_POST['whatsapp'] ?? ''))];
@@ -860,15 +890,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 pm_leads_save($leads);
                 $back('Logged the win-back WhatsApp to ' . $lead['name'] . '. The lead is back in play.');
             }
+            if ($do === 'winback_wa_biz') { // C3-A03: the same approval click, sent through WhatsApp Business inside the 24-hour window
+                $resW = pm_send_wa_draft($leads, $id, 'winback');
+                if (empty($resW['ok'])) {
+                    pm_leads_save($leads); // keep the edits even when the send was refused
+                }
+                $back((string)$resW['msg'], !empty($resW['ok']) ? 'ok' : 'err');
+            }
             $res = pm_send_first($leads, $id, 'winback_draft');
             if (empty($res['ok'])) {
                 pm_leads_save($leads); // keep the edits even when the send was refused
             }
             $back((string)$res['msg'], !empty($res['ok']) ? 'ok' : 'err');
         }
-        if (in_array($do, ['save_postsign', 'postsign_send', 'postsign_done'], true)) { // C2-A01: testimonial, review and referral asks after a signed deal
+        if (in_array($do, ['save_postsign', 'postsign_send', 'postsign_done', 'postsign_wa_biz', 'review_posted', 'review_undo'], true)) { // C2-A01: testimonial, review and referral asks after a signed deal
             $ps = (array)($lead['postsign'] ?? []);
-            foreach (['testimonial', 'review', 'referral'] as $k) {
+            foreach (['testimonial', 'review', 'referral', 'thanks'] as $k) {
                 if (isset($_POST['ps_' . $k])) {
                     $ps[$k] = trim((string)$_POST['ps_' . $k]);
                 }
@@ -883,6 +920,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($do === 'save_postsign') {
                 pm_leads_save($leads);
                 $back('Saved.');
+            }
+            if ($do === 'review_posted') { // C3-A07: counted on the Results screen; a thank-you is drafted, never sent by itself
+                $counted = pm_review_mark_posted($leads[$id]);
+                pm_leads_save($leads);
+                $back($counted ? 'Counted. A thank-you is drafted under the asks: read it and send it if you like.' : 'That review was already counted.');
+            }
+            if ($do === 'review_undo') {
+                unset($leads[$id]['review_posted_at']);
+                pm_lead_note($leads[$id], 'Review count undone');
+                pm_leads_save($leads);
+                $back('Taken off the count.');
+            }
+            if ($do === 'postsign_wa_biz') {
+                $resW = pm_send_wa_draft($leads, $id, (string)($_POST['which'] ?? ''));
+                if (empty($resW['ok'])) {
+                    pm_leads_save($leads);
+                }
+                $back((string)$resW['msg'], !empty($resW['ok']) ? 'ok' : 'err');
             }
             $res = pm_send_postsign($leads, $id, (string)($_POST['which'] ?? ''));
             if (empty($res['ok'])) {
@@ -1350,6 +1405,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pm_redirect($to, $e->getMessage(), 'err');
         }
         pm_redirect($to);
+    }
+
+    if ($action === 'health_check') { // C3-G02: one setup-health row's own check (logs in or reads; sends and posts nothing)
+        $hk = (string)($_POST['key'] ?? '');
+        [$hok, $hmsg] = pm_health_check($hk);
+        $hrow = array_values(array_filter(pm_setup_health(), fn($r) => $r['key'] === $hk))[0]['label'] ?? $hk;
+        pm_redirect('settings', $hrow . ': ' . ($hok ? 'ok, ' : 'did not work: ') . $hmsg . '.', $hok ? 'ok' : 'err');
+    }
+
+    if ($action === 'archive_restore') { // C3-G01: put one file back from a weekly archive
+        if (empty($_POST['confirm'])) {
+            pm_redirect('settings', 'Tick "I understand" before restoring a file.', 'err');
+        }
+        [$rok, $rmsg] = pm_archive_restore((string)($_POST['archive'] ?? ''), (string)($_POST['file'] ?? ''));
+        pm_redirect('settings', $rmsg, $rok ? 'ok' : 'err');
     }
 
     if ($action === 'social_check') {

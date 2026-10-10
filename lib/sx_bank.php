@@ -685,6 +685,9 @@ function pm_social_seed_pick(string $brand, int $n, array $posts, string $focus 
         }
     }
     // 2) the rest by rolling deficit
+    $boost = function_exists('pm_sx_segment_boost') ? pm_sx_segment_boost($brand) : null;
+    $boostCap = $boost ? max(1, (int)floor($n * $boost['share'])) : 0;
+    $boostUsed = 0;
     $guard = 0;
     while (count($slots) < $n && $guard++ < $n * 6) {
         $avail = [];
@@ -714,7 +717,17 @@ function pm_social_seed_pick(string $brand, int $n, array $posts, string $focus 
         }
         usort($rank, fn($a, $b) => [round($b['deficit'], 6), $b['w'], $a['pk']] <=> [round($a['deficit'], 6), $a['w'], $b['pk']]);
         $pickPk = '';
-        foreach ($rank as $r) {
+        if ($boost && $boostUsed < $boostCap) { // C3-A08: of the three pillars most due, take the first that has a topic for the winning segment
+            foreach (array_slice($rank, 0, 3) as $r) {
+                foreach ($r['pk'] === $prev ? [] : $candidates($r['pk']) as $sd) {
+                    if (pm_sx_seed_segment($sd, $brand) === $boost['segment']) {
+                        $pickPk = $r['pk'];
+                        break 2;
+                    }
+                }
+            }
+        }
+        foreach ($pickPk === '' ? $rank : [] as $r) {
             if ($r['pk'] !== $prev) {
                 $pickPk = $r['pk'];
                 break;
@@ -722,9 +735,17 @@ function pm_social_seed_pick(string $brand, int $n, array $posts, string $focus 
         }
         $pickPk = $pickPk ?: $rank[0]['pk'];
         $slot = null;
-        foreach ($candidates($pickPk) as $seed) {
+        $cands = $candidates($pickPk);
+        if ($boost && $boostUsed < $boostCap) { // C3-A08: the best segment's topics come first, up to the cap
+            usort($cands, fn($a, $b) => (int)(pm_sx_seed_segment($b, $brand) === $boost['segment']) <=> (int)(pm_sx_seed_segment($a, $brand) === $boost['segment']));
+        }
+        foreach ($cands as $seed) {
             $slot = $makeSlot($seed, $pillars[$pickPk]);
             if ($slot) {
+                if ($boost && pm_sx_seed_segment($seed, $brand) === $boost['segment']) {
+                    $boostUsed++;
+                    $slot['segment_boost'] = $boost['segment'];
+                }
                 break;
             }
         }

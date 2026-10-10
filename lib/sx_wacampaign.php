@@ -98,13 +98,16 @@ function pm_wac_lint(string $text): array
  * Why this lead must NOT get a campaign message right now ('' = fine). Used for the preview, at approval and again at every send,
  * so a STOP that arrives after approval is honoured. $leads is the whole lead file (for the company check).
  */
-function pm_wac_skip_reason(array $lead, array $leads, array $cfg): string
+function pm_wac_skip_reason(array $lead, array $leads, array $cfg, bool $optinOnly = true): string
 {
     if (($lead['status'] ?? '') === 'optout') {
         return 'asked us to stop';
     }
     if (pm_wa_best($lead)[0] === '') {
         return 'no mobile number';
+    }
+    if ($optinOnly && function_exists('pm_wa_optin') && !pm_wa_optin($lead)) { // C3-A01: only people who agreed to WhatsApp messages, unless the campaign says otherwise
+        return 'no WhatsApp opt-in on record';
     }
     if (pm_lead_snoozed($lead)) {
         return 'asked for time';
@@ -135,6 +138,7 @@ function pm_wac_audience(string $brand, array $aud, ?array $leads = null): array
     $st = array_values(array_intersect(array_map('strval', (array)($aud['statuses'] ?? [])), array_keys(PM_WAC_AUDIENCE_STATUSES)));
     $min = max(0, min(100, (int)($aud['min_score'] ?? 0)));
     $group = (string)($aud['group'] ?? '');
+    $optin = (bool)($aud['optin_only'] ?? true);
     $ok = [];
     $skipped = [];
     foreach ($leads as $k => $l) {
@@ -143,7 +147,7 @@ function pm_wac_audience(string $brand, array $aud, ?array $leads = null): array
             continue;
         }
         $l['id'] = (string)($l['id'] ?? $k);
-        $why = pm_wac_skip_reason($l, $leads, $cfg);
+        $why = pm_wac_skip_reason($l, $leads, $cfg, $optin);
         if ($why !== '') {
             $skipped[(string)($l['name'] ?? $l['id'])] = $why;
         } else {
@@ -172,7 +176,9 @@ function pm_do_wac_create(string $vb): array
     $ts = $when !== '' ? strtotime(str_replace('T', ' ', $when)) : false;
     $row = ['id' => 'wc' . substr(md5($vb . $name . microtime(true)), 0, 10), 'brand' => $vb, 'name' => $name, 'text' => mb_substr($text, 0, 700),
         'aud' => ['statuses' => array_values(array_intersect(array_map('strval', (array)($_POST['statuses'] ?? [])), array_keys(PM_WAC_AUDIENCE_STATUSES))),
-            'group' => mb_substr(trim((string)($_POST['group'] ?? '')), 0, 40), 'min_score' => max(0, min(100, (int)($_POST['min_score'] ?? 0)))],
+            'group' => mb_substr(trim((string)($_POST['group'] ?? '')), 0, 40), 'min_score' => max(0, min(100, (int)($_POST['min_score'] ?? 0))),
+            'optin_only' => isset($_POST['optin_form']) ? !empty($_POST['optin_only']) : true],
+        'template' => isset(pm_wa_templates()[(string)($_POST['template'] ?? '')]) ? (string)$_POST['template'] : '',
         'send_from' => $ts ? date('Y-m-d H:i', $ts) : date('Y-m-d H:i'), 'status' => 'draft', 'recipients' => [], 'created' => date('Y-m-d H:i'),
         'by' => trim((string)($GLOBALS['PM_WHO'] ?? '')) ?: 'owner'];
     if (!$row['aud']['statuses']) {
@@ -323,7 +329,7 @@ function pm_wac_send_pass(string $id, callable $sender, int $max = PM_WAC_PER_PA
             continue; // another scheduler pass took this person: never send twice
         }
         $lead = $leads[$r['id']] ?? null;
-        $why = !$lead ? 'lead no longer exists' : pm_wac_skip_reason($lead + ['id' => $r['id']], $leads, $cfg);
+        $why = !$lead ? 'lead no longer exists' : pm_wac_skip_reason($lead + ['id' => $r['id']], $leads, $cfg, (bool)($c['aud']['optin_only'] ?? true));
         if ($why === '') {
             [$ok, $m] = $sender((string)$r['num'], pm_wac_render((string)$c['text'], $lead), $lead);
             if ($ok) {
@@ -375,18 +381,84 @@ function pm_wac_send_pass(string $id, callable $sender, int $max = PM_WAC_PER_PA
     return $sent;
 }
 
-/** The sender the scheduler uses: free text inside the 24-hour window, the approved template outside it. */
-function pm_wac_api_sender(): callable
+/**
+ * C3-A02 · the approved WhatsApp templates the owner has named: name => ['name','lang','default']. The one in .env (WA_BIZ_TEMPLATE) is the default;
+ * the others are added on the WhatsApp screen. Approval itself happens in Meta's template manager: this only remembers the names. Each template
+ * takes one variable, {{1}}, which is the person's first name.
+ */
+function pm_wa_templates(): array
 {
-    return function (string $num, string $text, array $lead): array {
+    $out = [];
+    $env = pm_env_val('WA_BIZ_TEMPLATE');
+    if ($env !== '') {
+        $out[$env] = ['name' => $env, 'lang' => pm_env_val('WA_BIZ_TEMPLATE_LANG') ?: 'en', 'default' => true];
+    }
+    foreach ((array)(pm_load('settings', 'pm_default_settings')['wa_templates'] ?? []) as $t) {
+        $n = (string)($t['name'] ?? '');
+        if (preg_match('/^[a-z0-9_]{1,60}$/', $n) && !isset($out[$n])) {
+            $out[$n] = ['name' => $n, 'lang' => preg_match('/^[a-z]{2}(_[A-Z]{2})?$/', (string)($t['lang'] ?? '')) ? $t['lang'] : 'en', 'default' => false];
+        }
+    }
+    return $out;
+}
+
+/** The template a campaign uses: the one it names, else the default, else none. */
+function pm_wa_template_for(string $chosen): ?array
+{
+    $all = pm_wa_templates();
+    if ($chosen !== '' && isset($all[$chosen])) {
+        return $all[$chosen];
+    }
+    foreach ($all as $t) {
+        if (!empty($t['default'])) {
+            return $t;
+        }
+    }
+    return null;
+}
+
+function pm_do_wa_template_add(string $vb): array
+{
+    $name = strtolower(trim((string)($_POST['tname'] ?? '')));
+    $lang = trim((string)($_POST['tlang'] ?? '')) ?: 'en';
+    if (!preg_match('/^[a-z0-9_]{1,60}$/', $name)) {
+        return pm_wac_back('A template name uses lower-case letters, digits and underscores only, exactly as it is in Meta\'s template manager.', 'err');
+    }
+    if (!preg_match('/^[a-z]{2}(_[A-Z]{2})?$/', $lang)) {
+        return pm_wac_back('The language is a code such as en or en_GB.', 'err');
+    }
+    if (isset(pm_wa_templates()[$name])) {
+        return pm_wac_back('That template is already in the list.', 'err');
+    }
+    pm_update('settings', function (array $s) use ($name, $lang) {
+        $s['wa_templates'] = array_values(array_merge((array)($s['wa_templates'] ?? []), [['name' => $name, 'lang' => $lang]]));
+        return $s;
+    }, 'pm_default_settings');
+    return pm_wac_back('Template added. Check in Meta\'s template manager that it is approved and takes one variable (the first name).');
+}
+
+function pm_do_wa_template_remove(string $vb): array
+{
+    $name = strtolower(trim((string)($_POST['tname'] ?? '')));
+    pm_update('settings', function (array $s) use ($name) {
+        $s['wa_templates'] = array_values(array_filter((array)($s['wa_templates'] ?? []), fn($t) => (string)($t['name'] ?? '') !== $name));
+        return $s;
+    }, 'pm_default_settings');
+    return pm_wac_back('Template removed from the list. Campaigns that used it fall back to the default template.');
+}
+
+/** The sender the scheduler uses: free text inside the 24-hour window, the campaign's approved template outside it. */
+function pm_wac_api_sender(string $template = ''): callable
+{
+    return function (string $num, string $text, array $lead) use ($template): array {
         if (pm_wa_biz_window_open($lead)) {
             return pm_wa_biz_send($num, $text);
         }
-        $tpl = pm_env_val('WA_BIZ_TEMPLATE');
-        if ($tpl === '') {
-            return [false, 'outside the 24-hour window and no approved template is set (WA_BIZ_TEMPLATE)'];
+        $t = pm_wa_template_for($template);
+        if (!$t) {
+            return [false, 'outside the 24-hour window and no approved template is set (WA_BIZ_TEMPLATE, or add one on the WhatsApp screen)'];
         }
-        return pm_wa_biz_send_template($num, $tpl, pm_env_val('WA_BIZ_TEMPLATE_LANG') ?: 'en', [pm_wac_first_name($lead) ?: 'there']);
+        return pm_wa_biz_send_template($num, $t['name'], $t['lang'], [pm_wac_first_name($lead) ?: 'there']);
     };
 }
 
@@ -405,7 +477,7 @@ function pm_job_wa_campaigns(string $brand): string
     }
     $n = 0;
     foreach ($due as $c) {
-        $n += pm_wac_send_pass((string)$c['id'], pm_wac_api_sender(), max(1, PM_WAC_PER_PASS - $n));
+        $n += pm_wac_send_pass((string)$c['id'], pm_wac_api_sender((string)($c['template'] ?? '')), max(1, PM_WAC_PER_PASS - $n));
         if ($n >= PM_WAC_PER_PASS) {
             break;
         }
@@ -433,7 +505,9 @@ function pm_view_wa_campaigns(string $vb, string $csrf): void
         $n = pm_wac_counts($c);
         $st = (string)$c['status'];
         echo '<div class="card" style="margin:8px 0"><div class="wahead"><div><b>' . pm_h((string)$c['name']) . '</b> <span class="pill ' . (in_array($st, ['approved', 'sending'], true) ? 'hot' : ($st === 'paused' ? 'warn' : '')) . '">' . pm_h($st) . '</span>'
-            . ' <span class="muted">· from ' . pm_h((string)$c['send_from']) . ' · ' . pm_h(implode(', ', array_map(fn($k) => PM_WAC_AUDIENCE_STATUSES[$k] ?? $k, (array)$c['aud']['statuses']))) . (($c['aud']['group'] ?? '') !== '' ? ' · ' . pm_h((string)$c['aud']['group']) : '') . '</span></div></div>';
+            . ' <span class="muted">· from ' . pm_h((string)$c['send_from']) . ' · ' . pm_h(implode(', ', array_map(fn($k) => PM_WAC_AUDIENCE_STATUSES[$k] ?? $k, (array)$c['aud']['statuses']))) . (($c['aud']['group'] ?? '') !== '' ? ' · ' . pm_h((string)$c['aud']['group']) : '')
+            . (($c['aud']['optin_only'] ?? true) ? ' · agreed to WhatsApp only' : ' · everyone allowed, opt-in not required')
+            . (($c['template'] ?? '') !== '' ? ' · template ' . pm_h((string)$c['template']) : '') . '</span></div></div>';
         if ($st === 'draft') {
             [$ok, $skip] = pm_wac_audience($vb, (array)$c['aud']);
             $bad = pm_wac_lint((string)$c['text']);
@@ -471,11 +545,21 @@ function pm_view_wa_campaigns(string $vb, string $csrf): void
         }
     }
     arsort($groups);
+    echo '<h3>Templates</h3><p class="hint">WhatsApp only lets you start a chat with a template Meta has approved (made in Meta\'s template manager, one variable: the first name). Name the ones you have, then pick one for each campaign.</p>';
+    foreach (pm_wa_templates() as $t) {
+        echo '<form method="post" class="task">' . $sx(empty($t['default']) ? 'wa_template_remove' : '', '<input type="hidden" name="tname" value="' . pm_h($t['name']) . '">')
+            . '<span><b>' . pm_h($t['name']) . '</b> <span class="muted">· ' . pm_h($t['lang']) . (!empty($t['default']) ? ' · default, set in .env' : '') . '</span></span>'
+            . (empty($t['default']) ? '<button class="btn small">Remove</button>' : '') . '</form>';
+    }
+    echo '<form method="post" class="findrow">' . $sx('wa_template_add') . '<input type="text" name="tname" placeholder="template_name" maxlength="60" aria-label="Template name" required><input type="text" name="tlang" placeholder="en" value="en" maxlength="5" aria-label="Language" class="narrow"><button class="btn small">Add template</button></form>';
     echo '<h3>New campaign</h3><form method="post">' . $sx('wac_create')
         . '<div class="row"><div><label>Name (for you)</label><input type="text" name="name" maxlength="60" required></div>'
         . '<div><label>Start from</label><input type="datetime-local" name="send_from" value="' . pm_h(date('Y-m-d\TH:i', strtotime('+1 hour'))) . '"></div>'
         . '<div><label>Only business type</label><select name="group"><option value="">Any</option>' . implode('', array_map(fn($g, $n) => '<option value="' . pm_h($g) . '">' . pm_h($g) . ' (' . $n . ')</option>', array_keys($groups), $groups)) . '</select></div>'
-        . '<div><label>Score at least</label><input type="number" name="min_score" min="0" max="100" value="0"></div></div>'
+        . '<div><label>Score at least</label><input type="number" name="min_score" min="0" max="100" value="0"></div>'
+        . '<div><label>Template outside the 24-hour window</label><select name="template"><option value="">' . (pm_wa_template_for('') ? 'Default (' . pm_h(pm_wa_template_for('')['name']) . ')' : 'None set: only people who wrote in the last 24 hours') . '</option>'
+        . implode('', array_map(fn($t) => empty($t['default']) ? '<option value="' . pm_h($t['name']) . '">' . pm_h($t['name']) . ' (' . pm_h($t['lang']) . ')</option>' : '', pm_wa_templates())) . '</select></div></div>'
+        . '<input type="hidden" name="optin_form" value="1"><label class="check"><input type="checkbox" name="optin_only" value="1" checked> Only people who agreed to WhatsApp messages <span class="muted">(they wrote to us, replied, ticked the form box, or you recorded it). Recommended.</span></label>'
         . '<label>Message <span class="muted">(use {first_name} and {business}; the greeting, sign-off and STOP line are added)</span></label><textarea name="text" rows="3" required placeholder="We are running a short check-in with the businesses we have spoken to..."></textarea>'
         . '<label>Who</label><div class="checks">' . implode('', array_map(fn($k, $l) => '<label class="check"><input type="checkbox" name="statuses[]" value="' . $k . '"' . (in_array($k, ['contacted', 'won'], true) ? ' checked' : '') . '> ' . pm_h($l) . '</label>', array_keys(PM_WAC_AUDIENCE_STATUSES), PM_WAC_AUDIENCE_STATUSES)) . '</div>'
         . '<div class="btns"><button class="btn small primary">Save as draft</button></div></form></details>';

@@ -790,6 +790,9 @@ function pm_web_lead(array $d): array
         pm_lead_note($L, $label . ' (matched an existing lead)' . ($msg !== '' ? ': ' . mb_substr($msg, 0, 200) : '') . (($d['note'] ?? '') !== '' ? ' ' . pm_web_clean($d['note'], 300) : ''));
         unset($L);
     }
+    if (!empty($d['wa_ok']) && trim((string)($leads[$id]['phone'] ?? '')) !== '' && function_exists('pm_wa_optin_record')) { // C3-A01: they ticked "you may message me on WhatsApp"
+        pm_wa_optin_record($leads[$id], 'form', $now);
+    }
     pm_leads_save($leads);
     return ['id' => $id, 'merged' => $merged, 'lead' => $leads[$id]];
 }

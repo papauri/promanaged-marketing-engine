@@ -144,9 +144,60 @@ function pm_weighted_pick(array $items, array $weights, int $n, int $offset = 0)
 
 /* ---------------- MG-A05 · email subject experiments ---------------- */
 
-function pm_email_exp_arm(string $leadId, string $brand): string
+function pm_email_exp_arm(string $leadId, string $brand, bool $useStop = true): string
 {
+    $stop = $useStop ? (array)(pm_load('email_exp', fn() => [])['stopped'] ?? []) : []; // C3-A05: a style that lost clearly is not used until the pause ends
+    if (in_array($stop['winner'] ?? '', ['A', 'B'], true) && strcmp((string)($stop['until'] ?? ''), date('Y-m-d')) >= 0) {
+        return (string)$stop['winner'];
+    }
     return (crc32($brand . '|' . $leadId) % 2 === 0) ? 'A' : 'B';
+}
+
+/** Two-sided Fisher exact p for [[a, b], [c, d]]: how likely a split at least this uneven is by luck alone. Right for small counts, where a z-test fools you. */
+function pm_fisher_p(int $a, int $b, int $c, int $d): float
+{
+    $lf = function (int $n): float {
+        $s = 0.0;
+        for ($i = 2; $i <= $n; $i++) {
+            $s += log($i);
+        }
+        return $s;
+    };
+    $r1 = $a + $b;
+    $r2 = $c + $d;
+    $c1 = $a + $c;
+    $n = $r1 + $r2;
+    $prob = fn(int $x) => exp($lf($r1) + $lf($r2) + $lf($c1) + $lf($n - $c1) - $lf($n) - $lf($x) - $lf($r1 - $x) - $lf($c1 - $x) - $lf($r2 - $c1 + $x));
+    $obs = $prob($a);
+    $p = 0.0;
+    for ($x = max(0, $c1 - $r2); $x <= min($r1, $c1); $x++) {
+        $px = $prob($x);
+        $p += $px <= $obs * (1 + 1e-9) ? $px : 0.0;
+    }
+    return min(1.0, $p);
+}
+
+/**
+ * C3-A05 · stop a clearly losing subject style early, with the same strictness as the social experiments: each style needs at least $minPerArm sends,
+ * the better one needs 3 replies of its own, the worse one's reply rate must be at most half of it, and the gap must survive Fisher's exact test (p at most 0.05).
+ * Anything less keeps waiting, because a handful of emails can be luck. Returns the verdict (status win, early true) or null.
+ */
+function pm_exp_early(array $n, array $ex, int $minPerArm = 6): ?array
+{
+    if ($n['A'][0] < $minPerArm || $n['B'][0] < $minPerArm) {
+        return null;
+    }
+    $ra = $n['A'][1] / $n['A'][0];
+    $rb = $n['B'][1] / $n['B'][0];
+    $w = $rb > $ra ? 'B' : 'A';
+    $l = $w === 'A' ? 'B' : 'A';
+    $rw = max($ra, $rb);
+    $rl = min($ra, $rb);
+    if ($n[$w][1] < 3 || $rl > 0.5 * $rw || pm_fisher_p($n['A'][1], $n['A'][0] - $n['A'][1], $n['B'][1], $n['B'][0] - $n['B'][1]) > 0.05) {
+        return null;
+    }
+    return ['status' => 'win', 'winner' => $w, 'loser' => $l, 'early' => true, 'example' => mb_substr($ex[$w], 0, 90), 'figures' => ['A' => $n['A'], 'B' => $n['B']],
+        'text' => 'arm ' . $l . ' stopped early: ' . round(100 * $rl) . '% vs ' . round(100 * $rw) . '% replies (' . $n[$l][0] . ' and ' . $n[$w][0] . ' sends)'];
 }
 
 /** Tallies sent/replied per arm and the latest subject per arm from rows {arm, subject, replied}. Returns [counts, examples]. */
@@ -170,9 +221,12 @@ function pm_exp_tally(array $rows): array
  * Judges a subject experiment from its tallies. status: few (not enough sends), none (no clear winner) or win. A winner needs both arms, $min sends in all
  * and a real edge: two more replies than the other arm and a different reply rate.
  */
-function pm_exp_judge(array $n, array $ex, int $min = 20): array
+function pm_exp_judge(array $n, array $ex, int $min = 20, bool $allowEarly = false): array
 {
     if ($n['A'][0] + $n['B'][0] < $min || $n['A'][0] === 0 || $n['B'][0] === 0) {
+        if ($allowEarly && ($early = pm_exp_early($n, $ex)) !== null) { // C3-A05: a clear loser does not have to wait for the full sample
+            return $early;
+        }
         return ['status' => 'few', 'figures' => ['A' => $n['A'], 'B' => $n['B']]];
     }
     $ra = $n['A'][1] / $n['A'][0];
@@ -198,7 +252,7 @@ function pm_jobg_email_exp(): string
     }
     $store = pm_load('email_exp', fn() => []);
     [$n, $ex] = pm_exp_tally($rows);
-    $v = pm_exp_judge($n, $ex, 20);
+    $v = pm_exp_judge($n, $ex, 20, true);
     $msg = 'not enough sent emails for a subject verdict';
     if ($v['status'] === 'win') {
         $store['winner'] = $v['winner'];
@@ -206,6 +260,9 @@ function pm_jobg_email_exp(): string
         $store['at'] = date('Y-m-d');
         $store['figures'] = $v['figures'];
         $msg = 'subject experiment: ' . $v['text'];
+        if (!empty($v['early'])) { // the losing style is not handed out for 30 days; then the experiment starts again 50/50
+            $store['stopped'] = ['winner' => $v['winner'], 'loser' => $v['loser'], 'at' => date('Y-m-d'), 'until' => date('Y-m-d', strtotime('+30 days'))];
+        }
     } elseif ($v['status'] === 'none') {
         $msg = 'subject experiment: no clear winner yet';
     }
@@ -675,3 +732,86 @@ function pm_learn_qualifier_line(string $brand): string
 
 
 
+
+/* ---------------- C3-A09 · directory scout: public member lists, once a week ---------------- */
+
+/** Is this business's weekly directory pass due? (Once every 7 days; the state file keeps the last day per business.) */
+function pm_directory_due(string $brand): bool
+{
+    $d = (string)(pm_load('directory_state', fn() => [])[$brand] ?? '');
+    return $d === '' || strtotime($d) <= strtotime(date('Y-m-d') . ' -7 days');
+}
+
+function pm_directory_mark(string $brand): void
+{
+    pm_update('directory_state', function (array $s) use ($brand) {
+        $s[$brand] = date('Y-m-d');
+        return $s;
+    }, fn() => []);
+}
+
+/**
+ * DIRECTORY SCOUT: one search-grounded call that reads PUBLIC business directories, chambers of commerce and association member lists for one town.
+ * It reports only members it actually saw on such a page, with the address (https) of that page; names and contacts the page itself publishes, nothing else.
+ */
+function pm_agent_directory(string $brand, string $city, array $sectors, array $knownNames): array
+{
+    $system = pm_agents_company_brief('short') . "\nYou are the Directory Scout. Web-search PUBLIC business directories, chamber of commerce pages and association member lists for organisations in {$city}, Malawi, that fit "
+        . 'what we offer (' . implode(', ', array_slice($sectors, 0, 6)) . '). Report only organisations you actually saw listed on such a page, with the exact https address of the page that lists them, and only the contact details that page publishes. '
+        . 'Never guess an address, a phone number or a person, and never use a private person\'s personal contact. Skip chains and anything outside Malawi. ' . PM_AGENT_RULES;
+    $user = 'Skip these (already known): ' . implode('; ', array_slice(array_map(fn($n) => preg_replace('/ \(.*$/', '', $n), $knownNames), -80)) . "\n"
+        . 'JSON array of {"name","type":"kind of organisation in 2-3 words","city","address","website","phone","email","source":"https address of the directory or member-list page that lists it","evidence":["what the listing says about it"]} - at most 6 items.';
+    return pm_agent_list(pm_agent_json(pm_claude($system, $user, true, 2200)));
+}
+
+/** Keeps only usable directory rows: a name, and the https page that listed it. Contact fields that are not valid are blanked, never repaired or invented. Max 6. */
+function pm_directory_clean(array $rows): array
+{
+    $out = [];
+    foreach ($rows as $r) {
+        if (!is_array($r)) {
+            continue;
+        }
+        $name = trim((string)($r['name'] ?? ''));
+        $src = trim((string)($r['source'] ?? ''));
+        if ($name === '' || !preg_match('#^https://[^\s<>"\']{6,250}$#i', $src)) {
+            continue; // no name, or no listing page we can point to: not usable
+        }
+        $email = strtolower(trim((string)($r['email'] ?? '')));
+        $out[] = ['name' => mb_substr($name, 0, 100), 'type' => mb_substr(trim((string)($r['type'] ?? '')), 0, 60), 'city' => mb_substr(trim((string)($r['city'] ?? '')), 0, 60),
+            'address' => mb_substr(trim((string)($r['address'] ?? '')), 0, 160), 'website' => (string)(pm_clean_url((string)($r['website'] ?? ''))), 'phone' => mb_substr(trim((string)($r['phone'] ?? '')), 0, 40),
+            'email' => filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '', 'source' => $src,
+            'evidence' => array_slice(array_values(array_filter(array_map(fn($e) => mb_substr(trim((string)$e), 0, 200), (array)($r['evidence'] ?? [])))), 0, 3)];
+    }
+    return array_slice($out, 0, 6);
+}
+
+/**
+ * Turns cleaned directory rows into new leads: not already known (same name or website, phone, email, archived ones included), not an existing client,
+ * and no more than $room. Every lead says where it was listed. Returns [id => lead].
+ */
+function pm_directory_leads(array $rows, array $pool, string $brand, array $cfg, string $fallbackCity, int $room): array
+{
+    $new = [];
+    foreach ($rows as $b) {
+        if (count($new) >= $room) {
+            break;
+        }
+        $c = $b['city'] !== '' ? $b['city'] : $fallbackCity;
+        $cand = ['name' => $b['name'], 'city' => $c, 'brand' => $brand, 'type' => $b['type'], 'website' => $b['website'], 'phone' => $b['phone'], 'email' => $b['email']];
+        $id = pm_lead_id($b['name'], $c, $brand);
+        if (isset($pool[$id]) || isset($new[$id]) || (function_exists('pm_lead_find_dupe') && pm_lead_find_dupe($pool + $new, $cand, $brand) !== null)) {
+            continue;
+        }
+        if ($brand !== 'travel' && array_filter((array)($cfg['existing_clients'] ?? []), fn($x) => $x !== '' && stripos($b['name'], (string)$x) !== false)) {
+            continue;
+        }
+        $new[$id] = [
+            'id' => $id, 'brand' => $brand, 'name' => $b['name'], 'type' => $b['type'], 'city' => $c, 'address' => $b['address'], 'website' => $b['website'], 'phone' => $b['phone'],
+            'email' => $b['email'], 'whatsapp' => '', 'contact' => '', 'contact_title' => '', 'evidence' => array_merge(['Listed on a public directory: ' . $b['source']], $b['evidence']),
+            'facebook' => '', 'instagram' => '', 'social_gaps' => [], 'need_signals' => [], 'offering' => '', 'score' => 0, 'status' => 'new', 'notes' => [], 'drafts' => [], 'sent' => [],
+            'followups' => 0, 'created' => date('Y-m-d H:i'), 'updated' => date('Y-m-d H:i'), 'src' => ['kind' => 'directory', 'url' => $b['source'], 'run_date' => date('Y-m-d')],
+        ];
+    }
+    return $new;
+}
