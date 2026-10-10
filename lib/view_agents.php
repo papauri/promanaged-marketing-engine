@@ -79,6 +79,13 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
   <form method="post" class="btns"><?= $post('', 'tm_rewrite') ?><button class="btn primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?>>Redraft <?= count($tmTodo) ?> email<?= count($tmTodo) === 1 ? '' : 's' ?> in the new format</button></form>
 </div>
 <?php endif; endif; ?>
+<?php $sjTodo = pm_subjects_pending(pm_leads()); if ($sjTodo): $sj1 = reset($sjTodo); ?>
+<div class="card nofold" id="subjectfix">
+  <b><?= count($sjTodo) ?> subject line<?= count($sjTodo) === 1 ? '' : 's' ?> need capital letters.</b> For example "<?= pm_h(mb_substr($sj1['subject'], 0, 70)) ?>" should read "<?= pm_h(mb_substr($sj1['tidy'], 0, 70)) ?>". Anything sent is always corrected, and new drafts are written this way; this puts the ones already drafted right.
+  <p class="hint" style="margin:6px 0 0">Only the capitals and punctuation change, never a word. Drafts you edited yourself are left alone. Nothing is sent.<?= pm_agents_ready() ? ' The AI also checks the names code does not know.' : '' ?></p>
+  <form method="post" class="btns"><?= $post('', 'fix_subjects') ?><button class="btn primary">Fix <?= count($sjTodo) ?> subject line<?= count($sjTodo) === 1 ? '' : 's' ?></button></form>
+</div>
+<?php endif; ?>
 
 <!-- 2. Run the agents + progress -->
 <div class="card runbar" id="runbar" data-running="<?= $running ? '1' : '0' ?>">
@@ -201,6 +208,9 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <?php foreach (pm_lead_open_drafts($l) as $od): ?><span class="pill warn"><?= ['winback' => 'win-back ready', 'postsign' => 'thank-you asks ready', 'reverify' => 'contact re-checked'][$od] ?></span><?php endforeach; ?>
       <?php if (!empty($l['snooze_until']) && $l['snooze_until'] >= date('Y-m-d')): ?><span class="pill" title="No follow-ups until then">paused to <?= pm_h(date('j M', strtotime($l['snooze_until']))) ?></span><?php endif; ?>
       <?php if (!empty($l['email_bad'])): ?><span class="pill warn" title="<?= pm_h((string)$l['email_bad']) ?> bounced: find another contact">email bounced</span><?php endif; ?>
+      <?php $gapOpen = in_array($l['status'] ?? '', ['new', 'qualified', 'drafted', 'contacted'], true); $gapMail = (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL); $gapWa = pm_wa_best($l)[0] !== ''; ?>
+      <?php if ($gapOpen && !$gapMail): ?><span class="pill" title="No email address yet: add one or find one on the card">no email</span><?php endif; ?>
+      <?php if ($gapOpen && !$gapWa): ?><span class="pill" title="No WhatsApp-capable number yet: add one or find one on the card">no WhatsApp</span><?php endif; ?>
       <?php if (!empty($l['view_count'])): ?><span class="pill hot" title="They opened the proposal page">opened proposal</span><?php endif; ?>
       <?php if (!empty($l['approved_at'])): ?><span class="pill hot"><?= pm_h(function_exists('pm_approved_eta') ? (pm_approved_eta($l) ?: 'approved') : 'approved') ?></span><?php endif; ?>
       <?php if ($approvable($l)): ?><label class="pick" onclick="event.stopPropagation()"><input type="checkbox" form="approveform" name="ids[]" value="<?= pm_h($id) ?>"> Approve for sending</label><?php endif; ?>
@@ -214,7 +224,8 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
   <div class="body">
     <div class="cols">
       <div>
-        <p class="person"><?php if (!empty($l['contact'])): ?><b><?= pm_h($l['contact']) ?></b><?= !empty($l['contact_title']) ? ' · ' . pm_h($l['contact_title']) : '' ?><?php elseif (!empty($l['contact_hint'])): ?><span class="muted">Possible: <?= pm_h($l['contact_hint']) ?>. Not used yet: type the name in "Contact name" if it is right.</span><?php else: ?><span class="muted">No owner or manager name found yet. Add one below and the greeting uses it.</span><?php endif; ?></p>
+        <p class="person"><?php if (!empty($l['contact'])): ?><b><?= pm_h($l['contact']) ?></b><?= !empty($l['contact_title']) ? ' · ' . pm_h($l['contact_title']) : '' ?><?php elseif (!empty($l['contact_hint'])): ?><span class="muted">Possible: <?= pm_h($l['contact_hint']) ?>. Not used yet: confirm it, or type the name in "Contact name".</span><?php else: ?><span class="muted">No owner or manager name found yet. Add one below and the greeting uses it.</span><?php endif; ?></p>
+        <?php if (empty($l['contact']) && ($hp = pm_contact_hint_parts($l)) && empty($hp['not_owner'])): ?><form method="post" class="inline"><?= $post($id, 'use_hint') ?><button class="btn small" title="Use this name in the greeting">Use <?= pm_h($hp['name']) ?> as the contact</button></form><?php endif; ?>
         <?php if (!empty($l['pitch_response'])): $pr = $l['pitch_response']; ?><p class="hint warnt">On the proposal page they chose "<?= $pr['act'] === 'yes' ? 'Yes, send me the agreement' : 'I have a question' ?>"<?= $pr['msg'] !== '' ? ': ' . pm_h($pr['msg']) : '' ?>.</p><?php endif; ?>
         <?php if (!empty($l['view_count'])): ?><p class="hint">Opened the proposal <?= (int)$l['view_count'] ?> time<?= (int)$l['view_count'] === 1 ? '' : 's' ?>, last on <?= pm_h(date('j M, H:i', strtotime((string)($l['last_viewed_at'] ?? $l['viewed_at'])))) ?>.</p><?php endif; ?>
         <?php if (!empty($l['reason']) || !empty($l['pain'])): ?><p class="why"><?= pm_h($l['reason'] ?? '') ?><?php if (!empty($l['pain'])): ?> <b>Lead with:</b> <?= pm_h($l['pain']) ?><?php endif; ?></p><?php endif; ?>
@@ -222,6 +233,14 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
         <p class="hint"><?= pm_h(implode(' · ', array_filter([$l['website'] ?? '', $l['phone'] ?? '', $l['email'] ?? '']))) ?: 'No contact details found yet' ?>
           <?php foreach (['facebook' => 'Facebook', 'instagram' => 'Instagram'] as $sk => $sl): if (!empty($l[$sk]) && preg_match('#^https?://#', $l[$sk])): ?> · <a href="<?= pm_h($l[$sk]) ?>" target="_blank" rel="noopener noreferrer"><?= $sl ?></a><?php endif; endforeach; ?></p>
         <?php if (trim((string)($l['phone'] ?? '') . (string)($l['whatsapp'] ?? '')) !== ''): ?><p class="hint wa-optin"><?= pm_h(pm_wa_optin_line($l)) ?></p><?php endif; ?>
+        <?php if ($gapOpen && (!$gapMail || !$gapWa || empty($l['contact']))): ?>
+        <div class="gapfix">
+          <p class="hint warnt" style="margin:0 0 4px"><?= !$gapMail && !$gapWa ? 'No email address and no WhatsApp number yet.' : (!$gapMail ? 'No email address yet, so the email cannot go out.' : (!$gapWa ? 'No WhatsApp number yet.' : 'No owner or manager name yet.')) ?> Add what you know, or let the AI look.</p>
+          <?php if (!$gapMail): ?><form method="post" class="inline"><?= $post($id, 'save_contact') ?><input type="email" name="email" placeholder="Their email address" aria-label="Email address" autocomplete="off"><button class="btn small">Save email</button></form><?php endif; ?>
+          <?php if (!$gapWa): ?><form method="post" class="inline"><?= $post($id, 'save_contact') ?><input type="text" name="whatsapp" placeholder="WhatsApp number, e.g. 0999 123 456" aria-label="WhatsApp number" inputmode="tel" autocomplete="off"><button class="btn small">Save WhatsApp</button></form><?php endif; ?>
+          <?php if (pm_agents_ready()): ?><form method="post" class="inline"><?= $post($id, 'find_contact') ?><button class="btn small primary" title="Reads their website and searches the web for the owner's name, an email address and a WhatsApp number; it fills only what is missing and sends nothing">Find missing details with AI</button></form><?php endif; ?>
+        </div>
+        <?php endif; ?>
         <?php if (!empty($l['research'])): $rz = $l['research']; ?>
         <div class="research"><b>What we found</b> <span class="muted">· <?= pm_h($rz['at']) ?></span>
           <?php if (isset($rz['sure']) && !$rz['sure']): ?><p class="hint warnt">The researcher could not confirm it found this exact business online, so only facts our system checked itself are shown.</p><?php elseif (!empty($rz['identity'])): ?><p class="hint">Matched by: <?= pm_h($rz['identity']) ?></p><?php endif; ?>

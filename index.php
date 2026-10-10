@@ -770,6 +770,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $back(!$fr['due'] ? 'No follow-ups are due without a draft.' : $fr['drafted'] . ' follow-up' . ($fr['drafted'] === 1 ? '' : 's') . ' drafted with AI' . ($fr['failed'] ? ', ' . $fr['failed'] . ' could not be (try again)' : '') . '. Read them, then send.', $fr['failed'] && !$fr['drafted'] ? 'err' : 'ok');
         }
+        if ($do === 'fix_subjects') { // capital letters and names in the subject lines of unsent drafts (nothing is sent; hand-edited drafts are left alone)
+            @set_time_limit(180);
+            $sj = pm_subjects_fix_now();
+            $back(!$sj['checked'] ? 'No subject line needed fixing.' : $sj['fixed'] . ' subject line' . ($sj['fixed'] === 1 ? '' : 's') . ' put right' . ($sj['ai'] ? ' (the AI checked the names)' : ' (without the AI: add a key in .env and press again for a second look)') . '. Nothing was sent.');
+        }
         if ($do === 'tm_rewrite') { // redraft the unsent Travel Malawi emails in the new format (hand-edited and approved ones are left alone)
             if (pm_brand() !== 'travel') {
                 $back('This is for Travel Malawi.', 'err');
@@ -787,6 +792,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         pm_brand_set((string)($lead['brand'] ?? 'promanaged')); // act as the brand this lead was approached by
         $settings = pm_settings();
         $acfg = pm_agents_config();
+        if ($do === 'save_contact') { // an email, WhatsApp number, phone or name typed on the card (only the boxes that were filled in)
+            [$cok, $cmsg] = pm_contact_save($id, $_POST);
+            $back($cmsg, $cok ? 'ok' : 'err');
+        }
+        if ($do === 'use_hint') { // the owner confirms a possible name
+            [$cok, $cmsg] = pm_contact_use_hint($id);
+            $back($cmsg, $cok ? 'ok' : 'err');
+        }
+        if ($do === 'find_contact') { // read their website and search the web for the missing name, email and WhatsApp number
+            if (!pm_agents_ready()) {
+                $back('The AI needs a key in .env first. You can type the details in the boxes meanwhile.', 'err');
+            }
+            @set_time_limit(180);
+            [$cok, $cmsg] = pm_contact_find_one($id);
+            $back($cmsg, $cok ? 'ok' : 'err');
+        }
         if ($do === 'save_draft') {
             $key = ($_POST['which'] ?? '') === 'followup' ? 'followup_draft' : 'drafts';
             $oldBody = trim((string)($lead[$key]['email_body'] ?? ''));
@@ -815,6 +836,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $back((string)$res['msg'], !empty($res['ok']) ? 'ok' : 'err');
             }
             $d = $lead[$which] ?? [];
+            $d['email_subject'] = pm_subject_tidy((string)($d['email_subject'] ?? ''), $lead);
             if ($lead['status'] === 'optout') {
                 $back($lead['name'] . ' asked not to be contacted.', 'err');
             }

@@ -402,6 +402,7 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     $settings = pm_settings();
     $cfg = pm_agents_config();
     $d = (array)($lead[$which] ?? []);
+    $d['email_subject'] = pm_subject_tidy((string)($d['email_subject'] ?? ''), $lead); // a capital letter first and names in capitals, whatever the draft says
     $no = fn(string $m, string $kind = 'lead') => pm_ob_res(false, $m, $kind);
     if (($lead['status'] ?? '') === 'optout') {
         return $no(($lead['name'] ?? 'This business') . ' asked not to be contacted.');

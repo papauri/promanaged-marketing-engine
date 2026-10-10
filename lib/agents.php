@@ -340,6 +340,8 @@ require_once __DIR__ . '/sx_learn.php';
 require_once __DIR__ . '/sx_harvest.php';
 require_once __DIR__ . '/tm_email.php';
 require_once __DIR__ . '/followups.php';
+require_once __DIR__ . '/subjects.php';
+require_once __DIR__ . '/contacts.php';
 
 /* ---------------- Spend control: every call is counted against a daily token budget ---------------- */
 
@@ -856,8 +858,8 @@ function pm_agent_scout(string $sector, string $city, int $want, array $knownNam
     return array_values(array_filter($out, fn($x) => is_array($x) && !empty($x['name'])));
 }
 
-/** CONTACT FINDER: only for leads that still lack a way to reach them. */
-function pm_agent_contact(array $lead): array
+/** CONTACT FINDER, second chance: the web search, for what the lead's own website did not give (pm_agent_contact in lib/contacts.php reads the website first). */
+function pm_agent_contact_search(array $lead): array
 {
     $system = "You are the Contact Finder. Your main job is the NAME of the owner, founder, managing director or general manager of this business, then the business's own published enquiry contacts. "
         . "Check its website (about, team, contact pages), Facebook page, Google listing, LinkedIn company page and local directories. Only report a name that a public source ties to this business, and give the source. "
@@ -892,7 +894,7 @@ function pm_apply_contact(array &$lead, array $d): void
         return;
     }
     // A person's name: letters only (no digits or phone numbers), at least two letters, and not a department.
-    if (preg_match('/\d|@|https?:/', $name) || mb_strlen(preg_replace('/[^\p{L}]/u', '', $name)) < 2 || preg_match('/\b(reservations?|reception|info|sales|bookings?|management|admin|team|office)\b/i', $name)) {
+    if (!pm_contact_name_ok($name)) {
         return;
     }
     // Greet the decision maker: a restaurant, kitchen, front-desk or similar staff role is not who we pitch.
@@ -944,7 +946,7 @@ const PM_EMAIL_CRAFT = "Write like one real person writing to one owner, never l
     . "When research is given, the observation in (3) MUST be built on one item from research.discoveries, research.news or research.hooks (the most recent and specific one), mentioned naturally, so they can see we really looked. "
     . "Engage, don't lecture: say there are one or two simple things that could help with it, but do NOT hand over the full answer in the email; leave them curious enough to reply. "
     . "(4) One easy, low-pressure question: a 10-minute call, or a one-page plan for their business. "
-    . "Warm, plain, contractions welcome; no buzzwords (streamline, leverage, solution, seamless, cutting-edge, elevate). Subject: under 45 characters, specific to them, truthful, no capitals for emphasis, no exclamation marks. "
+    . "Warm, plain, contractions welcome; no buzzwords (streamline, leverage, solution, seamless, cutting-edge, elevate). Subject: under 45 characters, specific to them, truthful, written like a normal subject line: a capital letter first and a capital letter on every town, area, road, person and business name (for example 'Rooms near the Shire River barrage?'), every other word in ordinary lowercase, no full stop, no exclamation marks, no word in ALL CAPS except an acronym such as VAT. "
     . "NEVER mention prices, fees or numbers you cannot source. No urgency, scarcity, guarantees, links or attachments; never ask for passwords or payment; never claim we know them or follow their work; never name a town as our base. "
     . "No sign-off (the app adds it). Email: 70 to 110 words. WhatsApp: 30 to 45 words, one paragraph: greeting with first name, who you are, the gain, the easy question.";
 
@@ -977,22 +979,23 @@ function pm_agent_write(array $leads): array
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'city' => $l['city'], 'contact' => $l['contact'] ?? '',
         'evidence' => array_slice($l['evidence'] ?? [], 0, 2), 'online_gaps' => array_slice($l['social_gaps'] ?? [], 0, 2), 'research' => pm_research_brief($l), 'lead_with' => $l['pain'] ?? '', 'how_it_stops' => pm_fix_for((string)($l['pain'] ?? '')),
         'subject_style' => pm_subject_style(pm_email_exp_arm((string)$l['id'], $brand))], $leads);
-    return pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
-        . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}. Never greet with the business name.", false, 2500, 'write')));
+    return pm_subjects_polish(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
+        . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}. Never greet with the business name.", false, 2500, 'write'))), $leads);
 }
 
 /** FOLLOW-UP: a short nudge for leads that have gone quiet. Engagement-aware: opened-but-silent, never-opened and replied-then-quiet get different angles. */
 function pm_agent_followup(array $leads): array
 {
     $s = pm_settings();
+    $subjectRule = 'written like a normal subject line: a capital letter first and a capital letter on every town, area, road, person and business name (for example \'Rooms near the Shire River barrage?\'), every other word in ordinary lowercase, no full stop, no exclamation marks, no word in ALL CAPS except an acronym such as VAT';
     $system = pm_agents_company_brief('tiny') . "\nYou are the Follow-up agent for {$s['company_name']}. Write a 40-word follow-up email and 25-word WhatsApp that add ONE new angle (a different gain, or a one-page plan offer). "
         . "Match the state: for \"opened\" (they opened our proposal or email but stayed quiet) gently reference what they saw and add one new, true reason; for \"silent\" (never engaged) be shorter and lead with one specific fact about their business; for \"replied\" pick up their last words, never repeat a whole earlier message. "
-        . "No prices, no guilt, no pressure, no urgency. Plain text, no sign-off. Each item has subject_style: write that item's email subject in that style. "
+        . "No prices, no guilt, no pressure, no urgency. Plain text, no sign-off. Each item has subject_style: write that item's email subject in that style, $subjectRule. "
         . pm_email_exp_followup_example(pm_brand()) . ' ' . PM_AGENT_RULES;
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'contact' => $l['contact'] ?? '', 'used' => mb_substr($l['drafts']['email_body'] ?? '', 0, 220),
         'state' => pm_lead_engagement((array)$l), 'views' => (int)($l['view_count'] ?? 0), 'last_seen' => (string)($l['last_viewed_at'] ?? ''),
         'subject_style' => pm_subject_style(pm_followup_arm((array)$l))], $leads);
-    return pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}", false, 1800)));
+    return pm_subjects_polish(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}", false, 1800))), $leads);
 }
 
 /** One word for the follow-up writer: 'replied', 'opened' or 'silent'. */
@@ -1903,7 +1906,7 @@ function pm_agent_compose(array $lead, string $channel, string $tone, string $le
     if (!is_array($out) || trim((string)($out['body'] ?? '')) === '') {
         throw new RuntimeException('The AI did not return a message. Try again.');
     }
-    return ['subject' => trim((string)($out['subject'] ?? '')), 'body' => trim((string)$out['body'])];
+    return ['subject' => pm_subject_tidy(trim((string)($out['subject'] ?? '')), $lead), 'body' => trim((string)$out['body'])];
 }
 
 /** The picker shown above a message box. $target tells the script which fields to fill. */
@@ -2178,7 +2181,7 @@ function pm_agent_research(array $lead): array
         if ($body === '' || $n < 25 || $n > 120 || pm_has_price($body)) {
             continue; // too thin, too long or mentions money: not sent to the box
         }
-        $starters[] = ['angle' => mb_substr((string)($st['angle'] ?? ''), 0, 40), 'subject' => mb_substr(trim((string)($st['subject'] ?? '')), 0, 80), 'email' => $body, 'whatsapp' => trim((string)($st['whatsapp'] ?? ''))];
+        $starters[] = ['angle' => mb_substr((string)($st['angle'] ?? ''), 0, 40), 'subject' => pm_subject_tidy(mb_substr(trim((string)($st['subject'] ?? '')), 0, 80), $lead), 'email' => $body, 'whatsapp' => trim((string)($st['whatsapp'] ?? ''))];
     }
     $social = (array)($out['social'] ?? []);
     foreach (['facebook', 'instagram'] as $k) { // a link on their own website beats a search result

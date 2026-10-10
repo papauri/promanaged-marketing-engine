@@ -121,6 +121,11 @@ accepted by being made; they are logged in the Done log below, not in the regist
 
 ## 6 · Done log
 
+### Owner request in chat, 2026-10-11 — "contact names failing again; offer email / WhatsApp when a stay has none; subjects well written and capitalised"
+
+- **Contact Finder reads the website first** (`lib/contacts.php`): contact details by code from the business's own pages, the owner's name only with a quote that is really on the page and a role that is the owner's or a manager's; the web search is the second chance, not the only chance (it had been returning only what the lead already had). Names from other pages stay "possible" until the owner presses "Use <name> as the contact". Per lead: "no email" / "no WhatsApp" tags, boxes to type them, "Find missing details with AI". Landlines are never stored as WhatsApp numbers.
+- **Subject lines** (`lib/subjects.php`): written with capitals by every writer (first email, Travel Malawi, follow-up, win-back, compose, proposal, conversation starters), tidied by code, corrected again at send time, and "Fix N subject lines" for existing drafts with a word-for-word guard on the AI's version. Tests: `tests/test_contacts.php` (63), `tests/test_subjects.php` (60), HTTP checks in `tests/test_pages.php`.
+
 ### Owner request in chat, 2026-10-11 — "delete businesses, keep today's strategy updated, and follow-ups with AI"
 
 - **Follow-ups with AI** (`lib/followups.php`): one shared "due" rule (`pm_followup_due`) used by the daily run, the Leads screen and the scheduler. Drafts only, never sends: on demand for one lead ("Draft follow-up with AI") or all that are due ("Draft N follow-ups with AI", six to a call, at most 12), and by the scheduler job `followup_drafts` once each working morning (12 a day, retried the same day only if every call failed). Same Follow-up agent, same lint and subject experiment as before.

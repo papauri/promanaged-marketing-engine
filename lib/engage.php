@@ -42,13 +42,18 @@ function pm_agent_polish(array $p, array $line, array $package, ?array $lead, bo
     if (!is_array($draft) || empty($draft['pain_points'])) {
         throw new RuntimeException('The AI did not return a usable proposal. Try again.');
     }
+    $draft['email_subject'] = pm_subject_tidy((string)($draft['email_subject'] ?? ''), (array)$lead);
     if (!$review) {
         return $draft; // one pass is the default: a second review pass doubles the cost
     }
     $rev = "Review as the sceptical owner of {$p['business']}. Cut anything that could be sent to any other business, anything vague or unsupported by the facts, and padding. Keep placeholders. Return the SAME JSON.\nFacts:\n"
         . json_encode($facts, JSON_UNESCAPED_UNICODE) . "\nDraft:\n" . json_encode($draft, JSON_UNESCAPED_UNICODE);
     $final = pm_agent_json(pm_claude($system, $rev, false, 2200, 'write'));
-    return (is_array($final) && !empty($final['pain_points'])) ? $final : $draft;
+    if (is_array($final) && !empty($final['pain_points'])) {
+        $final['email_subject'] = pm_subject_tidy((string)($final['email_subject'] ?? ''), (array)$lead);
+        return $final;
+    }
+    return $draft;
 }
 
 /* ---------------- Reply agent ---------------- */

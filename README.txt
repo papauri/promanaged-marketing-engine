@@ -241,6 +241,18 @@ FOLLOW-UPS WITH AI, AND TODAY'S STRATEGY (lib/followups.php, lib/director.php)
   are drafted, drafts to read, approved and waiting) and is written again by itself after each agent run, after you press "Draft N follow-ups", and when that
   work moves (at most every 90 minutes), so it no longer repeats yesterday's advice. "Refresh strategy" still rewrites it at once.
 
+CONTACT NAMES, EMAILS, WHATSAPP NUMBERS, SUBJECT LINES (lib/contacts.php, lib/subjects.php)
+  The Contact Finder now reads the business's OWN website first (home page plus the about, team, owner and contact pages): emails, phone numbers and WhatsApp
+  links come straight off the page by code; the owner's or manager's name is taken only when the AI points to a sentence that is really on the page, the name
+  is in it and the role is owner/director/manager (never kitchen, restaurant, housekeeping or front-desk staff). A name from the business's own page is
+  used in the greeting; a name from anywhere else stays a "possible" name with a "Use <name> as the contact" button. The web search runs only for what the
+  site did not give. On a lead's card, "no email" and "no WhatsApp" tags show what is missing, with boxes to type an email or a WhatsApp number (a landline
+  is kept as the phone, not WhatsApp) and "Find missing details with AI" for that one lead. Nothing is sent by any of it.
+  Subject lines: the writers are told to write a capital letter first and capitals on every town, area, road, person and business name; code then puts
+  right what slips through without changing a word (VAT, M1, Area 44, Lake Malawi ...), anything sent is corrected the same way, and the Leads screen offers
+  "Fix N subject lines" for drafts already written (code first, then one cheap AI call per 20 for names code does not know; the AI's version is used only
+  when every word is unchanged; hand-edited drafts are left alone).
+
 EMAIL WORKS ON YOUR PC BUT NOT FROM THE SERVER
   Settings > the business > "Check the mail login" (also "Test now" in Setup health) logs in without sending, and when it fails says why and what to do:
   it tries the usual ports (465, 587, 25) from the server and tells you which one opens. The commonest cause on a website host is that it BLOCKS outgoing

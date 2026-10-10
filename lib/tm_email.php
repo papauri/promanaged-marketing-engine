@@ -105,7 +105,7 @@ function pm_tm_write(array $leads): array
     $subjectLine = function_exists('pm_email_exp_example') ? pm_email_exp_example('travel') : '';
     $system = pm_agents_company_brief('tiny') . "\nYou are writing outreach for {$s['company_name']} as "
         . ($sender !== '' ? "$sender (use this first name: " . explode(' ', $sender)[0] . ')' : 'a member of the team (no personal name: name the company instead)') . '. For each item write three things. '
-        . 'email_subject: under 45 characters, specific to them, truthful, no capitals for emphasis, no exclamation marks, in the subject_style given. '
+        . 'email_subject: under 45 characters, specific to them, truthful, in the subject_style given, written like a normal subject line: a capital letter first and a capital letter on every town, area, road, person and business name (for example "Rooms near the Shire River barrage?"), every other word in ordinary lowercase, no full stop, no exclamation marks, no word in ALL CAPS except an acronym such as VAT. '
         . 'opening: at most two short sentences and 40 words: first who you are in one natural sentence (first name and company), then ONE true observation about their place from the evidence or research, such as how you came across it. '
         . 'No greeting, no sign-off, no promises, no numbers, no prices, no link, no exclamation marks. '
         . 'whatsapp: 30 to 45 words, one paragraph: a greeting with the first name if given, who you are, the gain (direct bookings with no commission), one easy question. '
@@ -137,7 +137,7 @@ function pm_tm_write(array $leads): array
         }
         $res[] = ['id' => $l['id'], 'email_subject' => $subject, 'email_body' => pm_tm_email_compose($l, pm_tm_clean_opening($txt($x['opening'] ?? ''))), 'whatsapp' => $wa];
     }
-    return $res;
+    return pm_subjects_polish($res, $leads);
 }
 
 /** Ids of Travel Malawi leads whose unsent draft is still in the old format (no link) and that nobody has edited by hand or approved. */

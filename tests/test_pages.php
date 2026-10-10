@@ -469,6 +469,37 @@ pm_t_assert(empty(pm_load('leads', fn() => [])['fu1']['followup_draft']), 'and n
 file_put_contents($T['env'], $envBefore);
 pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
 
+echo "\nMissing contact details and subject lines on the Leads screen\n";
+$gp = fn(string $id, array $x = []) => array_replace($mkl($id, 'promanaged', []), ['status' => 'drafted', 'name' => "Gap $id", 'drafts' => ['email_subject' => 'rooms near the shire river barrage?', 'email_body' => 'Body of the email.', 'whatsapp' => 'wa'], 'thread' => []], $x);
+pm_save('leads', ['gp1' => $gp('gp1', ['email' => '', 'phone' => '', 'contact' => '']), 'gp2' => $gp('gp2', ['email' => 'ok@gap2.example', 'phone' => '0999 123 456', 'contact' => 'Grace Phiri', 'drafts' => ['email_subject' => 'Rooms in Zomba', 'email_body' => 'Body', 'whatsapp' => '']]),
+    'gp3' => $gp('gp3', ['email' => 'ok@gap3.example', 'phone' => '0999 123 457', 'contact' => '', 'contact_hint' => 'Luca Oddera (Owner), from https://blog.example/x'])]);
+[, $html] = http("$base?tab=agents&status=all&brand=promanaged");
+$csrf7 = csrf_of($html);
+pm_t_assert(str_contains($html, 'id="subjectfix"') && str_contains($html, 'Fix 2 subject lines') && str_contains($html, 'should read "Rooms near the Shire River barrage?"'), 'subject lines that need capitals are counted, with an example of the fix');
+pm_t_assert(str_contains($html, 'No email address and no WhatsApp number yet.') && str_contains($html, 'name="email" placeholder="Their email address"') && str_contains($html, 'placeholder="WhatsApp number'), 'a lead with no email and no WhatsApp number offers both boxes');
+pm_t_assert(substr_count($html, 'class="pill" title="No email address yet') === 1 && substr_count($html, 'class="pill" title="No WhatsApp-capable number yet') === 1, 'and carries both "no email" and "no WhatsApp" tags, the others do not');
+pm_t_assert(str_contains($html, 'Use Luca Oddera as the contact') && str_contains($html, 'value="use_hint"'), 'a possible name offers to be used with one press');
+pm_t_assert(!str_contains($html, 'Find missing details with AI'), 'without an AI key the AI button is not offered');
+[$code] = http($base, ['csrf' => $csrf7, 'action' => 'agents', 'do' => 'save_contact', 'id' => 'gp1', 'email' => 'nonsense']);
+[, $html] = http("$base?tab=agents&status=all&brand=promanaged");
+pm_t_assert($code === 302 && str_contains($html, 'is not an email address') && pm_leads()['gp1']['email'] === '', 'a typed email that is not one is refused');
+[$code] = http($base, ['csrf' => $csrf7, 'action' => 'agents', 'do' => 'save_contact', 'id' => 'gp1', 'email' => 'Hello@Gap1.example']);
+[$code2] = http($base, ['csrf' => $csrf7, 'action' => 'agents', 'do' => 'save_contact', 'id' => 'gp1', 'whatsapp' => '0888 765 432']);
+$g1 = pm_leads()['gp1'];
+[, $html] = http("$base?tab=agents&status=all&brand=promanaged");
+pm_t_assert($g1['email'] === 'hello@gap1.example' && $g1['whatsapp'] === '+265888765432' && !str_contains($html, 'No email address and no WhatsApp number yet.'), 'a typed email and WhatsApp number are saved, and the gap box goes away');
+[$code] = http($base, ['csrf' => $csrf7, 'action' => 'agents', 'do' => 'use_hint', 'id' => 'gp3']);
+pm_t_assert($code === 302 && pm_leads()['gp3']['contact'] === 'Luca' || pm_leads()['gp3']['contact'] === 'Luca Oddera', 'using a possible name makes it the contact');
+[$code] = http($base, ['csrf' => $csrf7, 'action' => 'agents', 'do' => 'find_contact', 'id' => 'gp2']);
+[, $html] = http("$base?tab=agents&status=all&brand=promanaged");
+pm_t_assert($code === 302 && str_contains($html, 'The AI needs a key'), 'finding details with AI without a key says so');
+[$code] = http($base, ['csrf' => $csrf7, 'action' => 'agents', 'do' => 'fix_subjects']);
+[, $html] = http("$base?tab=agents&status=all&brand=promanaged");
+$gs = pm_leads();
+pm_t_assert($code === 302 && $gs['gp1']['drafts']['email_subject'] === 'Rooms near the Shire River barrage?' && $gs['gp3']['drafts']['email_subject'] === 'Rooms near the Shire River barrage?' && $gs['gp2']['drafts']['email_subject'] === 'Rooms in Zomba' && !str_contains($html, 'id="subjectfix"') && str_contains($html, 'subject lines put right'),
+    'fixing the subjects puts the drafted ones right, leaves right ones alone and removes the notice');
+pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
+
 echo "\nThe WhatsApp webhook: one address for every connected number\n";
 $wa = "http://127.0.0.1:$port/wa.php";
 pm_t_eq(http($wa)[0], 404, 'with no business connected the webhook does not exist');
