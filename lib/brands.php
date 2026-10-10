@@ -322,6 +322,8 @@ function pm_brand_draft(array $a, ?array $bundle = null): array
             if (is_array($r)) {
                 $ai = true;
                 $out = pm_study_merge($out, $r, ['own' => $own, 'source' => $source, 'owner_text' => $ownerText, 'pages' => $pages, 'pagetext' => mb_strtolower(implode("\n", array_column($pages, 'text')))]);
+            } else {
+                $note = trim($note . ' The AI answered, but not in a form we could use, so this is a plain draft from your answers. Go back and try again, or edit everything here.');
             }
         } catch (Throwable $e) {
             $note = trim($note . ' The AI draft did not work (' . mb_substr($e->getMessage(), 0, 80) . '), so this is a plain draft from your answers. You can edit everything.');

@@ -30,7 +30,7 @@ $HOME = '<html><head><title>Sunrise Solar | Solar power for Malawi</title>'
     . '<footer>Call us on 0999 111 222 or write to info@sunrise.example</footer></body></html>';
 $SITE = [
     'https://www.sunrise.example' => $HOME,
-    'https://www.sunrise.example/about' => '<html><body><p>Sunrise Solar started as a small family workshop in Lilongwe repairing inverters.</p><p>Every installation is done by our own technicians.</p></body></html>',
+    'https://www.sunrise.example/about' => '<html><body><p>Sunrise Solar started as a small family workshop in Lilongwe repairing inverters.</p><p>Every installation is done by our own technicians.</p><p>Day visits cost MWK 20,000 per person.</p></body></html>',
     'https://www.sunrise.example/services' => '<html><body><h2>Installations</h2><p>We install rooftop solar panels with battery storage for schools and clinics.</p><p>Maintenance visits are available after installation.</p></body></html>',
     'https://www.sunrise.example/contact' => '<html><body><p>Visit us at Area 3 in Lilongwe.</p><a href="mailto:sales@sunrise.example">sales@sunrise.example</a><p>Phone: +265 999 111 222</p></body></html>',
     'https://www.sunrise.example/pricing' => '<html><body><p>Our price list: panels from MWK 500,000 for the small kit.</p></body></html>',
@@ -53,6 +53,7 @@ $STUDY = [
         ['fact' => 'The business started as a family workshop in Lilongwe', 'quote' => 'Sunrise Solar started as a small family workshop in Lilongwe repairing inverters.'],
         ['fact' => 'Maintenance visits are available after installation', 'quote' => 'Maintenance visits are available after installation.'],
         ['fact' => 'Their own technicians do the work', 'quote' => 'our own technicians do every single installation job'],
+        ['fact' => 'Day visits cost MWK 20,000 per person', 'quote' => 'Day visits cost MWK 20,000 per person.'],
         ['fact' => 'They have installed 500 systems', 'quote' => 'We design, install and maintain solar power and battery systems across Malawi.'],
         ['fact' => 'They are the leading installer in Africa', 'quote' => 'A sentence that appears nowhere on the website or in the notes at all'],
         ['fact' => 'Solar power', 'quote' => 'solar power'],
@@ -110,10 +111,16 @@ t('A website is read safely: the pages that say what the business does, and noth
 t('Private and internal addresses are never fetched', function () {
     $GLOBALS['PM_PAGE_STUB'] = null;
     putenv('PM_TEST'); // the real fetcher, which must refuse before any network call
-    foreach (['http://127.0.0.1/', 'http://localhost/admin', 'http://192.168.1.10/', 'http://169.254.169.254/latest/meta-data/', 'http://10.0.0.5:8080/', 'http://[::1]/', 'ftp://example.com/x', 'http://example.com:22/'] as $u) {
+    foreach (['http://127.0.0.1/', 'http://localhost/admin', 'http://192.168.1.10/', 'http://169.254.169.254/latest/meta-data/', 'http://10.0.0.5:8080/', 'http://[::1]/'] as $u) {
         $r = pm_study_fetch($u);
         pm_t_assert(!$r['ok'] && str_contains($r['why'], 'not allowed'), "$u is refused");
     }
+    foreach (['ftp://example.com/x', 'http://example.com:22/'] as $u) { // refused before any request; the reason depends on whether DNS answers
+        $r = pm_study_fetch($u);
+        pm_t_assert(!$r['ok'] && (str_contains($r['why'], 'not allowed') || str_contains($r['why'], 'could not be found')), "$u is refused");
+    }
+    $r = pm_study_fetch('https://no-such-site-' . bin2hex(random_bytes(4)) . '.invalid/');
+    pm_t_assert(!$r['ok'] && str_contains($r['why'], 'could not be found'), 'a name that does not exist says so, not "not allowed": ' . $r['why']);
     putenv('PM_TEST=1');
 });
 
@@ -139,8 +146,8 @@ t('The draft: facts carry proof, advice carries no numbers, and what is dropped 
         'the owner\'s lines stay, and only facts whose quote is really in the pages or the owner\'s words are added');
     pm_t_eq($d['sources']['The business started as a family workshop in Lilongwe'], 'https://www.sunrise.example/about', 'each fact says which page it came from');
     pm_t_eq([$d['sources']['Their own technicians do the work'], $d['sources']['We offer a free site visit']], ['you', 'you'], 'and the owner\'s own words are marked as theirs');
-    pm_t_assert(!str_contains(json_encode($d['facts']), '500') && !str_contains(json_encode($d['facts']), 'leading installer') && !str_contains(json_encode($d['facts']), 'plain statement') && !in_array('Solar power', $d['facts'], true),
-        'a number nobody wrote, a quote that is nowhere, a quote too short to mean anything and an unquoted statement are all dropped');
+    pm_t_assert(!str_contains(json_encode($d['facts']), '500') && !str_contains(json_encode($d['facts']), 'MWK') && !str_contains(json_encode($d['facts']), 'leading installer') && !str_contains(json_encode($d['facts']), 'plain statement') && !in_array('Solar power', $d['facts'], true),
+        'a number nobody wrote, a quote that is nowhere, a quote too short to mean anything, an unquoted statement and a price are all dropped');
     pm_t_eq($d['sectors'], ['schools', 'clinics', 'guest houses'], 'kinds to look for that the owner typed are kept');
     pm_t_eq($d['cities'], ['Lilongwe', 'Blantyre'], 'and so are their towns');
     pm_t_eq($d['found'], [], 'contact details the owner gave are not replaced by the website\'s');
@@ -165,6 +172,16 @@ t('An AI that answers with the wrong shapes cannot break the draft', function ()
         'wrong shapes are ignored and the owner\'s own words stand');
     pm_t_eq(array_column($d['targeting']['segments'], 'name'), ['schools'], 'only the well-formed kind survives');
     pm_t_eq([$d['targeting']['skip'], $d['targeting']['angles'], array_column($d['targeting']['cities'], 'name'), array_column($d['questions'], 'q')], [['chains'], ['not a list'], ['Mzuzu'], ['A plain question?']], 'and so do the well-formed notes, towns and questions');
+    $GLOBALS['PM_AI_STUB'] = null;
+});
+
+t('An AI answer that is not JSON is said plainly', function () use ($ANS) {
+    $GLOBALS['PM_AI_STUB'] = fn() => 'Sorry, I cannot help with that.';
+    $r = pm_brand_draft($ANS);
+    pm_t_assert($r['ai'] === false && str_contains($r['note'], 'not in a form we could use') && $r['draft']['facts'] === ['We install and maintain solar systems', 'We offer a free site visit'], 'the owner is told, and the draft is their own words: ' . $r['note']);
+    $GLOBALS['PM_AI_STUB'] = fn() => throw new RuntimeException('quota exceeded');
+    $r = pm_brand_draft($ANS);
+    pm_t_assert($r['ai'] === false && str_contains($r['note'], 'quota exceeded'), 'so is an AI that fails: ' . $r['note']);
     $GLOBALS['PM_AI_STUB'] = null;
 });
 

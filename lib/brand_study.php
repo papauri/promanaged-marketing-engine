@@ -56,7 +56,8 @@ function pm_study_fetch(string $url): array
     for ($hop = 0; $hop < 4; $hop++) {
         $pub = function_exists('pm_url_public') ? pm_url_public($u) : null;
         if (!$pub) {
-            return $no('that address is not allowed');
+            $h = trim((string)parse_url($u, PHP_URL_HOST), '[]');
+            return $no($h !== '' && !filter_var($h, FILTER_VALIDATE_IP) && !@gethostbynamel($h) ? 'that address could not be found' : 'that address is not allowed');
         }
         $port = parse_url($u, PHP_URL_PORT) ?: (stripos($u, 'https') === 0 ? 443 : 80);
         $try = function (bool $strict) use ($u, $pub, $port, &$loc) {
@@ -192,7 +193,7 @@ function pm_study_pages(string $website, int $max = 5): array
     $score = function (string $u, string $label): int {
         $path = strtolower((string)parse_url($u, PHP_URL_PATH));
         $s = strtolower($path . ' ' . $label);
-        if ($path === '' || $path === '/' || preg_match('#(privacy|terms|cookie|login|signin|register|cart|checkout|wp-admin|wp-content|feed|tag/|category/|price|pricing|rates|tariff|\.(pdf|jpe?g|png|gif|zip|docx?|xlsx?))#', $s)) {
+        if ($path === '' || $path === '/' || preg_match('#(privacy|terms|cookie|login|signin|register|cart|checkout|wp-admin|wp-content|feed|tag/|category/|price|pricing|rates|tariff|special|exclusive|deals?\b|promo|discount|voucher|coupon|book-now|\.(pdf|jpe?g|png|gif|zip|docx?|xlsx?))#', $s)) {
             return 0;
         }
         return preg_match('#(about|who-we|who we|our-story|our story|story)#', $s) ? 5 : (preg_match('#(service|product|solution|what-we|what we|offer|rooms|accommodation|activities|menu|packages|programme|programs|courses|treatments)#', $s) ? 4 : (preg_match('#(contact|team|faq|why-)#', $s) ? 3 : 0));
@@ -352,7 +353,7 @@ function pm_study_merge(array $out, array $r, array $ctx): array
         }
         if ($quote !== '') {
             $where = pm_study_quote_source($quote, $ctx['pages'], $ctx['owner_text']);
-            if ($where === null || pm_brand_unsourced_number($fact, mb_strtolower($quote . ' ' . $ctx['source']))) {
+            if ($where === null || pm_brand_unsourced_number($fact, mb_strtolower($quote . ' ' . $ctx['source'])) || preg_match('/\b(MWK|USD|ZAR|GBP|EUR|kwacha)\b|[$€£]\s?\d|\bK\s?\d{2,}|\bper (night|person|day)\b/i', $fact)) { // prices are never facts the AI may repeat
                 continue;
             }
             $sources[$fact] = $where;

@@ -175,9 +175,9 @@ ANY BUSINESS, NOT JUST TWO (cycle 3)
 
 THE AI LEARNS THE BUSINESS (lib/brand_study.php)
   When you add a business, give its website and, if you like, paste any text about it. The app reads up to five pages of the site (home, about,
-  services, contact; never pricing, blog or privacy; only public addresses, so nothing inside your network is ever fetched), then ONE AI call
+  services, contact; never pricing, special offers, blog or privacy; only public addresses, so nothing inside your network is ever fetched), then ONE AI call
   learns: what the business is and offers; FACTS about it, each carried by a sentence copied from your words or from a page that was really
-  fetched (the app checks the sentence is there, and drops any fact with a number nobody wrote); WHO TO TARGET (kinds of buyer best fit first,
+  fetched (the app checks the sentence is there, and drops any fact with a number nobody wrote or a price); WHO TO TARGET (kinds of buyer best fit first,
   why they buy, signs they need it, who is not a fit, where to start, what to lead with: the AI's advice, with no statistics, for you to edit);
   and up to five questions only you can answer. Answer them and press "Update the draft" (your edits are kept; the site is not read again).
   Facts show where each came from. Email and phone shown on the site fill blanks you left, for you to confirm. Nothing is saved until you press Create.
