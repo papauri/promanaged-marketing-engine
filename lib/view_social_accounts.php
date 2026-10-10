@@ -20,7 +20,6 @@ $status = function (string $k) use ($fb, $li, $cfg): array {
 $built = is_dir(pm_kit_dir($vb)) && glob(pm_kit_dir($vb) . '/*.png');
 $stepHtml = fn(string $t): string => preg_match('/^([^:]{3,48}):\s(.+)$/su', $t, $m) ? '<b>' . pm_h($m[1]) . ':</b> ' . pm_h($m[2]) : pm_h($t); // bold the lead-in so the steps scan quickly
 ?>
-<h1>Social · <?= pm_h($bname) ?></h1>
 <?php $nav = pm_social_nav('accounts'); echo $nav; if (!str_contains($nav, 'sx-banner')) { echo pm_social_banner(); } ?>
 
 <?php $tinfo = $fb['ready'] ? pm_fb_token_info($fb['token']) : null; $e0 = pm_env(); ?>

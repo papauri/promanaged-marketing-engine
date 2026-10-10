@@ -31,7 +31,6 @@ foreach ($queue as $p) {
 ksort($byDay);
 $isVideo = fn($f) => (bool)preg_match('/\.(mp4|mov|m4v)$/i', (string)$f);
 ?>
-<h1>Social · <?= pm_h($bname) ?></h1>
 <?php $nav = pm_social_nav(''); echo $nav; if (!str_contains($nav, 'sx-banner')) { echo pm_social_banner(); } ?>
 <?= pm_social_panels('plan_top', $vb) ?>
 

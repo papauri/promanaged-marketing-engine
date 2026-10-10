@@ -72,8 +72,23 @@ if (!function_exists('pm_wa_biz_cfg')) {
         return [false, 'WhatsApp said: ' . ($code ?: 'no answer') . ' ' . mb_substr($raw, 0, 120)];
     }
 
-    /** One inbound WhatsApp message, fully handled. Returns a short note. */
+    /**
+     * One inbound WhatsApp message, fully handled, AS THE BUSINESS THE LEAD BELONGS TO: its brief, its voice and its settings, not whichever business
+     * the process happened to start in (one WhatsApp number can serve several businesses). Returns a short note.
+     */
     function pm_wa_biz_handle(string $from, string $text): string
+    {
+        $lead = pm_wa_biz_find_lead(pm_leads(), $from);
+        $prev = pm_brand();
+        pm_brand_set((string)($lead['brand'] ?? 'promanaged'));
+        try {
+            return pm_wa_biz_handle_run($from, $text);
+        } finally {
+            pm_brand_set($prev);
+        }
+    }
+
+    function pm_wa_biz_handle_run(string $from, string $text): string
     {
         if (!pm_rate_hit('wabiz', $from, 10, 3600)) {
             return 'rate limited';

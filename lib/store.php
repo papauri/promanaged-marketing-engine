@@ -3,6 +3,7 @@ require_once __DIR__ . '/defaults.php';
 require_once __DIR__ . '/lines.php';
 require_once __DIR__ . '/links.php';
 require_once __DIR__ . '/brands.php';
+require_once __DIR__ . '/ui.php';
 date_default_timezone_set('Africa/Blantyre');
 
 define('PM_ROOT', dirname(__DIR__));

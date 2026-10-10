@@ -376,8 +376,11 @@ function pm_brand_create(array $a, array $draft): array
         'market' => $market, 'dial' => $dial, 'sell_to' => $sellTo, 'customers' => trim((string)($a['customers'] ?? '')),
         'magnet' => trim((string)($draft['magnet'] ?? '')), 'cta_keyword' => strtoupper(preg_replace('/[^A-Za-z]/', '', (string)($draft['cta_keyword'] ?? ''))),
         'offerings' => pm_brand_list($draft['offerings'] ?? [], 4, 200), 'sectors' => pm_brand_list($draft['sectors'] ?? [], 10, 60),
-        'cities' => pm_brand_list($draft['cities'] ?? [], 12, 40), 'existing_clients' => [], 'pillars' => (array)($draft['pillars'] ?? []),
+        'cities' => pm_brand_list($draft['cities'] ?? [], 12, 40), 'existing_clients' => [], 'pillars' => array_values(array_filter((array)($draft['pillars'] ?? []), fn($r) => trim((string)($r['name'] ?? '')) !== '')),
     ];
+    if ($blk['profile']['magnet'] !== '' && $blk['profile']['cta_keyword'] !== '' && !array_filter($blk['profile']['pillars'], fn($r) => preg_match('/^free\b/i', (string)$r['name']))) {
+        $blk['profile']['pillars'][] = ['name' => 'Free first step', 'weight' => 10]; // the invitation topic: posts that offer the free first step
+    }
 
     pm_update('brands', function (array $all) use ($id, $name) {
         $all[$id] = ['id' => $id, 'name' => $name, 'created' => date('Y-m-d H:i:s'), 'daily_run' => true];

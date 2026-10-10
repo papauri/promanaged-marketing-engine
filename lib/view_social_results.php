@@ -35,7 +35,6 @@ $tz = fn($s) => $s === '' ? '–' : pm_h($s);
 .rs-chip.me{background:var(--warnbg,#fff7e0);border-color:#f0dcaa}
 @media (max-width:640px){.rs th,.rs td{padding:5px 4px;font-size:12px}}
 </style>
-<h1>Social · <?= pm_h($bname) ?></h1>
 <?= pm_social_nav('results') ?>
 
 <?php if (!$sc['ready']): ?>

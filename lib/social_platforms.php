@@ -20,7 +20,7 @@ function pm_platforms(): array
             'auto' => 'Publishes posts, pictures and videos on schedule, reads followers and engagement, answers comments, and can change the profile picture and cover.',
             'env' => ['FB_PAGE_ID', 'FB_PAGE_TOKEN'],
             'steps' => [
-                'Create the Page (if needed): on Facebook go to Menu > Pages > Create new Page. Use the business name, category (ProManaged IT: "Information technology company"; Travel Malawi: "Travel company") and a one-line bio.',
+                'Create the Page (if needed): on Facebook go to Menu > Pages > Create new Page. Use the business name, category (the one that fits what the business does, for example "Information technology company" or "Travel company") and a one-line bio.',
                 'Finish the Page: add the profile picture and cover from the branding kit below, the website link, WhatsApp number, email, address/area and opening hours. Set a username (@...) so the link is short.',
                 'Add an action button: Edit action button > Send WhatsApp message (or Send message). This is where enquiries arrive.',
                 'Give your team access safely: Settings > Page access > Add people, as "Facebook access" with only the tasks they need. Never share your personal password.',
@@ -31,7 +31,7 @@ function pm_platforms(): array
                 'Make the token last: in developers.facebook.com > Tools > Access Token Debugger, paste the token from Graph API Explorer, press "Debug", then "Extend Access Token" and copy the new long-lived token.',
                 'Back in Graph API Explorer, paste it in the Access Token box, set the request to GET me/accounts and press Submit. Copy the "id" (the Page ID) and "access_token" (the Page token, starts with EAA). It does not expire unless you change your Facebook password, remove the app or lose admin rights.',
                 'Empty me/accounts list: the Page sits in a business portfolio. Tick business_management when you generate the token, or add yourself to the Page with full control in Meta Business Suite, then try again.',
-                'Put both in the .env file (FB_PAGE_ID and FB_PAGE_TOKEN, or TM_FB_PAGE_ID and TM_FB_PAGE_TOKEN for Travel Malawi), save, and press "Check the Facebook connection" in Settings. It should show the Page name and followers.',
+                'Put both in the .env file (FB_PAGE_ID and FB_PAGE_TOKEN for ProManaged IT, TM_FB_PAGE_ID and TM_FB_PAGE_TOKEN for Travel Malawi, and each business you added has its own prefix, for example GREENGROCERS_FB_PAGE_ID), save, and press "Check the Facebook connection" in Settings. It should show the Page name and followers.',
             ],
         ],
         'instagram' => [
@@ -39,7 +39,7 @@ function pm_platforms(): array
             'auto' => 'Publishes picture, carousel and story posts on schedule through the Facebook connection, and reels when the app can serve the video. Instagram fetches every picture and video from a public web address, so the app must be online (APP_URL in .env). Until then the Channels tab lists each Instagram post as a hand-post task. Profile picture: change it in the Instagram app.',
             'env' => ['IG_USER_ID'],
             'steps' => [
-                'In the Instagram app create the account (@travelmalawi or @promanagedit if free), then Settings > Account type and tools > Switch to professional account > Business.',
+                'In the Instagram app create the account (your business name as the @username, if it is free), then Settings > Account type and tools > Switch to professional account > Business.',
                 'Profile: add the profile picture from the branding kit, a bio (what you do + who for + a call to action), the website link and the WhatsApp/Contact buttons.',
                 'Link it to the Facebook Page: on the Facebook Page go to Settings > Linked accounts > Instagram > Connect (or Meta Business Suite > Settings > Instagram accounts > Connect). Instagram posting from the app only works for an account linked to a Page.',
                 'Connect (or reconnect) Facebook in the "Facebook connection" box at the top of this screen. The app finds the linked Instagram account by itself and shows it as Linked. Tick instagram_basic and instagram_content_publish when you make the token.',

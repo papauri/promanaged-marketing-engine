@@ -12,7 +12,6 @@ $hid = fn($n, $v) => '<input type="hidden" name="' . $n . '" value="' . pm_h((st
 $ti = $sc['ready'] ? pm_fb_token_info($sc['token']) : ['ok' => false];
 $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['reply'] ?? ''), (array)(pm_load('fb_judged', fn() => [])[$vb] ?? [])));
 ?>
-<h1>Social · <?= pm_h($bname) ?></h1>
 <?= pm_social_nav($view) ?>
 
 <?php if (!$sc['ready']): ?>

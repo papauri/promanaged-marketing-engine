@@ -56,7 +56,7 @@ $brandCards = function (string $b) use ($settings, $vb): void {
       <?php endif; ?>
     </div>
 
-    <div class="card" <?= $hide ?>><h2><?= pm_h($name) ?> · Signing</h2>
+    <div class="card" <?= $hide ?> data-fold="closed"><h2><?= pm_h($name) ?> · Signing</h2>
       <label class="check"><input type="checkbox" name="<?= $n('online_signing') ?>" value="1" <?= !empty($c['online_signing']) ? 'checked' : '' ?>> Let clients accept and sign online</label>
       <label class="check"><input type="checkbox" name="<?= $n('esign_tags') ?>" value="1" <?= !empty($c['esign_tags']) ? 'checked' : '' ?>> Add DocuSign and Adobe Acrobat Sign tags</label>
       <label>Your signature (PNG with a transparent background), shown on every agreement</label>
@@ -66,7 +66,7 @@ $brandCards = function (string $b) use ($settings, $vb): void {
     </div>
 
     <?php $brn = pm_brain($b); ?>
-    <div class="card" <?= $hide ?>><h2><?= pm_h($name) ?> · Marketing brain</h2>
+    <div class="card" <?= $hide ?> data-fold="closed"><h2><?= pm_h($name) ?> · Marketing brain</h2>
       <p class="hint" style="margin-top:0">Everything the AI agents know about this business, and all they may claim. Change these and every agent, email, post and proposal follows. To market a different business, rewrite them.</p>
       <label>Who we are and what we do</label><textarea name="<?= $n('brain') ?>[about]" rows="2"><?= pm_h($brn['about']) ?></textarea>
       <label>Facts the AI may use (one per line; nothing else is ever claimed)</label><textarea name="<?= $n('brain') ?>[facts]" rows="5"><?= pm_h($brn['facts']) ?></textarea>
@@ -78,14 +78,14 @@ $brandCards = function (string $b) use ($settings, $vb): void {
     </div>
 
     <?php $soc = pm_social_cfg($b); $pre = $tr ? 'TM_' : ''; ?>
-    <div class="card" <?= $hide ?>><h2><?= pm_h($name) ?> · Social media</h2>
+    <div class="card" <?= $hide ?> data-fold="closed"><h2><?= pm_h($name) ?> · Social media</h2>
       <p class="hint" style="margin-top:0">Facebook: <b><?= $soc['ready'] ? 'connected' : 'not connected' ?></b> · Instagram: <b><?= $soc['ig_id'] !== '' ? 'linked' : 'not linked' ?></b> · LinkedIn: <b><?= pm_linkedin_cfg($b)['ready'] ? 'connected' : 'not connected' ?></b>.
         Setup steps for every platform, profile and cover pictures, and links are in <a href="?tab=social&view=accounts&brand=<?= $b ?>">Social &gt; Accounts &amp; branding</a>.</p>
       <label class="check"><input type="checkbox" name="<?= $n('social_auto') ?>" value="1" <?= !empty($c['social_auto']) ? 'checked' : '' ?>> Auto-publish: posts the AI plans go out at their time without my approval</label>
       <div class="btns"><button class="btn small" form="socialcheck-<?= $b ?>">Check the Facebook connection</button></div>
     </div>
 
-    <div class="card" <?= $hide ?>><h2><?= pm_h($name) ?> · Email sending</h2>
+    <div class="card" <?= $hide ?> data-fold="closed"><h2><?= pm_h($name) ?> · Email sending</h2>
       <?php if ($env): ?><p class="hint" style="margin-top:0">Read-only here: these come from the .env file.</p><?php endif; ?>
       <fieldset <?= $env ? 'disabled' : '' ?> style="border:0;padding:0;margin:0">
       <div class="row">
@@ -106,23 +106,16 @@ $brandCards = function (string $b) use ($settings, $vb): void {
     <?php
 };
 ?>
-  <h1>Settings</h1>
-  <div class="brandcards">
-    <?php foreach (['promanaged' => ['ProManaged IT', 'assets/logo.png', $settings['tagline'] ?? ''], 'travel' => [$settings['travel']['company_name'], 'assets/travel_logo.png', $settings['travel']['tagline'] ?? '']] as $bk => [$bn, $bl, $bt]): ?>
-      <a href="?tab=settings&brand=<?= $bk ?>" class="brandcard <?= $vb === $bk ? 'on' : '' ?>">
-        <?php if (is_file(PM_ROOT . '/' . $bl)): ?><img src="<?= $bl ?>?v=<?= @filemtime(PM_ROOT . '/' . $bl) ?>" alt="" class="<?= $bk === 'travel' ? 'sq' : '' ?>"><?php else: ?><span class="nologo">No logo</span><?php endif; ?>
-        <span><b><?= pm_h($bn) ?></b><small><?= pm_h($bt) ?></small></span></a>
-    <?php endforeach; ?>
-  </div>
-
-  <?php function_exists('pm_view_setup_health') && pm_view_setup_health(); // C2-G01: what is connected and what to add ?>
-  <?php function_exists('pm_view_archives') && pm_view_archives(); // C3-G01: weekly backups, download and restore ?>
+  <?= pm_ui_head('Settings', 'Details, mailbox and voice for each business, and how the whole app is set up.', '<a class="btn primary" href="?tab=business&amp;new=1">+ Add a business</a>') ?>
+  <?php pm_view_biz_grid($settings, $vb, $csrf); ?>
+  <h3><?= pm_h(pm_brand_title($settings, $vb)) ?></h3>
+  <?php $isCustom = pm_brand_is_custom($vb); if ($isCustom) { require __DIR__ . '/view_brand_settings.php'; } ?>
 
   <form method="post" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="settings">
     <?php $brandCards('promanaged'); $brandCards('travel'); ?>
 
-    <details class="card shared"><summary>Shared by both businesses: currencies (<?= count($settings['currencies']) ?>) and marketing team (<?= count((array)($settings['team'] ?? [])) ?>)</summary>
+    <details class="card shared" id="team"><summary>Team and currencies, shared by every business: <?= count((array)($settings['team'] ?? [])) ?> on the team, <?= count($settings['currencies']) ?> currencies</summary>
       <h3>Currencies</h3>
       <p class="hint">Prices are in <b><?= pm_h($settings['currency']) ?></b>. Another currency is one pick on a proposal.</p>
       <table class="grid compact" data-next="<?= count($settings['currencies']) ?>"><thead><tr><th>Code</th><th>Name</th><th><?= pm_h($settings['currency']) ?> per 1</th><th>Round to</th><th></th></tr></thead><tbody>
@@ -147,10 +140,14 @@ $brandCards = function (string $b) use ($settings, $vb): void {
 
     <input type="hidden" name="test_brand" value="<?= pm_h($vb) ?>">
     <div class="btns">
-      <button class="btn primary">Save settings</button>
-      <button class="btn" name="test_email" value="1">Save and send a test email</button>
+      <button class="btn primary"><?= $isCustom ? 'Save the team and currencies' : 'Save settings' ?></button>
+      <?php if (!$isCustom): ?><button class="btn" name="test_email" value="1">Save and send a test email</button><?php endif; ?>
     </div>
   </form>
+
+  <h3>Health and backups</h3>
+  <div id="health"><?php function_exists('pm_view_setup_health') && pm_view_setup_health(); // C2-G01: what is connected and what to add ?></div>
+  <div id="backups"><?php function_exists('pm_view_archives') && pm_view_archives(); // C3-G01: weekly backups, download and restore ?></div>
 
   <?php if (is_file(__DIR__ . '/view_outbound.php')): require_once __DIR__ . '/view_outbound.php'; pm_brand_set($vb); // sending health and the public enquiry form, for the business shown above ?>
     <?php function_exists('pm_view_email_health') && pm_view_email_health(); ?>
@@ -158,7 +155,7 @@ $brandCards = function (string $b) use ($settings, $vb): void {
   <?php endif; ?>
   <p class="hint">Alerts (a reply, a bounce, a proposal opened) are emailed to the Email address under Company, from the mail login above, at most once per subject every 6 hours. Run <code>php lib/poll_run.php</code> every 15 minutes (schedule_agents.bat does this) to check replies without opening the app.</p>
 
-  <?php foreach (['travel', 'promanaged'] as $bk): ?>
+  <?php foreach (array_reverse(pm_brand_ids()) as $bk): ?>
   <form method="post" id="linkrefresh-<?= $bk ?>"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="link_refresh"><input type="hidden" name="brand" value="<?= $bk ?>"></form>
   <form method="post" id="socialcheck-<?= $bk ?>"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_check"><input type="hidden" name="brand" value="<?= $bk ?>"></form>
   <form method="post" id="smtpcheck-<?= $bk ?>"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="smtp_check"><input type="hidden" name="brand" value="<?= $bk ?>"></form>

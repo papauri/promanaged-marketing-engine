@@ -8,7 +8,6 @@ $fx = fn(string $do, string $extra = '') => pm_ch_form($do) . $extra;
 $hid = fn(string $n, string $v) => '<input type="hidden" name="' . pm_h($n) . '" value="' . pm_h($v) . '">';
 $cp = fn(string $text, string $label = 'Copy') => '<button type="button" class="btn small" data-copy="' . pm_h($text) . '">' . pm_h($label) . '</button>';
 ?>
-<h1>Social · <?= pm_h($bname) ?></h1>
 <?= pm_social_nav('channels') ?>
 <style>
 .sxv pre{white-space:pre-wrap;word-break:break-word;margin:8px 0;padding:9px 11px;background:var(--bg,#f6f7f8);border-radius:8px;font:13px/1.45 -apple-system,"Segoe UI",Roboto,Arial,sans-serif}

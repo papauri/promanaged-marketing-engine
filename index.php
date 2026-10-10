@@ -1497,6 +1497,137 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         pm_redirect('template', 'Wording put back to the original.');
     }
 
+    // ---------- Businesses: add one with a short questionnaire, change one, hide one ----------
+    if ($action === 'brand_cancel') {
+        unset($_SESSION['bwiz']);
+        pm_redirect('business&new=1');
+    }
+    if ($action === 'brand_draft') {
+        $answers = [];
+        foreach (['name', 'sells', 'customers', 'sell_to', 'cities', 'targets', 'facts', 'magnet', 'voice', 'email', 'phone', 'website', 'never'] as $k) {
+            $answers[$k] = trim((string)($_POST[$k] ?? ''));
+        }
+        $_SESSION['bwiz'] = ['answers' => $answers];
+        if ($bad = pm_brand_check_answers($answers)) {
+            pm_redirect('business&new=1', implode(' ', $bad), 'err');
+        }
+        @set_time_limit(120);
+        $r = pm_brand_draft($answers);
+        $_SESSION['bwiz'] = ['answers' => $answers, 'draft' => $r['draft'], 'ai' => $r['ai'], 'note' => $r['note']];
+        pm_redirect('business&step=2');
+    }
+    if ($action === 'brand_create') {
+        $ans = (array)(($_SESSION['bwiz'] ?? [])['answers'] ?? []);
+        if (!$ans) {
+            pm_redirect('business&new=1', 'Start with the questions first.', 'err');
+        }
+        $in = (array)($_POST['d'] ?? []);
+        $byLine = fn($v) => array_values(array_filter(array_map('trim', preg_split('/\R/', (string)$v))));
+        $pl = [];
+        foreach ($byLine($in['pillars'] ?? '') as $ln) {
+            if (preg_match('/^(.+?)\s*:\s*(\d{1,3})$/u', $ln, $m)) {
+                $pl[] = ['name' => mb_substr(trim($m[1]), 0, 40), 'weight' => max(5, min(50, (int)$m[2]))];
+            } else {
+                $pl[] = ['name' => mb_substr($ln, 0, 40), 'weight' => 15];
+            }
+        }
+        $draft = ['about' => trim((string)($in['about'] ?? '')), 'offerings' => $byLine($in['offerings'] ?? ''), 'facts' => $byLine($in['facts'] ?? ''), 'audience' => trim((string)($in['audience'] ?? '')),
+            'voice' => trim((string)($in['voice'] ?? '')), 'never' => trim((string)($in['never'] ?? '')), 'sectors' => pm_brand_list($in['sectors'] ?? '', 10, 60), 'cities' => pm_brand_list($in['cities'] ?? '', 12, 40),
+            'magnet' => trim((string)($in['magnet'] ?? '')), 'cta_keyword' => (string)($in['cta_keyword'] ?? ''), 'pillars' => array_slice($pl, 0, 8)];
+        [$newId, $errs] = pm_brand_create($ans, $draft);
+        if ($errs) {
+            pm_redirect('business&step=2', implode(' ', $errs), 'err');
+        }
+        unset($_SESSION['bwiz']);
+        $_SESSION['abrand'] = $newId;
+        pm_redirect('business&id=' . $newId . '&welcome=1', pm_brand_name($newId) . ' was created. Nothing was sent and nothing was switched on.');
+    }
+    if ($action === 'brand_archive') {
+        $bid = (string)($_POST['id'] ?? '');
+        $nm = pm_brand_name($bid);
+        if (empty($_POST['confirm']) || !pm_brand_archive($bid)) {
+            pm_redirect('settings&brand=' . (pm_brand_is_custom($bid) ? $bid : 'promanaged'), 'Tick the box to hide a business. Only a business you added can be hidden.', 'err');
+        }
+        $_SESSION['abrand'] = 'promanaged';
+        pm_redirect('settings', $nm . ' is hidden: no more daily runs, and it is gone from the menus. Its leads and posts are kept.');
+    }
+    if ($action === 'brand_save') {
+        $bid = pm_brand_norm((string)($_POST['id'] ?? ''));
+        if (!pm_brand_is_custom($bid)) {
+            pm_redirect('settings', 'Only a business you added is edited here.', 'err');
+        }
+        $in = (array)($_POST['b'] ?? []);
+        $cur = (array)pm_settings()['brands'][$bid];
+        $t = fn($k, $d = '') => trim((string)($in[$k] ?? $d));
+        $blk = $cur;
+        foreach (['tagline', 'address', 'phone', 'email', 'website', 'signatory_name', 'signatory_title'] as $k) {
+            $blk[$k] = $t($k);
+        }
+        $blk['company_name'] = $t('company_name') ?: (string)$cur['company_name'];
+        $blk['accent_color'] = preg_match('/^#[0-9a-fA-F]{6}$/', $t('accent_color')) ? $t('accent_color') : (string)$cur['accent_color'];
+        $blk['ref_prefix'] = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $t('ref_prefix'))) ?: (string)$cur['ref_prefix'];
+        $blk['link_url'] = pm_clean_url($t('link_url'));
+        $blk['link_on'] = !empty($in['link_on']);
+        $blk['social_auto'] = pm_social_can_approve() ? !empty($in['social_auto']) : !empty($cur['social_auto']);
+        $sm = (array)($in['smtp'] ?? []);
+        $blk['smtp'] = (array)$cur['smtp'];
+        foreach (['host', 'username', 'from_email', 'from_name'] as $k) {
+            $blk['smtp'][$k] = trim((string)($sm[$k] ?? ''));
+        }
+        $blk['smtp']['port'] = max(1, min(65535, (int)($sm['port'] ?? 465)));
+        $blk['smtp']['encryption'] = in_array($sm['encryption'] ?? '', ['tls', 'ssl', 'none'], true) ? $sm['encryption'] : 'ssl';
+        $blk['smtp']['bcc_self'] = !empty($sm['bcc_self']);
+        if (($sm['password'] ?? '') !== '') {
+            $blk['smtp']['password'] = (string)$sm['password'];
+        }
+        $im = (array)($in['imap'] ?? []);
+        $blk['imap'] = ['host' => trim((string)($im['host'] ?? '')), 'port' => max(1, min(65535, (int)($im['port'] ?? 993))), 'secure' => in_array($im['secure'] ?? '', ['ssl', 'none'], true) ? $im['secure'] : 'ssl'];
+        $blk['brain'] = [];
+        foreach (['about', 'facts', 'audience', 'voice', 'never'] as $k) {
+            $blk['brain'][$k] = trim(str_replace("\r\n", "\n", (string)($in['brain'][$k] ?? '')));
+        }
+        $byLine = fn($v) => array_values(array_filter(array_map('trim', preg_split('/\R/', (string)$v))));
+        $prof = (array)($cur['profile'] ?? []);
+        $prof['magnet'] = $t('magnet');
+        $prof['cta_keyword'] = strtoupper(preg_replace('/[^A-Za-z]/', '', $t('cta_keyword')));
+        $prof['customers'] = $t('customers');
+        $prof['sell_to'] = in_array($in['sell_to'] ?? '', ['business', 'public', 'both'], true) ? $in['sell_to'] : ($prof['sell_to'] ?? 'business');
+        $blk['profile'] = $prof;
+        $raw = pm_load('settings', 'pm_default_settings');
+        $raw['brands'][$bid] = $blk;
+        pm_save('settings', $raw);
+        $acfg = pm_load('agents_config', 'pm_agents_default_config');
+        $acfg[$bid] = array_replace((array)($acfg[$bid] ?? []), [
+            'sectors' => pm_brand_list($in['sectors'] ?? '', 10, 60), 'cities' => pm_brand_list($in['cities'] ?? '', 12, 40),
+            'offerings' => array_slice($byLine($in['offerings'] ?? ''), 0, 6), 'existing_clients' => array_slice($byLine($in['existing_clients'] ?? ''), 0, 200)]);
+        pm_save('agents_config', $acfg);
+        pm_update('brands', function (array $all) use ($bid, $in) {
+            $all[$bid]['daily_run'] = !empty($in['daily_run']);
+            $all[$bid]['name'] = $all[$bid]['name'] ?? $bid;
+            return $all;
+        }, fn() => []);
+        foreach (['logo' => 'logo'] as $field => $what) {
+            if (!empty($_FILES[$field]['tmp_name']) && is_uploaded_file($_FILES[$field]['tmp_name'])) {
+                $info = @getimagesize($_FILES[$field]['tmp_name']);
+                if ($info && in_array($info[2], [IMAGETYPE_PNG, IMAGETYPE_JPEG], true)) {
+                    $img = $info[2] === IMAGETYPE_PNG ? imagecreatefrompng($_FILES[$field]['tmp_name']) : imagecreatefromjpeg($_FILES[$field]['tmp_name']);
+                    imagesavealpha($img, true);
+                    imagepng($img, PM_ROOT . '/' . pm_brand_asset($bid, $what));
+                } else {
+                    pm_redirect('settings&brand=' . $bid, 'Saved, but the logo must be a PNG or JPG image.', 'err');
+                }
+            }
+        }
+        if (!empty($_POST['test_email'])) {
+            pm_brand_set($bid);
+            $ts = pm_settings();
+            $to = $ts['smtp']['from_email'] ?: $ts['smtp']['username'];
+            [$tok, $terr] = $to !== '' ? pm_mail($ts, ['to' => $to, 'subject' => 'Test email from ' . $ts['company_name'], 'body' => 'This is a test from the ' . $ts['company_name'] . ' mailbox. If you can read this, email is working.', 'link' => pm_link_card()]) : [false, 'no address to send to'];
+            pm_redirect('settings&brand=' . $bid, $tok ? 'Saved, and a test email was sent to ' . $to . '.' : 'Saved, but the test email failed: ' . $terr, $tok ? 'ok' : 'err');
+        }
+        pm_redirect('settings&brand=' . $bid, 'Saved.');
+    }
+
     if ($action === 'settings') {
         $in = $_POST['s'] ?? [];
         $new = $settings;
@@ -1697,100 +1828,28 @@ function pm_rows_editor(string $name, array $cols, array $rows, string $addLabel
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Proposals · <?= pm_h($settings['company_name']) ?></title>
-<style>
-:root { --ink:#16181d; --muted:#6b7078; --line:#e3e5e8; --bg:#f6f7f8; --accent:<?= pm_h($settings['accent_color']) ?>; }
-* { box-sizing:border-box; }
-body { margin:0; font:14px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color:var(--ink); background:var(--bg); }
-header { background:#fff; border-bottom:1px solid var(--line); }
-.bar { max-width:1180px; margin:0 auto; padding:14px 24px; display:flex; align-items:center; gap:18px; }
-.bar img { height:34px; }
-.bar .name { font-weight:600; letter-spacing:.02em; }
-nav { margin-left:auto; display:flex; gap:4px; }
-nav a { padding:8px 14px; border-radius:6px; color:var(--muted); text-decoration:none; }
-nav a.on { color:var(--ink); background:var(--bg); font-weight:600; }
-main { max-width:1180px; margin:0 auto; padding:24px; }
-h1 { font:400 26px/1.2 Georgia, "Times New Roman", serif; margin:0 0 4px; }
-.sub { color:var(--muted); margin:0 0 22px; }
-.card { background:#fff; border:1px solid var(--line); border-radius:10px; padding:20px 22px; margin-bottom:18px; }
-.card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 14px; font-weight:600; }
-.row { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; }
-label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
-input[type=text], input[type=email], input[type=number], input[type=date], input[type=password], select, textarea {
-  width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:6px; font:inherit; color:var(--ink); background:#fff; }
-input:focus, select:focus, textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent); }
-textarea { resize:vertical; }
-.layout { display:grid; grid-template-columns:1fr 340px; gap:18px; align-items:start; }
-.sticky { position:sticky; top:16px; }
-.pk { display:grid; gap:8px; }
-.pk label.opt { display:flex; justify-content:space-between; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; cursor:pointer; color:var(--ink); font-size:14px; margin:0; }
-.pk label.opt:has(input:checked) { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 5%, #fff); }
-.pk small { color:var(--muted); display:block; font-size:12px; }
-.pk .price { text-align:right; white-space:nowrap; font-size:13px; }
-.ex { display:grid; grid-template-columns:1fr 90px 70px; gap:8px; align-items:center; padding:7px 0; border-bottom:1px solid var(--line); }
-.ex:last-child { border-bottom:0; }
-.ex { grid-template-columns:1fr 130px 70px; }
-.ex .fee { color:var(--muted); font-size:11px; text-align:right; }
-.ex .fee input { text-align:right; }
-.ex .fee small { display:block; margin-top:2px; }
-.pricebox { margin-top:16px; padding-top:16px; border-top:1px solid var(--line); }
-.pricebar { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:12px; flex-wrap:wrap; }
-label.check { display:flex; gap:8px; align-items:center; color:var(--ink); font-size:13px; margin:0; }
-.seg { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
-.seg label { flex:1; margin:0; text-align:center; padding:9px; cursor:pointer; color:var(--ink); font-size:13px; border-right:1px solid var(--line); }
-.seg label:last-child { border-right:0; }
-.seg input { display:none; }
-.seg label:has(input:checked) { background:var(--ink); color:#fff; }
-.total { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line); }
-.total.big { font-size:18px; border-bottom:0; padding-top:12px; }
-.total span:last-child { font-variant-numeric:tabular-nums; }
-.btn { display:inline-block; width:100%; padding:11px 14px; border-radius:7px; border:1px solid var(--line); background:#fff; font:inherit; font-weight:600; cursor:pointer; color:var(--ink); text-align:center; text-decoration:none; }
-.btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
-.btn + .btn { margin-top:8px; }
-.btn.small { width:auto; padding:6px 12px; font-size:13px; }
-.flash { padding:12px 14px; border-radius:8px; margin-bottom:18px; border:1px solid; }
-.flash.ok { background:#f2f7f3; border-color:#cfe3d4; }
-.flash.err { background:#fbf3f2; border-color:#ecd0cc; }
-table.grid { width:100%; border-collapse:collapse; }
-table.grid th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:600; padding:6px; border-bottom:1px solid var(--line); }
-table.grid td { padding:5px 6px; vertical-align:top; border-bottom:1px solid var(--line); }
-table.grid td input, table.grid td select, table.grid td textarea { padding:7px 8px; }
-button.icon { border:0; background:none; font-size:20px; color:var(--muted); cursor:pointer; line-height:1; padding:6px; }
-button.link { border:0; background:none; color:var(--accent); cursor:pointer; padding:10px 0 0; font:inherit; font-weight:600; }
-.hist td { padding:10px 8px; border-bottom:1px solid var(--line); vertical-align:middle; }
-.muted { color:var(--muted); }
-details summary { cursor:pointer; color:var(--muted); font-size:13px; margin-top:6px; }
-.hint { font-size:12px; color:var(--muted); margin-top:6px; }
-@media (max-width:900px) { .layout { grid-template-columns:1fr; } .sticky { position:static; } }
-</style>
+<title><?= pm_h($vb === 'promanaged' ? $settings['company_name'] : pm_brand_title($settings, $vb)) ?> · Marketing</title>
+<style>:root{--accent:<?= pm_h(pm_ui_accent($settings, $vb)) ?>}</style>
 <link rel="stylesheet" href="assets/app.css?v=<?= @filemtime(PM_ROOT . '/assets/app.css') ?>">
-<?php if ($vb !== 'promanaged'): ?><?php if (is_file(PM_ROOT . '/' . pm_brand_asset($vb, 'favicon'))): ?><link rel="icon" href="<?= pm_h(pm_brand_asset($vb, 'favicon')) ?>"><?php endif; ?><style>:root{--accent:<?= pm_h(pm_brand_block($settings, $vb)['accent_color'] ?? '#047857') ?>}</style><?php endif; ?>
+<?php if ($vb !== 'promanaged' && is_file(PM_ROOT . '/' . pm_brand_asset($vb, 'favicon'))): ?><link rel="icon" href="<?= pm_h(pm_brand_asset($vb, 'favicon')) ?>"><?php endif; ?>
 </head>
 <body>
 <?php
-$hdrLogo = pm_brand_asset($vb, 'logo');
-$hdrName = $vb === 'promanaged' ? $settings['company_name'] : pm_brand_title($settings, $vb);
 $team = array_values(array_filter((array)($settings['team'] ?? [])));
+echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'vb' => $vb, 'settings' => $settings, 'csrf' => $csrf, 'team' => $team, 'who' => $GLOBALS['PM_WHO'], 'hbAge' => pm_social_heartbeat_age()]);
 ?>
-<header><div class="bar">
-  <?php if (is_file(PM_ROOT . '/' . $hdrLogo)): ?><img class="<?= $vb === 'travel' ? 'sq' : '' ?>" src="<?= pm_h($hdrLogo) ?>?v=<?= @filemtime(PM_ROOT . '/' . $hdrLogo) ?>" alt=""><?php endif; ?>
-  <span class="name"><?= pm_h($hdrName) ?></span>
-  <span class="brandsw"><?php foreach (pm_brand_ids() as $bid): ?><a href="?tab=<?= pm_h($tab) ?>&brand=<?= pm_h($bid) ?>" class="<?= $vb === $bid ? 'on' : '' ?>"><?= pm_h($bid === 'promanaged' ? PM_BUILTIN_BRANDS['promanaged'] : pm_brand_title($settings, $bid)) ?></a><?php endforeach; ?><a href="?tab=business&new=1" title="Add another business">+</a></span>
-  <?php $hbAge = pm_social_heartbeat_age(); $hbMin = $hbAge === null ? 0 : intdiv($hbAge, 60);
-  $hbTxt = $hbAge === null ? 'Scheduler has not run yet' : 'Scheduler last ran ' . ($hbMin >= 120 ? intdiv($hbMin, 60) . ' h' : $hbMin . ' min') . ' ago'; ?>
-  <a class="sx-chip <?= $hbAge === null || $hbAge >= 2700 ? ($hbAge !== null && $hbAge >= 7200 ? 'bad' : 'warn') : 'ok' ?>" href="?tab=social&view=accounts" title="Posts go out when the scheduler runs (every 15 to 30 minutes), or when the app is open. See README: SOCIAL."><?= pm_h($hbTxt) ?></a>
-  <?php if ($team): ?><form method="post" class="who" data-quiet><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="who"><input type="hidden" name="back" value="<?= pm_h($tab) ?>">
-    <select name="who" onchange="this.form.submit()" aria-label="Who is working"><option value="">Working as…</option><?php foreach ($team as $m): ?><option <?= $GLOBALS['PM_WHO'] === $m ? 'selected' : '' ?>><?= pm_h($m) ?></option><?php endforeach; ?></select></form><?php endif; ?>
-</div></header>
-<div class="tabsbar"><nav aria-label="Main">
-  <?php foreach (['agents' => 'Agents', 'whatsapp' => 'WhatsApp', 'social' => 'Social', 'proposal' => 'New proposal', 'history' => 'History', 'template' => 'Template', 'settings' => 'Settings'] as $k => $l): ?>
-    <a href="?tab=<?= $k ?>" class="<?= $tab === $k ? 'on' : '' ?>"<?= $tab === $k ? ' aria-current="page"' : '' ?>><?= $l ?></a>
-  <?php endforeach; ?>
-</nav></div>
 <main>
 <?php if ($flash): ?><div class="flash <?= pm_h($flash[0]) ?>"><?= pm_h($flash[1]) ?></div><?php endif; ?>
 
-<?php if ($tab === 'proposal'): ?>
+<?php $propTabs = ['proposal' => ['New proposal', '?tab=proposal'], 'history' => ['History', '?tab=history'], 'template' => ['Template and prices', '?tab=template']]; ?>
+<?php if (in_array($tab, ['proposal', 'history', 'template'], true) && empty(pm_brand_profile($vb)['proposals'])): ?>
+  <?= pm_ui_head('Proposals', 'Quotations and agreements with online signing.') ?>
+  <div class="card empty nofold"><b><?= pm_h(pm_brand_title($settings, $vb)) ?> has no price list or agreement wording yet.</b><br>
+    <span class="muted">Proposals use the price list and terms written for ProManaged IT and Travel Malawi, so they are switched off for a business you added. Leads, messages and posts work as usual.</span>
+    <div class="btns" style="justify-content:center"><a class="btn primary" href="?tab=proposal&amp;brand=promanaged">Open ProManaged IT proposals</a><a class="btn" href="?tab=proposal&amp;brand=travel">Open Travel Malawi proposals</a></div></div>
+<?php elseif ($tab === 'proposal'): ?>
+  <?= pm_ui_head('Proposals', 'Fill in the client, choose their package, then preview, download or email the PDF. Next reference: <b>' . pm_h(pm_next_ref($settings, false)) . '</b>') ?>
+  <?= pm_ui_tabs($propTabs, 'proposal', 'Proposals') ?>
   <?php if (pm_app_url() === ''): ?><div class="flash err"><b>Clients cannot open links or be tracked until the app is hosted.</b> APP_URL is empty in .env, so proposal links, the "opened" alert and online signing do not work yet. PDFs and emails still go out.</div><?php endif; ?>
   <details class="card" style="padding:14px 20px"><summary style="margin:0;font-weight:600;color:var(--ink)">Find a business by name and prepare its proposal</summary>
     <form method="post" style="margin-top:10px"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="lookup"><input type="hidden" name="proposal" value="1">
@@ -1803,8 +1862,7 @@ $team = array_values(array_filter((array)($settings['team'] ?? [])));
       <p class="hint">Searches the web for that business, works out what it needs, and fills in the form below with a tailored proposal. About two AI calls.</p>
     </form></details>
 
-  <h1>New proposal</h1>
-  <p class="sub">Fill in the client, choose their package, then preview, download or email the PDF. Next reference: <b><?= pm_h(pm_next_ref($settings, false)) ?></b></p>
+
   <form method="post" id="pf">
     <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="proposal">
     <div class="layout">
@@ -2014,7 +2072,8 @@ $team = array_values(array_filter((array)($settings['team'] ?? [])));
   </script>
 
 <?php elseif ($tab === 'template'): ?>
-  <h1>Template</h1>
+  <?= pm_ui_head('Proposals', 'The wording, prices and packages every proposal is built from.') ?>
+  <?= pm_ui_tabs($propTabs, 'template', 'Proposals') ?>
   <p class="sub">Everything the PDF says. Change prices, wording or terms here; every new PDF uses them straight away.</p>
   <form method="post">
     <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="template">
@@ -2102,9 +2161,11 @@ $team = array_values(array_filter((array)($settings['team'] ?? [])));
 
 <?php elseif ($tab === 'settings'): require __DIR__ . '/lib/view_settings.php'; ?>
 
+<?php elseif ($tab === 'business'): require __DIR__ . '/lib/view_business.php'; ?>
+
 <?php else: ?>
-  <h1>History</h1>
-  <p class="sub">Every proposal you downloaded or emailed. Open the PDF, or load it back into the form to send an updated version.</p>
+  <?= pm_ui_head('Proposals', 'Every proposal you downloaded or emailed. Open the PDF, or load it back into the form to send an updated version.') ?>
+  <?= pm_ui_tabs($propTabs, 'history', 'Proposals') ?>
   <div class="card">
   <?php $history = array_filter($history, fn($h) => pm_brand_of_type((string)($tpl['packages'][(int)($h['proposal']['package'] ?? -1)]['type'] ?? '')) === $vb); ?>
   <?php if (!$history): ?><p class="muted">No <?= pm_h(pm_brand_name($vb)) ?> proposals yet.</p><?php else: ?>
@@ -2130,6 +2191,7 @@ $team = array_values(array_filter((array)($settings['team'] ?? [])));
 </main>
 <div id="busy" role="status" aria-live="polite"><div class="bcard"><div class="spin"></div><b id="busyMsg">Working…</b><span id="busyTime"></span><span>Please wait. Other buttons are paused so two tasks cannot clash.</span></div></div>
 <script src="assets/app.js?v=<?= @filemtime(PM_ROOT . '/assets/app.js') ?>"></script>
+<script src="assets/ui.js?v=<?= @filemtime(PM_ROOT . '/assets/ui.js') ?>"></script>
 <script>
 function addRow(btn) {
   const table = btn.previousElementSibling.previousElementSibling;

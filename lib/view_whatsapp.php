@@ -18,8 +18,7 @@ $waBiz = pm_wa_biz_cfg()['ready'];
 $wrote = array_values(array_filter(pm_leads(), fn($x) => ($x['brand'] ?? 'promanaged') === $vb && ($x['status'] ?? '') !== 'optout' && (($x['status'] ?? '') === 'replied' || !empty($x['awaiting_reply_since']))));
 usort($wrote, fn($a, $b) => strcmp((string)($a['awaiting_reply_since'] ?? $a['last_reply'] ?? ''), (string)($b['awaiting_reply_since'] ?? $b['last_reply'] ?? '')));
 ?>
-<h1>WhatsApp · <?= pm_h($bname) ?></h1>
-<p class="sub">Tap <b>Send on WhatsApp</b>: WhatsApp opens with the message ready, you press send there, and the lead moves on. <?= $sent ?> sent today · <?= $left ?> left of <?= $cap ?>.</p>
+<?= pm_ui_head('WhatsApp · ' . pm_h($bname), 'Tap <b>Send on WhatsApp</b>: WhatsApp opens with the message ready, you press send there, and the lead moves on. ' . (int)$sent . ' sent today · ' . (int)$left . ' left of ' . (int)$cap . '.') ?>
 <?php if ($wrote): ?>
 <h2 class="repttl">They replied <span class="pill warn"><?= count($wrote) ?></span></h2>
 <?php foreach (array_slice($wrote, 0, 15) as $l):

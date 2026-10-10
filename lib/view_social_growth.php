@@ -8,7 +8,6 @@ $sc = pm_social_cfg($vb);
 $fg = fn($do, $extra = '') => '<input type="hidden" name="csrf" value="' . $csrf . '"><input type="hidden" name="action" value="fbg"><input type="hidden" name="do" value="' . $do . '"><input type="hidden" name="view" value="' . pm_h($view) . '">' . $extra;
 $chan = ['reply_comment' => 'Reply to their comment', 'messenger' => 'Messenger', 'whatsapp' => 'WhatsApp', 'call' => 'Call', 'comment_on_their_page' => 'Comment on their Page', 'email' => 'Email'];
 ?>
-<h1>Social · <?= pm_h($bname) ?></h1>
 <?= pm_social_nav($view) ?>
 
 <?php if (!$sc['ready']): ?>

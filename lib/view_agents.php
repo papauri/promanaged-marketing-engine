@@ -51,10 +51,11 @@ $post = fn($id, $do, $extra = '') => '<input type="hidden" name="csrf" value="' 
 require_once __DIR__ . '/view_drafts.php';
 $waBiz = pm_wa_biz_cfg()['ready'];
 @set_time_limit(120);
-$dir = pm_director_brief();
+$dir = pm_director_brief() + ['headline' => '', 'priorities' => [], 'focus' => [], 'drop' => [], 'experiment' => '']; // a new business has no advice yet
 $ds = $dir['stats'];
 $ndone = count(array_filter($plan, fn($t) => $t['done']));
 ?>
+<?= pm_ui_head('Leads · ' . pm_h($bname), 'Find businesses, let the agents draft the messages, and send what you approve. Nothing goes out without you.') ?>
 <?php if (!pm_agents_ready()): ?>
   <div class="flash err"><b>One thing to set up first.</b> Add <code><?= pm_h(pm_agents_missing_key()) ?>=...</code> to <code>.env</code>, then reload.</div>
 <?php endif; ?>

@@ -22,11 +22,16 @@ function pm_social_nav(string $on): string
 {
     $tabs = function_exists('pm_social_tabs') ? pm_social_tabs()
         : ['' => 'Plan', 'growth' => 'Growth', 'page' => 'Page', 'inbox' => 'Inbox', 'cleanup' => 'Clean-up', 'ads' => 'Ads', 'audit' => 'Audit', 'accounts' => 'Accounts &amp; branding'];
-    $h = (function_exists('pm_social_banner') ? pm_social_banner() : '') . '<div class="filters subnav">';
+    $sub = ['' => 'Plan posts, approve them and watch what goes out.', 'content' => 'What posts can be about: ideas, hashtags, key dates and places.', 'channels' => 'Where else to post, and today\'s hand-post tasks.',
+        'growth' => 'Turn comments and messages into customers.', 'results' => 'What worked, what it cost, and what to do next.', 'page' => 'How the Facebook Page looks to visitors.',
+        'inbox' => 'Messages and comments waiting for an answer.', 'cleanup' => 'Tidy old posts and comments on the Page.', 'ads' => 'Small targeted ads, always created paused.',
+        'audit' => 'A health check of the Page.', 'accounts' => 'Connect Facebook and the other channels, and make the pictures.'];
+    $items = [];
     foreach ($tabs as $k => $l) {
-        $h .= '<a href="?tab=social' . ($k !== '' ? '&view=' . $k : '') . '"' . ($k === $on ? ' class="on"' : '') . '>' . $l . '</a>';
+        $items[$k] = [$l, '?tab=social' . ($k !== '' ? '&view=' . $k : '')];
     }
-    return $h . '</div>';
+    $name = function_exists('pm_brand_title') ? pm_brand_title(pm_settings(), pm_brand()) : pm_brand_name(pm_brand());
+    return pm_ui_head('Social · ' . $name, pm_h($sub[$on] ?? $sub[''])) . (function_exists('pm_social_banner') ? pm_social_banner() : '') . pm_ui_tabs($items, $on, 'Social');
 }
 
 /** The live Facebook Page as visitors see it, beside the cleaning tools. Facebook's own Page plugin: costs no API calls. */

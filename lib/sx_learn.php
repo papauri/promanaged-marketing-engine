@@ -391,8 +391,9 @@ function pm_agent_postsign(array $leads): array
     $s = pm_settings();
     $reviewAsk = pm_google_review_link(pm_brand()) !== '' ? 'a polite Google review request; the review link is added under your text by the system, so do not write any link yourself'
         : 'a polite Google review request that says the owner will send the link separately';
+    $did = pm_brand_is_custom(pm_brand()) ? 'what working with us improved for them' : 'what the system improved for them';
     $system = pm_agents_company_brief('tiny') . "\nYou are the Post-sign agent for {$s['company_name']}. The client just signed. Write three SHORT messages, each its own paragraph, in plain text: "
-        . "(1) \"testimonial\": ask if we may quote a line about what the system improved for them; (2) \"review\": $reviewAsk; "
+        . "(1) \"testimonial\": ask if we may quote a line about $did; (2) \"review\": $reviewAsk; "
         . "(3) \"referral\": ask whether another business they know could use the same help. Warm and light, no pressure, no prices, no discounts, no guilt. " . PM_AGENT_RULES;
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'contact' => (string)($l['contact'] ?? '')], $leads);
     return pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)

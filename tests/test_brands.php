@@ -183,7 +183,10 @@ t('Every agent prompt for a third business is free of the other two', function (
     pm_agent_lookup('Bright Schools', 'Lilongwe');
     pm_agent_compose($lead, 'email', 'human', 'short', 'need', 'english');
     pm_agent_compose($lead, 'whatsapp', 'warm', 'short', 'offer', 'english');
-    pm_t_assert(count($SEEN) >= 8, 'eight agent calls were captured (' . count($SEEN) . ')');
+    pm_agent_winback([$lead + ['lost_reason' => 'not_now']]);
+    pm_agent_postsign([$lead]);
+    pm_agent_contact($lead);
+    pm_t_assert(count($SEEN) >= 11, 'eleven agent calls were captured (' . count($SEEN) . ')');
     $bad = [];
     foreach ($SEEN as $p) {
         if (preg_match(LEAK, $p, $m)) {
@@ -191,7 +194,7 @@ t('Every agent prompt for a third business is free of the other two', function (
         }
     }
     pm_t_eq($bad, [], 'no prompt mentions ProManaged IT, Travel Malawi, their packages or their products');
-    pm_t_assert(count(array_filter($SEEN, fn($p) => str_contains($p, 'Sunrise Solar'))) === count($SEEN), 'every prompt names the business it works for');
+    pm_t_assert(count(array_filter($SEEN, fn($p) => str_contains($p, 'Sunrise Solar'))) === count($SEEN) - 1, 'every prompt names the business it works for (the Contact Finder only looks people up at the lead)');
     pm_t_assert(str_contains(implode(' ', $SEEN), 'free site visit'), 'the owner\'s own facts reach the agents');
     $quick = implode(' ', pm_wa_quick_replies());
     pm_t_assert(!preg_match(LEAK, $quick) && str_contains($quick, 'Sunrise Solar'), 'the paste-in WhatsApp replies are its own');
@@ -266,12 +269,42 @@ t('Replies: neutral wording, no claim the owner did not write', function () use 
     pm_t_assert(pm_reply_lint('We will reply within 5 minutes', $id) !== [], 'the reply lint applies to it');
 });
 
+t('A WhatsApp message is answered as the business the lead belongs to', function () use (&$CREATED, &$SEEN) {
+    $id = $CREATED;
+    putenv('WA_BIZ_TOKEN=tok');
+    putenv('WA_BIZ_PHONE_ID=999');
+    putenv('WA_BIZ_VERIFY=v');
+    $mk = fn($lid, $brand, $num) => ['id' => $lid, 'brand' => $brand, 'name' => "Lead $lid", 'type' => 'shop', 'city' => 'Zomba', 'status' => 'contacted', 'whatsapp' => $num, 'phone' => $num, 'score' => 70, 'sent' => ['2026-10-01 09:00'],
+        'notes' => [], 'thread' => [['dir' => 'out', 'at' => date('Y-m-d H:i', time() - 7200), 'text' => 'Hello', 'ch' => 'wa']], 'wa_sent' => [date('Y-m-d H:i', time() - 7200)], 'email' => "l$lid@x$lid.mw"];
+    pm_save('leads', ['w1' => $mk('w1', $id, '+265 999 700 001'), 'w2' => $mk('w2', 'travel', '+265 999 700 002'), 'w3' => $mk('w3', 'promanaged', '+265 999 700 003')]);
+    $GLOBALS['PM_WA_STUB'] = fn($to, $text) => [true, 'wamid'];
+    $systems = [];
+    $GLOBALS['PM_AI_STUB'] = function ($sys, $user) use (&$systems) {
+        $systems[] = $sys;
+        return json_encode(['intent' => 'question', 'summary' => 'asks', 'needs_human' => false, 'reply_subject' => 'Re', 'reply_body' => 'Thanks for asking, we will reply.', 'whatsapp' => 'Thanks for asking.', 'resume_on' => '', 'next_step' => 'reply']);
+    };
+    pm_brand_set('promanaged');
+    pm_wa_biz_handle('265999700001', 'Do you cover Zomba?');
+    pm_wa_biz_handle('265999700002', 'Do you have a room for Friday?');
+    pm_wa_biz_handle('265999700003', 'Do you do websites?');
+    $GLOBALS['PM_AI_STUB'] = null;
+    $GLOBALS['PM_WA_STUB'] = null;
+    pm_t_eq(count($systems), 3, 'three messages, three replies drafted');
+    pm_t_assert(str_contains($systems[0], 'Reply agent for Sunrise Solar') && !preg_match(LEAK, $systems[0]), 'the third business\'s lead is answered by its own Reply agent, free of the other two');
+    pm_t_assert(str_contains($systems[1], 'Reply agent for Travel Malawi') && str_contains($systems[2], 'Reply agent for ProManaged IT'), 'and the others by theirs');
+    pm_t_eq(pm_brand(), 'promanaged', 'the app is back where it started');
+    pm_save('leads', []);
+    putenv('WA_BIZ_TOKEN');
+    putenv('WA_BIZ_PHONE_ID');
+    putenv('WA_BIZ_VERIFY');
+});
+
 /* =========================================================== social */
 
 t('Social: its own themes, tags, ideas and invitation', function () use (&$CREATED, &$SEEN, $stub) {
     $id = $CREATED;
     pm_brand_set($id);
-    pm_t_eq(array_column(pm_default_pillars($id), 'name'), ['Tip/How-to', 'Proof', 'Behind the scenes', 'Offer', 'Question'], 'the starter set of content themes');
+    pm_t_eq(array_column(pm_default_pillars($id), 'name'), ['Tip/How-to', 'Proof', 'Behind the scenes', 'Offer', 'Question', 'Free first step'], 'the starter set of content themes, with one for the free first step it offers');
     $tags = pm_default_bank_tags($id);
     pm_t_assert(in_array('#Lilongwe', $tags['local'], true) && in_array('#SunriseSolar', $tags['niche'], true) && !preg_match(LEAK, json_encode($tags)), 'hashtags come from its own name and cities: ' . json_encode($tags));
     pm_t_eq(pm_default_ideas($id), [], 'no starter ideas written for another business');
@@ -372,6 +405,65 @@ t('The scheduler starts a business that was added in the app', function () use (
     putenv('GEMINI_API_KEY');
     $GLOBALS['PM_BRAND_RUN_STUB'] = null;
     pm_run_state(['state' => 'idle']);
+});
+
+t('Other kinds of business, names and numbers of businesses', function () use ($ANS, $stub, &$SEEN) {
+    $draftOf = fn(array $a) => pm_brand_draft($a)['draft'];
+    // a business that sells to the public: the agents do not go cold-calling for customers
+    $cafe = ['name' => 'Café Zomba!', 'sells' => 'A café and bakery on the Zomba road serving breakfast, lunch and fresh bread every day.', 'customers' => 'Families, students and travellers passing through Zomba',
+        'sell_to' => 'public', 'cities' => 'Zomba', 'magnet' => '', 'voice' => 'warm'];
+    [$cid, $err] = pm_brand_create($cafe, $draftOf($cafe));
+    pm_t_assert($err === [] && preg_match('/^[a-z][a-z0-9]{1,15}$/', $cid), 'a name with an accent and punctuation becomes a safe id: ' . $cid);
+    $cc = pm_agents_config($cid);
+    pm_t_assert($cc['enabled']['scout'] === false && $cc['enabled']['writer'] === true && $cc['enabled']['proposals'] === false, 'selling to the public switches the scouts off and keeps replies, follow-ups and the writer');
+    pm_t_eq(pm_brand_profile($cid)['sell_to'], 'public', 'and it is remembered');
+    pm_t_eq(pm_default_pillars($cid)[0]['name'], 'Tip/How-to', 'it still gets a starter set of content themes');
+    pm_t_eq(pm_magnet_keyword_line($cid), '', 'with no free first step it invites nobody to anything');
+    // a name that starts with a digit, a very long one, a duplicate and a reserved word
+    [$d1] = pm_brand_create(['name' => '2020 Hardware Supplies Limited Malawi'] + $ANS, $draftOf($ANS));
+    pm_t_assert(preg_match('/^[a-z][a-z0-9]{1,15}$/', $d1) && strlen($d1) <= 13, 'a name starting with a digit still gets a letter-first id of sensible length: ' . $d1);
+    [$d2] = pm_brand_create(['name' => '2020 Hardware Supplies Limited Malawi'] + $ANS, $draftOf($ANS));
+    pm_t_assert($d2 !== $d1 && pm_brand_valid($d2), 'the same long name twice gets two different ids');
+    pm_t_assert(pm_brand_check_answers(['name' => 'travel'] + $ANS) !== [], 'the word "travel" on its own is refused');
+    foreach (['default', 'all', 'settings'] as $res) {
+        [$rid] = pm_brand_create(['name' => $res] + $ANS, $draftOf($ANS));
+        pm_t_assert($rid !== $res && !in_array($rid, PM_BRAND_RESERVED, true), "\"$res\" as a name never becomes the reserved id");
+    }
+    // many businesses side by side, each only seeing its own leads
+    $ids = array_values(array_filter(pm_brand_ids(), fn($i) => pm_brand_is_custom($i)));
+    pm_t_assert(count($ids) >= 6, 'six or more added businesses coexist (' . count($ids) . ')');
+    $leads = [];
+    foreach ($ids as $i => $bid) {
+        $leads["x$i"] = ['id' => "x$i", 'brand' => $bid, 'name' => "Lead of $bid", 'type' => 'shop', 'city' => 'Zomba', 'status' => 'drafted', 'score' => 70, 'email' => "a$i@lead$i.mw", 'drafts' => ['email_body' => 'Hello'], 'sent' => [], 'notes' => [], 'thread' => []];
+    }
+    pm_save('leads', $leads);
+    $own = [];
+    foreach ($ids as $i => $bid) {
+        pm_brand_set($bid);
+        $titles = implode('|', array_column(pm_daily_plan(pm_leads(), pm_agents_config()), 'title'));
+        $own[$bid] = substr_count($titles, 'Lead of ') === 1 && str_contains($titles, "Lead of $bid");
+    }
+    pm_brand_set('promanaged');
+    pm_t_eq(array_values(array_unique($own)), [true], 'each business\'s Today list holds exactly its own lead');
+    // prompts of the many stay free of each other's names
+    $GLOBALS['PM_AI_STUB'] = $stub;
+    $SEEN = [];
+    foreach ($ids as $bid) {
+        pm_brand_set($bid);
+        pm_agent_write([['id' => 'x1', 'name' => 'Lead', 'type' => 'shop', 'city' => 'Zomba', 'contact' => '', 'evidence' => [], 'social_gaps' => [], 'pain' => '']]);
+    }
+    pm_brand_set('promanaged');
+    $names = array_map('pm_brand_name', $ids);
+    $cross = 0;
+    foreach ($SEEN as $k => $p) {
+        foreach ($names as $n) {
+            if (!str_contains($p, 'writing outreach for ' . $n) && str_contains($p, $n . ':')) {
+                $cross++;
+            }
+        }
+    }
+    pm_t_eq($cross, 0, 'no business\'s writer is ever told another business\'s facts');
+    pm_save('leads', []);
 });
 
 t('The two original businesses still behave exactly as before', function () {
