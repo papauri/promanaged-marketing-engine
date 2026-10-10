@@ -542,7 +542,13 @@ function pm_sx_build(string $brand, int $n, string $start, string $focus, bool $
 function pm_plan_posts(int $n, string $focus, string $start): array
 {
     pm_budget_check();
-    return pm_sx_build(pm_brand(), max(1, min(14, $n)), $start, $focus, true);
+    $rows = pm_sx_build(pm_brand(), max(1, min(14, $n)), $start, $focus, true);
+    foreach ($rows as $i => $r) { // the AI's captions lose the tells people now recognise (em dashes, stock phrases, stacked exclamation marks)
+        if (!empty($r['caption']) && is_string($r['caption']) && empty($r['offline'])) {
+            $rows[$i]['caption'] = pm_human_polish($r['caption'], 'post');
+        }
+    }
+    return $rows;
 }
 
 /** The same batch with NO AI: templates from the facts. Always drafts; passes the same lint. */

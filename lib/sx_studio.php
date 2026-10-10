@@ -8,11 +8,13 @@
  * Data: data/cover_studio.json {brand: {design: spec|null, drafts: {id: spec}, history: [{id, at, how}]}}; pictures: data/brandkit/<brand>/studio/ (cache) and the usual kit files.
  */
 
-const PM_SD_VERSION = 3; // bump when the drawing changes: cached pictures are drawn again
-const PM_SD_STYLES = ['aurora' => 'Aurora', 'dusk' => 'Dusk over the lake', 'waves' => 'Lake waves', 'geometry' => 'Rings', 'blueprint' => 'Blueprint', 'lowpoly' => 'Facets', 'diamonds' => 'Diamonds',
-    'spotlight' => 'Spotlight', 'ribbons' => 'Ribbons', 'minimal' => 'Minimal', 'photo' => 'Your photo'];
-const PM_SD_PSTYLES = ['plate' => 'Logo on a plate', 'monogram' => 'Monogram', 'ring' => 'Glow ring', 'tile' => 'Bold tile', 'aurora' => 'Aurora'];
-const PM_SD_TEXTURES = ['none' => 'Clean', 'grain' => 'Fine grain', 'dots' => 'Dots', 'lines' => 'Diagonal lines'];
+const PM_SD_VERSION = 4; // bump when the drawing changes: cached pictures are drawn again
+/** The first eight look made by hand (paper, cut shapes, flecks, weave, a flat landscape poster); the "digital" ones below them are glowing or technical and are used on purpose, not by default. */
+const PM_SD_STYLES = ['paper' => 'Paper and ink', 'cutout' => 'Cut paper', 'terrazzo' => 'Terrazzo', 'weave' => 'Weave', 'dusk' => 'Dusk over the lake', 'waves' => 'Lake waves', 'minimal' => 'Minimal', 'photo' => 'Your photo',
+    'aurora' => 'Soft glow', 'geometry' => 'Rings', 'blueprint' => 'Blueprint', 'lowpoly' => 'Facets', 'diamonds' => 'Diamonds', 'spotlight' => 'Spotlight', 'ribbons' => 'Ribbons'];
+const PM_SD_DIGITAL = ['aurora', 'geometry', 'blueprint', 'lowpoly', 'diamonds', 'spotlight', 'ribbons'];
+const PM_SD_PSTYLES = ['plate' => 'Logo on a plate', 'monogram' => 'Monogram', 'ring' => 'Fine ring', 'tile' => 'Bold tile', 'shapes' => 'Cut shapes'];
+const PM_SD_TEXTURES = ['paper' => 'Paper grain', 'grain' => 'Fine grain', 'none' => 'Clean', 'dots' => 'Dots', 'lines' => 'Diagonal lines'];
 
 /* ---------------- colour ---------------- */
 
@@ -98,6 +100,33 @@ function pm_sd_rot(array $c, float $deg, float $ds = 0.0, float $dl = 0.0): arra
     return pm_sd_from_hsl($h + $deg, $s + $ds, $l + $dl);
 }
 
+/**
+ * Makes a palette look natural: indigo and violet drift to a muted ink blue, magenta to clay, anything neon is calmed, backgrounds lose most of their saturation.
+ * Used on what the AI chooses (never on colours the owner picked by hand). Returns [spec, changed].
+ */
+function pm_sd_humanize(array $spec): array
+{
+    $changed = false;
+    foreach (['bg1' => 0.4, 'bg2' => 0.5, 'accent' => 0.62] as $k => $maxS) {
+        $c = pm_sd_hex((string)$spec[$k]);
+        [$h, $s, $l] = pm_sd_hsl($c);
+        $n = $s;
+        if ($h >= 235 && $h < 285 && $s > 0.3) {
+            $h = 212; // indigo and violet read as generated: a muted ink blue instead
+            $n = min($n, 0.34);
+        } elseif ($h >= 285 && $h <= 335 && $s > 0.3) {
+            $h = 14; // purple and magenta become clay
+            $n = min($n, 0.4);
+        }
+        $n = min($n, $k === 'accent' && $h >= 8 && $h <= 62 ? 0.8 : $maxS); // ochre and terracotta are allowed to be rich
+        if (abs($n - $s) > 0.01 || abs($h - pm_sd_hsl($c)[0]) > 1) {
+            $spec[$k] = pm_sd_tohex(pm_sd_from_hsl($h, $n, $l));
+            $changed = true;
+        }
+    }
+    return [$spec, $changed];
+}
+
 /** Ink (the writing colour) that reads on the average of the two background colours. */
 function pm_sd_ink_for(array $bg1, array $bg2, array $prefer): array
 {
@@ -115,20 +144,24 @@ function pm_sd_palettes(string $accentHex): array
 {
     $a = pm_sd_hex($accentHex);
     [$h, $s, $l] = pm_sd_hsl($a);
+    $s = max(0.16, min($s, 0.46)); // the business's colour, softened: a loud brand colour on a cover looks like a template
+    $warm = $h < 70 || $h > 330;
+    $ochre = $warm ? '#e6d6b0' : '#d9a566'; // one warm accent that sits well with any brand colour
     $hx = fn(array $c) => pm_sd_tohex($c);
-    $s = max($s, 0.25);
     return [
-        'brand' => ['Your colour', $hx(pm_sd_from_hsl($h, $s * 0.85, 0.11)), $hx(pm_sd_from_hsl($h, $s, max(0.28, min(0.42, $l)))), $hx(pm_sd_from_hsl($h + 35, min(1, $s + 0.15), 0.74)), '#ffffff'],
-        'brand-light' => ['Your colour, light', $hx(pm_sd_from_hsl($h, 0.38, 0.97)), $hx(pm_sd_from_hsl($h, 0.42, 0.88)), $hx(pm_sd_from_hsl($h, $s, 0.38)), $hx(pm_sd_from_hsl($h, 0.55, 0.13))],
-        'brand-contrast' => ['Your colour and its opposite', $hx(pm_sd_from_hsl($h, $s * 0.8, 0.12)), $hx(pm_sd_from_hsl($h + 180, $s * 0.65, 0.34)), $hx(pm_sd_from_hsl($h + 180, 0.9, 0.76)), '#ffffff'],
-        'sunrise' => ['Sunrise', '#3b0a45', '#e8632b', '#ffd166', '#fff7ec'],
-        'lake' => ['Lake Malawi', '#022b3a', '#1f7a8c', '#bfe3f5', '#ffffff'],
-        'forest' => ['Forest', '#0b2e1d', '#2d6a4f', '#b7e4c7', '#f1faee'],
-        'ember' => ['Ember', '#1b0f0a', '#a3380f', '#fdba74', '#ffffff'],
-        'orchid' => ['Orchid', '#1e1b4b', '#7e22ce', '#f0abfc', '#ffffff'],
-        'sand' => ['Sand', '#f8f0e1', '#e8d6b4', '#b45309', '#2a1d0c'],
-        'slate' => ['Slate', '#0f172a', '#334155', '#38bdf8', '#f8fafc'],
-        'rose' => ['Rose', '#4a0d2b', '#d81e5b', '#fecdd3', '#ffffff'],
+        'brand' => ['Your colour', $hx(pm_sd_from_hsl($h, $s * 0.75, 0.12)), $hx(pm_sd_from_hsl($h, $s, max(0.27, min(0.38, $l)))), $ochre, '#f4efe6'],
+        'brand-light' => ['Your colour on bone', '#f3ede2', '#e6dcc8', $hx(pm_sd_from_hsl($h, min(0.5, $s + 0.05), 0.34)), $hx(pm_sd_from_hsl($h, 0.4, 0.12))],
+        'brand-clay' => ['Your colour and clay', $hx(pm_sd_from_hsl($h, $s * 0.7, 0.11)), $hx(pm_sd_mix(pm_sd_from_hsl($h, $s, 0.3), [138, 75, 50], 0.5)), '#e9b872', '#f4efe6'],
+        'clay' => ['Clay and bone', '#2b1d17', '#8a4b32', '#e9b872', '#f4eadb'],
+        'sage' => ['Sage and cream', '#1f2a22', '#5d7360', '#e6d8b8', '#f3efe3'],
+        'ink' => ['Ink and sand', '#16202e', '#2f4258', '#d9a566', '#f2ece0'],
+        'olive' => ['Olive grove', '#26261a', '#6b6a3a', '#d8c47f', '#f2eee0'],
+        'rosewood' => ['Rosewood', '#2a1618', '#7a3b3f', '#e3b9a0', '#f5ece4'],
+        'lake' => ['Lake shore', '#17272b', '#4b6f73', '#e8d8b0', '#f3efe4'],
+        'mustard' => ['Mustard and charcoal', '#2a2a28', '#4a4a45', '#d9a521', '#f4efe4'],
+        'bone' => ['Bone and terracotta', '#f3ede2', '#e6dcc8', '#b4532a', '#2a211b'],
+        'oat' => ['Oat and forest', '#f1ebdd', '#e2d8c0', '#3f5b46', '#1f2a22'],
+        'blush' => ['Blush and brown', '#f4e6df', '#e8cfc3', '#8a4b3d', '#2d1c18'],
     ];
 }
 
@@ -287,11 +320,141 @@ function pm_sd_grain($im, int $w, int $h, float $amount, int $seed): void
     }
 }
 
+/** A wobbly circle, like something cut by hand: flat coordinates for a polygon. */
+function pm_sd_blob(Closure $r, float $cx, float $cy, float $rad, int $n = 44, float $wob = 0.15): array
+{
+    $p1 = $r() * 6.28;
+    $p2 = $r() * 6.28;
+    $p3 = $r() * 6.28;
+    $pts = [];
+    for ($i = 0; $i < $n; $i++) {
+        $a = 2 * M_PI * $i / $n;
+        $k = 1 + $wob * (0.6 * sin(2 * $a + $p1) + 0.3 * sin(3 * $a + $p2) + 0.1 * sin(5 * $a + $p3));
+        $pts[] = $cx + $rad * $k * cos($a);
+        $pts[] = $cy + $rad * $k * sin($a);
+    }
+    return $pts;
+}
+
+/** A shape with the soft shadow a cut piece of paper throws. */
+function pm_sd_piece($im, array $pts, array $col, float $alpha, float $lift): void
+{
+    $sh = [];
+    foreach ($pts as $i => $v) {
+        $sh[] = $v + ($i % 2 ? $lift * 1.3 : $lift * 0.6);
+    }
+    pm_sd_poly($im, $sh, pm_sd_col($im, [0, 0, 0], 0.16));
+    pm_sd_poly($im, $pts, pm_sd_col($im, $col, $alpha));
+}
+
+/** Where the art goes so the writing keeps its calm side: [cx, cy] as fractions of the width and height. */
+function pm_sd_art_spot(float $ax, Closure $r): array
+{
+    return abs($ax - 0.5) < 0.1 ? [0.84 + $r() * 0.08, 0.14 + $r() * 0.12] : [min(0.97, $ax + 0.1 + $r() * 0.05), 0.5 + ($r() - 0.5) * 0.3];
+}
+
 /* ---------------- cover backgrounds: each returns a canvas of $w x $h; $ax = where the busy part of the art sits (0 left .. 1 right), the writing goes on the calmer side ---------------- */
+
+/** Paper and ink: a flat card with a cut-paper circle, a smaller one, a stamped ring and a printed border. */
+function pm_sd_bg_paper(int $w, int $h, array $p, Closure $r, float $ax): GdImage
+{
+    $im = pm_sd_field($w, $h, fn($nx, $ny) => pm_sd_mix($p['bg1'], pm_sd_mix($p['bg1'], $p['bg2'], 0.3), $ny * 0.7));
+    [$fx, $fy] = pm_sd_art_spot($ax, $r);
+    $cx = $fx * $w;
+    $cy = $fy * $h;
+    $R = min($h * 0.62, abs($ax - 0.5) < 0.1 ? $h * 0.3 : max($h * 0.34, $cx - $w * 0.64));
+    pm_sd_piece($im, pm_sd_blob($r, $cx, $cy, $R, 60, 0.035), $p['bg2'], 1, $h * 0.012);
+    pm_sd_piece($im, pm_sd_blob($r, $cx - $R * 0.18, $cy + $R * 0.1, $R * 0.5, 50, 0.05), $p['accent'], 1, $h * 0.01);
+    pm_sd_donut($im, $cx, $cy, $R * 1.14, $R * 1.14 - max(2, $h * 0.0035), pm_sd_col($im, $p['ink'], 0.32));
+    $m = (int)($h * 0.05);
+    imagesetthickness($im, max(2, (int)($h * 0.004)));
+    imagerectangle($im, $m, $m, $w - $m, $h - $m, pm_sd_col($im, $p['ink'], 0.2));
+    imagesetthickness($im, 1);
+    return $im;
+}
+
+/** Cut paper: four or five hand-cut layers overlapping, each with its own shadow, on a flat base. */
+function pm_sd_bg_cutout(int $w, int $h, array $p, Closure $r, float $ax): GdImage
+{
+    $im = pm_sd_field($w, $h, fn($nx, $ny) => pm_sd_mix($p['bg1'], pm_sd_shade($p['bg1'], 0.03), $ny));
+    [$fx, $fy] = pm_sd_art_spot($ax, $r);
+    $tones = [pm_sd_mix($p['bg2'], $p['bg1'], 0.3), $p['bg2'], pm_sd_mix($p['bg2'], $p['accent'], 0.35), $p['accent'], pm_sd_mix($p['accent'], $p['ink'], 0.25)];
+    foreach ($tones as $i => $c) {
+        $rad = $h * (0.62 - $i * 0.09) * (0.85 + $r() * 0.3);
+        pm_sd_piece($im, pm_sd_blob($r, ($fx + ($r() - 0.5) * 0.14) * $w, ($fy + ($r() - 0.5) * 0.4) * $h, $rad, 48, 0.2), $c, 1, $h * 0.014);
+    }
+    return $im;
+}
+
+/** Terrazzo: irregular flecks of stone scattered on a flat base, thicker on the art side. */
+function pm_sd_bg_terrazzo(int $w, int $h, array $p, Closure $r, float $ax): GdImage
+{
+    $im = pm_sd_field($w, $h, fn($nx, $ny) => pm_sd_mix($p['bg2'], pm_sd_shade($p['bg2'], -0.03), $ny));
+    $tones = [$p['bg1'], $p['accent'], pm_sd_mix($p['ink'], $p['bg2'], 0.55), pm_sd_shade($p['bg2'], 0.13), pm_sd_mix($p['accent'], $p['bg1'], 0.5)];
+    for ($i = 0; $i < 420; $i++) {
+        $nx = $r();
+        $ny = $r();
+        if ($r() > exp(-((($nx - $ax) / 0.3) ** 2)) * 0.95 + 0.04) {
+            continue;
+        }
+        $rad = $h * (0.008 + $r() * $r() * 0.05);
+        $n = 5 + (int)($r() * 3);
+        $a0 = $r() * 6.28;
+        $pts = [];
+        for ($k = 0; $k < $n; $k++) {
+            $a = $a0 + 2 * M_PI * $k / $n + ($r() - 0.5) * 0.5;
+            $rr = $rad * (0.6 + $r() * 0.7);
+            $pts[] = $nx * $w + $rr * cos($a);
+            $pts[] = $ny * $h + $rr * sin($a);
+        }
+        pm_sd_poly($im, $pts, pm_sd_col($im, $tones[(int)($r() * count($tones))], 0.9));
+    }
+    return $im;
+}
+
+/** Weave: hand-laid bands with slightly uneven edges and faint threads across them. */
+function pm_sd_bg_weave(int $w, int $h, array $p, Closure $r, float $ax): GdImage
+{
+    $im = pm_sd_field($w, $h, fn($nx, $ny) => pm_sd_mix($p['bg1'], pm_sd_shade($p['bg1'], 0.04), $nx));
+    $tones = [$p['bg2'], $p['accent'], pm_sd_mix($p['bg2'], $p['accent'], 0.5), pm_sd_shade($p['bg2'], 0.1), pm_sd_mix($p['bg1'], $p['ink'], 0.25)];
+    $bands = 9;
+    $bh = $h / $bands;
+    for ($i = 0; $i < $bands; $i++) {
+        $ph = $r() * 6.28;
+        $amp = $bh * (0.05 + $r() * 0.07);
+        $top = [];
+        $bot = [];
+        for ($x = 0; $x <= $w; $x += max(8, (int)($w / 160))) {
+            $t = $x / $w;
+            $weight = 0.25 + 0.75 * exp(-((($t - $ax) / 0.34) ** 2)); // the weave fades toward the writing
+            $wob = sin($t * 9 + $ph) * $amp;
+            $top[] = [$x, $i * $bh + $wob + $bh * 0.06];
+            $bot[] = [$x, ($i + 1) * $bh + $wob - $bh * 0.06];
+            if ($weight < 0.3) {
+                $bot[count($bot) - 1][1] -= $bh * 0.5 * (0.3 - $weight) / 0.3; // thinner bands where it is calm
+            }
+        }
+        $pts = [];
+        foreach ($top as [$x, $y]) {
+            array_push($pts, $x, $y);
+        }
+        foreach (array_reverse($bot) as [$x, $y]) {
+            array_push($pts, $x, $y);
+        }
+        pm_sd_poly($im, $pts, pm_sd_col($im, $tones[$i % count($tones)], 0.55 + $r() * 0.4));
+    }
+    imagesetthickness($im, max(1, (int)($h / 700)));
+    for ($x = (int)($h * 0.04); $x < $w; $x += (int)($h * 0.045)) {
+        imageline($im, $x, 0, $x + (int)(($r() - 0.5) * $h * 0.02), $h, pm_sd_col($im, $p['ink'], 0.05));
+    }
+    imagesetthickness($im, 1);
+    return $im;
+}
+
 
 function pm_sd_bg_aurora(int $w, int $h, array $p, Closure $r, float $ax): GdImage
 {
-    $cols = [$p['accent'], pm_sd_mix($p['accent'], $p['bg2'], 0.5), pm_sd_shade($p['bg2'], 0.14), pm_sd_rot($p['accent'], 45, 0, -0.05), $p['bg2'], pm_sd_rot($p['bg2'], -35, 0, 0.1)];
+    $cols = [$p['accent'], pm_sd_mix($p['accent'], $p['bg2'], 0.5), pm_sd_shade($p['bg2'], 0.14), pm_sd_shade($p['accent'], -0.1), $p['bg2'], pm_sd_mix($p['bg2'], $p['ink'], 0.2)]; // only the palette's own colours: a hue-shifted blob is what makes glows look generated
     $blobs = [];
     for ($i = 0; $i < 6; $i++) {
         $blobs[] = ['x' => $ax + ($r() - 0.5) * 0.6, 'y' => 0.1 + $r() * 0.8, 'r' => 0.2 + $r() * 0.4, 'c' => $cols[$i % count($cols)], 'k' => 0.45 + $r() * 0.45];
@@ -311,31 +474,26 @@ function pm_sd_bg_aurora(int $w, int $h, array $p, Closure $r, float $ax): GdIma
 function pm_sd_bg_dusk(int $w, int $h, array $p, Closure $r, float $ax): GdImage
 {
     $hz = 0.66;
-    $sx = $ax;
-    $sy = 0.47;
-    $glow = pm_sd_mix($p['accent'], [255, 255, 255], 0.25);
-    $horizon = pm_sd_mix($p['bg2'], $p['accent'], 0.55);
-    $asp = $w / $h;
-    $im = pm_sd_field($w, $h, function ($nx, $ny) use ($p, $hz, $sx, $sy, $glow, $horizon, $asp) {
-        if ($ny < $hz) {
-            $c = pm_sd_mix($p['bg1'], $horizon, ($ny / $hz) ** 1.5);
-        } else {
-            $c = pm_sd_mix(pm_sd_mix($horizon, $p['bg1'], 0.35), pm_sd_shade($p['bg1'], -0.04), (($ny - $hz) / (1 - $hz)) ** 0.8);
+    $sx = abs($ax - 0.5) < 0.1 ? 0.82 : min(0.9, $ax + 0.04);
+    $sy = abs($ax - 0.5) < 0.1 ? 0.3 : 0.47;
+    $sun = pm_sd_mix($p['accent'], [255, 245, 225], 0.2);
+    $horizon = pm_sd_mix($p['bg2'], $p['accent'], 0.45);
+    $bands = [pm_sd_mix($p['bg1'], $p['bg2'], 0.0), pm_sd_mix($p['bg1'], $p['bg2'], 0.4), pm_sd_mix($p['bg2'], $horizon, 0.4), $horizon]; // a printed poster: the sky steps down in flat bands
+    $im = pm_sd_field($w, $h, function ($nx, $ny) use ($p, $hz, $bands, $horizon) {
+        if ($ny >= $hz) {
+            return pm_sd_mix(pm_sd_mix($horizon, $p['bg1'], 0.45), pm_sd_shade($p['bg1'], -0.03), (($ny - $hz) / (1 - $hz)));
         }
-        $dx = ($nx - $sx) * $asp;
-        $dy = $ny - $sy;
-        return pm_sd_mix($c, $glow, 0.75 * exp(-($dx * $dx + $dy * $dy) / 0.12));
+        return $bands[min(3, (int)floor($ny / $hz * 4))];
     });
-    $sun = $h * 0.14;
-    pm_sd_disc($im, $sx * $w, $sy * $h, $sun * 1.5, pm_sd_col($im, $glow, 0.14));
-    pm_sd_disc($im, $sx * $w, $sy * $h, $sun, pm_sd_col($im, pm_sd_mix($glow, [255, 255, 255], 0.5), 0.97));
-    for ($i = 0; $i < 9; $i++) { // the sun on the water
-        $y = ($hz + 0.025 + $i * 0.032) * $h;
-        $half = $sun * (1.0 - $i * 0.09);
-        imagefilledrectangle($im, (int)($sx * $w - $half), (int)$y, (int)($sx * $w + $half), (int)($y + max(2, $h * 0.007)), pm_sd_col($im, $glow, 0.55 - $i * 0.05));
+    $rad = $h * 0.13;
+    pm_sd_disc($im, $sx * $w, $sy * $h, $rad, pm_sd_col($im, $sun, 1));
+    for ($i = 0; $i < 7; $i++) { // the sun on the water, in hand-cut strokes
+        $y = ($hz + 0.03 + $i * 0.034) * $h;
+        $half = $rad * (1.0 - $i * 0.1) * (0.9 + $r() * 0.2);
+        imagefilledrectangle($im, (int)($sx * $w - $half), (int)$y, (int)($sx * $w + $half), (int)($y + max(3, $h * 0.009)), pm_sd_col($im, $sun, 0.7 - $i * 0.07));
     }
-    foreach ([[0.64, 0.05, 0.22], [0.69, 0.06, 0.12], [0.75, 0.07, 0.04]] as $i => [$base, $amp, $d]) {
-        pm_sd_ridge($im, $w, $h, $base, $amp, $r, pm_sd_col($im, pm_sd_mix(pm_sd_shade($p['bg1'], -0.02), $horizon, $d), 0.96), 0.9 + $i * 0.3);
+    foreach ([[0.64, 0.05, 0.28], [0.69, 0.06, 0.14], [0.75, 0.07, 0.04]] as $i => [$base, $amp, $d]) {
+        pm_sd_ridge($im, $w, $h, $base, $amp, $r, pm_sd_col($im, pm_sd_mix(pm_sd_shade($p['bg1'], -0.02), $horizon, $d), 1), 0.9 + $i * 0.3);
     }
     return $im;
 }
@@ -495,7 +653,7 @@ function pm_sd_bg_spotlight(int $w, int $h, array $p, Closure $r, float $ax): Gd
 function pm_sd_bg_ribbons(int $w, int $h, array $p, Closure $r, float $ax): GdImage
 {
     $im = pm_sd_field($w, $h, fn($nx, $ny) => pm_sd_mix($p['bg1'], $p['bg2'], (1 - $ny) * 0.4 + $nx * 0.6));
-    $cols = [$p['accent'], pm_sd_mix($p['accent'], [255, 255, 255], 0.45), pm_sd_shade($p['bg2'], 0.16), pm_sd_rot($p['accent'], 38), pm_sd_mix($p['accent'], $p['bg2'], 0.5), pm_sd_rot($p['bg2'], -30, 0, 0.12)];
+    $cols = [$p['accent'], pm_sd_mix($p['accent'], [255, 255, 255], 0.4), pm_sd_shade($p['bg2'], 0.16), pm_sd_shade($p['accent'], -0.12), pm_sd_mix($p['accent'], $p['bg2'], 0.5), pm_sd_mix($p['bg2'], $p['ink'], 0.25)];
     for ($k = 0; $k < 6; $k++) {
         $ph = $r() * 6.28;
         $f = 0.8 + $r() * 1.3;
@@ -557,7 +715,7 @@ function pm_sd_bg_photo(int $w, int $h, array $p, Closure $r, float $ax, string 
     imagecopymerge($im, $wash, 0, 0, 0, 0, $w, $h, 62);
     for ($x = 0; $x < $w; $x++) { // the writing side is darker
         $t = abs($x / $w - $ax);
-        imageline($im, $x, 0, $x, $h, pm_sd_col($im, $p['bg1'], max(0.0, min(0.86, 1.05 - $t * 1.5))));
+        imageline($im, $x, 0, $x, $h, pm_sd_col($im, $p['bg1'], max(0.12, min(0.9, 0.12 + $t * 1.25))));
     }
     return $im;
 }
@@ -582,9 +740,22 @@ function pm_sd_veil($im, int $w, int $h, float $ax, array $bg, float $strength):
 /** Faint texture over the whole picture. */
 function pm_sd_texture($im, int $w, int $h, string $texture, array $p, int $seed): void
 {
-    pm_sd_grain($im, $w, $h, $texture === 'grain' ? 0.075 : 0.014, $seed); // a hair of grain always hides banding in the gradients
+    pm_sd_grain($im, $w, $h, in_array($texture, ['grain', 'paper'], true) ? ($texture === 'paper' ? 0.06 : 0.075) : 0.014, $seed); // a hair of grain always hides banding in the gradients
     imagealphablending($im, true);
-    if ($texture === 'dots') {
+    if ($texture === 'paper') { // short fibres, like pressed paper
+        $r = pm_sd_rng($seed ^ 0x51ED);
+        $n = (int)($w * $h / 5500);
+        $light = pm_sd_col($im, [255, 250, 240], 0.10);
+        $dark = pm_sd_col($im, [20, 14, 8], 0.09);
+        for ($i = 0; $i < $n; $i++) {
+            $x = $r() * $w;
+            $y = $r() * $h;
+            $a = $r() * 6.28;
+            $len = 5 + $r() * 14;
+            $bend = ($r() - 0.5) * 0.6;
+            imageline($im, (int)$x, (int)$y, (int)($x + $len * cos($a + $bend)), (int)($y + $len * sin($a + $bend)), $r() > 0.5 ? $light : $dark);
+        }
+    } elseif ($texture === 'dots') {
         $s = max(14, (int)($h / 34));
         $col = pm_sd_col($im, [255, 255, 255], 0.13);
         for ($y = (int)($s / 2); $y < $h; $y += $s) {
@@ -775,7 +946,7 @@ function pm_studio_default(string $brand): array
         $head = trim((string)($cfg['cover_head'] ?? ''));
         $site = preg_replace('#^https?://#i', '', rtrim((string)(pm_link_cfg($brand)['url'] ?: ($s['website'] ?? '')), '/'));
         $phone = trim((string)($s['phone'] ?? ''));
-        return ['v' => 1, 'style' => 'aurora', 'pstyle' => 'plate', 'pal' => 'brand', 'bg1' => $pal[1], 'bg2' => $pal[2], 'accent' => $pal[3], 'ink' => $pal[4], 'texture' => 'grain', 'align' => 'left', 'seed' => abs(crc32($brand)) % 900000 + 1000,
+        return ['v' => 2, 'style' => 'paper', 'pstyle' => 'plate', 'pal' => 'brand', 'bg1' => $pal[1], 'bg2' => $pal[2], 'accent' => $pal[3], 'ink' => $pal[4], 'texture' => 'paper', 'align' => 'left', 'seed' => abs(crc32($brand)) % 900000 + 1000,
             'eyebrow' => mb_strtoupper(mb_substr($name, 0, 40)), 'headline' => $head !== '' ? mb_substr($head, 0, 70) : $name, 'subline' => mb_substr(trim((string)($cfg['cover_line'] ?? '')), 0, 110),
             'whisper' => array_values(array_filter([$site, $phone !== '' ? 'WhatsApp ' . $phone : ''])), 'monogram' => pm_studio_monogram($name), 'cover_logo' => 'none', 'by' => 'start', 'at' => ''];
     } finally {
@@ -822,6 +993,9 @@ function pm_studio_clean(array $in, array $base, ?string $factsSource = null): a
             return;
         }
         $t = trim((string)preg_replace('/\s+/u', ' ', strip_tags((string)$in[$k])));
+        if ($factsSource !== null) {
+            $t = pm_human_polish($t, 'profile');
+        }
         if ($factsSource !== null && $t !== '' && !pm_opt_ai_ok($t, $max, $factsSource)) {
             $drop[] = $k;
             return;
@@ -893,6 +1067,10 @@ function pm_studio_cover(array $spec, int $W, int $H, ?array $safe = null, strin
     $style = isset(PM_SD_STYLES[$spec['style']]) ? (string)$spec['style'] : 'aurora';
     $hero = $brand !== '' && function_exists('pm_hero_path') ? pm_hero_path($brand) : '';
     $big = match ($style) {
+        'paper' => pm_sd_bg_paper($w, $h, $pal, $r, $ax),
+        'cutout' => pm_sd_bg_cutout($w, $h, $pal, $r, $ax),
+        'terrazzo' => pm_sd_bg_terrazzo($w, $h, $pal, $r, $ax),
+        'weave' => pm_sd_bg_weave($w, $h, $pal, $r, $ax),
         'dusk' => pm_sd_bg_dusk($w, $h, $pal, $r, $ax),
         'waves' => pm_sd_bg_waves($w, $h, $pal, $r, $ax),
         'geometry' => pm_sd_bg_geometry($w, $h, $pal, $r, $ax),
@@ -905,8 +1083,8 @@ function pm_studio_cover(array $spec, int $W, int $H, ?array $safe = null, strin
         'photo' => pm_sd_bg_photo($w, $h, $pal, $r, $ax, $hero),
         default => pm_sd_bg_aurora($w, $h, $pal, $r, $ax),
     };
-    if ($style !== 'aurora' && $style !== 'lowpoly' && $style !== 'spotlight' && !($style === 'photo' && $hero !== '')) {
-        $veil = ['dusk' => 0.25, 'waves' => 0.45, 'geometry' => 0.8, 'blueprint' => 0.4, 'diamonds' => 0.55, 'ribbons' => 0.4, 'minimal' => 0.3][$style] ?? 0.3;
+    if ($style !== 'aurora' && $style !== 'lowpoly' && $style !== 'spotlight' && $style !== 'paper' && !($style === 'photo' && $hero !== '')) {
+        $veil = ['dusk' => 0.2, 'waves' => 0.45, 'geometry' => 0.8, 'blueprint' => 0.4, 'diamonds' => 0.55, 'ribbons' => 0.4, 'minimal' => 0.3, 'cutout' => 0.35, 'terrazzo' => 0.6, 'weave' => 0.68][$style] ?? 0.3;
         pm_sd_veil($big, $w, $h, $ax, pm_sd_mix($pal['bg1'], $pal['bg2'], 0.25), $veil);
     }
     if ($ss > 1) {
@@ -1041,6 +1219,7 @@ function pm_studio_profile(array $spec, int $size, string $brand = ''): ?GdImage
     $serifB = pm_font(true, true) ?: pm_font(true);
     $mark = $brand !== '' ? pm_sd_logo_mark($brand, $pal['ink'], 360) : null;
     $c = $S / 2;
+    $bone = [244, 239, 230];
     $drawMono = function ($im, float $frac, array $col, float $a = 1.0) use ($mono, $serifB, $S, $c) {
         if ($mono === '') {
             return;
@@ -1062,34 +1241,39 @@ function pm_studio_profile(array $spec, int $size, string $brand = ''): ?GdImage
             $drawMono($im, 0.30, $pal['ink']);
         }
     };
+    $flat = function () use ($S, $pal, $r) { // a flat base with two cut-paper pieces in the corners
+        $im = pm_sd_field($S, $S, fn($nx, $ny) => pm_sd_mix($pal['bg2'], pm_sd_shade($pal['bg2'], -0.04), $ny));
+        pm_sd_poly($im, pm_sd_blob($r, $S * 0.9, $S * 0.1, $S * 0.42, 44, 0.12), pm_sd_col($im, $pal['bg1'], 0.6));
+        pm_sd_poly($im, pm_sd_blob($r, $S * 0.08, $S * 0.95, $S * 0.34, 44, 0.12), pm_sd_col($im, $pal['accent'], 0.28));
+        return $im;
+    };
     if ($style === 'tile') {
-        $im = pm_sd_field($S, $S, fn($nx, $ny) => pm_sd_mix($pal['bg1'], $pal['bg2'], $nx * 0.4 + $ny * 0.6));
-        pm_sd_poly($im, [0, $S * 0.62, $S, $S * 0.30, $S, $S, 0, $S], pm_sd_col($im, $pal['accent'], 0.20));
-        pm_sd_poly($im, [0, $S * 0.78, $S, $S * 0.52, $S, $S, 0, $S], pm_sd_col($im, $pal['accent'], 0.16));
-        pm_sd_donut($im, $c, $c, $S * 0.43, $S * 0.425, pm_sd_col($im, $pal['ink'], 0.28));
+        $im = $flat();
+        pm_sd_poly($im, [0, $S * 0.64, $S, $S * 0.32, $S, $S, 0, $S], pm_sd_col($im, $pal['accent'], 0.3));
+        pm_sd_donut($im, $c, $c, $S * 0.43, $S * 0.425, pm_sd_col($im, $pal['ink'], 0.3));
         $markOrMono($im, $S * 0.46);
     } elseif ($style === 'ring') {
-        $im = pm_sd_field($S, $S, fn($nx, $ny) => pm_sd_mix(pm_sd_shade($pal['bg1'], -0.03), $pal['bg2'], 0.5 * exp(-((($nx - 0.5) ** 2 + ($ny - 0.5) ** 2) / 0.12))));
-        for ($i = 10; $i >= 0; $i--) { // a soft glow around the ring
-            pm_sd_donut($im, $c, $c, $S * (0.395 + $i * 0.011), $S * (0.375 - $i * 0.011), pm_sd_col($im, $pal['accent'], 0.035));
-        }
-        pm_sd_donut($im, $c, $c, $S * 0.395, $S * 0.372, pm_sd_col($im, $pal['accent'], 1));
-        pm_sd_donut($im, $c, $c, $S * 0.345, $S * 0.341, pm_sd_col($im, $pal['ink'], 0.4));
-        $markOrMono($im, $S * 0.40);
+        $im = pm_sd_field($S, $S, fn($nx, $ny) => pm_sd_mix(pm_sd_shade($pal['bg1'], -0.02), $pal['bg1'], $ny));
+        pm_sd_donut($im, $c, $c, $S * 0.42, $S * 0.404, pm_sd_col($im, $pal['accent'], 1));
+        pm_sd_donut($im, $c, $c, $S * 0.375, $S * 0.371, pm_sd_col($im, $pal['ink'], 0.4));
+        $markOrMono($im, $S * 0.4);
     } elseif ($style === 'monogram') {
-        $im = pm_sd_bg_aurora($S, $S, $pal, $r, 0.5);
-        pm_sd_donut($im, $c, $c, $S * 0.405, $S * 0.397, pm_sd_col($im, $pal['accent'], 0.9));
+        $im = $flat();
+        pm_sd_donut($im, $c, $c, $S * 0.405, $S * 0.397, pm_sd_col($im, $pal['accent'], 0.95));
         pm_sd_donut($im, $c, $c, $S * 0.37, $S * 0.368, pm_sd_col($im, $pal['ink'], 0.35));
         if ($mono !== '') {
             $drawMono($im, 0.34, $pal['ink']);
         } elseif ($mark) {
             pm_sd_put($im, $mark, $c, $c, $S * 0.44, $S * 0.4);
         }
-    } elseif ($style === 'aurora') {
-        $im = pm_sd_bg_aurora($S, $S, $pal, $r, 0.5);
-        $markOrMono($im, $S * 0.46);
-    } else { // plate
-        $im = pm_sd_bg_aurora($S, $S, $pal, $r, 0.5);
+    } elseif ($style === 'shapes') {
+        $im = pm_sd_field($S, $S, fn($nx, $ny) => $pal['bg1']);
+        foreach ([[$pal['bg2'], 0.5, 0.52, 0.5], [pm_sd_mix($pal['bg2'], $pal['accent'], 0.5), 0.62, 0.4, 0.3], [$pal['accent'], 0.4, 0.62, 0.22]] as [$col, $fx, $fy, $rr]) {
+            pm_sd_piece($im, pm_sd_blob($r, $S * $fx, $S * $fy, $S * $rr, 40, 0.16), $col, 1, $S * 0.012);
+        }
+        $markOrMono($im, $S * 0.44);
+    } else { // plate: the logo on a bone-coloured circle over a flat base
+        $im = $flat();
         $plain = $brand !== '' ? pm_sd_logo_plain($brand) : null;
         $transparentLogo = $plain && $mark && (((imagecolorat($plain, 1, 1) >> 24) & 127) > 100);
         if ($plain && !$transparentLogo) { // a logo that is its own tile: shown as that tile, with a soft shadow
@@ -1098,8 +1282,8 @@ function pm_studio_profile(array $spec, int $size, string $brand = ''): ?GdImage
             pm_sd_put($im, $plain, $c, $c, $t, $t);
         } else {
             pm_sd_disc($im, $c + $S * 0.012, $c + $S * 0.02, $S * 0.372, pm_sd_col($im, [0, 0, 0], 0.18));
-            pm_sd_disc($im, $c, $c, $S * 0.37, pm_sd_col($im, [255, 255, 255], 1));
-            pm_sd_donut($im, $c, $c, $S * 0.405, $S * 0.392, pm_sd_col($im, $pal['accent'], 0.85));
+            pm_sd_disc($im, $c, $c, $S * 0.37, pm_sd_col($im, $bone, 1));
+            pm_sd_donut($im, $c, $c, $S * 0.405, $S * 0.395, pm_sd_col($im, $pal['accent'], 0.85));
             if ($plain) {
                 pm_sd_put($im, $plain, $c, $c, $S * 0.5, $S * 0.46);
             } elseif ($mono !== '') {
@@ -1112,7 +1296,7 @@ function pm_studio_profile(array $spec, int $size, string $brand = ''): ?GdImage
         imagecopyresampled($out, $im, 0, 0, 0, 0, $size, $size, $S, $S);
         $im = $out;
     }
-    pm_sd_grain($im, $size, $size, 0.014, (int)$spec['seed']);
+    pm_sd_grain($im, $size, $size, 0.05, (int)$spec['seed']);
     return $im;
 }
 
@@ -1220,15 +1404,20 @@ function pm_studio_shuffle(string $brand, array $spec): array
 {
     $acc = (string)(pm_settings()['accent_color'] ?? '#17375E');
     $pals = pm_sd_palettes($acc);
-    $styles = array_keys(PM_SD_STYLES);
+    $styles = array_values(array_diff(array_keys(PM_SD_STYLES), [$spec['style']]));
     if (pm_hero_path($brand) === '') {
         $styles = array_values(array_diff($styles, ['photo']));
     }
-    $styles = array_values(array_diff($styles, [$spec['style']]));
+    $pool = [];
+    foreach ($styles as $s) { // the handmade looks come up three times as often as the digital ones
+        for ($i = 0, $n = in_array($s, PM_SD_DIGITAL, true) ? 1 : 3; $i < $n; $i++) {
+            $pool[] = $s;
+        }
+    }
     $keys = array_values(array_diff(array_keys($pals), [$spec['pal'] ?? '']));
-    $style = $styles[random_int(0, count($styles) - 1)];
+    $style = $pool[random_int(0, count($pool) - 1)];
     $pk = $keys[random_int(0, count($keys) - 1)];
-    $tex = array_keys(PM_SD_TEXTURES)[random_int(0, 3)];
+    $tex = ['paper', 'paper', 'grain', 'none'][random_int(0, 3)];
     $p = $pals[$pk];
     return pm_studio_clean(['style' => $style, 'pal' => $pk, 'bg1' => $p[1], 'bg2' => $p[2], 'accent' => $p[3], 'ink' => $p[4], 'texture' => $tex, 'seed' => random_int(1000, 999999),
         'pstyle' => array_keys(PM_SD_PSTYLES)[random_int(0, 4)]], $spec);
@@ -1245,7 +1434,9 @@ function pm_studio_ai(string $brand, array $base): array
     $f = pm_opt_facts($brand);
     $acc = (string)(pm_settings()['accent_color'] ?? '#17375E');
     $system = pm_agents_company_brief('tiny') . "\nYou are the art director for " . $f['name'] . ' (Malawi). You choose the design of its social media profile picture and cover; code draws it, so you only choose. '
-        . 'Pick the style that suits the business and its customers, four colours that suit it and stay close to or tastefully complement its brand colour (hex: bg1 dark or light base, bg2 second background tone, accent a lively highlight, ink the writing colour with strong contrast on the backgrounds), a texture, and the words. '
+        . 'The look must feel made by a person: neo-naturalism, editorial, paper and print. Choose a muted, earthy palette (clay, sage, olive, ochre, ink, bone, sand, rosewood) with a calm base and ONE stronger accent; stay close to the brand colour. '
+        . 'Never use purple, indigo, violet, neon, glowing or blue-to-purple gradients, glassmorphism or generic tech blue: they look machine-made. Prefer the styles paper, cutout, terrazzo, weave, dusk, waves or minimal; use a digital style only for a technology business and say why. '
+        . 'Give four colours (hex: bg1 base, bg2 second tone, accent one highlight, ink the writing colour with strong contrast on the backgrounds), a texture (paper or grain), and the words. '
         . 'Words: eyebrow (the business name or a 2-3 word label, up to 40 characters), headline (up to 60 characters, what the business does or stands for), subline (up to 100 characters, one plain supporting line), whisper (up to 3 short items such as the website or a town the business serves; contact details only from the facts). '
         . 'Use ONLY what the facts say: no number, price, award, ranking or claim that is not in them, no link, hashtag, emoji or exclamation mark, never "best" or "leading". Reply JSON only.';
     $user = json_encode(['business' => $f['name'], 'tagline' => $f['tagline'], 'about' => mb_substr($f['about'], 0, 400), 'audience' => mb_substr($f['audience'], 0, 200), 'facts' => array_slice($f['facts'], 0, 6),
@@ -1261,9 +1452,14 @@ function pm_studio_ai(string $brand, array $base): array
     }
     $out['pal'] = 'ai';
     $spec = pm_studio_clean($out, $base, pm_studio_facts_source($brand, $base));
+    $softened = false;
+    if (!empty($out['palette']) || !empty($out['bg1'])) { // generated colour choices are made natural: no violet, indigo or neon
+        [$spec, $softened] = pm_sd_humanize($spec);
+        $spec['ink'] = pm_sd_tohex(pm_sd_ink_for(pm_sd_hex($spec['bg1']), pm_sd_hex($spec['bg2']), pm_sd_hex($spec['ink'])));
+    }
     $note = trim((string)preg_replace('/\s+/u', ' ', strip_tags(is_scalar($out['why'] ?? null) ? (string)$out['why'] : '')));
     $dropped = $spec['_dropped'];
-    $msg = ($note !== '' ? mb_substr($note, 0, 160) . ' ' : '') . ($dropped ? '(Some of its words were not used because they added a claim or a number: ' . implode(', ', $dropped) . '.)' : '');
+    $msg = ($note !== '' ? mb_substr($note, 0, 160) . ' ' : '') . ($softened ? '(The colours were softened so they look natural.) ' : '') . ($dropped ? '(Some of its words were not used because they added a claim or a number: ' . implode(', ', $dropped) . '.)' : '');
     return [$spec, trim($msg)];
 }
 

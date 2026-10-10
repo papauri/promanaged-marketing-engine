@@ -43,6 +43,11 @@ function pm_agent_polish(array $p, array $line, array $package, ?array $lead, bo
         throw new RuntimeException('The AI did not return a usable proposal. Try again.');
     }
     $draft['email_subject'] = pm_subject_tidy((string)($draft['email_subject'] ?? ''), (array)$lead);
+    foreach (['email_body' => 'email', 'personal_note' => 'email', 'cover_hook' => 'email', 'intro' => 'email'] as $k => $ch) {
+        if (isset($draft[$k]) && is_string($draft[$k])) {
+            $draft[$k] = pm_human_polish($draft[$k], $ch);
+        }
+    }
     if (!$review) {
         return $draft; // one pass is the default: a second review pass doubles the cost
     }
@@ -110,7 +115,7 @@ function pm_agent_reply(array $lead, string $incoming, string $ch = 'email'): ar
         . "Set needs_human true if they are angry, complaining, negotiating price or terms, raise legal or security questions, ask for something outside the facts above, or you are unsure. "
         . "For stop, not_interested, not_now, out_of_office and bounce, reply_body must be empty. "
         . "resume_on: only for not_now, the date (YYYY-MM-DD) they asked to be contacted again, else " . date('Y-m-d', strtotime('+30 days')) . " (today is " . date('Y-m-d') . "). "
-        . "whatsapp: the same answer as a WhatsApp message, at most 40 words, no subject, no links; empty when reply_body is empty. " . PM_AGENT_RULES;
+        . "whatsapp: the same answer as a WhatsApp message, at most 40 words, no subject, no links; empty when reply_body is empty. " . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $user = "Business: {$lead['name']} ({$lead['city']}), contact: " . ($lead['contact'] ?? '') . ", package we suggested: $pk, their likely need: " . ($lead['pain'] ?? '') . ".\n"
         . "Conversation so far:\n" . implode("\n", $thread) . "\n\nTheir new message" . ($ch === 'wa' ? ' (on WhatsApp)' : '') . ":\n" . mb_substr($incoming, 0, 4000)
         . "\n\nReturn JSON: {\"intent\",\"summary\":\"one sentence\",\"needs_human\":bool,\"reply_subject\",\"reply_body\",\"whatsapp\",\"resume_on\",\"next_step\":\"what the owner should do next\"}";
@@ -121,7 +126,12 @@ function pm_agent_reply(array $lead, string $incoming, string $ch = 'email'): ar
     $out['intent'] = in_array($out['intent'] ?? '', PM_REPLY_INTENTS, true) ? $out['intent'] : 'other';
     $out['needs_human'] = !empty($out['needs_human']);
     $out['resume_on'] = $out['intent'] === 'not_now' ? pm_resume_date((string)($out['resume_on'] ?? ''), 30) : '';
-    $out['whatsapp'] = pm_wa_reply_clean((string)($out['whatsapp'] ?? ''));
+    $out['whatsapp'] = pm_wa_reply_clean(pm_human_polish((string)($out['whatsapp'] ?? ''), 'whatsapp'));
+    foreach (['reply_body' => 'email', 'reply_subject' => 'subject'] as $k => $chn) {
+        if (isset($out[$k]) && is_string($out[$k])) {
+            $out[$k] = pm_human_polish($out[$k], $chn);
+        }
+    }
     return $out;
 }
 

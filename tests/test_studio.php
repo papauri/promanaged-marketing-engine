@@ -61,7 +61,7 @@ t('Monograms and the random stream', function () {
 
 t('Checking a design that came from a form or the AI', function () {
     $base = pm_studio_default('promanaged');
-    pm_t_assert($base['style'] === 'aurora' && $base['headline'] !== '' && $base['monogram'] === 'PM' && in_array('promanaged-it.com', array_map(fn($w) => preg_replace('#^https?://(www\.)?#', '', $w), $base['whisper']), true) || true, 'the starting design uses the business\'s own words and colour');
+    pm_t_assert($base['style'] === 'paper' && $base['texture'] === 'paper' && $base['headline'] !== '' && $base['monogram'] === 'PM' && in_array('promanaged-it.com', array_map(fn($w) => preg_replace('#^https?://(www\.)?#', '', $w), $base['whisper']), true) || true, 'the starting design uses the business\'s own words and colour');
     $c = pm_studio_clean(['style' => 'nope', 'pstyle' => 'monogram', 'texture' => 'dots', 'align' => 'center', 'bg1' => '#102030', 'bg2' => 'zzz', 'accent' => '#abc', 'seed' => '123'], $base);
     pm_t_assert($c['style'] === $base['style'] && $c['pstyle'] === 'monogram' && $c['texture'] === 'dots' && $c['align'] === 'center' && $c['bg1'] === '#102030' && $c['accent'] === '#aabbcc' && $c['bg2'] === $base['bg2'] && $c['seed'] === 123, 'good values are taken, bad ones ignored');
     pm_t_assert(in_array('bg2', $c['_dropped'], true), 'and the refused one is reported');
@@ -190,8 +190,8 @@ t('Drafts, the saved design and history', function () {
     $id = pm_studio_put('promanaged', ['style' => 'dusk'] + $base, 'you');
     pm_t_assert(preg_match('/^[a-f0-9]{12}$/', $id) === 1 && pm_studio_get('promanaged', $id)['style'] === 'dusk', 'a draft has a short hex id and is kept');
     pm_t_eq(pm_studio_put('promanaged', ['style' => 'dusk'] + $base, 'shuffle'), $id, 'the same design always has the same id');
-    pm_t_eq(pm_studio_get('promanaged', 'new')['style'], 'aurora', '"new" is the starting design');
-    pm_t_eq(pm_studio_get('promanaged', 'ffffffffffff')['style'], 'aurora', 'an unknown id falls back to it');
+    pm_t_eq(pm_studio_get('promanaged', 'new')['style'], 'paper', '"new" is the starting design: paper and ink, not a glow');
+    pm_t_eq(pm_studio_get('promanaged', 'ffffffffffff')['style'], 'paper', 'an unknown id falls back to it');
     pm_t_eq(pm_studio_saved('promanaged'), null, 'nothing is saved yet');
     pm_t_eq(pm_studio_get('promanaged', $id)['_dropped'] ?? null, null, 'a stored draft never carries the refusal list');
     for ($i = 0; $i < 45; $i++) {
@@ -207,7 +207,7 @@ t('The handlers on the screen', function () use (&$CALLS) {
     $r = pm_social_ext_run('studio', 'promanaged');
     pm_t_assert($r['kind'] === 'ok' && preg_match('/^social&view=studio&d=([a-f0-9]{12})$/', $r['to'], $m) === 1, 'Surprise me makes a new draft and goes to it: ' . $r['to']);
     $a = pm_studio_get('promanaged', $m[1]);
-    pm_t_assert($a['style'] !== 'aurora' && $a['by'] === 'shuffle' && $a['headline'] === pm_studio_default('promanaged')['headline'], 'with another style, and the same words (' . $a['style'] . ')');
+    pm_t_assert($a['style'] !== 'paper' && $a['by'] === 'shuffle' && $a['headline'] === pm_studio_default('promanaged')['headline'], 'with another style, and the same words (' . $a['style'] . ')');
     $_POST = ['d' => $m[1], 'op' => 'style', 'style' => 'waves'];
     pm_social_ext_run('studio', 'promanaged');
     pm_t_assert(pm_studio_store('promanaged')['history'][0]['how'] === 'you' && pm_studio_get('promanaged', pm_studio_store('promanaged')['history'][0]['id'])['style'] === 'waves', 'choosing a style changes only the style');
@@ -217,7 +217,7 @@ t('The handlers on the screen', function () use (&$CALLS) {
     $_POST = ['d' => $m[1], 'op' => 'pal', 'pal' => 'lake'];
     $r = pm_social_ext_run('studio', 'promanaged');
     $p = pm_studio_get('promanaged', substr($r['to'], strrpos($r['to'], '=') + 1));
-    pm_t_assert($p['bg1'] === '#022b3a' && $p['pal'] === 'lake' && $p['style'] === $a['style'], 'a colour set changes the four colours');
+    pm_t_assert($p['bg1'] === '#17272b' && $p['pal'] === 'lake' && $p['style'] === $a['style'], 'a colour set changes the four colours');
     $_POST = ['d' => $m[1], 'op' => 'pal', 'pal' => 'nope'];
     pm_t_eq(pm_social_ext_run('studio', 'promanaged')['kind'], 'err', 'a colour set that does not exist is refused');
     $_POST = ['d' => $m[1], 'op' => 'edit', 'headline' => 'Software that fits', 'subline' => '', 'eyebrow' => 'PROMANAGED', 'whisper' => "a.mw\nb", 'monogram' => 'pm', 'texture' => 'lines', 'align' => 'right', 'c_bg1' => '#ffffff', 'c_bg2' => '#f0f0f0', 'c_ink' => '#ffffff'];
@@ -252,6 +252,36 @@ t('The handlers on the screen', function () use (&$CALLS) {
     pm_t_assert(is_file("$dir/profile-720.png") && getimagesize("$dir/profile-720.png")[0] === 720, 'with every file still there');
 });
 
+t('Made to look human, not generated', function () {
+    foreach (pm_sd_palettes('#17375E') + pm_sd_palettes('#6d28d9') as $k => [$label, $a, $b, $c, $ink]) {
+        foreach ([$a, $b, $c] as $col) {
+            [$h, $s, $l] = pm_sd_hsl(pm_sd_hex($col));
+            pm_t_assert(!($h >= 235 && $h <= 335 && $s > 0.3) && $s < 0.8, "palette $k: $col has no violet, indigo or neon (hue " . (int)$h . ', saturation ' . round($s, 2) . ')');
+        }
+    }
+    [$sp, $changed] = pm_sd_humanize(['bg1' => '#1b1035', 'bg2' => '#7c3aed', 'accent' => '#ff00ff', 'ink' => '#ffffff']);
+    $bad = 0;
+    foreach (['bg1', 'bg2', 'accent'] as $k) {
+        [$h, $s] = pm_sd_hsl(pm_sd_hex($sp[$k]));
+        $bad += ($h >= 235 && $h <= 335 && $s > 0.3) || $s > 0.8 ? 1 : 0;
+    }
+    pm_t_assert($changed && $bad === 0 && $sp['ink'] === '#ffffff', 'an indigo, violet and magenta palette is made natural and the writing colour is kept');
+    [$ok, $c2] = [pm_sd_humanize(['bg1' => '#2b1d17', 'bg2' => '#8a4b32', 'accent' => '#e9b872', 'ink' => '#f4eadb']), 0];
+    pm_t_assert($ok[1] === false, 'an earthy palette is left alone');
+    pm_t_assert(PM_SD_STYLES && array_slice(array_keys(PM_SD_STYLES), 0, 8) === ['paper', 'cutout', 'terrazzo', 'weave', 'dusk', 'waves', 'minimal', 'photo'] && array_intersect(PM_SD_DIGITAL, array_slice(array_keys(PM_SD_STYLES), 0, 8)) === [], 'the hand-made styles come first and the digital ones are marked');
+    $human = 0;
+    $digital = 0;
+    $violet = 0;
+    for ($i = 0; $i < 150; $i++) {
+        $sp = pm_studio_shuffle('travel', pm_studio_default('travel'));
+        in_array($sp['style'], PM_SD_DIGITAL, true) ? $digital++ : $human++;
+        [$h, $s] = pm_sd_hsl(pm_sd_hex($sp['bg2']));
+        $violet += $h >= 235 && $h <= 335 && $s > 0.3 ? 1 : 0;
+    }
+    pm_t_eq($violet, 0, 'a shuffled design never has a violet or indigo background');
+    pm_t_assert($human > $digital * 1.5, "Surprise me picks hand-made looks far more often ($human to $digital)");
+});
+
 t('The AI idea', function () {
     $calls = 0;
     $seen = '';
@@ -265,7 +295,12 @@ t('The AI idea', function () {
     $r = pm_social_ext_run('studio_ai', 'promanaged');
     pm_t_assert($r['kind'] === 'ok' && $calls === 1 && str_contains($r['msg'], 'warm dusk') && str_contains($r['msg'], 'subline'), 'one call; its reason is shown and the refused words are named: ' . $r['msg']);
     $s = pm_studio_get('promanaged', substr($r['to'], strrpos($r['to'], '=') + 1));
-    pm_t_assert($s['style'] === 'dusk' && $s['pstyle'] === 'ring' && $s['bg2'] === '#c2410c' && $s['by'] === 'ai' && $s['pal'] === 'ai' && $s['headline'] === 'Business systems built for Malawi' && $s['subline'] !== 'Trusted by 500 businesses', 'the look is accepted; the invented "500 businesses" is not used');
+    pm_t_assert($s['style'] === 'dusk' && $s['pstyle'] === 'ring' && $s['by'] === 'ai' && $s['pal'] === 'ai' && $s['headline'] === 'Business systems built for Malawi' && $s['subline'] !== 'Trusted by 500 businesses', 'the look is accepted; the invented "500 businesses" is not used');
+    foreach (['bg1', 'bg2', 'accent'] as $k) {
+        [$hh, $ss] = pm_sd_hsl(pm_sd_hex($s[$k]));
+        pm_t_assert(!($hh >= 235 && $hh <= 335 && $ss > 0.3) && $ss <= 0.81, "the AI's $k (" . $s[$k] . ') is natural: no violet or neon');
+    }
+    pm_t_assert(str_contains($r['msg'], 'softened'), 'and the owner is told the colours were softened');
     pm_t_assert(!str_contains($seen, 'AI image') && str_contains($seen, 'code draws it') && str_contains($seen, 'brand_colour'), 'the AI is asked to art-direct, not to make a picture, and is told the brand colour');
     $GLOBALS['PM_AI_STUB'] = fn() => json_encode(['style' => 'photo', 'palette' => ['bg1' => 'red', 'bg2' => '#000000', 'accent' => '#ffffff', 'ink' => '#ffffff'], 'headline' => 'x']);
     [$spec, $note] = pm_studio_ai('promanaged', pm_studio_default('promanaged'));

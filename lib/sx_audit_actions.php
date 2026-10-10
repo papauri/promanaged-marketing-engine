@@ -263,10 +263,10 @@ function pm_aa_rewrite(string $brand, string $postId, string $improve): array
     }
     $f = pm_opt_facts($brand);
     $system = pm_agents_company_brief('tiny') . "\nYou improve one Facebook Page post for " . $f['name'] . '. Follow the audit note. Keep the meaning, the language and the facts; make it clearer, warmer and easier to act on, '
-        . 'with one easy next step (a WhatsApp message or a comment). Plain text, no more than 900 characters. Use ONLY what the post and the facts already say: add no number, price, claim or promise. Reply JSON only: {"text":""}';
+        . 'with one easy next step (a WhatsApp message or a comment). Plain text, no more than 900 characters. Use ONLY what the post and the facts already say: add no number, price, claim or promise. ' . PM_HUMAN_RULES . ' Reply JSON only: {"text":""}';
     $user = json_encode(['post' => $post['message'], 'audit_note' => mb_substr($improve, 0, 300), 'facts' => array_slice($f['facts'], 0, 8), 'about' => mb_substr($f['about'], 0, 300), 'whatsapp' => $f['phone']], JSON_UNESCAPED_UNICODE);
     $out = pm_agent_json(pm_claude($system, $user, false, 700, 'write'));
-    $t = trim((string)(is_array($out) && is_scalar($out['text'] ?? null) ? $out['text'] : ''));
+    $t = pm_human_polish(trim((string)(is_array($out) && is_scalar($out['text'] ?? null) ? $out['text'] : '')), 'post');
     $src = implode(' ', array_filter([$f['name'], $f['tagline'], $f['about'], $f['audience'], implode(' ', $f['facts']), $f['phone'], $f['address']]));
     if (!pm_aa_rewrite_ok($t, $post['message'], $src)) {
         return [false, 'The AI\'s version added a claim or a number that is not in the post or your facts, or was not usable, so it was not kept. Edit the post by hand, or try again.'];

@@ -1167,9 +1167,9 @@ function pm_agent_social_reply(array $c): string
 {
     $s = pm_settings();
     $system = pm_agents_company_brief('tiny') . "\nYou reply to comments on {$s['company_name']}'s Facebook Page. 1 to 3 short sentences, warm and human, in the commenter's language if it is clear. "
-        . "Answer only from the facts. For prices or details, invite them to send a WhatsApp or private message. Never promise times or results. No hashtags." . (function_exists('pm_aa_reply_style_line') ? pm_aa_reply_style_line(pm_brand()) : '') . " Reply JSON only: {\"reply\":\"\"}";
+        . "Answer only from the facts. For prices or details, invite them to send a WhatsApp or private message. Never promise times or results. No hashtags. " . PM_HUMAN_RULES . (function_exists('pm_aa_reply_style_line') ? pm_aa_reply_style_line(pm_brand()) : '') . " Reply JSON only: {\"reply\":\"\"}";
     $out = pm_agent_json(pm_claude($system, json_encode(['post' => $c['post'], 'commenter' => $c['from'], 'comment' => $c['message']], JSON_UNESCAPED_UNICODE), false, 400, 'write'));
-    return trim((string)(is_array($out) ? ($out['reply'] ?? '') : ''));
+    return pm_human_polish(trim((string)(is_array($out) && is_scalar($out['reply'] ?? null) ? $out['reply'] : '')), 'reply');
 }
 
 /* ---------------- branded image ---------------- */

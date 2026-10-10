@@ -475,7 +475,7 @@ function pm_agent_engage_playbook(string $brand, bool $force = false): array
             $link = '?tab=agents&rl=' . substr($ref, 2) . '#lead-' . substr($ref, 2);
         }
         $tasks[] = ['n' => $i, 'ref' => $ref, 'who' => (string)($t['who'] ?? ''), 'why' => (string)($t['why'] ?? ''), 'when' => (string)($t['when'] ?? ''), 'channel' => (string)($t['channel'] ?? ''),
-            'message' => (string)($t['message'] ?? ''), 'goal' => (string)($t['goal'] ?? ''), 'link' => $link, 'done' => false];
+            'message' => pm_human_polish((string)($t['message'] ?? ''), in_array((string)($t['channel'] ?? ''), ['email'], true) ? 'email' : 'whatsapp'), 'goal' => (string)($t['goal'] ?? ''), 'link' => $link, 'done' => false];
     }
     usort($tasks, fn($a, $b) => strcmp($a['when'], $b['when']));
     $pb = ['at' => date('Y-m-d H:i'), 'day' => date('Y-m-d'), 'sig' => $sig, 'focus' => (string)($out['focus'] ?? ''), 'tasks' => $tasks, 'moves' => array_slice((array)($out['page_moves'] ?? []), 0, 3), 'times' => $times];

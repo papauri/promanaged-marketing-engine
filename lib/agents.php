@@ -5,6 +5,7 @@
  * Agents only ever DRAFT. Nothing is sent to a business until you press Send.
  */
 require_once __DIR__ . '/store.php';
+require_once __DIR__ . '/human.php'; // the human voice layer: rules for the writers and a polish for what comes back
 
 use Anthropic\Client;
 
@@ -948,10 +949,10 @@ const PM_EMAIL_CRAFT = "Write like one real person writing to one owner, never l
     . "(4) One easy, low-pressure question: a 10-minute call, or a one-page plan for their business. "
     . "Warm, plain, contractions welcome; no buzzwords (streamline, leverage, solution, seamless, cutting-edge, elevate). Subject: under 45 characters, specific to them, truthful, written like a normal subject line: a capital letter first and a capital letter on every town, area, road, person and business name (for example 'Rooms near the Shire River barrage?'), every other word in ordinary lowercase, no full stop, no exclamation marks, no word in ALL CAPS except an acronym such as VAT. "
     . "NEVER mention prices, fees or numbers you cannot source. No urgency, scarcity, guarantees, links or attachments; never ask for passwords or payment; never claim we know them or follow their work; never name a town as our base. "
-    . "No sign-off (the app adds it). Email: 70 to 110 words. WhatsApp: 30 to 45 words, one paragraph: greeting with first name, who you are, the gain, the easy question.";
+    . "No sign-off (the app adds it). Email: 70 to 110 words. WhatsApp: 30 to 45 words, one paragraph: greeting with first name, who you are, the gain, the easy question. " . PM_HUMAN_RULES;
 
 /** The email rules in a nutshell, for the proposal cover email. */
-const PM_EMAIL_CRAFT_SHORT = "under 60 words, opens with something specific and true about THEM, states the gain in plain words, ends with one easy yes (the attached plan, or a 10-minute chat). NEVER any price, fee or amount of money; no urgency or hype";
+const PM_EMAIL_CRAFT_SHORT = "under 60 words, opens with something specific and true about THEM, states the gain in plain words, ends with one easy yes (the attached plan, or a 10-minute chat). NEVER any price, fee or amount of money; no urgency or hype. " . PM_HUMAN_RULES;
 
 /** The person the message comes from: whoever is working (team menu), else the business's signatory. '' = nobody named. */
 function pm_sender_name(): string
@@ -979,8 +980,8 @@ function pm_agent_write(array $leads): array
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'city' => $l['city'], 'contact' => $l['contact'] ?? '',
         'evidence' => array_slice($l['evidence'] ?? [], 0, 2), 'online_gaps' => array_slice($l['social_gaps'] ?? [], 0, 2), 'research' => pm_research_brief($l), 'lead_with' => $l['pain'] ?? '', 'how_it_stops' => pm_fix_for((string)($l['pain'] ?? '')),
         'subject_style' => pm_subject_style(pm_email_exp_arm((string)$l['id'], $brand))], $leads);
-    return pm_subjects_polish(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
-        . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}. Never greet with the business name.", false, 2500, 'write'))), $leads);
+    return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
+        . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}. Never greet with the business name.", false, 2500, 'write'))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);
 }
 
 /** FOLLOW-UP: a short nudge for leads that have gone quiet. Engagement-aware: opened-but-silent, never-opened and replied-then-quiet get different angles. */
@@ -991,11 +992,11 @@ function pm_agent_followup(array $leads): array
     $system = pm_agents_company_brief('tiny') . "\nYou are the Follow-up agent for {$s['company_name']}. Write a 40-word follow-up email and 25-word WhatsApp that add ONE new angle (a different gain, or a one-page plan offer). "
         . "Match the state: for \"opened\" (they opened our proposal or email but stayed quiet) gently reference what they saw and add one new, true reason; for \"silent\" (never engaged) be shorter and lead with one specific fact about their business; for \"replied\" pick up their last words, never repeat a whole earlier message. "
         . "No prices, no guilt, no pressure, no urgency. Plain text, no sign-off. Each item has subject_style: write that item's email subject in that style, $subjectRule. "
-        . pm_email_exp_followup_example(pm_brand()) . ' ' . PM_AGENT_RULES;
+        . pm_email_exp_followup_example(pm_brand()) . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'contact' => $l['contact'] ?? '', 'used' => mb_substr($l['drafts']['email_body'] ?? '', 0, 220),
         'state' => pm_lead_engagement((array)$l), 'views' => (int)($l['view_count'] ?? 0), 'last_seen' => (string)($l['last_viewed_at'] ?? ''),
         'subject_style' => pm_subject_style(pm_followup_arm((array)$l))], $leads);
-    return pm_subjects_polish(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}", false, 1800))), $leads);
+    return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}", false, 1800))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);
 }
 
 /** One word for the follow-up writer: 'replied', 'opened' or 'silent'. */
@@ -1906,7 +1907,7 @@ function pm_agent_compose(array $lead, string $channel, string $tone, string $le
     if (!is_array($out) || trim((string)($out['body'] ?? '')) === '') {
         throw new RuntimeException('The AI did not return a message. Try again.');
     }
-    return ['subject' => pm_subject_tidy(trim((string)($out['subject'] ?? '')), $lead), 'body' => trim((string)$out['body'])];
+    return ['subject' => pm_subject_tidy(trim((string)($out['subject'] ?? '')), $lead), 'body' => pm_human_polish(trim((string)$out['body']), $wa ? 'whatsapp' : 'email')];
 }
 
 /** The picker shown above a message box. $target tells the script which fields to fill. */

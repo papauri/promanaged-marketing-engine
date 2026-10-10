@@ -121,6 +121,13 @@ accepted by being made; they are logged in the Done log below, not in the regist
 
 ## 6 · Done log
 
+### Owner request in chat, 2026-10-11 — "playbook not updating; top-of-range profile words; human, not AI-obvious pictures and writing everywhere"
+
+- **Playbook** (`pm_playbook_ensure`, `pm_playbook_carry`, `pm_job_playbook`): refreshed on opening Growth, each morning by the scheduler, after an agent run; carry-over without AI; fingerprint includes how long leads have been quiet. `tests/test_playbook.php` (24).
+- **Human voice layer** (`lib/human.php`): rules in every customer-facing writer prompt + a code polish on what comes back (em dashes, stock openers, buzzwords, stacked exclamation, emoji in email). Research: AI-tell lists (delve/leverage/seamless/robust/elevate/unlock/game-changer, "thrilled to announce", not-just-X-but-Y, threes, em dash). `tests/test_human.php` (39).
+- **Studio, human look** (`lib/sx_studio.php`): new hand-made styles (Paper and ink, Cut paper, Terrazzo, Weave, flat Dusk poster), earthy muted palettes, paper fibre texture, no glow; digital looks demoted; AI palettes softened (`pm_sd_humanize`); art-direction prompt bans purple/indigo/neon/glass. Research: 2026 neo-naturalism, texture and "imperfect by design"; the purple-to-blue gradient as the AI tell.
+- **Profile words** (`lib/sx_copy.php`): three options per profile field in one call, polished, limit- and facts-checked, usable as the Optimise suggestion or applied to Facebook/WhatsApp. `tests/test_copy.php` (25).
+
 ### Owner request in chat, 2026-10-11 — "the Audit should let me change the channel settings from within, according to the audit, with all the help including AI"
 
 - **Social > Audit is now actionable** (`lib/sx_audit_actions.php`, `lib/view_social_page.php`): the audit prompt asks for a kind per fix (+ wording for intro/description), post ids, a reply style rule and short ideas. The screen adds: code-derived channel settings (weekly goal, posting times override honoured by `pm_social_hours`/`pm_social_time_for`, theme mix from the scoreboard, Instagram/LinkedIn auto-posting switches, reply style fed into `pm_agent_social_reply`) with bulk-apply of the safe ones; the fix list as the same cards as Optimise with AI wording kept only past `pm_opt_ai_ok`; "Show me how (AI)" for fixes with no screen; per-post "Rewrite with AI" (facts-only, no new numbers) and "Save to Facebook" through `pm_fb_action('edit')`; ideas into the content bank. `pm_opt_item_html()` is now shared by Optimise and Audit. Tests: `tests/test_audit_actions.php` (95).

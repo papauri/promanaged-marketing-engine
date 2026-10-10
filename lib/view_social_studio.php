@@ -46,7 +46,7 @@ $how = ['ai' => 'AI idea', 'shuffle' => 'Surprise', 'you' => 'Edited', 'start' =
 
 <div class="card">
   <h2>Cover studio for <?= pm_h($bname) ?></h2>
-  <p class="hint" style="margin-top:0">Not generated pictures: every cover and profile picture is <b>designed by code</b> from a style, four colours and your own words (a quiet name line, a headline, a supporting line and your contact details), then drawn at the exact size each platform wants, with the writing kept inside the part that is always shown. <b>Surprise me</b> re-rolls the look. <b>New idea from the AI</b> asks the AI to art-direct a design in one small call; code draws it, and any words that add a claim or a number are not used.</p>
+  <p class="hint" style="margin-top:0">Not generated pictures: every cover and profile picture is <b>designed by code</b> from a style, four colours and your own words (a quiet name line, a headline, a supporting line and your contact details), then drawn at the exact size each platform wants, with the writing kept inside the part that is always shown. The look is deliberately <b>human</b>: earthy colours, paper grain, cut shapes and a serif headline, never the glowing purple-and-blue gradients that give generated art away. <b>Surprise me</b> re-rolls the look. <b>New idea from the AI</b> asks the AI to art-direct a design in one small call; code draws it, colours that look generated are softened, and any words that add a claim or a number are not used.</p>
   <p class="hint"><?= $saved ? 'In use everywhere now: <b>' . pm_h(PM_SD_STYLES[$saved['style']] ?? 'custom') . '</b> (' . pm_h($saved['by'] === 'ai' ? 'AI idea' : ($saved['by'] === 'shuffle' ? 'surprise' : 'your design')) . ($saved['at'] !== '' ? ', saved ' . pm_h($saved['at']) : '') . ').' : 'No design saved yet: the plain classic cover is in use. Choose one below and press <b>Use this design</b>.' ?>
     <?= $sameAsSaved ? ' You are looking at the saved design.' : ($saved ? ' You are looking at a new draft: it is not in use until you press Use.' : '') ?></p>
   <div class="btns">
@@ -83,12 +83,16 @@ $how = ['ai' => 'AI idea', 'shuffle' => 'Surprise', 'you' => 'Edited', 'start' =
 
 <div class="card">
   <h2>Style</h2>
-  <div class="gal"><?php foreach (PM_SD_STYLES as $k => $l): if ($k === 'photo' && !$hasHero) { continue; } ?>
+  <p class="hint" style="margin-top:0">Made by hand: paper, cut shapes, flecks and woven bands in earthy colours with a visible grain, the look of things that were printed and cut rather than generated.</p>
+  <div class="gal"><?php foreach (PM_SD_STYLES as $k => $l): if (in_array($k, PM_SD_DIGITAL, true) || ($k === 'photo' && !$hasHero)) { continue; } ?>
     <form method="post"><?= $fx('studio', $hid('op', 'style') . $hid('style', $k)) ?><button class="<?= $spec['style'] === $k ? 'on' : '' ?>"><img src="<?= pm_h($img('cover', 340, 178, '&t=facebook&style=' . $k)) ?>" alt="" loading="lazy"><span><?= pm_h($l) ?></span></button></form>
   <?php endforeach; ?></div>
   <?php if (!$hasHero): ?><p class="hint">"Your photo" appears once you add a hero photo under Accounts &amp; branding.</p><?php endif; ?>
+  <details class="more"><summary class="hint" style="cursor:pointer">Digital looks (glows, circuits, facets): for a technology business, used on purpose</summary>
+    <div class="gal"><?php foreach (PM_SD_DIGITAL as $k): $l = PM_SD_STYLES[$k]; ?>
+      <form method="post"><?= $fx('studio', $hid('op', 'style') . $hid('style', $k)) ?><button class="<?= $spec['style'] === $k ? 'on' : '' ?>"><img src="<?= pm_h($img('cover', 340, 178, '&t=facebook&style=' . $k)) ?>" alt="" loading="lazy"><span><?= pm_h($l) ?></span></button></form>
+    <?php endforeach; ?></div></details>
 </div>
-
 <div class="card">
   <h2>Colours</h2>
   <div class="pal"><?php foreach ($pals as $k => [$l, $a, $b, $c, $ink]): ?>
@@ -116,6 +120,46 @@ $how = ['ai' => 'AI idea', 'shuffle' => 'Surprise', 'you' => 'Edited', 'start' =
   </form>
 </div>
 
+<?php $copyStore = pm_copy_store($vb); $plainOf = fn(string $k) => pm_copy_plain($vb, $k); ?>
+<div class="card" id="words">
+  <h2>Profile words</h2>
+  <p class="hint" style="margin-top:0">The intro, description and bio for each channel, written like a person who does this for a living: three options each (plain and warm, specific and confident, short and memorable), in one AI call for the profiles you tick. They use only your facts, fit each platform's limit and are checked for the wording people now recognise as machine-written. Choose one and it becomes the suggestion on Optimise and the Audit; Facebook and WhatsApp can apply it straight away.</p>
+  <form method="post"><?= $fx('copy_write') ?>
+    <div class="btns" style="margin-top:0"><?php foreach (PM_COPY_GROUPS as $gk => $gl): ?><label class="check"><input type="checkbox" name="groups[]" value="<?= $gk ?>" <?= in_array($gk, ['facebook', 'instagram', 'whatsapp', 'google'], true) ? 'checked' : '' ?>> <?= pm_h($gl) ?></label><?php endforeach; ?></div>
+    <div class="btns"><button class="btn primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?>>Write 3 options for each (AI)</button><?php if ($copyStore): ?><button class="btn small" name="do" value="copy_clear">Clear the options</button><?php endif; ?></div>
+  </form>
+  <?php foreach (PM_COPY_FIELDS as $k => [$label, $limit, $what, $grp]): $cur = $copyStore[$k] ?? null; $plain = $plainOf($k); $chosen = trim((string)(pm_opt_store($vb)['ai'][$k] ?? '')); ?>
+  <div class="sx-card" id="w-<?= pm_h($k) ?>" style="margin:10px 0">
+    <div class="sxh" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b><?= pm_h($label) ?></b><span class="sx-chip"><?= pm_h(PM_COPY_GROUPS[$grp]) ?> · up to <?= (int)$limit ?></span><span class="muted"><?= pm_h($what) ?></span></div>
+    <?php if ($plain !== ''): ?><p class="hint" style="margin:6px 0 0">Plain version: <?= pm_h($plain) ?> <button type="button" class="btn small" data-copy="<?= pm_h($plain) ?>">Copy</button></p><?php endif; ?>
+    <?php foreach ((array)($cur['options'] ?? []) as $i => $o): ?>
+    <div style="margin-top:8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;<?= $chosen === $o['text'] ? 'border-color:var(--accent);' : '' ?>">
+      <span class="sx-chip"><?= pm_h(PM_COPY_VOICES[$o['voice']] ?? $o['voice']) ?> · <?= mb_strlen($o['text']) ?>/<?= (int)$limit ?></span><?= $chosen === $o['text'] ? ' <span class="sx-chip ok">chosen</span>' : '' ?>
+      <p style="margin:6px 0"><?= pm_h($o['text']) ?></p>
+      <div class="btns" style="margin-top:4px">
+        <form method="post" class="inl"><?= $fx('copy_use', $hid('key', $k) . $hid('i', (string)$i)) ?><button class="btn small">Use this one</button></form>
+        <?php if (in_array($k, PM_COPY_APPLY, true)): ?><form method="post" class="inl" onsubmit="return confirm('Put this on the <?= $grp === 'facebook' ? 'Facebook Page' : 'WhatsApp Business profile' ?> now?')"><?= $fx('copy_use', $hid('key', $k) . $hid('i', (string)$i) . $hid('apply', '1')) ?><button class="btn small primary">Apply to <?= $grp === 'facebook' ? 'Facebook' : 'WhatsApp' ?></button></form><?php endif; ?>
+        <button type="button" class="btn small" data-copy="<?= pm_h($o['text']) ?>">Copy</button>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <?php endforeach; ?>
+</div>
+
+<?php $insKw = rawurlencode(trim(preg_replace('/\s+/', ' ', mb_substr((string)($settings['company_name'] ?? ''), 0, 30)))); ?>
+<div class="card">
+  <h2>Look for inspiration</h2>
+  <p class="hint" style="margin-top:0">Great covers rarely look new: they look <i>made</i>. These searches open Pinterest and Behance in a new tab with the looks this Studio is built on. Pick a few you like, then match the style and colours here.</p>
+  <div class="btns" style="margin-top:0">
+    <?php foreach (['Neo-naturalism brand covers' => 'neo naturalism brand identity earthy palette', 'Earthy colour palettes' => 'earthy brand color palette terracotta sage ochre', 'Editorial social banners' => 'editorial social media banner design paper texture', 'Cut-paper graphics' => 'cut paper collage graphic design organic shapes', 'Terrazzo and grain' => 'terrazzo pattern brand design grain texture', 'Travel poster landscapes' => 'flat landscape poster design sun hills lake'] as $l => $q): ?>
+      <a class="btn small" href="https://www.pinterest.com/search/pins/?q=<?= rawurlencode($q) ?>" target="_blank" rel="noopener noreferrer"><?= pm_h($l) ?></a>
+    <?php endforeach; ?>
+    <a class="btn small" href="https://www.behance.net/search/projects?search=<?= rawurlencode('brand identity social media') ?>" target="_blank" rel="noopener noreferrer">Behance: brand identity</a>
+  </div>
+  <details class="more"><summary class="hint" style="cursor:pointer">Why these looks read as human</summary>
+    <ul class="hint"><li>A calm earthy base with <b>one</b> stronger accent, not a rainbow gradient.</li><li>Visible <b>grain and paper fibre</b>: real print is never perfectly clean.</li><li>Shapes that look <b>cut by hand</b>, with slightly uneven edges and a soft shadow.</li><li>A serif headline, small spaced-out capitals for the details, and room to breathe.</li><li>No glow, no glass, no purple-to-blue: those are what make generated work look generic. <a href="https://www.925studios.co/blog/ai-slop-design-tells" target="_blank" rel="noopener noreferrer">The tells</a> · <a href="https://www.designandpaper.com/?p=189953" target="_blank" rel="noopener noreferrer">2026 branding trends</a> · <a href="https://fairwindcreative.com/blog/neo-naturalism-the-down-to-earth-graphic-design-trend-defining-2026/" target="_blank" rel="noopener noreferrer">Neo-naturalism</a></li></ul></details>
+</div>
 <div class="card">
   <h2>Every size, ready to use</h2>
   <p class="hint" style="margin-top:0">Each one is drawn at the exact size the platform asks for. "Use this design everywhere" also puts them in the branding kit under Accounts &amp; branding.</p>

@@ -241,6 +241,26 @@ FOLLOW-UPS WITH AI, AND TODAY'S STRATEGY (lib/followups.php, lib/director.php)
   are drafted, drafts to read, approved and waiting) and is written again by itself after each agent run, after you press "Draft N follow-ups", and when that
   work moves (at most every 90 minutes), so it no longer repeats yesterday's advice. "Refresh strategy" still rewrites it at once.
 
+THE HUMAN VOICE (lib/human.php) AND HAND-MADE LOOKS (lib/sx_studio.php) THROUGHOUT THE MARKETING DEPARTMENT
+  Everything a customer reads that an AI helped write goes through two things. (1) PM_HUMAN_RULES, a few lines added to the writers' instructions (first email, follow-up, win-back,
+  Travel Malawi, compose, replies, the proposal email, posts, the playbook, profile words): plain everyday words, one specific detail instead of a general claim, and a list of stock
+  phrases never to use (delve, leverage, seamless, robust, elevate, unlock, game-changer, "thrilled to announce", "in today's fast-paced world", "not just X, but Y", em dashes ...).
+  (2) pm_human_polish(), a free code pass over what comes back: em dashes become commas or full stops (ranges like Mon-Fri and 09:00-17:00 keep their hyphen), stock openers are cut,
+  buzzwords swapped for plain ones, exclamation marks removed from emails and kept to one in WhatsApp, emoji removed from emails. Links, numbers, phone numbers and meaning are never
+  touched, and polishing twice changes nothing. pm_human_flags() lists what is left; profile words with a remaining flag are dropped.
+  The Studio's look follows the same idea: designs are made to look hand-made, not generated. The default is "Paper and ink" in earthy colours (clay, sage, olive, ink, bone, rosewood ...)
+  with paper grain and fibre; the other hand-made styles are Cut paper, Terrazzo, Weave, a flat Dusk landscape poster, Lake waves, Minimal and Your photo. The glowing/technical looks
+  (Soft glow, Rings, Blueprint, Facets, Diamonds, Spotlight, Ribbons) are tucked under "Digital looks". Colours the AI chooses are softened in code: indigo and violet drift to a muted ink
+  blue, magenta to clay, neon is calmed; Surprise me picks hand-made looks three times as often. The Studio also has "Profile words": three options (plain and warm, specific and confident,
+  short and memorable) per profile field (Facebook intro and description, Instagram bio, WhatsApp, Google, LinkedIn, X, TikTok, YouTube) in ONE AI call for the channels you tick, kept only
+  when they fit the limit, stay in the facts and read naturally; choosing one makes it the suggestion on Optimise and the Audit, and Facebook and WhatsApp can apply it at once.
+  "Look for inspiration" opens Pinterest and Behance searches for these looks.
+
+TODAY'S PLAYBOOK (Social > Growth)
+  It is brought up to date by itself: opening Growth refreshes a playbook from a past day, the scheduler does it each morning (06:00 to 18:00) even with autopilot off, and a full agent run
+  updates it. Same people and leads as before: yesterday's open tasks are carried over (done ones dropped) with no AI call; new comments, messages or warm leads (or a lead quiet for
+  another three days) mean one new AI call; a quiet day is still today's playbook; a failed try is not repeated for an hour.
+
 SOCIAL > AUDIT: EVERY FINDING CAN BE ACTED ON (lib/sx_audit_actions.php, lib/view_social_page.php)
   The AI audit (one call) now also labels each fix with a kind (about, description, hours, phone, website, email, cover, picture, posting, replies, messages, cta, formats,
   pin, reviews, timing) and, for the intro and description, offers wording; it names each post by id, gives a one-sentence reply style, and lists ideas. The Audit screen turns

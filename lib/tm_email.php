@@ -110,7 +110,7 @@ function pm_tm_write(array $leads): array
         . 'No greeting, no sign-off, no promises, no numbers, no prices, no link, no exclamation marks. '
         . 'whatsapp: 30 to 45 words, one paragraph: a greeting with the first name if given, who you are, the gain (direct bookings with no commission), one easy question. '
         . 'The rest of the email (what the platform is, the benefits, the set-up steps, the link and that it is free) is a fixed text the app adds, so never describe it. '
-        . ($subjectLine !== '' ? $subjectLine . ' ' : '') . PM_AGENT_RULES;
+        . ($subjectLine !== '' ? $subjectLine . ' ' : '') . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'] ?? '', 'city' => $l['city'] ?? '', 'contact' => $l['contact'] ?? '', 'evidence' => array_slice((array)($l['evidence'] ?? []), 0, 2),
         'online_gaps' => array_slice((array)($l['social_gaps'] ?? []), 0, 2), 'research' => function_exists('pm_research_brief') ? pm_research_brief($l) : '',
         'subject_style' => function_exists('pm_subject_style') ? pm_subject_style(pm_email_exp_arm((string)$l['id'], 'travel')) : ''], $leads);
@@ -121,7 +121,7 @@ function pm_tm_write(array $leads): array
             $by[(string)$x['id']] = $x;
         }
     }
-    $txt = fn($v) => is_scalar($v) ? trim(strip_tags((string)$v)) : '';
+    $txt = fn($v, string $ch = 'email') => is_scalar($v) ? pm_human_polish(trim(strip_tags((string)$v)), $ch) : '';
     $res = [];
     foreach ($leads as $l) {
         $x = $by[(string)$l['id']] ?? [];
@@ -130,7 +130,7 @@ function pm_tm_write(array $leads): array
             $subject = 'Direct bookings for ' . mb_substr(trim((string)$l['name']), 0, 40);
         }
         $first = pm_tm_first_name($l);
-        $wa = $txt($x['whatsapp'] ?? '');
+        $wa = $txt($x['whatsapp'] ?? '', 'whatsapp');
         if ($wa === '') {
             $me = trim(explode(' ', $sender)[0] ?? '');
             $wa = 'Hello' . ($first !== '' ? " $first" : '') . ', ' . ($me !== '' ? "this is $me from" : 'this is the team at') . ' Travel Malawi. We help independent stays take direct bookings with no commission, and listing is free for now. May I send you the details?';
