@@ -121,6 +121,10 @@ accepted by being made; they are logged in the Done log below, not in the regist
 
 ## 6 · Done log
 
+### Owner request in chat, 2026-10-11 — "fix any aspect of the social pages by channel, with suggestions that can be applied directly, minimal AI"
+
+- **Social > Optimise** (`lib/sx_optimise.php`, `lib/view_social_optimise.php`): per-channel checklists (business details, Facebook, Instagram, WhatsApp Business, Google, and X / LinkedIn / TikTok / YouTube when the owner says they use them) read from the live profiles, scored in code, each gap with a suggestion built from the business's own details and facts (no AI). Applied with one press where an API allows it: Facebook Page fields, hours, picture, cover; WhatsApp Business profile; business details; Google review link; calendar refill with five offline drafts. Everything else is copy + open + tick. Honesty rules kept: nothing is published, hours are a labelled starting point until confirmed (or read off the Page), a Page value that disagrees with the business details is flagged and never overwritten in bulk, and a channel that refuses shows its own reason. Optional single AI call polishes wording under a facts-only guard (no new numbers, links, boasts). Daily read-only job `pageopt`, Today line, per-day score history, apply log. `page_opt` is swept when a business is deleted. Tests: `tests/test_optimise.php` (130) and HTTP checks in `tests/test_pages.php`.
+
 ### Owner request in chat, 2026-10-11 — "contact names failing again; offer email / WhatsApp when a stay has none; subjects well written and capitalised"
 
 - **Contact Finder reads the website first** (`lib/contacts.php`): contact details by code from the business's own pages, the owner's name only with a quote that is really on the page and a role that is the owner's or a manager's; the web search is the second chance, not the only chance (it had been returning only what the lead already had). Names from other pages stay "possible" until the owner presses "Use <name> as the contact". Per lead: "no email" / "no WhatsApp" tags, boxes to type them, "Find missing details with AI". Landlines are never stored as WhatsApp numbers.

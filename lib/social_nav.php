@@ -12,7 +12,7 @@
 /** Sub-navigation of the Social screen: view => label, in order. */
 function pm_social_tabs(): array
 {
-    return ['' => 'Plan', 'leadposts' => 'Lead posts', 'content' => 'Content', 'channels' => 'Channels', 'growth' => 'Growth', 'results' => 'Results', 'page' => 'Page', 'inbox' => 'Inbox',
+    return ['' => 'Plan', 'leadposts' => 'Lead posts', 'content' => 'Content', 'channels' => 'Channels', 'optimise' => 'Optimise', 'growth' => 'Growth', 'results' => 'Results', 'page' => 'Page', 'inbox' => 'Inbox',
         'cleanup' => 'Clean-up', 'ads' => 'Ads', 'audit' => 'Audit', 'accounts' => 'Accounts &amp; branding'];
 }
 
@@ -24,6 +24,7 @@ function pm_social_view_file(string $view): string
         $view === 'content' => 'view_social_content.php',
         $view === 'leadposts' => 'view_social_leadposts.php',
         $view === 'channels' => 'view_social_channels.php',
+        $view === 'optimise' => 'view_social_optimise.php',
         $view === 'results' => 'view_social_results.php',
         in_array($view, ['page', 'inbox', 'audit'], true) => 'view_social_page.php',
         in_array($view, ['growth', 'cleanup', 'ads'], true) => 'view_social_growth.php',

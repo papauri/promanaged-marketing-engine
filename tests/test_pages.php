@@ -500,6 +500,33 @@ pm_t_assert($code === 302 && $gs['gp1']['drafts']['email_subject'] === 'Rooms ne
     'fixing the subjects puts the drafted ones right, leaves right ones alone and removes the notice');
 pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
 
+echo "\nSocial > Optimise\n";
+[$code, $html] = http("$base?tab=social&view=optimise&brand=promanaged");
+$csrf8 = csrf_of($html);
+pm_t_assert($code === 200 && str_contains($html, 'page health') && str_contains($html, 'id="c-business"') && str_contains($html, 'id="c-facebook"') && str_contains($html, 'id="c-google"') && str_contains($html, 'Optimise'), 'the screen loads with a card per channel and is in the Social menu');
+pm_t_assert(str_contains($html, 'Connect the Facebook Page') && str_contains($html, 'not connected'), 'a channel that is not connected says so and is not scored');
+pm_t_assert(str_contains($html, 'name="hr[mon][on]"') && str_contains($html, 'Save these hours'), 'the opening-hours form is there');
+[$code] = http($base, ['csrf' => $csrf8, 'action' => 'social_ext', 'do' => 'opt_apply', 'key' => 'biz_hours', 'hr' => ['mon' => ['on' => '1', 'from' => '08:00', 'to' => '17:00'], 'tue' => ['on' => '1', 'from' => '08:00', 'to' => '17:00'], 'sat' => ['on' => '1', 'from' => '09:00', 'to' => '12:00']]]);
+[, $html] = http("$base?tab=social&view=optimise&brand=promanaged");
+pm_t_assert($code === 302 && str_contains($html, 'Opening hours saved: Mon-Tue 08:00-17:00; Sat 09:00-12:00') && pm_opt_store('promanaged')['hours_confirmed'], 'hours posted from the screen are saved and reported');
+[$code] = http($base, ['csrf' => $csrf8, 'action' => 'social_ext', 'do' => 'opt_apply', 'key' => 'biz_hours', 'hr' => ['mon' => ['on' => '1', 'from' => '18:00', 'to' => '09:00']]]);
+[, $html] = http("$base?tab=social&view=optimise&brand=promanaged");
+pm_t_assert(str_contains($html, 'closes before it opens'), 'bad hours are refused with the reason');
+[$code] = http($base, ['csrf' => $csrf8, 'action' => 'social_ext', 'do' => 'opt_apply', 'key' => 'biz_phone', 'val' => ['biz_phone' => 'abc']]);
+[, $html] = http("$base?tab=social&view=optimise&brand=promanaged");
+pm_t_assert(str_contains($html, 'does not look like a phone number'), 'a bad phone number is refused');
+[$code] = http($base, ['csrf' => $csrf8, 'action' => 'social_ext', 'do' => 'opt_apply', 'key' => 'biz_phone', 'val' => ['biz_phone' => '0999 111 222']]);
+pm_t_assert($code === 302 && pm_settings()['phone'] === '0999 111 222', 'a good phone number is saved in the business details');
+[$code] = http($base, ['csrf' => $csrf8, 'action' => 'social_ext', 'do' => 'opt_done', 'tick' => 'google_verified']);
+[, $html] = http("$base?tab=social&view=optimise&brand=promanaged");
+pm_t_assert($code === 302 && str_contains($html, 'Profile verified') && str_contains($html, 'Already good') && !empty(pm_channels_cfg('promanaged')['ticks']['google_verified']), 'ticking a manual item moves it to "Already good"');
+[$code] = http($base, ['csrf' => $csrf8, 'action' => 'social_ext', 'do' => 'opt_polish']);
+[, $html] = http("$base?tab=social&view=optimise&brand=promanaged");
+pm_t_assert($code === 302 && str_contains($html, 'The AI needs a key'), 'polishing without an AI key says so');
+[$code] = http($base, ['csrf' => 'wrong', 'action' => 'social_ext', 'do' => 'opt_apply', 'key' => 'biz_phone', 'val' => ['biz_phone' => '0999 000 000']]);
+pm_t_assert(pm_settings()['phone'] === '0999 111 222', 'a request without the right token changes nothing');
+pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
+
 echo "\nThe WhatsApp webhook: one address for every connected number\n";
 $wa = "http://127.0.0.1:$port/wa.php";
 pm_t_eq(http($wa)[0], 404, 'with no business connected the webhook does not exist');

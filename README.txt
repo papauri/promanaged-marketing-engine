@@ -241,6 +241,25 @@ FOLLOW-UPS WITH AI, AND TODAY'S STRATEGY (lib/followups.php, lib/director.php)
   are drafted, drafts to read, approved and waiting) and is written again by itself after each agent run, after you press "Draft N follow-ups", and when that
   work moves (at most every 90 minutes), so it no longer repeats yesterday's advice. "Refresh strategy" still rewrites it at once.
 
+SOCIAL > OPTIMISE: FIX EVERY CHANNEL FROM ONE SCREEN (lib/sx_optimise.php, lib/view_social_optimise.php)
+  One checklist per channel (Business details, Facebook Page, Instagram, WhatsApp Business, Google Business Profile; X, LinkedIn, TikTok and YouTube when you tick
+  them under "Channels you use"), scored out of 100, with a page-health score for the whole business that is kept day by day. It is all worked out in CODE, no AI:
+  the Page, Instagram and WhatsApp profiles are read, every gap gets a ready suggestion built from the business's own details and facts, and you see it (and can
+  edit it) before anything is applied. Three kinds of fix:
+    - Applied for you, with one press: Facebook intro, description, phone, website, email, opening hours, profile picture and cover (made from your logo and cover
+      wording); the WhatsApp Business about line, description, address, email, website and category; the business details themselves (phone, email, website,
+      address, one-line description, opening hours: saved once and used by every channel's suggestion); the Google review link; and "Fill the calendar", which adds
+      five draft posts from your facts (no AI, nothing is approved or posted). If a channel refuses (Facebook does not let every Page be edited by an app) you see
+      the channel's own reason and the text stays on screen to copy.
+    - To copy, open and tick: Instagram bio and link, Google profile (hours, description, services, photos, review requests), X, LinkedIn, TikTok, YouTube bios,
+      the WhatsApp greeting and away messages, the Facebook username, location and message button. Those platforms give apps no way to edit a profile.
+    - Links to the screen that fixes it: unanswered comments, Messenger conversations waiting, scam comments to decide on, posts that never invite an enquiry.
+  "Apply the N ready suggestions" does every complete, safe one at once (it never overwrites a Page phone or website that differs from your business details, never
+  uses opening hours you have not confirmed, and says what it did). Opening hours start as a labelled starting point (Monday to Friday 08:00-17:00); hours already on
+  the Facebook Page are taken as yours. Optional AI: "Polish the wording" is ONE small call that rewords the text suggestions; a reworded text is kept only if it adds
+  no number, link, email, phone, boast or exclamation mark and fits the limit. The scheduler re-checks once a day (reads only) and Today shows one line when the
+  score is under 90. A channel that is not connected is not scored; its first item is to connect it.
+
 CONTACT NAMES, EMAILS, WHATSAPP NUMBERS, SUBJECT LINES (lib/contacts.php, lib/subjects.php)
   The Contact Finder now reads the business's OWN website first (home page plus the about, team, owner and contact pages): emails, phone numbers and WhatsApp
   links come straight off the page by code; the owner's or manager's name is taken only when the AI points to a sentence that is really on the page, the name
