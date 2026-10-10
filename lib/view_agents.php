@@ -213,6 +213,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
         <?php if (!empty($l['thread'])): ?><div class="thread"><b class="hint">Conversation</b>
           <?php foreach (array_slice($l['thread'], -4) as $tm): ?><p class="<?= $tm['dir'] === 'in' ? 'in' : 'out' ?>"><b><?= $tm['dir'] === 'in' ? 'Them' : 'Us' ?></b> · <?= pm_h($tm['at']) ?><?= ($tm['ch'] ?? '') === 'wa' ? ' · WhatsApp' : '' ?><br><?= nl2br(pm_h(mb_substr($tm['text'], 0, 400))) ?></p><?php endforeach; ?></div><?php endif; ?>
         <?php foreach (array_slice(array_reverse((array)($l['notes'] ?? [])), 0, 3) as $n): ?><p class="hint note"><?= pm_h($n['at']) ?> · <?= pm_h($n['text']) ?><?= !empty($n['by']) ? ' · ' . pm_h($n['by']) : '' ?></p><?php endforeach; ?>
+        <?= pm_social_panels('lead_card', $vb, ['lead' => $l]) ?>
         <form method="post" class="inline"><?= $post($id, 'note') ?><input type="text" name="text" placeholder="Add a note"><button class="btn small">Add</button></form>
       </div>
       <div>

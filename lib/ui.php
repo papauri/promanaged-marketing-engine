@@ -14,7 +14,7 @@ function pm_ui_nav(): array
         'agents' => ['label' => 'Leads', 'href' => '?tab=agents', 'tabs' => ['agents']],
         'whatsapp' => ['label' => 'WhatsApp', 'href' => '?tab=whatsapp', 'tabs' => ['whatsapp']],
         'social' => ['label' => 'Social', 'href' => '?tab=social', 'tabs' => ['social'], 'groups' => [
-            'Publish' => ['' => 'Plan', 'content' => 'Content', 'channels' => 'Channels'],
+            'Publish' => ['' => 'Plan', 'leadposts' => 'Lead posts', 'content' => 'Content', 'channels' => 'Channels'],
             'Grow' => ['growth' => 'Growth', 'inbox' => 'Inbox', 'page' => 'Page', 'cleanup' => 'Clean-up', 'ads' => 'Ads'],
             'Measure' => ['results' => 'Results', 'audit' => 'Audit'],
             'Set up' => ['accounts' => 'Accounts & branding'],

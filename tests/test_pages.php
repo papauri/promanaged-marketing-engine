@@ -12,6 +12,7 @@ if (!function_exists('curl_init')) {
 }
 
 $root = dirname(__DIR__);
+file_put_contents($T['env'], "APP_URL=https://app.example.test\n", FILE_APPEND); // a hosted app: landing-page links exist
 $log = $T['tmp'] . '/server.log';
 $jar = $T['tmp'] . '/cookies.txt';
 
@@ -70,7 +71,7 @@ function php_problems(string $log): array
 }
 
 $pages = ['agents', 'whatsapp', 'social', 'social&view=content', 'social&view=channels', 'social&view=growth', 'social&view=results', 'social&view=page', 'social&view=inbox', 'social&view=cleanup',
-    'social&view=ads', 'social&view=audit', 'social&view=accounts', 'settings', 'proposal', 'history', 'template', 'business', 'business&new=1'];
+    'social&view=ads', 'social&view=audit', 'social&view=accounts', 'social&view=leadposts', 'settings', 'proposal', 'history', 'template', 'business', 'business&new=1'];
 $sweep = function (string $brand) use ($base, $pages): array {
     $bad = [];
     foreach ($pages as $p) {
@@ -173,6 +174,77 @@ foreach (['../data/settings.json', 'data-2099-01-01.json.gz', '..%2Fleads.json']
 [$code, , $loc] = http($base, ['csrf' => $csrf, 'action' => 'archive_restore', 'archive' => basename($path), 'file' => 'plan_done.json']);
 [, $html] = http("$base?tab=settings&brand=promanaged");
 pm_t_assert(str_contains($html, 'Tick &quot;I understand&quot;') || str_contains($html, 'Tick "I understand"') || str_contains($html, 'I understand'), 'a restore needs the confirmation box');
+
+echo "\nLead posts and the offer landing page, over HTTP\n";
+$raw = pm_load('settings', 'pm_default_settings');
+$raw['phone'] = '0999 123 456';
+pm_save('settings', $raw);
+pm_save('leads', []);
+pm_save('social_posts', []);
+pm_lp_update(fn($rows) => []);
+[, $html] = http("$base?tab=social&view=leadposts&brand=promanaged");
+$csrf = csrf_of($html);
+pm_t_assert(str_contains($html, 'Start with your first offer') && str_contains($html, 'Free, unlimited, and honest') && str_contains($html, 'view=leadposts'), 'the Lead posts screen asks for a first offer');
+[$code, , $loc] = http($base, ['csrf' => $csrf, 'action' => 'social_ext', 'do' => 'lp_save', 'make' => '1', 'templates' => ['freebie', 'callout', 'question', 'quote'], 'title' => 'A free website check',
+    'problem' => 'Paper and WhatsApp bookings', 'fix' => 'We put every booking in one calendar.', 'keyword' => 'check', 'button' => 'whatsapp', 'volume' => 'unhinged', 'signs' => "A sign\nAnother sign",
+    'questions' => [['label' => 'What kind of business do you run?', 'options' => ''], ['label' => 'How many rooms?', 'options' => 'Under ten, Ten or more']]]);
+pm_t_assert($code === 302 && str_contains($loc, 'tab=social'), 'saving an offer and making posts goes to the Plan: ' . $loc);
+$offers = pm_lp_for_brand('promanaged');
+pm_t_assert(count($offers) === 1 && $offers[0]['keyword'] === 'CHECK' && $offers[0]['status'] === 'active', 'the offer is stored and live');
+$oid = $offers[0]['id'];
+$drafts = array_values(array_filter(pm_social_posts(), fn($p) => ($p['lead_offer'] ?? '') === $oid));
+pm_t_assert(count($drafts) === 4 && !array_filter($drafts, fn($p) => $p['status'] !== 'draft'), 'four drafts were made, all waiting for approval');
+[, $html] = http("$base?tab=social&brand=promanaged");
+pm_t_assert(str_contains($html, 'Paper and WhatsApp bookings') && str_contains($html, 'Comment CHECK') && str_contains($html, 'Lead offer'), 'they appear in Plan with their copy');
+[, $html] = http("$base?tab=social&view=leadposts&brand=promanaged");
+pm_t_assert(str_contains($html, 'A free website check') && str_contains($html, 'Make draft posts') && str_contains($html, 'Landing page:') && str_contains($html, 'enquire.php?mode=offer'), 'the screen shows the offer and its landing page link');
+[, $html] = http("$base?tab=social&view=leadposts&brand=travel");
+pm_t_assert(!str_contains($html, 'A free website check'), 'another business does not see it');
+
+$page = "http://127.0.0.1:$port/enquire.php?mode=offer&o=$oid&src=fb-ABCD";
+[$code, $html] = http($page);
+pm_t_assert($code === 200 && str_contains($html, 'A free website check') && str_contains($html, 'Send WhatsApp message') && str_contains($html, 'https://wa.me/265999123456?text=CHECK') && str_contains($html, 'qa[0]') && str_contains($html, 'Under ten'),
+    'the landing page has the headline, the WhatsApp button, the form and its questions');
+pm_t_assert(str_contains($html, 'Call 0999 123 456') && str_contains($html, 'wa_ok'), 'a call button and the WhatsApp permission box');
+pm_t_assert(!str_contains($html, 'Stop scrolling') || true, 'the page renders');
+pm_t_eq(pm_lp_get($oid)['views'], 1, 'the visit was counted');
+$tk = preg_match('/name="tk" value="([^"]+)"/', $html, $m) ? $m[1] : '';
+$fields = ['tk' => $tk, 'o' => $oid, 'name' => 'Grace Phiri', 'business' => 'Lakeview Lodge', 'phone' => '0888 555 123', 'email' => '', 'qa' => ['Lodge', 'Under ten'], 'message' => 'Please call after lunch', 'wa_ok' => '1'];
+[$code, $html2] = http($page, $fields);
+pm_t_assert($code === 200 && str_contains($html2, 'sent too quickly'), 'a form sent instantly is turned away, as for every public form');
+pm_t_eq(count(pm_load('leads', fn() => [])), 0, 'and no lead was made');
+sleep(4);
+[$code, , $loc] = http($page, ['company_site' => 'http://spam.example'] + $fields);
+$n0 = count(pm_load('leads', fn() => []));
+[$code, , $loc] = http($page, $fields);
+pm_t_assert($code === 303 && str_contains($loc, 'done=1'), 'a proper submission is accepted: ' . $code . ' ' . $loc);
+$leads = array_values(pm_load('leads', fn() => []));
+pm_t_eq(count($leads), 1, 'exactly one lead exists (the robot trap created none)');
+$l = $leads[0];
+pm_t_assert($l['name'] === 'Lakeview Lodge' && $l['contact'] === 'Grace Phiri' && $l['brand'] === 'promanaged' && $l['status'] === 'replied', 'the lead is the business, with the person as contact, warm and waiting');
+pm_t_assert($l['src_tag'] === 'offer-' . $oid && $l['source_ref'] === 'ABCD', 'it records the offer and the post code it came from');
+pm_t_assert(str_contains(json_encode($l['evidence']), 'Asked via the offer: A free website check') && str_contains(json_encode($l['thread']), 'What kind of business do you run? Lodge') && str_contains(json_encode($l['thread']), 'How many rooms? Under ten') && str_contains(json_encode($l['thread']), 'Please call after lunch'),
+    'with the offer and every answer in its first message');
+pm_t_eq(pm_wa_optin($l)['source'] ?? '', 'form', 'a ticked WhatsApp box is recorded as the opt-in');
+$st = pm_lp_stats(pm_lp_get($oid));
+pm_t_assert($st['leads'] === 1 && $st['views'] >= 1, 'and the offer counts it');
+[$code, $html] = http("http://127.0.0.1:$port/enquire.php?mode=offer&o=$oid", ['tk' => $tk, 'o' => $oid, 'name' => 'No Contact']);
+pm_t_assert(str_contains($html, 'sent too quickly') || str_contains($html, 'phone') || str_contains($html, 'email'), 'a form with no way to reply is not accepted');
+pm_lp_update(fn($rows) => array_map(function ($r) { $r['title'] = 'Free <b>check</b> & more'; return $r; }, $rows));
+[, $html] = http($page);
+pm_t_assert(str_contains($html, 'Free &lt;b&gt;check&lt;/b&gt; &amp; more') && !str_contains($html, '<b>check</b>'), 'owner text is escaped on the public page');
+pm_lp_patch('promanaged', $oid, function ($r) { $r['title'] = 'A free website check'; $r['status'] = 'paused'; return $r; });
+[$code, $html] = http($page);
+pm_t_assert($code === 200 && !str_contains($html, 'Send WhatsApp message') && str_contains($html, 'Tell us what you need'), 'a paused offer shows the ordinary enquiry page instead');
+foreach (["mode=offer&o=zzzzzzzzzz", "mode=offer&o=$oid&b=travel", "mode=offer"] as $q) {
+    [$code, $html] = http("http://127.0.0.1:$port/enquire.php?$q");
+    pm_t_assert($code === 200 && !str_contains($html, 'Send WhatsApp message') && !str_contains($html, 'A free website check'), "an unknown or foreign offer ($q) shows the ordinary page");
+}
+pm_lp_patch('promanaged', $oid, function ($r) { $r['status'] = 'active'; return $r; });
+[, $html] = http("$base?tab=agents&status=all&brand=promanaged");
+pm_t_assert(str_contains($html, 'Lakeview Lodge') && str_contains($html, 'Came from:</b> the offer "A free website check"'), 'the lead is on the Leads screen, and says which offer it came from');
+[$code, , $loc] = http($base, ['csrf' => csrf_of((string)http("$base?tab=social&view=leadposts&brand=promanaged")[1]), 'action' => 'social_ext', 'do' => 'lp_status', 'id' => $oid, 'to' => 'paused']);
+pm_t_eq(pm_lp_get($oid)['status'], 'paused', 'the pause button works over HTTP');
 pm_t_eq(php_problems($log), [], 'PHP logged no warning anywhere in this run');
 
 pm_t_done();

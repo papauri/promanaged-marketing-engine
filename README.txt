@@ -163,3 +163,30 @@ REVIEW BEFORE SEND, CAMPAIGNS, ARCHIVE, HEALTH (cycle 2)
   Leads untouched for 12 months (never clients or "do not contact") move to data/leads_archive.json, restorable under Agents > More > Archive.
   The scheduler also clears old temp files daily and saves a weekly backup of data/*.json without secrets to data/archive/ (8 weeks kept; a
   .zip when PHP has php-zip, else a .json.gz). Social > Results shows results by audience segment and lets you type X numbers per post.
+
+ANY BUSINESS, NOT JUST TWO (cycle 3)
+  The top bar's business menu has "+ Add a business" (also Settings > Add a business). Three questions (name, what it does, who buys) start it;
+  more answers (cities, kinds of business to look for, true facts, a free first step, voice, email) make the agents better. One small AI call drafts the
+  profile from your answers only (numbers you did not write are dropped); with no AI key you get a plain draft. You check the draft, press Create, and
+  the business has its own voice, mailbox, leads, posts, hashtags, partner radar, limits and settings page. Nothing is sent or switched on by creating
+  it. Its agents start by themselves each weekday morning from the scheduler (no change to the scheduled task), or press "Run the agents now".
+  Its mail login can be typed in its Settings page or put in .env with its own prefix (id in capitals + underscore, e.g. GREENGROCERS_SMTP_HOST).
+  Proposals stay ProManaged IT and Travel Malawi only (they use those price lists and terms). "Hide this business" keeps all its data.
+  Code rule: never write `$brand === 'travel' ? ...` to mean "the other business"; ask lib/brands.php (pm_brand_ids, pm_brand_name, pm_brand_profile).
+  tests/test_brands.php proves a third business never receives another business's words; tests/test_pages.php loads every screen for every business.
+
+ONE LOOK FOR EVERY SCREEN (lib/ui.php, assets/ui.js)
+  One sticky top bar (business menu, Leads / WhatsApp / Social / Proposals / Settings with drop-downs, scheduler status), one page head and one tab
+  style (Social and Proposals), and foldable sections that remember whether you left them open. Screens call pm_ui_head / pm_ui_tabs instead of
+  printing their own navigation, so they cannot drift apart again.
+
+LEAD POSTS (Social > Lead posts): free, unlimited, honest
+  An OFFER (what you give, the problem it fixes, a button, a comment keyword) becomes ready-to-approve posts from 12 templates at three volumes
+  (Calm, Bold, Unhinged). Each post has a picture with a real button, a comment-the-keyword ask, and a link: the offer's landing page when the app
+  is online (enquire.php?mode=offer: big buttons and a short form with your own questions) or a tap-to-chat WhatsApp link that already says the
+  keyword. Anyone who comments the keyword is judged a buyer by code (no AI), with a ready reply, and joins your leads. Leads from the form carry the
+  offer and the post code they came from; Social > Lead posts counts posts, landing visits, leads and keyword comments per offer.
+  Everything is a DRAFT in Plan until you approve it, goes out one a day by the normal schedule, and passes the same lint as every post: no invented
+  numbers, prices, claims, guarantees or fake deadlines. Unhinged is energy, not licence. Facebook ads are never free: organic posts are; paid reach is
+  the Ads screen (campaigns are created paused). Facebook does not let a normal post carry a clickable button, so also set the Page's own action
+  button to "Send WhatsApp message".

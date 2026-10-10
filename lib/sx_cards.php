@@ -6,7 +6,7 @@
  * Sizes in this file are PIXELS; GD wants points, so they are converted (px x 0.75) when text is drawn or measured.
  */
 
-const PM_CARD_LAYOUTS = ['headline', 'checklist', 'mythfact', 'beforeafter', 'quote', 'faq', 'offer', 'cover', 'slide', 'photo'];
+const PM_CARD_LAYOUTS = ['headline', 'checklist', 'mythfact', 'beforeafter', 'quote', 'faq', 'offer', 'cover', 'slide', 'photo', 'leadad'];
 
 function pm_card_sizes(): array
 {

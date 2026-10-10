@@ -21,8 +21,8 @@ function pm_brand_site(string $brand): string
 function pm_social_nav(string $on): string
 {
     $tabs = function_exists('pm_social_tabs') ? pm_social_tabs()
-        : ['' => 'Plan', 'growth' => 'Growth', 'page' => 'Page', 'inbox' => 'Inbox', 'cleanup' => 'Clean-up', 'ads' => 'Ads', 'audit' => 'Audit', 'accounts' => 'Accounts &amp; branding'];
-    $sub = ['' => 'Plan posts, approve them and watch what goes out.', 'content' => 'What posts can be about: ideas, hashtags, key dates and places.', 'channels' => 'Where else to post, and today\'s hand-post tasks.',
+        : ['' => 'Plan', 'leadposts' => 'Lead posts', 'growth' => 'Growth', 'page' => 'Page', 'inbox' => 'Inbox', 'cleanup' => 'Clean-up', 'ads' => 'Ads', 'audit' => 'Audit', 'accounts' => 'Accounts &amp; branding'];
+    $sub = ['' => 'Plan posts, approve them and watch what goes out.', 'leadposts' => 'Bold posts with a button and a keyword that bring in client details. Free and unlimited.', 'content' => 'What posts can be about: ideas, hashtags, key dates and places.', 'channels' => 'Where else to post, and today\'s hand-post tasks.',
         'growth' => 'Turn comments and messages into customers.', 'results' => 'What worked, what it cost, and what to do next.', 'page' => 'How the Facebook Page looks to visitors.',
         'inbox' => 'Messages and comments waiting for an answer.', 'cleanup' => 'Tidy old posts and comments on the Page.', 'ads' => 'Small targeted ads, always created paused.',
         'audit' => 'A health check of the Page.', 'accounts' => 'Connect Facebook and the other channels, and make the pictures.'];
@@ -919,6 +919,8 @@ function pm_agent_junk_judge(string $brand): array
             $rows[$id] = $it + ['verdict' => 'off_topic', 'action' => 'hide', 'reason' => 'Possible spam (for you to decide): ' . implode(', ', $sig['soft']), 'reply' => '', 'by' => 'soft'];
         } elseif (mb_strlen($norm($t)) >= 12 && ($seen[$norm($t) . '|' . $it['from']] ?? 0) >= 2) {
             $rows[$id] = $it + ['verdict' => 'off_topic', 'action' => 'hide', 'reason' => 'Same words posted more than once by the same person', 'reply' => '', 'by' => 'soft'];
+        } elseif (function_exists('pm_lp_keyword_hit') && ($lpo = pm_lp_keyword_hit($brand, $t)) !== null) { // someone commented a lead offer's keyword: a buyer, answered without any AI
+            $rows[$id] = $it + ['verdict' => 'buyer', 'action' => 'reply', 'reason' => 'Commented the offer keyword (' . $lpo['keyword'] . ')', 'reply' => pm_lp_keyword_reply($lpo, $it['from']), 'by' => 'code', 'tpl' => 'keyword'];
         } elseif ($t === '' || mb_strlen(preg_replace('/[\p{So}\p{Sk}\p{P}\s]+/u', '', $t)) <= 2 || preg_match('/^(nice|great|good|wow|amazing|thanks?|thank you|congrats?|congratulations|well done|love (it|this)|beautiful|zikomo|👍|❤️)[\s!.\p{So}]*$/iu', $t)) {
             $rows[$id] = $it + ['verdict' => 'fan', 'action' => 'like', 'reason' => 'Friendly reaction', 'reply' => '', 'by' => 'code'];
         } elseif ($intent !== '' && $intent !== 'thanks' && !preg_match(PM_COMPLAINT_RE, $t) && !$sig['link'] && mb_strlen($t) <= 200 && ($buy || str_contains($t, '?') || $intent === 'interested')) {

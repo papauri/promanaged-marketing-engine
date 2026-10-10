@@ -184,7 +184,9 @@ function pm_panel_lead_card_attrib(string $vb, array $ctx = []): string
     if ($cur) {
         $h .= '<b>Came from post:</b> ' . pm_h((string)($cur['headline'] ?: mb_substr((string)$cur['caption'], 0, 60))) . ' (' . pm_h((string)($cur['pillar'] ?? '')) . ')';
     } elseif (pm_lead_src_tag($l) !== '') {
-        $h .= '<b>Came from:</b> ' . pm_h(pm_lead_src_tag($l)) . (!empty($l['source_ref']) ? ' (code ' . pm_h($l['source_ref']) . ')' : '');
+        $tag = pm_lead_src_tag($l);
+        $offer = function_exists('pm_lp_get') && preg_match('/^offer-([a-f0-9]{10})/', $tag, $om) ? pm_lp_get($om[1]) : null; // a lead post's landing page
+        $h .= '<b>Came from:</b> ' . ($offer ? 'the offer "' . pm_h((string)$offer['title']) . '"' : pm_h($tag)) . (!empty($l['source_ref']) ? ' (code ' . pm_h($l['source_ref']) . ')' : '');
     } else {
         $h .= '<b>Came from:</b> not recorded';
     }

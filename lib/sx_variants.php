@@ -171,6 +171,9 @@ function pm_ch_cta(array $p): string
 {
     $c = (string)($p['cta'] ?? '');
     $travel = ($p['brand'] ?? '') === 'travel';
+    if ($c === 'offer' && !empty($p['lead_offer'])) {
+        return 'check'; // a lead post behaves like the enquiry-link call to action everywhere (see pm_ch_enquire and pm_ch_cta_line)
+    }
     return match (true) {
         $c === 'check', $c === 'host' => ($travel ? 'host' : ($c === 'check' && !pm_brand_is_custom((string)($p['brand'] ?? '')) ? 'check' : 'whatsapp')),
         in_array($c, ['comment', 'save', 'share', 'tag'], true) => $c,
@@ -210,6 +213,9 @@ function pm_ch_site(array $p, string $ch): string
 
 function pm_ch_enquire(array $p, string $mode, string $ch): string
 {
+    if (!empty($p['lead_offer']) && function_exists('pm_lp_url')) { // a lead post points at its own offer page
+        return pm_lp_url((string)($p['brand'] ?? 'promanaged'), (string)$p['lead_offer'], (PM_CH_SRC[$ch] ?? 'x') . '-' . pm_ch_ref($p));
+    }
     return function_exists('pm_enquire_url') ? (string)pm_enquire_url((string)$p['brand'], $mode, (PM_CH_SRC[$ch] ?? 'x') . '-' . pm_ch_ref($p)) : '';
 }
 
@@ -240,6 +246,9 @@ function pm_ch_cta_line(array $p, string $ch, bool $allowWa): array
 {
     $cta = pm_ch_cta($p);
     $site = pm_ch_site($p, $ch);
+    if (!empty($p['lead_offer']) && function_exists('pm_lp_cta_line') && ($lp = pm_lp_cta_line($p, $ch, $allowWa)) !== null && $lp['line'] !== '') {
+        return $lp;
+    }
     if ($cta === 'check' || $cta === 'host') {
         $u = pm_ch_enquire($p, $cta, $ch);
         if ($u !== '') {

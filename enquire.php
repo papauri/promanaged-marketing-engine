@@ -10,6 +10,7 @@ if (!function_exists('pm_mail')) {
     require_once __DIR__ . '/lib/mail.php';
 }
 require_once __DIR__ . '/lib/outbound.php';
+require_once __DIR__ . '/lib/leadoffers.php'; // the public page of a lead offer (?mode=offer&o=...)
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
@@ -19,7 +20,8 @@ $brand = pm_brand_norm($_GET['b'] ?? $_POST['b'] ?? '');
 $custom = pm_brand_is_custom($brand);
 pm_brand_set($brand);
 $mode = (string)($_GET['mode'] ?? '');
-$mode = ($mode === 'check' && !$custom) || ($mode === 'host' && $brand === 'travel') ? $mode : '';
+$offer = $mode === 'offer' ? pm_lp_public($brand, (string)($_GET['o'] ?? $_POST['o'] ?? '')) : null; // unknown, paused or ended: the normal enquiry page instead
+$mode = ($mode === 'check' && !$custom) || ($mode === 'host' && $brand === 'travel') || ($mode === 'offer' && $offer) ? $mode : '';
 $src = substr(preg_replace('/[^a-z0-9_.-]/i', '', (string)($_GET['src'] ?? $_GET['ref'] ?? $_POST['src'] ?? '')), 0, 40);
 $embed = !empty($_GET['embed']);
 $s = pm_settings();
@@ -70,6 +72,46 @@ function pm_e_page(string $title, string $body, int $code = 200): never
         . '</style></head><body><div class="wrap">' . ($embed ? '' : '<div class="top">' . (is_file(__DIR__ . '/' . $logo) ? '<img src="' . $logo . '" alt="">' : '') . '<b>' . pm_h($co) . '</b></div>')
         . $body . ($embed ? '' : '<p class="small" style="text-align:center">' . pm_h(implode('  ·  ', array_filter([$co, $s['phone'] ?? '', $s['email'] ?? '']))) . '</p>') . '</div></body></html>';
     exit;
+}
+
+/** The landing page of a lead offer: a bold headline, what it is, big buttons, and a short form. Nothing here promises more than the owner wrote. */
+function pm_e_offer_page(array $o, string $errHtml, array $in, string $action): never
+{
+    global $s, $tr;
+    $phone = trim((string)($s['phone'] ?? ''));
+    $tel = $phone !== '' ? pm_tel_link(['phone' => $phone]) : '';
+    $key = (string)$o['button_key'];
+    $primary = $key === 'call' && $tel !== '' ? [$tel, $o['button']] : ($o['wa'] !== '' ? [$o['wa'], $o['button'] === 'Call us' ? 'Send WhatsApp message' : $o['button']] : ['#form', $o['button']]);
+    $v = fn(string $k) => pm_h((string)($in[$k] ?? ''));
+    $bul = '';
+    foreach (array_slice((array)$o['bullets'], 0, 5) as $b) {
+        $bul .= '<li>' . pm_h((string)$b) . '</li>';
+    }
+    $qs = '';
+    foreach ((array)$o['questions'] as $i => $q) {
+        $val = (string)($in['qa'][$i] ?? '');
+        if ($q['options']) {
+            $qs .= '<div class="f"><label>' . pm_h($q['label']) . '</label><select name="qa[' . $i . ']"><option value="">Choose…</option>'
+                . implode('', array_map(fn($op) => '<option' . ($val === $op ? ' selected' : '') . '>' . pm_h($op) . '</option>', $q['options'])) . '</select></div>';
+        } else {
+            $qs .= pm_e_field($q['label'], 'qa[' . $i . ']', $val, ['max' => 200]);
+        }
+    }
+    $body = '<style>.offer h1{font:700 34px/1.1 Georgia,"Times New Roman",serif;letter-spacing:-.01em;margin:0 0 10px}.offer .sub{font-size:18px;color:#3b4048;margin:0 0 16px}'
+        . '.offer ul{list-style:none;margin:0 0 18px;padding:0}.offer li{padding:8px 0 8px 30px;position:relative;border-bottom:1px solid var(--line)}.offer li:before{content:"✓";position:absolute;left:2px;color:var(--accent);font-weight:700}'
+        . '.cta{display:block;text-align:center;padding:17px 18px;border-radius:999px;background:var(--accent);color:#fff;font-weight:700;font-size:18px;text-decoration:none;margin:10px 0}'
+        . '.cta.alt{background:#fff;color:var(--accent);border:2px solid var(--accent)}.or{text-align:center;color:var(--muted);margin:16px 0 6px;font-size:14px}</style>'
+        . '<div class="card offer"><h1>' . pm_h((string)$o['headline']) . '</h1>' . ($o['sub'] !== '' ? '<p class="sub">' . pm_h((string)$o['sub']) . '</p>' : '') . ($bul !== '' ? '<ul>' . $bul . '</ul>' : '')
+        . '<a class="cta" href="' . pm_h($primary[0]) . '"' . (str_starts_with($primary[0], 'http') ? ' target="_blank" rel="noopener"' : '') . '>' . pm_h($primary[1]) . '</a>'
+        . ($tel !== '' && $key !== 'call' ? '<a class="cta alt" href="' . pm_h($tel) . '">Call ' . pm_h($phone) . '</a>' : '')
+        . '<p class="or">or leave your details and a person will reply</p>' . $errHtml
+        . '<form method="post" id="form" action="' . pm_h($action) . '">' . pm_e_guard($GLOBALS['brand'] . '|offer') . '<input type="hidden" name="o" value="' . pm_h((string)$o['id']) . '">'
+        . pm_e_field('Your name', 'name', (string)($in['name'] ?? ''), ['required' => true, 'auto' => 'name', 'max' => 80]) . pm_e_field('Business name', 'business', (string)($in['business'] ?? ''), ['max' => 100])
+        . pm_e_field('Phone or WhatsApp', 'phone', (string)($in['phone'] ?? ''), ['type' => 'tel', 'auto' => 'tel', 'mode' => 'tel', 'max' => 40]) . pm_e_wa_box()
+        . pm_e_field('Email', 'email', (string)($in['email'] ?? ''), ['type' => 'email', 'auto' => 'email']) . $qs
+        . pm_e_field('Anything else we should know?', 'message', (string)($in['message'] ?? ''), ['area' => true])
+        . '<button class="btn">' . pm_h($o['button'] === 'Call us' ? 'Send my details' : $o['button']) . '</button><p class="small">We use your details only to reply to you. Give us a phone number or an email so we can.</p></form></div>';
+    pm_e_page((string)$o['headline'], $body);
 }
 
 function pm_e_thanks(string $msg): never
@@ -132,7 +174,7 @@ function pm_e_finish(array $d, string $kind): never
     exit;
 }
 
-$act = $mode === 'check' ? (isset($_POST['facts']) ? 'checklead' : 'check') : ($mode === 'host' ? 'host' : 'enquiry');
+$act = $mode === 'offer' ? 'offer' : ($mode === 'check' ? (isset($_POST['facts']) ? 'checklead' : 'check') : ($mode === 'host' ? 'host' : 'enquiry'));
 $err = '';
 $in = $_SERVER['REQUEST_METHOD'] === 'POST' ? $_POST : [];
 $facts = null;
@@ -176,6 +218,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     pm_e_finish(['website' => $site, 'business' => $d['business'] !== '' ? $d['business'] : (pm_host_key($site) ?: 'Website check'), 'message' => 'Asked us to fix the problems found by the free website check of ' . $site . '.',
                         'evidence' => array_map(fn($f) => 'Site check: ' . $f, array_slice(array_map('strval', (array)($fl['facts'] ?? [])), 0, 10))] + $d, 'check');
                 }
+            } elseif ($act === 'offer' && $offer) {
+                if (trim($d['name']) === '') {
+                    $err = 'Please give your name.';
+                } else {
+                    pm_e_limit('enq', 5);
+                    pm_e_limit('enqall', 60);
+                    $full = pm_lp_get((string)$offer['id']) ?: [];
+                    $ref = preg_match('/^(?:fb|ig|li|wa|x|tt|gb|yt)-([A-Za-z0-9]{4})$/i', $src, $rm) ? strtoupper($rm[1]) : '';
+                    pm_e_finish(['message' => pm_lp_message($full + ['title' => $offer['title'], 'questions' => $offer['questions']], (array)($_POST['qa'] ?? []), (string)($_POST['message'] ?? '')),
+                        'label' => 'Asked via the offer: ' . $offer['title'], 'src_tag' => 'offer-' . $offer['id'], 'ref' => $ref, 'business' => $d['business'] !== '' ? $d['business'] : ''] + $d, 'offer');
+                }
             } else {
                 if (trim($d['name']) === '' || ($act === 'enquiry' && mb_strlen($d['message']) < 5) || ($act === 'host' && ($d['business'] === '' || $d['city'] === ''))) {
                     $err = $act === 'host' ? 'Please give your name, your property name and the town.' : 'Please give your name and tell us a little about what you need.';
@@ -214,6 +267,13 @@ if ($act === 'check' && $facts !== null) { // results + offer to fix
 }
 if ($act === 'checklead') { // a failed check-lead post: back to a fresh check
     pm_e_page('Free website check', '<div class="card"><h1>Free website check</h1>' . $errHtml . '<p><a href="' . pm_h($qs(['mode' => 'check'])) . '">Run the check again</a></p></div>');
+}
+
+if ($act === 'offer' && $offer) {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        pm_lp_view((string)$offer['id']);
+    }
+    pm_e_offer_page($offer, $errHtml, $in, $qs(['mode' => 'offer', 'o' => $offer['id']]));
 }
 
 $title = $act === 'host' ? 'List your stay with Travel Malawi' : ($tr ? 'Ask Travel Malawi about a stay' : 'Tell us what you need');
