@@ -40,7 +40,7 @@ $fields = function (array $o) use ($def): string {
 <?= pm_social_nav('leadposts') ?>
 <?php if (!$hasWa || !$hosted): ?>
 <div class="card nofold"><b>Before the buttons work well:</b>
-  <ul class="hint" style="margin:6px 0 0 18px">
+  <ul class="hint mt-1 ml-4">
     <?php if (!$hasWa): ?><li>Set a mobile <b>WhatsApp number</b> in <a href="?tab=settings&amp;brand=<?= pm_h($vb) ?>">Settings</a>. The tap-to-chat button and the picture need it.</li><?php endif; ?>
     <?php if (!$hosted): ?><li>The landing page and its form need the app online (<code>APP_URL</code> in .env). Until then every post's button opens WhatsApp instead, which works anywhere.</li><?php endif; ?>
   </ul></div>
@@ -49,7 +49,7 @@ $fields = function (array $o) use ($def): string {
 <div class="card nofold">
   <b>Free, unlimited, and honest.</b> Pick an offer, choose the templates and the volume, and get ready-to-approve posts with a picture that carries a real button, a comment keyword that turns commenters into leads,
   and a landing page that collects their details. Nothing here costs money, and nothing is published until you approve it in Plan.
-  <p class="hint" style="margin:6px 0 0">Posts go out one a day by the normal schedule. Facebook does not let a normal post carry a clickable button, so the button is in the picture, on the landing page, and as the tap-to-chat link; set the Page's own action button to "Send WhatsApp message" too (Channels).
+  <p class="hint mt-1">Posts go out one a day by the normal schedule. Facebook does not let a normal post carry a clickable button, so the button is in the picture, on the landing page, and as the tap-to-chat link; set the Page's own action button to "Send WhatsApp message" too (Channels).
     Want paid reach? The <a href="?tab=social&amp;view=ads">Ads</a> screen plans a paused campaign you can switch on.</p>
 </div>
 
@@ -62,9 +62,9 @@ $fields = function (array $o) use ($def): string {
   <summary><b><?= pm_h($o['title']) ?></b>
     <span class="pill <?= $live ? 'hot' : 'warn' ?>"><?= $live ? 'live' : (($o['status'] ?? '') === 'paused' ? 'paused' : 'ended') ?></span>
     <span class="pill"><?= pm_h(PM_LP_VOLUMES[$o['volume']] ?? 'Bold') ?></span>
-    <span class="muted" style="font-size:12px"><?= (int)$st['posts'] ?> posts · <?= (int)$st['leads'] ?> leads<?= $o['keyword'] !== '' ? ' · ' . pm_h($o['keyword']) : '' ?></span></summary>
+    <span class="muted t-xs"><?= (int)$st['posts'] ?> posts · <?= (int)$st['leads'] ?> leads<?= $o['keyword'] !== '' ? ' · ' . pm_h($o['keyword']) : '' ?></span></summary>
 
-  <div class="kpis" style="margin-top:0">
+  <div class="kpis mt-0">
     <div><b><?= (int)$st['posts'] ?></b><span>posts made · <?= (int)$st['published'] ?> published · <?= (int)$st['drafts'] ?> waiting</span></div>
     <div><b><?= (int)$st['views'] ?></b><span>landing page views</span></div>
     <div><b><?= (int)$st['leads'] ?></b><span>leads from it</span></div>
@@ -105,11 +105,11 @@ $fields = function (array $o) use ($def): string {
 <?php $ideas = pm_lp_ideas($vb); ?>
 <div class="card nofold" id="ideas">
   <h2>Not sure what to offer?</h2>
-  <p class="hint" style="margin-top:0">Get three ideas from what this business told the app: its facts, what it offers, its free first step and who it wants to reach. <?= pm_agents_ready() ? 'The AI writes them, using only those facts.' : 'The AI is not set up, so you get the free first step as a starting point.' ?></p>
+  <p class="hint mt-0">Get three ideas from what this business told the app: its facts, what it offers, its free first step and who it wants to reach. <?= pm_agents_ready() ? 'The AI writes them, using only those facts.' : 'The AI is not set up, so you get the free first step as a starting point.' ?></p>
   <form method="post" class="btns"><?= $sx('lp_suggest') ?><button class="btn small primary"><?= $ideas['rows'] ? 'Suggest different ideas' : 'Suggest offers' ?></button>
     <?php if ($ideas['rows']): ?><button class="btn small" name="do" value="lp_ideas_clear">Clear the ideas</button><?php endif; ?></form>
   <?php foreach ($ideas['rows'] as $i => $idea): ?>
-  <details class="card" style="margin:8px 0" <?= $i === 0 ? 'open' : '' ?>><summary><b><?= pm_h($idea['title']) ?></b> <span class="muted" style="font-size:12px"><?= $idea['keyword'] !== '' ? '· ' . pm_h($idea['keyword']) . ' ' : '' ?>· an idea, not saved yet</span></summary>
+  <details class="card my-2" <?= $i === 0 ? 'open' : '' ?>><summary><b><?= pm_h($idea['title']) ?></b> <span class="muted t-xs"><?= $idea['keyword'] !== '' ? '· ' . pm_h($idea['keyword']) . ' ' : '' ?>· an idea, not saved yet</span></summary>
     <form method="post"><?= $sx('lp_save') ?><?= $hid('make', '1') ?>
       <?php foreach (['freebie', 'callout', 'question', 'quote', 'whatsapp', 'ask'] as $dt): ?><?= $hid('templates[]', $dt) ?><?php endforeach; ?>
       <?= $fields($idea) ?>

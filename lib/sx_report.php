@@ -731,10 +731,10 @@ function pm_sx_goal_strip(string $vb): string
     if (!$bars) {
         return '';
     }
-    $h = '<div class="card sx-card" style="padding:12px 16px"><b style="font-size:13px">Goals</b>';
+    $h = '<div class="card sx-card py-3 px-4"><b class="t-sm">Goals</b>';
     foreach ($bars as [$l, $v, $t, $note]) {
         $pct = (int)min(100, round($v / max(1, $t) * 100));
-        $h .= '<div style="margin:8px 0 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="min-width:150px;font-size:13px">' . pm_h($l) . '</span>'
+        $h .= '<div class="mt-2" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="t-sm" style="min-width:150px">' . pm_h($l) . '</span>'
             . '<span style="flex:1 1 120px;height:8px;border-radius:99px;background:var(--line,#e5e7eb);overflow:hidden"><i style="display:block;height:100%;width:' . $pct . '%;background:' . ($pct >= 100 ? 'var(--ok,#1a7f37)' : 'var(--accent,#2563eb)') . '"></i></span>'
             . '<span style="font-size:12px;color:var(--muted,#667085);min-width:170px">' . number_format($v) . ' of ' . number_format($t) . ' · ' . pm_h($note) . '</span></div>';
     }

@@ -24,7 +24,7 @@ $chan = ['reply_comment' => 'Reply to their comment', 'messenger' => 'Messenger'
     $people = isset($_GET['people']) ? pm_fb_people($vb) : null; ?>
   <div class="card">
     <div class="findrow" style="justify-content:space-between">
-      <h2 style="margin:0" id="playbook">Today's playbook <?= $pb ? '<span class="muted" style="font-weight:400;font-size:13px">· made ' . pm_h($pb['at']) . '</span>' : '' ?></h2>
+      <h2 class="m-0" id="playbook">Today's playbook <?= $pb ? '<span class="muted t-sm" style="font-weight:400">· made ' . pm_h($pb['at']) . '</span>' : '' ?></h2>
       <form method="post"><?= $fg('playbook') ?><button class="btn primary small"><?= $pb && $pb['day'] === date('Y-m-d') ? 'Make it again' : 'Make today\'s playbook' ?></button></form>
     </div>
     <?php if (!$pb): ?><p class="hint">Who to engage today, when, where and with which words: built from everyone who reacted, commented or messaged, plus your warm leads. One AI call.</p>
@@ -54,7 +54,7 @@ $chan = ['reply_comment' => 'Reply to their comment', 'messenger' => 'Messenger'
   </div>
 
   <div class="card">
-    <div class="findrow" style="justify-content:space-between"><h2 style="margin:0">People on the Page</h2>
+    <div class="findrow" style="justify-content:space-between"><h2 class="m-0">People on the Page</h2>
       <?php if (!$people): ?><a class="btn small" href="?tab=social&view=growth&people=1#people">Show everyone, ranked</a><?php endif; ?>
       <form method="post"><?= $fg('capture') ?><button class="btn small">Add buyers to leads</button></form></div>
     <?php if ($people !== null): ?>
@@ -100,7 +100,7 @@ $chan = ['reply_comment' => 'Reply to their comment', 'messenger' => 'Messenger'
     <?php if ($todo): ?><div class="btns stick"><button type="button" class="btn small" onclick="document.querySelectorAll('.cl input[type=checkbox]').forEach(c=>c.checked=true)">Tick all</button>
       <button class="btn primary" onclick="return confirm('Apply the ticked changes to the Facebook Page? Deleted posts cannot be brought back.')">Apply the ticked changes</button></div><?php endif; ?>
   </form>
-  <div class="card"><p class="hint" style="margin:0">The Page's about line and description are written and applied under <a href="?tab=social&amp;view=optimise">Brand &gt; Profiles</a>.</p></div>
+  <div class="card"><p class="hint m-0">The Page's about line and description are written and applied under <a href="?tab=social&amp;view=optimise">Brand &gt; Profiles</a>.</p></div>
   <?php endif; ?>
 
 <?php endif; ?>

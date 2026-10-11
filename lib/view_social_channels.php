@@ -9,12 +9,6 @@ $hid = fn(string $n, string $v) => '<input type="hidden" name="' . pm_h($n) . '"
 $cp = fn(string $text, string $label = 'Copy') => '<button type="button" class="btn small" data-copy="' . pm_h($text) . '">' . pm_h($label) . '</button>';
 ?>
 <?= pm_social_nav('channels') ?>
-<style>
-.sxv pre{white-space:pre-wrap;word-break:break-word;margin:8px 0;padding:9px 11px;background:var(--bg,#f6f7f8);border-radius:8px;font:13px/1.45 -apple-system,"Segoe UI",Roboto,Arial,sans-serif}
-.sxv .sxh{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.sxv .sxb{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:6px 0}
-.sxv .sx-card{padding:12px 14px;margin:8px 0}.sxv .warnt{color:var(--warn,#8a5a00);font-size:12px;margin:2px 0}.sxv form.inl{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
-.sxv .score{font-size:30px;font-weight:700}.sxv .sxcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}.sxv img.kitp{max-width:170px;border-radius:8px;display:block;margin:6px 0}
-</style>
 <div class="sxv">
 
 <div class="card"><b>Instagram</b>

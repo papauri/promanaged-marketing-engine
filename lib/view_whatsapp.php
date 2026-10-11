@@ -53,7 +53,7 @@ usort($wrote, fn($a, $b) => strcmp((string)($a['awaiting_reply_since'] ?? $a['la
 <?php endforeach; ?>
 <h2 class="repttl">To message</h2>
 <?php endif; ?>
-<form method="get" class="typesel" style="margin:0 0 10px"><input type="hidden" name="tab" value="whatsapp">
+<form method="get" class="typesel mb-2"><input type="hidden" name="tab" value="whatsapp">
   <select name="type" onchange="this.form.submit()" aria-label="Business type"><option value="">All business types</option>
   <?php foreach ($wtypes as $tk => $tn): ?><option value="<?= pm_h($tk) ?>" <?= strtolower($wtype) === $tk ? 'selected' : '' ?>><?= pm_h(ucfirst($tk)) ?> (<?= $tn ?>)</option><?php endforeach; ?></select></form>
 <div class="prog"><i style="width:<?= $cap ? min(100, (int)(100 * $sent / $cap)) : 0 ?>%"></i></div>
@@ -82,7 +82,7 @@ usort($wrote, fn($a, $b) => strcmp((string)($a['awaiting_reply_since'] ?? $a['la
 <?php endforeach; ?>
 </div>
 
-<details class="card" style="margin-top:14px"><summary>Quick replies (tap to copy, then paste into the chat)</summary>
+<details class="card mt-3"><summary>Quick replies (tap to copy, then paste into the chat)</summary>
   <?php foreach (pm_wa_quick_replies() as $t => $m): ?>
     <div class="qr"><b><?= pm_h($t) ?></b><span><?= pm_h($m) ?></span><button type="button" class="btn small" data-copy="<?= pm_h($m) ?>">Copy</button></div>
   <?php endforeach; ?>

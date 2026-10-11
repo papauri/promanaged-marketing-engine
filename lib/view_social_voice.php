@@ -18,7 +18,7 @@ $nFacts = count(array_filter(array_map('trim', $words)));
   <?php if ($custom): ?><input type="hidden" name="action" value="brand_save"><input type="hidden" name="id" value="<?= pm_h($vb) ?>"><?php else: ?><input type="hidden" name="action" value="settings"><?php endif; ?>
   <div class="card">
     <h2>Who we are</h2>
-    <p class="hint" style="margin-top:0">Everything the agents, the planner and the reply writer know about <?= pm_h($bname) ?>, and all they may claim. Change these and every email, post, reply and proposal follows. They use nothing beyond these lines and never invent numbers, prices or customers.</p>
+    <p class="hint mt-0">Everything the agents, the planner and the reply writer know about <?= pm_h($bname) ?>, and all they may claim. Change these and every email, post, reply and proposal follows. They use nothing beyond these lines and never invent numbers, prices or customers.</p>
     <label>Who we are and what we do</label><textarea name="<?= $n('about') ?>" rows="3"><?= pm_h((string)$brn['about']) ?></textarea>
     <label>True facts the AI may use (one per line; nothing else is ever claimed) <span class="muted">· <?= $nFacts ?> now</span></label><textarea name="<?= $n('facts') ?>" rows="7"><?= pm_h((string)$brn['facts']) ?></textarea>
   </div>

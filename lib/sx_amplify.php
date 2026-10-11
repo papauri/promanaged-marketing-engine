@@ -375,9 +375,9 @@ function pm_panel_plan_top_partners(string $vb, array $ctx = []): string
     if (!$rows) {
         return '';
     }
-    $h = '<div class="card sx-card" style="padding:12px 16px"><b style="font-size:13px">Partnership radar</b> <span class="muted" style="font-size:12px">· pages worth working with; drafts only, you send them by hand</span>';
+    $h = '<div class="card sx-card py-3 px-4"><b class="t-sm">Partnership radar</b> <span class="muted t-xs">· pages worth working with; drafts only, you send them by hand</span>';
     foreach ($rows as $r) {
-        $h .= '<div style="margin-top:10px;font-size:13px"><b>' . pm_h((string)$r['name']) . '</b>' . ($r['kind'] !== '' ? ' <span class="muted">· ' . pm_h((string)$r['kind']) . '</span>' : '')
+        $h .= '<div class="mt-2 t-sm"><b>' . pm_h((string)$r['name']) . '</b>' . ($r['kind'] !== '' ? ' <span class="muted">· ' . pm_h((string)$r['kind']) . '</span>' : '')
             . ' <a href="' . pm_h((string)$r['url']) . '" target="_blank" rel="noopener noreferrer">open page</a>'
             . ($r['why'] !== '' ? '<br><span class="muted">' . pm_h((string)$r['why']) . '</span>' : '')
             . '<div class="msgbox">' . pm_h((string)$r['dm']) . '</div><div class="btns"><button type="button" class="btn small" data-copy="' . pm_h((string)$r['dm']) . '">Copy message</button>'

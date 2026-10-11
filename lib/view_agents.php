@@ -69,21 +69,21 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
     <button class="btn">Find</button>
     <button class="btn primary" name="proposal" value="1">Find + proposal</button>
   </form>
-  <p class="hint" style="margin:6px 0 0">Start typing: it suggests businesses you already know, then ones a web search finds (those are marked, and only fill the box).</p>
+  <p class="hint mt-1">Start typing: it suggests businesses you already know, then ones a web search finds (those are marked, and only fill the box).</p>
   <form method="post" style="display:inline"><?= $post('', 'export') ?><button class="btn" title="Download all leads of this business as JSON (no mail server details)">Export</button></form>
 </div>
 
 <?php if (pm_brand() === 'travel'): $tmAll = pm_leads(); $tmTodo = pm_tm_rewrite_candidates($tmAll); $tmKept = pm_tm_rewrite_kept($tmAll); if ($tmTodo): ?>
 <div class="card nofold" id="tmformat">
   <b>Travel Malawi's emails have a new standard format.</b> It opens with a line written for that place, then says what Travel Malawi is, what a host gets, the set-up steps with the link to <?= pm_h(preg_replace('#^https?://#', '', (string)pm_tm_email_cfg()['link'])) ?>, and that it is free for now and why. You can change the wording in <a href="?tab=settings&amp;brand=travel">Settings</a>.
-  <p class="hint" style="margin:6px 0 0"><?= count($tmTodo) ?> unsent draft<?= count($tmTodo) === 1 ? ' is' : 's are' ?> still in the old format.<?= $tmKept['approved'] + $tmKept['edited'] ? ' Emails you approved (' . (int)$tmKept['approved'] . ') or edited by hand (' . (int)$tmKept['edited'] . ') are left alone.' : '' ?> Redrafting uses about one AI call for every six emails and never sends anything.</p>
+  <p class="hint mt-1"><?= count($tmTodo) ?> unsent draft<?= count($tmTodo) === 1 ? ' is' : 's are' ?> still in the old format.<?= $tmKept['approved'] + $tmKept['edited'] ? ' Emails you approved (' . (int)$tmKept['approved'] . ') or edited by hand (' . (int)$tmKept['edited'] . ') are left alone.' : '' ?> Redrafting uses about one AI call for every six emails and never sends anything.</p>
   <form method="post" class="btns"><?= $post('', 'tm_rewrite') ?><button class="btn primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?>>Redraft <?= count($tmTodo) ?> email<?= count($tmTodo) === 1 ? '' : 's' ?> in the new format</button></form>
 </div>
 <?php endif; endif; ?>
 <?php $sjTodo = pm_subjects_pending(pm_leads()); if ($sjTodo): $sj1 = reset($sjTodo); ?>
 <div class="card nofold" id="subjectfix">
   <b><?= count($sjTodo) ?> subject line<?= count($sjTodo) === 1 ? '' : 's' ?> need capital letters.</b> For example "<?= pm_h(mb_substr($sj1['subject'], 0, 70)) ?>" should read "<?= pm_h(mb_substr($sj1['tidy'], 0, 70)) ?>". Anything sent is always corrected, and new drafts are written this way; this puts the ones already drafted right.
-  <p class="hint" style="margin:6px 0 0">Only the capitals and punctuation change, never a word. Drafts you edited yourself are left alone. Nothing is sent.<?= pm_agents_ready() ? ' The AI also checks the names code does not know.' : '' ?></p>
+  <p class="hint mt-1">Only the capitals and punctuation change, never a word. Drafts you edited yourself are left alone. Nothing is sent.<?= pm_agents_ready() ? ' The AI also checks the names code does not know.' : '' ?></p>
   <form method="post" class="btns"><?= $post('', 'fix_subjects') ?><button class="btn primary">Fix <?= count($sjTodo) ?> subject line<?= count($sjTodo) === 1 ? '' : 's' ?></button></form>
 </div>
 <?php endif; ?>
@@ -236,7 +236,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
         <?php if (trim((string)($l['phone'] ?? '') . (string)($l['whatsapp'] ?? '')) !== ''): ?><p class="hint wa-optin"><?= pm_h(pm_wa_optin_line($l)) ?></p><?php endif; ?>
         <?php if ($gapOpen && (!$gapMail || !$gapWa || empty($l['contact']))): ?>
         <div class="gapfix">
-          <p class="hint warnt" style="margin:0 0 4px"><?= !$gapMail && !$gapWa ? 'No email address and no WhatsApp number yet.' : (!$gapMail ? 'No email address yet, so the email cannot go out.' : (!$gapWa ? 'No WhatsApp number yet.' : 'No owner or manager name yet.')) ?> Add what you know, or let the AI look.</p>
+          <p class="hint warnt mb-1"><?= !$gapMail && !$gapWa ? 'No email address and no WhatsApp number yet.' : (!$gapMail ? 'No email address yet, so the email cannot go out.' : (!$gapWa ? 'No WhatsApp number yet.' : 'No owner or manager name yet.')) ?> Add what you know, or let the AI look.</p>
           <?php if (!$gapMail): ?><form method="post" class="inline"><?= $post($id, 'save_contact') ?><input type="email" name="email" placeholder="Their email address" aria-label="Email address" autocomplete="off"><button class="btn small">Save email</button></form><?php endif; ?>
           <?php if (!$gapWa): ?><form method="post" class="inline"><?= $post($id, 'save_contact') ?><input type="text" name="whatsapp" placeholder="WhatsApp number, e.g. 0999 123 456" aria-label="WhatsApp number" inputmode="tel" autocomplete="off"><button class="btn small">Save WhatsApp</button></form><?php endif; ?>
           <?php if (pm_agents_ready()): ?><form method="post" class="inline"><?= $post($id, 'find_contact') ?><button class="btn small primary" title="Reads their website and searches the web for the owner's name, an email address and a WhatsApp number; it fills only what is missing and sends nothing">Find missing details with AI</button></form><?php endif; ?>

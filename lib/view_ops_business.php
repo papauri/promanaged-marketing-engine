@@ -52,13 +52,13 @@ if ($isCustom): // a business added in the app: one form, saved by brand_save (t
 </form>
 <p class="hint">What the AI knows is under <a href="?tab=social&amp;view=voice">Brand &gt; Voice</a>, who the agents look for under <a href="?tab=targeting">Sales &gt; Targeting and messages</a>, and the mail login under <a href="?tab=settings&amp;section=email">Email</a>.</p>
 
-<details class="card" style="margin-top:14px"><summary>Hide this business</summary>
+<details class="card mt-3"><summary>Hide this business</summary>
   <p class="hint">Hiding stops its daily agent run and removes it from the menus. Its leads, posts and settings are kept, and you can bring it back any time from Operations &gt; Business details &gt; Hidden businesses.</p>
   <form method="post" onsubmit="return confirm('Hide <?= pm_h(addslashes($bname)) ?>?')"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="brand_archive"><input type="hidden" name="id" value="<?= pm_h($b) ?>">
     <label class="check"><input type="checkbox" name="confirm" value="1" required> Yes, hide <?= pm_h($bname) ?></label>
     <div class="btns"><button class="btn danger">Hide this business</button></div></form>
 </details>
-<details class="card" style="margin-top:14px"><summary>Delete this business for good</summary>
+<details class="card mt-3"><summary>Delete this business for good</summary>
   <?= pm_brand_delete_form($b, $csrf) ?>
 </details>
 

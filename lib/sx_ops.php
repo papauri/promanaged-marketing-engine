@@ -85,10 +85,10 @@ function pm_view_setup_health(): void
         . '<table class="grid compact" style="width:100%"><tbody>';
     foreach ($rows as $r) {
         echo '<tr><td style="white-space:nowrap"><span class="pill ' . ($r['ok'] ? 'hot' : ($r['need'] === 'required' ? 'warn' : '')) . '">' . ($r['ok'] ? 'ready' : ($r['need'] === 'required' ? 'to do' : 'off')) . '</span></td>'
-            . '<td><b>' . pm_h($r['label']) . '</b><br><span class="hint" style="margin:0">' . pm_h($r['detail']) . '</span></td>'
-            . '<td>' . ($r['add'] !== '' ? '<span class="hint" style="margin:0">Add: <code>' . pm_h($r['add']) . '</code></span>' : '')
+            . '<td><b>' . pm_h($r['label']) . '</b><br><span class="hint m-0">' . pm_h($r['detail']) . '</span></td>'
+            . '<td>' . ($r['add'] !== '' ? '<span class="hint m-0">Add: <code>' . pm_h($r['add']) . '</code></span>' : '')
             . (!empty($r['testable']) ? '<form method="post" style="display:inline"><input type="hidden" name="csrf" value="' . pm_h((string)($GLOBALS['csrf'] ?? ($_SESSION['csrf'] ?? ''))) . '"><input type="hidden" name="action" value="health_check"><input type="hidden" name="key" value="' . pm_h($r['key']) . '"><button class="btn small">Test now</button></form>' : '')
-            . (!empty($r['last']) ? ' <span class="hint" style="margin:0">Last test ' . pm_h(date('j M H:i', strtotime((string)$r['last']['at']))) . ': ' . (!empty($r['last']['ok']) ? '<b>ok</b>' : '<b style="color:var(--danger)">failed</b>') . ' · ' . pm_h((string)$r['last']['msg']) . '</span>' : '') . '</td></tr>';
+            . (!empty($r['last']) ? ' <span class="hint m-0">Last test ' . pm_h(date('j M H:i', strtotime((string)$r['last']['at']))) . ': ' . (!empty($r['last']['ok']) ? '<b>ok</b>' : '<b class="t-bad">failed</b>') . ' · ' . pm_h((string)$r['last']['msg']) . '</span>' : '') . '</td></tr>';
     }
     echo '</tbody></table></details>';
 }
@@ -537,7 +537,7 @@ function pm_view_archives(): void
             . '<span><b>' . pm_h(date('j M Y', strtotime($day))) . '</b> <span class="muted">· ' . pm_h(strtoupper(substr(basename($f), strrpos(basename($f), '.') + 1))) . ' · ' . number_format(((int)filesize($f)) / 1024, 0) . ' KB</span></span>'
             . '<a class="btn small" href="?archive=' . urlencode(basename($f)) . '">Download</a>'
             . ($names ? '<select name="file" aria-label="File to put back" required><option value="">Put back…</option>' . implode('', array_map(fn($n) => '<option>' . pm_h($n) . '</option>', $names)) . '</select>'
-                . '<label class="check" style="margin:0"><input type="checkbox" name="confirm" value="1" required> I understand</label><button class="btn small danger">Restore that file</button>'
+                . '<label class="check m-0"><input type="checkbox" name="confirm" value="1" required> I understand</label><button class="btn small danger">Restore that file</button>'
                 : '<span class="hint">Cannot be opened on this server.</span>') . '</form>';
     }
     echo '</details>';

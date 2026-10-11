@@ -1871,7 +1871,7 @@ function pm_rows_editor(string $name, array $cols, array $rows, string $addLabel
     foreach ($cols as [$label, , $w]) {
         $head .= '<th style="width:' . $w . '">' . pm_h($label) . '</th>';
     }
-    $head .= '<th style="width:36px"></th></tr>';
+    $head .= '<th class="w-icon"></th></tr>';
     $cell = function ($key, $col, $val, $i) use ($name) {
         [$label, $type] = $col;
         $n = "tpl[$name][$i][$key]";
@@ -1931,14 +1931,14 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
   <?= pm_ui_head('Proposals', 'Fill in the client, choose their package, then preview, download or email the PDF. Next reference: <b>' . pm_h(pm_next_ref($settings, false)) . '</b>') ?>
   <?= pm_ui_strip('proposal') ?>
   <?php if (pm_app_url() === ''): ?><div class="flash err"><b>Clients cannot open links or be tracked until the app is hosted.</b> APP_URL is empty in .env, so proposal links, the "opened" alert and online signing do not work yet. PDFs and emails still go out.</div><?php endif; ?>
-  <details class="card" style="padding:14px 20px"><summary style="margin:0;font-weight:600;color:var(--ink)">Find a business by name and prepare its proposal</summary>
-    <form method="post" style="margin-top:10px"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="lookup"><input type="hidden" name="proposal" value="1">
+  <details class="card"><summary class="sum">Find a business by name and prepare its proposal</summary>
+    <form class="mt-2" method="post"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="lookup"><input type="hidden" name="proposal" value="1">
       <div class="row">
         <div><label>For</label><select name="brand"><?php foreach (array_filter(pm_brand_ids(), fn($x) => !empty(pm_brand_profile($x)['proposals'])) as $bid): ?><option value="<?= pm_h($bid) ?>"<?= $bid === $vb ? ' selected' : '' ?>><?= pm_h(pm_brand_title($settings, $bid)) ?></option><?php endforeach; ?></select></div>
         <div><label>Business name *</label><input type="text" name="biz" required data-suggest data-web="1" autocomplete="off"></div>
         <div><label>City (helps)</label><input type="text" name="city"></div>
       </div>
-      <div class="btns" style="display:flex;gap:8px;margin-top:10px"><button class="btn small primary" style="width:auto">Find it and prepare the proposal</button></div>
+      <div class="btns mt-2" style="display:flex;gap:8px"><button class="btn small primary" style="width:auto">Find it and prepare the proposal</button></div>
       <p class="hint">Searches the web for that business, works out what it needs, and fills in the form below with a tailored proposal. About two AI calls.</p>
     </form></details>
 
@@ -1998,7 +1998,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
               <label class="check"><input type="checkbox" name="save_prices" value="1"> Also make these my standard prices</label>
               <button class="btn small" name="do" value="save_prices" formnovalidate>Save as standard prices</button>
             </div>
-            <div style="margin-top:10px"><label>Show prices in the quotation as</label>
+            <div class="mt-2"><label>Show prices in the quotation as</label>
               <select name="price_mode"><option value="exact" <?= ($d['price_mode'] ?? 'exact') === 'exact' ? 'selected' : '' ?>>Exact amounts</option><option value="from" <?= ($d['price_mode'] ?? '') === 'from' ? 'selected' : '' ?>>"From" prices (final price confirmed before they sign)</option></select></div>
             <p class="hint">Prices fill in from the package you pick. Change them to quote this client differently; the PDF shows the price you enter here.</p>
           </div>
@@ -2015,7 +2015,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
               <span class="fee"><input type="number" min="0" step="any" name="extra_price[<?= $i ?>]" value="<?= pm_h((string)($d['extra_price'][$i] ?? '')) ?>" title="Price"><small><?= $ex['period'] === 'month' ? 'per month' : 'once' ?></small></span>
               <input type="number" min="0" step="1" name="extras[<?= $i ?>]" value="<?= (int)($d['extras'][$i] ?? 0) ?>" title="Quantity"></div>
           <?php endforeach; ?>
-          <div class="row" style="margin-top:14px">
+          <div class="row mt-3">
             <div><label>Discount on setup (%)</label><input type="number" min="0" max="100" step="any" name="discount_setup" value="<?= $v('discount_setup', '0') ?>"></div>
             <div><label>Discount on monthly (%)</label><input type="number" min="0" max="100" step="any" name="discount_monthly" value="<?= $v('discount_monthly', '0') ?>"></div>
           </div>
@@ -2041,15 +2041,15 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
         $ea = $d['ai'] ?? null;
         $eaPains = $ea ? $ea['pain_points'] : array_map(fn($x) => ['pain' => $x['pain'], 'cost' => $x['cost'], 'fix' => $x['fix'], 'fact' => ''], array_slice($selLine['pain_points'] ?? [], 0, 3));
         ?>
-        <details class="card" <?= $ea ? 'open' : '' ?>><summary style="margin:0;font-weight:600;color:var(--ink)">Edit the proposal wording before it goes out (optional)</summary>
+        <details class="card" <?= $ea ? 'open' : '' ?>><summary class="sum">Edit the proposal wording before it goes out (optional)</summary>
           <p class="hint">Change anything the client will read. Tick the box to use your version; leave it unticked to use the standard wording. Use "Preview PDF" to check.</p>
           <label class="check"><input type="checkbox" name="edit_use" value="1" <?= $ea ? 'checked' : '' ?>> Use my edited wording below</label>
-          <label style="margin-top:8px">Cover line</label><input type="text" name="edit[cover_hook]" value="<?= pm_h($ea['cover_hook'] ?? $selLine['cover_hook'] ?? '') ?>">
-          <label style="margin-top:8px">Introduction</label><textarea name="edit[intro]" rows="2"><?= pm_h($ea['intro'] ?? $selLine['intro'] ?? '') ?></textarea>
-          <label style="margin-top:8px">What we understand about them (one per line)</label><textarea name="edit[what_we_know]" rows="3"><?= pm_h(implode("\n", $ea['what_we_know'] ?? [])) ?></textarea>
-          <label style="margin-top:8px">Their problems (one per line: problem | what it costs them | how we fix it | what we know that shows it)</label>
+          <label class="mt-2">Cover line</label><input type="text" name="edit[cover_hook]" value="<?= pm_h($ea['cover_hook'] ?? $selLine['cover_hook'] ?? '') ?>">
+          <label class="mt-2">Introduction</label><textarea name="edit[intro]" rows="2"><?= pm_h($ea['intro'] ?? $selLine['intro'] ?? '') ?></textarea>
+          <label class="mt-2">What we understand about them (one per line)</label><textarea name="edit[what_we_know]" rows="3"><?= pm_h(implode("\n", $ea['what_we_know'] ?? [])) ?></textarea>
+          <label class="mt-2">Their problems (one per line: problem | what it costs them | how we fix it | what we know that shows it)</label>
           <textarea name="edit[pain_points]" rows="5"><?= pm_h(pm_rows_to_text($eaPains, ['pain', 'cost', 'fix', 'fact'])) ?></textarea>
-          <label style="margin-top:8px">What they gain (one per line)</label><textarea name="edit[gains]" rows="3"><?= pm_h(implode("\n", $ea['gains'] ?? [])) ?></textarea>
+          <label class="mt-2">What they gain (one per line)</label><textarea name="edit[gains]" rows="3"><?= pm_h(implode("\n", $ea['gains'] ?? [])) ?></textarea>
         </details>
 
         <div class="card"><h2>Email</h2>
@@ -2072,7 +2072,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
         </div>
         <div class="card">
           <button class="btn" name="do" value="polish" formnovalidate title="Rewrites the cover line, problems and email for this client, then reviews them like a sceptical buyer">Tailor with AI (pitch perfect)</button>
-          <?php if (!empty($d['ai'])): ?><label class="check" style="margin:2px 0 8px"><input type="checkbox" name="clear_ai" value="1"> Remove the AI tailoring (use the standard wording)</label><?php endif; ?>
+          <?php if (!empty($d['ai'])): ?><label class="check mt-0 mb-2"><input type="checkbox" name="clear_ai" value="1"> Remove the AI tailoring (use the standard wording)</label><?php endif; ?>
           <button class="btn" name="do" value="preview" formtarget="_blank">Preview PDF</button>
           <button class="btn" name="do" value="download">Generate and download</button>
           <button class="btn primary" name="do" value="email" onclick="return confirmSend()">Generate and email to client</button>
@@ -2081,7 +2081,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
       </div>
     </div>
   </form>
-  <form method="post" style="margin-top:-6px"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="clear"><button class="btn small">Clear form</button></form>
+  <form method="post" class="mt-0"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="clear"><button class="btn small">Clear form</button></form>
   <script>
   const PK = <?= json_encode(array_map(fn($p) => [(float)$p['setup'], (float)$p['monthly']], $tpl['packages'])) ?>;
   const PKT = <?= json_encode(array_map(fn($p) => (string)($p['type'] ?? ''), $tpl['packages'])) ?>;
@@ -2172,7 +2172,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
     </div>
     <div class="card"><h2>Pain points (the pitch opens with these)</h2>
       <div class="row"><div><label>Line on the cover</label><textarea name="tpl[cover_hook]" rows="2"><?= pm_h($tpl['cover_hook']) ?></textarea></div>
-        <div><label>Section title</label><input type="text" name="tpl[pain_title]" value="<?= pm_h($tpl['pain_title']) ?>"><label style="margin-top:8px">Introduction</label><textarea name="tpl[pain_intro]" rows="2"><?= pm_h($tpl['pain_intro']) ?></textarea></div></div><br>
+        <div><label>Section title</label><input type="text" name="tpl[pain_title]" value="<?= pm_h($tpl['pain_title']) ?>"><label class="mt-2">Introduction</label><textarea name="tpl[pain_intro]" rows="2"><?= pm_h($tpl['pain_intro']) ?></textarea></div></div><br>
       <?= pm_rows_editor('pain_points', ['type' => ['Shown to', ['all' => 'Everyone'] + pm_types(), '14%'], 'pain' => ['The leak', 'textarea', '22%'], 'cost' => ['What it costs them', 'textarea', '34%'], 'fix' => ['How it stops', 'textarea', '26%']], $tpl['pain_points'], 'Add pain point') ?>
       <p class="hint">The PDF shows the client's own business type first, then the "Everyone" points, up to 8 in total. The first one for their type also goes into the pitch email.</p>
       <br><label>Line under the daily cost in the quotation</label><input type="text" name="tpl[anchor_note]" value="<?= pm_h($tpl['anchor_note']) ?>">
@@ -2202,34 +2202,34 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
       <?= pm_rows_editor('terms', [0 => ['Clause', 'text', '20%'], 1 => ['Wording', 'textarea', '76%']], $tpl['terms'], 'Add clause') ?>
     </div>
     <div class="card"><h2>Emails</h2>
-      <p class="hint" style="margin-top:0">One email per document type. Placeholders: {business} {contact} {reference} {package} {setup} {monthly} {daily} {first_year} {valid_until} {type_plural} {pain_title} {pain_cost} {or_call} {signature}</p>
+      <p class="hint mt-0">One email per document type. Placeholders: {business} {contact} {reference} {package} {setup} {monthly} {daily} {first_year} {valid_until} {type_plural} {pain_title} {pain_cost} {or_call} {signature}</p>
       <?php foreach (['pitch' => 'Pitch only', 'contract' => 'Contract only', 'both' => 'Pitch + contract'] as $ek => $el): ?>
-        <br><label><b style="color:var(--ink)"><?= $el ?></b> &middot; subject</label><input type="text" name="tpl[emails][<?= $ek ?>][subject]" value="<?= pm_h($tpl['emails'][$ek]['subject']) ?>">
-        <label style="margin-top:8px">Message</label><textarea name="tpl[emails][<?= $ek ?>][body]" rows="12"><?= pm_h($tpl['emails'][$ek]['body']) ?></textarea>
+        <br><label><b><?= $el ?></b> &middot; subject</label><input type="text" name="tpl[emails][<?= $ek ?>][subject]" value="<?= pm_h($tpl['emails'][$ek]['subject']) ?>">
+        <label class="mt-2">Message</label><textarea name="tpl[emails][<?= $ek ?>][body]" rows="12"><?= pm_h($tpl['emails'][$ek]['body']) ?></textarea>
       <?php endforeach; ?>
     </div>
     <button class="btn primary" style="max-width:260px">Save template</button>
   </form>
-  <form method="post" style="margin-top:12px" onsubmit="return confirm('Put every price and word back to the original template?')">
+  <form class="mt-3" method="post" onsubmit="return confirm('Put every price and word back to the original template?')">
     <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="reset_template">
     <button class="btn small">Reset to original</button>
   </form>
 
-  <h1 style="margin-top:34px">Business lines</h1>
+  <h1 class="mt-6">Business lines</h1>
   <p class="sub">The wording above is for the industry management system. Packages for our other lines (software, websites, hardware, IT support) use their own wording below. Review every commitment, timeline and clause before you send one.</p>
   <?php foreach (pm_line_names() as $ln => $lname): $L = $tpl['lines'][$ln]; ?>
-  <details class="card" style="padding:0"><summary style="padding:16px 22px;margin:0;font-weight:600;color:var(--ink)"><?= pm_h($lname) ?></summary>
-    <form method="post" style="padding:0 22px 20px"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="lines"><input type="hidden" name="line" value="<?= $ln ?>">
-      <?php foreach (PM_LINE_TEXT as $k => $lab): ?><label style="margin-top:10px"><?= pm_h($lab) ?></label><textarea name="ln[<?= $k ?>]" rows="<?= in_array($k, ['intro', 'fees_note', 'steps_note', 'support_note', 'pain_intro'], true) ? 3 : 1 ?>"><?= pm_h((string)($L[$k] ?? '')) ?></textarea><?php endforeach; ?>
-      <label class="check" style="margin-top:10px"><input type="checkbox" name="ln[show_first_year]" value="1" <?= ($L['show_first_year'] ?? true) ? 'checked' : '' ?>> Show "first-year cost" under the quotation</label>
-      <?php foreach (PM_LINE_LISTS as $k => [$lab, $cols]): ?><label style="margin-top:10px"><?= pm_h($lab) ?></label><textarea name="ln[<?= $k ?>]" rows="<?= max(3, min(9, count($L[$k] ?? []) + 1)) ?>"><?= pm_h(pm_rows_to_text($L[$k] ?? [], $cols)) ?></textarea><?php endforeach; ?>
+  <details class="card flush"><summary class="sum"><?= pm_h($lname) ?></summary>
+    <form method="post" class="flush-body"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="lines"><input type="hidden" name="line" value="<?= $ln ?>">
+      <?php foreach (PM_LINE_TEXT as $k => $lab): ?><label class="mt-2"><?= pm_h($lab) ?></label><textarea name="ln[<?= $k ?>]" rows="<?= in_array($k, ['intro', 'fees_note', 'steps_note', 'support_note', 'pain_intro'], true) ? 3 : 1 ?>"><?= pm_h((string)($L[$k] ?? '')) ?></textarea><?php endforeach; ?>
+      <label class="check mt-2"><input type="checkbox" name="ln[show_first_year]" value="1" <?= ($L['show_first_year'] ?? true) ? 'checked' : '' ?>> Show "first-year cost" under the quotation</label>
+      <?php foreach (PM_LINE_LISTS as $k => [$lab, $cols]): ?><label class="mt-2"><?= pm_h($lab) ?></label><textarea name="ln[<?= $k ?>]" rows="<?= max(3, min(9, count($L[$k] ?? []) + 1)) ?>"><?= pm_h(pm_rows_to_text($L[$k] ?? [], $cols)) ?></textarea><?php endforeach; ?>
       <?php foreach (['pitch' => 'Pitch only', 'contract' => 'Contract only', 'both' => 'Pitch + contract'] as $ek => $el): ?>
-        <label style="margin-top:14px"><b style="color:var(--ink)">Email: <?= $el ?></b> &middot; subject</label><input type="text" name="ln[emails][<?= $ek ?>][subject]" value="<?= pm_h($L['emails'][$ek]['subject'] ?? '') ?>">
-        <textarea name="ln[emails][<?= $ek ?>][body]" rows="9" style="margin-top:6px"><?= pm_h($L['emails'][$ek]['body'] ?? '') ?></textarea>
+        <label class="mt-3"><b>Email: <?= $el ?></b> &middot; subject</label><input type="text" name="ln[emails][<?= $ek ?>][subject]" value="<?= pm_h($L['emails'][$ek]['subject'] ?? '') ?>">
+        <textarea class="mt-1" name="ln[emails][<?= $ek ?>][body]" rows="9"><?= pm_h($L['emails'][$ek]['body'] ?? '') ?></textarea>
       <?php endforeach; ?>
-      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn primary" style="max-width:240px">Save <?= pm_h($lname) ?></button></div>
+      <div class="mt-3" style="display:flex;gap:8px"><button class="btn primary" style="max-width:240px">Save <?= pm_h($lname) ?></button></div>
     </form>
-    <form method="post" style="padding:0 22px 18px" onsubmit="return confirm('Put this line wording back to the original?')"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="reset_line"><input type="hidden" name="line" value="<?= $ln ?>"><button class="btn small">Reset to original</button></form>
+    <form method="post" class="flush-body" onsubmit="return confirm('Put this line wording back to the original?')"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="reset_line"><input type="hidden" name="line" value="<?= $ln ?>"><button class="btn small">Reset to original</button></form>
   </details>
   <?php endforeach; ?>
 
@@ -2261,9 +2261,9 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
         <td style="text-align:right"><?= pm_h(pm_money((float)$h['setup'], $h['currency'] ?? $cur)) ?></td>
         <td style="text-align:right"><?= pm_h(pm_money((float)$h['monthly'], $h['currency'] ?? $cur)) ?></td>
         <td><?php $signedRow = !empty($h['signed_file']); ?><span style="<?= $signedRow ? 'color:#1d6b3a;font-weight:600' : '' ?>"><?= pm_h($h['status']) ?></span>
-          <?php if (!$signedRow && !empty($h['sign_url'])): ?><br><a class="muted" style="font-size:12px" href="<?= pm_h($h['sign_url']) ?>" target="_blank">Signing link</a><?php endif; ?></td>
+          <?php if (!$signedRow && !empty($h['sign_url'])): ?><br><a class="muted t-xs" href="<?= pm_h($h['sign_url']) ?>" target="_blank">Signing link</a><?php endif; ?></td>
         <td style="white-space:nowrap">
-          <?php if (!empty($h['signed_file']) && is_file(PM_OUT . '/' . $h['signed_file'])): ?><a class="btn small" href="?file=<?= urlencode($h['signed_file']) ?>" target="_blank" style="border-color:#1d6b3a;color:#1d6b3a">Signed copy</a><?php endif; ?>
+          <?php if (!empty($h['signed_file']) && is_file(PM_OUT . '/' . $h['signed_file'])): ?><a class="btn small signed" href="?file=<?= urlencode($h['signed_file']) ?>" target="_blank">Signed copy</a><?php endif; ?>
           <?php if (is_file(PM_OUT . '/' . $h['file'])): ?><a class="btn small" href="?file=<?= urlencode($h['file']) ?>" target="_blank">Open</a><?php endif; ?>
           <form method="post" style="display:inline"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="reuse"><input type="hidden" name="i" value="<?= $i ?>"><button class="btn small">Use again</button></form>
         </td></tr>

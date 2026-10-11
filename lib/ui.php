@@ -271,8 +271,8 @@ function pm_view_biz_grid(array $settings, string $vb, string $csrf): void
         foreach ($rows as $r) {
             echo '<span class="chip ' . ($r['ok'] ? 'ok' : 'todo') . '" title="' . pm_h($r['ok'] ? 'Ready' : $r['hint']) . '">' . ($r['ok'] ? '✓ ' : '') . pm_h($r['label']) . '</span>';
         }
-        echo '</div><div class="muted" style="font-size:13px">' . $n . ' lead' . ($n === 1 ? '' : 's') . '</div>'
-            . '<div class="btns" style="margin-top:0"><a class="btn small' . ($bid === $vb ? '' : ' primary') . '" href="?tab=agents&amp;brand=' . pm_h($bid) . '">' . ($bid === $vb ? 'Open leads' : 'Switch to it') . '</a>'
+        echo '</div><div class="muted t-sm">' . $n . ' lead' . ($n === 1 ? '' : 's') . '</div>'
+            . '<div class="btns mt-0"><a class="btn small' . ($bid === $vb ? '' : ' primary') . '" href="?tab=agents&amp;brand=' . pm_h($bid) . '">' . ($bid === $vb ? 'Open leads' : 'Switch to it') . '</a>'
             . '<a class="btn small" href="?tab=settings&amp;brand=' . pm_h($bid) . '">Settings</a></div></div>';
     }
     echo '<a class="bizcard add" href="?tab=business&amp;new=1"><span style="font-size:26px;line-height:1">+</span><b>Add a business</b><small>A few questions, then it is ready</small></a></div>';

@@ -500,7 +500,7 @@ function pm_view_wa_campaigns(string $vb, string $csrf): void
     $biz = pm_wac_boot() && $wc['ready'];
     $sx = fn($do, $extra = '') => '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="' . $do . '">' . $extra;
     $rows = array_reverse(pm_wac_campaigns($vb));
-    echo '<details class="card" style="margin-top:14px"' . ($rows ? ' open' : '') . '><summary><b>Campaigns</b> <span class="pill">' . ($biz ? 'WhatsApp Business connected' : 'off: needs WhatsApp Business') . '</span></summary>';
+    echo '<details class="card mt-3"' . ($rows ? ' open' : '') . '><summary><b>Campaigns</b> <span class="pill">' . ($biz ? 'WhatsApp Business connected' : 'off: needs WhatsApp Business') . '</span></summary>';
     if (!$biz) {
         echo '<p class="hint">Campaigns are scheduled messages to a group of leads, with the same approval, STOP and daily-limit rules as everything else. They go out from this business\'s own WhatsApp number, and switch on when ' . pm_h($wc['prefix']) . 'WA_BIZ_TOKEN, ' . pm_h($wc['prefix']) . 'WA_BIZ_PHONE_ID and ' . pm_h($wc['prefix']) . 'WA_BIZ_VERIFY are in .env (see Settings &gt; Setup health).</p></details>';
         return;
@@ -511,7 +511,7 @@ function pm_view_wa_campaigns(string $vb, string $csrf): void
     foreach ($rows as $c) {
         $n = pm_wac_counts($c);
         $st = (string)$c['status'];
-        echo '<div class="card" style="margin:8px 0"><div class="wahead"><div><b>' . pm_h((string)$c['name']) . '</b> <span class="pill ' . (in_array($st, ['approved', 'sending'], true) ? 'hot' : ($st === 'paused' ? 'warn' : '')) . '">' . pm_h($st) . '</span>'
+        echo '<div class="card my-2"><div class="wahead"><div><b>' . pm_h((string)$c['name']) . '</b> <span class="pill ' . (in_array($st, ['approved', 'sending'], true) ? 'hot' : ($st === 'paused' ? 'warn' : '')) . '">' . pm_h($st) . '</span>'
             . ' <span class="muted">· from ' . pm_h((string)$c['send_from']) . ' · ' . pm_h(implode(', ', array_map(fn($k) => PM_WAC_AUDIENCE_STATUSES[$k] ?? $k, (array)$c['aud']['statuses']))) . (($c['aud']['group'] ?? '') !== '' ? ' · ' . pm_h((string)$c['aud']['group']) : '')
             . (($c['aud']['optin_only'] ?? true) ? ' · agreed to WhatsApp only' : ' · everyone allowed, opt-in not required')
             . (($c['template'] ?? '') !== '' ? ' · template ' . pm_h((string)$c['template']) : '') . '</span></div></div>';
@@ -526,7 +526,7 @@ function pm_view_wa_campaigns(string $vb, string $csrf): void
                 . (pm_social_can_approve() ? '<button class="btn small primary" name="do" value="wac_approve" onclick="return confirm(\'Approve this campaign? It will start sending in working hours.\')">Approve</button>' : '<span class="hint">An approver approves campaigns.</span>')
                 . '<button class="btn small" name="do" value="wac_cancel">Cancel</button></div></form>';
         } else {
-            echo '<p style="white-space:pre-wrap;margin:6px 0">' . pm_h((string)$c['text']) . '</p><p class="hint">' . (int)$n['sent'] . ' sent · ' . ((int)$n['pending'] + (int)$n['sending']) . ' waiting · ' . (int)$n['skipped'] . ' skipped · ' . (int)$n['failed'] . ' failed'
+            echo '<p class="my-1" style="white-space:pre-wrap">' . pm_h((string)$c['text']) . '</p><p class="hint">' . (int)$n['sent'] . ' sent · ' . ((int)$n['pending'] + (int)$n['sending']) . ' waiting · ' . (int)$n['skipped'] . ' skipped · ' . (int)$n['failed'] . ' failed'
                 . (!empty($c['approved_by']) ? ' · approved by ' . pm_h((string)$c['approved_by']) . ' ' . pm_h((string)$c['approved_at']) : '') . '</p>';
             if (!empty($c['error'])) {
                 echo '<p class="hint warnt">' . pm_h((string)$c['error']) . '</p>';

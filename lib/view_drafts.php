@@ -16,8 +16,8 @@ function pm_view_lead_drafts(array $l, string $csrf, callable $post, callable $h
     $h = '';
     $waBiz = function_exists('pm_wa_biz_cfg') && pm_wa_biz_cfg()['ready'] && function_exists('pm_wa_biz_window_open') && pm_wa_biz_window_open($l); // C3-A03: they wrote in the last 24 hours
     if (in_array('reverify', $open, true)) {
-        $h .= '<form method="post" class="replybox" style="background:var(--okbg);border-color:#cfe3d4"><b>Contact details re-checked</b> <span class="muted">· ' . pm_h((string)$l['reverify']['at']) . '</span>'
-            . '<p class="hint" style="margin:6px 0">' . pm_h((string)$l['reverify']['what']) . '. Check it looks right, then press Got it.</p>'
+        $h .= '<form method="post" class="replybox ok"><b>Contact details re-checked</b> <span class="muted">· ' . pm_h((string)$l['reverify']['at']) . '</span>'
+            . '<p class="hint my-1">' . pm_h((string)$l['reverify']['what']) . '. Check it looks right, then press Got it.</p>'
             . $post($id, 'reverify_seen') . '<div class="btns"><button class="btn small">Got it</button></div></form>';
     }
     if (in_array('winback', $open, true)) {

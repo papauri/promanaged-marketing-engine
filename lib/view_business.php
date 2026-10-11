@@ -42,14 +42,14 @@ if ($step === 1) {
   <label>Who buys from you? *</label>
   <input type="text" name="customers" required maxlength="200" value="<?= $av('customers') ?>" placeholder="e.g. Schools, clinics and small businesses that want reliable power">
   <label>Who do you mainly sell to?</label>
-  <div class="checks" style="margin-top:2px">
+  <div class="checks mt-0">
     <?php foreach (['business' => 'Other businesses (the agents find and write to them)', 'public' => 'The public (social media, enquiries and partners; no cold emails)', 'both' => 'Both'] as $k => $l): ?>
       <label class="check"><input type="radio" name="sell_to" value="<?= $k ?>" <?= ($ans['sell_to'] ?? 'business') === $k ? 'checked' : '' ?>> <?= pm_h($l) ?></label>
     <?php endforeach; ?>
   </div>
   <label>Website <span class="muted">(the AI reads it, up to five pages, to learn the business and who to target)</span></label>
   <input type="text" name="website" value="<?= $av('website') ?>" placeholder="www.example.mw">
-  <details class="more" style="margin-top:12px" <?= array_filter([$ans['cities'] ?? '', $ans['targets'] ?? '', $ans['facts'] ?? '', $ans['email'] ?? '', $ans['notes'] ?? '']) ? 'open' : '' ?>><summary>More, if you like (the agents work better with it)</summary>
+  <details class="more mt-3" <?= array_filter([$ans['cities'] ?? '', $ans['targets'] ?? '', $ans['facts'] ?? '', $ans['email'] ?? '', $ans['notes'] ?? '']) ? 'open' : '' ?>><summary>More, if you like (the agents work better with it)</summary>
     <label>Anything else the AI should read <span class="muted">(paste an About text, a brochure or a list of services; it is treated as your own words)</span></label>
     <textarea name="notes" rows="4" maxlength="6000" placeholder="No website? Paste a few paragraphs about the business here."><?= $av('notes') ?></textarea>
     <div class="two">
@@ -114,7 +114,7 @@ if ($step === 2) {
     <textarea name="d[facts]" rows="5"><?= $lines($d['facts'] ?? []) ?></textarea>
     <?php if (!empty($d['sources'])): ?>
     <details class="more"><summary>Where each fact came from</summary>
-      <ul class="srcs" style="margin:6px 0 0 18px"><?php foreach ((array)$d['facts'] as $fct): ?><li><?= pm_h((string)$fct) ?> <span class="muted">· <?= $srcLabel($d['sources'][$fct] ?? 'you') ?></span></li><?php endforeach; ?></ul>
+      <ul class="srcs mt-1 ml-4"><?php foreach ((array)$d['facts'] as $fct): ?><li><?= pm_h((string)$fct) ?> <span class="muted">· <?= $srcLabel($d['sources'][$fct] ?? 'you') ?></span></li><?php endforeach; ?></ul>
     </details>
     <?php endif; ?>
     <div class="two">
@@ -135,10 +135,10 @@ if ($step === 2) {
       <div><label>Cities to search (comma separated)</label><input type="text" name="d[cities]" value="<?= pm_h(implode(', ', (array)($d['cities'] ?? []))) ?>"></div>
     </div>
     <?php if ($segs): ?>
-      <p class="hint" style="margin-bottom:4px">The AI's reasoning, from how businesses like this sell. It is advice, not a claim about you: change anything.</p>
-      <ul class="why" style="margin:0 0 6px 0;padding:0;list-style:none">
+      <p class="hint mb-1">The AI's reasoning, from how businesses like this sell. It is advice, not a claim about you: change anything.</p>
+      <ul class="why plain-list mb-1">
       <?php foreach ($segs as $s): $inList = (bool)array_filter((array)($d['sectors'] ?? []), fn($x) => pm_study_same((string)$x, (string)$s['name'])); ?>
-        <li style="margin:6px 0"><?php if (!$inList): ?><label class="check" style="display:inline"><input type="checkbox" name="d[extra][]" value="<?= pm_h((string)$s['name']) ?>"> <b><?= pm_h((string)$s['name']) ?></b></label> <span class="muted">· also worth trying</span><?php else: ?><b><?= pm_h((string)$s['name']) ?></b><?php endif; ?>
+        <li class="my-1"><?php if (!$inList): ?><label class="check" style="display:inline"><input type="checkbox" name="d[extra][]" value="<?= pm_h((string)$s['name']) ?>"> <b><?= pm_h((string)$s['name']) ?></b></label> <span class="muted">· also worth trying</span><?php else: ?><b><?= pm_h((string)$s['name']) ?></b><?php endif; ?>
           <span class="muted" title="How well it fits what you offer">· <?= $dots($s['fit'] ?? 3) ?></span><br>
           <span class="muted"><?= pm_h((string)($s['why'] ?? '')) ?><?= !empty($s['signals']) ? ' Signs they need it: ' . pm_h(implode('; ', (array)$s['signals'])) . '.' : '' ?></span></li>
       <?php endforeach; ?>
@@ -152,7 +152,7 @@ if ($step === 2) {
 
   <?php $qs = (array)($d['questions'] ?? []); if ($qs && (int)($wz['rounds'] ?? 0) < 3): ?>
   <div class="card nofold"><h2>What the AI would like to know</h2>
-    <p class="hint" style="margin-top:0">Only you can answer these. Answer what you like, then press "Update the draft". Your answers are treated as your own words.</p>
+    <p class="hint mt-0">Only you can answer these. Answer what you like, then press "Update the draft". Your answers are treated as your own words.</p>
     <?php foreach ($qs as $i => $q): ?>
       <label><?= pm_h((string)$q['q']) ?><?= ($q['why'] ?? '') !== '' ? ' <span class="muted">(' . pm_h((string)$q['why']) . ')</span>' : '' ?></label>
       <input type="hidden" name="qtext[<?= (int)$i ?>]" value="<?= pm_h((string)$q['q']) ?>"><input type="text" name="qa[<?= (int)$i ?>]" maxlength="400">
@@ -195,7 +195,7 @@ if ($step === 4) { // studying an existing business again: what is new, with a t
     $any = array_filter([$diff['facts'], $diff['segments'], $diff['skip'], $diff['angles'], $diff['cities'], $diff['found']]);
     ?>
 <form method="post" class="wiz"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="brand_study_apply"><input type="hidden" name="id" value="<?= pm_h($id) ?>">
-  <?php if ($diff['facts']): ?><div class="card nofold"><h2>New facts the AI may use</h2><p class="hint" style="margin-top:0">Each one carries a sentence the app found on your website or in your own words.</p>
+  <?php if ($diff['facts']): ?><div class="card nofold"><h2>New facts the AI may use</h2><p class="hint mt-0">Each one carries a sentence the app found on your website or in your own words.</p>
     <?php foreach ($diff['facts'] as $k => $x): ?><label class="check"><input type="checkbox" name="pick[facts][]" value="<?= pm_h($k) ?>" checked> <?= pm_h($x['text']) ?> <span class="muted">· <?= $srcLabel($x['src']) ?></span></label><?php endforeach; ?></div><?php endif; ?>
   <?php if ($diff['segments']): ?><div class="card nofold"><h2>More kinds of business to look for</h2>
     <?php foreach ($diff['segments'] as $k => $s): ?><label class="check"><input type="checkbox" name="pick[segments][]" value="<?= pm_h($k) ?>" <?= (int)($s['fit'] ?? 3) >= 4 ? 'checked' : '' ?>> <b><?= pm_h((string)$s['name']) ?></b> <span class="muted">· <?= pm_h((string)($s['why'] ?? '')) ?></span></label><?php endforeach; ?></div><?php endif; ?>
@@ -206,9 +206,9 @@ if ($step === 4) { // studying an existing business again: what is new, with a t
     <?php foreach ($diff['cities'] as $k => $c): ?><label class="check"><input type="checkbox" name="pick[cities][]" value="<?= pm_h($k) ?>"> <b><?= pm_h((string)$c['name']) ?></b> <span class="muted">· <?= pm_h((string)($c['why'] ?? '')) ?></span></label><?php endforeach; ?></div><?php endif; ?>
   <?php if ($diff['found']): ?><div class="card nofold"><h2>Details your website shows</h2>
     <?php foreach ($diff['found'] as $k => $v): ?><label class="check"><input type="checkbox" name="pick[found][<?= pm_h($k) ?>]" value="1" checked> Use <?= pm_h($k === 'email' ? 'the email address' : 'the phone number') ?>: <b><?= pm_h($v) ?></b></label><?php endforeach; ?></div><?php endif; ?>
-  <?php if (!$any && !empty($st['ai'])): ?><div class="card nofold"><h2>Nothing new</h2><p class="hint" style="margin-top:0">What the AI learned is already in the business's settings.</p></div><?php endif; ?>
-  <?php if (!empty($diff['questions'])): ?><div class="card nofold"><h2>Things only you can tell it</h2><p class="hint" style="margin-top:0">Add the true ones to "True facts the AI may use" in the business's settings.</p>
-    <ul style="margin:0 0 0 18px"><?php foreach ($diff['questions'] as $q): ?><li><?= pm_h((string)$q['q']) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
+  <?php if (!$any && !empty($st['ai'])): ?><div class="card nofold"><h2>Nothing new</h2><p class="hint mt-0">What the AI learned is already in the business's settings.</p></div><?php endif; ?>
+  <?php if (!empty($diff['questions'])): ?><div class="card nofold"><h2>Things only you can tell it</h2><p class="hint mt-0">Add the true ones to "True facts the AI may use" in the business's settings.</p>
+    <ul class="m-0 ml-4"><?php foreach ($diff['questions'] as $q): ?><li><?= pm_h((string)$q['q']) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
   <?php if (!empty($bundle['pages'])): ?><p class="hint">Read: <?= implode(' · ', array_map(fn($p) => '<a href="' . pm_h((string)$p['url']) . '" target="_blank" rel="noopener noreferrer">' . pm_h(pm_study_host((string)$p['url']) . (string)parse_url((string)$p['url'], PHP_URL_PATH)) . '</a>', $bundle['pages'])) ?></p><?php endif; ?>
   <div class="btns"><?php if ($any): ?><button class="btn primary">Add the ticked ones</button><?php endif; ?><a class="btn" href="?tab=settings&amp;brand=<?= pm_h($id) ?>">Leave it as it is</a></div>
 </form>

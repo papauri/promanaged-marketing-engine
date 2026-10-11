@@ -17,7 +17,7 @@ function pm_view_send_queue(array $leads): void
       <?php if ($br['blocked']): ?><p class="flash err"><?= pm_h($br['why']) ?></p><?php endif; ?>
       <?php if (!$q): ?><p class="hint">Nothing approved yet. Approve drafts to start the drip.</p><?php endif; ?>
       <?php $i = 0; foreach ($q as $l): ?>
-        <div class="row" style="display:flex;gap:10px;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)">
+        <div class="splitrow">
           <span><b><?= pm_h($l['name'] ?? '') ?></b> <span class="muted"><?= pm_h($l['email'] ?? '') ?></span></span>
           <span><span class="pill"><?= (int)($l['score'] ?? 0) ?></span> <span class="muted"><?= pm_h(pm_approved_eta($l, $i++, $left)) ?></span></span>
         </div>
@@ -38,11 +38,11 @@ function pm_view_embed_card(): void
       <?php if ($base === ''): ?><p class="flash err">Not reachable yet: APP_URL is empty in .env. Visitors cannot open this page until the app is hosted online and APP_URL is set.</p><?php endif; ?>
       <p class="hint">Visitors fill in a short form and it arrives as a lead scored 85, with the owner told straight away. Nothing is sent to them except one short receipt.</p>
       <?php foreach ($links as $label => $path): $url = ($base !== '' ? $base : 'https://YOUR-SITE') . '/enquire.php' . $path; ?>
-        <div style="margin:10px 0"><b><?= pm_h($label) ?></b>
+        <div class="my-2"><b><?= pm_h($label) ?></b>
           <div><input type="text" readonly value="<?= pm_h($url) ?>" onclick="this.select()" style="width:100%"></div>
           <?php if ($label === 'Enquiry form'): ?><div class="hint">Embed on a page: <code><?= pm_h('<iframe src="' . $url . '&embed=1" width="100%" height="640" style="border:0" title="Contact us"></iframe>') ?></code></div>
             <?php if ($base !== '' && class_exists('TCPDF2DBarcode')): $qr = (new TCPDF2DBarcode($url, 'QRCODE,M'))->getBarcodeSVGcode(4, 4, 'black'); ?>
-              <div class="hint">QR code for posters and cards (made on this computer):</div><div style="width:150px;background:#fff;padding:6px;border:1px solid var(--line)"><?= $qr ?></div>
+              <div class="hint">QR code for posters and cards (made on this computer):</div><div class="qrbox"><?= $qr ?></div>
             <?php else: ?><div class="hint">QR code: paste the link above into any QR generator you trust.</div><?php endif; ?>
           <?php endif; ?>
         </div>

@@ -438,7 +438,7 @@ function pm_film_card_html(array $p, bool $withCards = true): string
             'shots' => array_map(fn($s, $i) => pm_ch_shot_spec($p, $s, $i, count($shots)), $shots, array_keys($shots))], 'story');
         $u = is_string($sb) ? pm_ch_data_uri($sb) : '';
         if ($u !== '') {
-            $h .= '<p><img src="' . $u . '" alt="Storyboard" style="max-width:220px;border-radius:8px"> <a class="btn small" download="storyboard-' . pm_h((string)$p['id']) . '.png" href="' . $u . '">Download storyboard</a></p>';
+            $h .= '<p><img src="' . $u . '" alt="Storyboard" class="thumb"> <a class="btn small" download="storyboard-' . pm_h((string)$p['id']) . '.png" href="' . $u . '">Download storyboard</a></p>';
         }
     }
     return $h . '</div>';

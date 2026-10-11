@@ -37,7 +37,7 @@ $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type
 
 <div class="card" id="pillars">
   <h2>Pillars: the kinds of post, and how often</h2>
-  <p class="hint" style="margin-top:0">The planner writes exactly this mix (weights are shares, not percentages that must add to 100). Proof and Offer posts only happen when the proof bank below has a usable item.</p>
+  <p class="hint mt-0">The planner writes exactly this mix (weights are shares, not percentages that must add to 100). Proof and Offer posts only happen when the proof bank below has a usable item.</p>
   <form method="post"><?= $sxx ?>
     <?php foreach ($pilRows as $r): ?><div class="row pillrow"><div><input type="text" name="pillar_name[]" value="<?= pm_h((string)$r['name']) ?>" placeholder="Pillar name" aria-label="Pillar name"></div><div><input type="number" min="0" max="100" name="pillar_weight[]" value="<?= pm_h((string)$r['weight']) ?>" placeholder="Weight" aria-label="Weight"></div></div><?php endforeach; ?>
     <div class="btns"><button class="btn small primary" name="do" value="pillars_save">Save the pillars</button><button class="btn small" name="do" value="pillars_reset">Back to the defaults</button></div>
@@ -46,7 +46,7 @@ $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type
 
 <div class="card" id="mix">
   <h2>Suggested mix, from what worked</h2>
-<?php if (!$mix): ?><p class="hint" style="margin:0">Not enough results yet: at least 8 scored posts, and 3 in each of two pillars, are needed before a change is suggested. The scoreboard is on <a href="?tab=social&amp;view=results">Insights &gt; Results</a>.</p>
+<?php if (!$mix): ?><p class="hint m-0">Not enough results yet: at least 8 scored posts, and 3 in each of two pillars, are needed before a change is suggested. The scoreboard is on <a href="?tab=social&amp;view=results">Insights &gt; Results</a>.</p>
 <?php else: ?>
   <div class="rs-wrap"><table class="grid compact"><tr><th>Pillar</th><th class="n">Now</th><th class="n">Suggested</th><th class="n">Posts scored</th><th class="n">Avg engagement</th></tr>
   <?php foreach ($mix as $name => $m): ?><tr><td><?= pm_h($name) ?></td><td class="n"><?= round($m['old'] * 100) ?>%</td><td class="n"><b><?= round($m['new'] * 100) ?>%</b></td><td class="n"><?= (int)$m['n'] ?></td><td class="n"><?= $m['avg'] ?? '–' ?></td></tr><?php endforeach; ?>
@@ -58,11 +58,11 @@ $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type
 
 <div class="card" id="ideas">
   <h2>Idea bank</h2>
-  <p class="hint" style="margin-top:0">Ideas the planner may turn into posts. Yours sit beside the built-in starters for <?= pm_h($bname) ?>. Ideas the Audit suggests are added here too.</p>
+  <p class="hint mt-0">Ideas the planner may turn into posts. Yours sit beside the built-in starters for <?= pm_h($bname) ?>. Ideas the Audit suggests are added here too.</p>
   <div class="ideaboom">
     <div class="crew-row"><?php foreach (array_keys(PM_IR_SPECIALISTS) as $sp): ?><span class="crew-chip<?= pm_agents_ready() ? '' : ' off' ?>"><i></i><?= pm_h($sp) ?></span><?php endforeach; ?><span class="crew-chip"><i></i>Idea editor</span></div>
     <form method="post" class="findrow bt-run"><?= $sx('ir_run') ?><button class="btn"><?= $irOpts ? 'Ask the idea room again' : 'Ask the idea room for ideas' ?></button>
-      <span class="hint" style="margin:0"><?= pm_agents_ready() ? 'Four specialists, one AI call; an editor scores every idea.' : 'No AI key: ideas are built from your own facts.' ?></span></form>
+      <span class="hint m-0"><?= pm_agents_ready() ? 'Four specialists, one AI call; an editor scores every idea.' : 'No AI key: ideas are built from your own facts.' ?></span></form>
     <?php foreach ($irOpts as $o): ?>
     <div class="idearow">
       <span><span class="sx-chip"><?= pm_h((string)$o['by']) ?></span> <?= pm_h((string)$o['text']) ?> <span class="sx-chip <?= (int)$o['score'] >= PM_IR_THRESHOLD ? 'ok' : 'warn' ?>"><?= (int)$o['score'] ?>/100</span><?php foreach (array_slice((array)$o['issues'], 0, 1) as $is): ?> <span class="sx-chip warn" title="<?= pm_h((string)$is) ?>">to watch</span><?php endforeach; ?></span>
@@ -89,7 +89,7 @@ $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type
 
 <div class="card" id="proof">
   <h2>Proof bank</h2>
-  <p class="hint" style="margin-top:0">Real quotes, results, photos and offers the planner may use. Text is posted word for word. A quote or result is used only with the client's consent ticked; offers need an end date to get a "last days" post and stop being used after it. Clients who sign get a blank row here to ask for a one-line quote.</p>
+  <p class="hint mt-0">Real quotes, results, photos and offers the planner may use. Text is posted word for word. A quote or result is used only with the client's consent ticked; offers need an end date to get a "last days" post and stop being used after it. Clients who sign get a blank row here to ask for a one-line quote.</p>
   <form method="post"><?= $sxx ?>
     <?php foreach ($proofRows as $i => $r): ?>
     <div class="split proofrow">
@@ -118,7 +118,7 @@ $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type
 
 <div class="card" id="tags">
   <h2>Hashtags</h2>
-  <p class="hint" style="margin-top:0">The planner picks a few of these for each post and rotates them. Leave a box empty to use the built-in set. Separate them with spaces or commas.</p>
+  <p class="hint mt-0">The planner picks a few of these for each post and rotates them. Leave a box empty to use the built-in set. Separate them with spaces or commas.</p>
   <form method="post"><?= $sx('tags_save') ?>
     <div class="row">
       <div><label>Local (place and community)</label><textarea name="local" rows="2" placeholder="#Malawi #Lilongwe"><?= pm_h(implode(' ', (array)$bank['tags']['local'])) ?></textarea></div>
@@ -130,7 +130,7 @@ $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type
 
 <div class="card" id="recycle">
   <h2>Bring back what worked</h2>
-<?php if (!$rec): ?><p class="hint" style="margin:0">No post is ready to come back yet. A post can return when it is among the best 20% by 7-day engagement, older than 45 days, not about a date or offer, and not used again in the last 90 days. At least 5 such posts are needed before one is picked.</p>
+<?php if (!$rec): ?><p class="hint m-0">No post is ready to come back yet. A post can return when it is among the best 20% by 7-day engagement, older than 45 days, not about a date or offer, and not used again in the last 90 days. At least 5 such posts are needed before one is picked.</p>
 <?php else: ?>
   <div class="rs-wrap"><table class="grid compact"><tr><th>Post</th><th class="n">Engagement</th><th class="n">Age</th><th></th></tr>
   <?php foreach ($rec as $c): ?><tr><td><?= pm_h((string)(($c['post']['headline'] ?? '') ?: mb_substr((string)$c['post']['caption'], 0, 60))) ?><br><span class="hint"><?= pm_h((string)($c['post']['pillar'] ?? '')) ?></span></td><td class="n"><?= $num($c['eng']) ?></td><td class="n"><?= (int)$c['age_days'] ?> days</td>

@@ -539,14 +539,7 @@ function pm_panel_plan_card_variants(string $vb, array $ctx): string
     $vs = pm_social_variants($p);
     $id = (string)($p['id'] ?? '');
     $hasPic = ($p['format'] ?? 'image') !== 'text';
-    static $css = false;
     $h = '';
-    if (!$css) {
-        $css = true;
-        $h .= '<style>.sx-var{margin-top:10px}.sx-var>summary{cursor:pointer;font-weight:600;font-size:13px}.sx-var .vch{margin:6px 0;padding:8px 10px}.sx-var .vch>summary{cursor:pointer;font-size:13px}'
-            . '.sx-var pre{white-space:pre-wrap;word-break:break-word;font:13px/1.45 inherit;margin:8px 0;padding:8px 10px;background:var(--bg,#f6f7f8);border-radius:8px}.sx-var .vb{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}'
-            . '.sx-var .vw{color:var(--warn,#8a5a00);font-size:12px;margin:2px 0}</style>';
-    }
     $h .= '<details class="sx-var"><summary>Channels (' . count($vs) . ')</summary>';
     foreach ($vs as $ch => $v) {
         $over = $v['chars'] > $v['limit'];

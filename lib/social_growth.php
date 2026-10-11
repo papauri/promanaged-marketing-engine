@@ -50,7 +50,7 @@ function pm_fb_page_embed(string $brand, int $height = 1400): string
         'adapt_container_width' => 'true', 'hide_cover' => 'false', 'show_facepile' => 'true']);
     return '<aside class="wppage"><div class="wphead"><b>Your Page, live</b> <a class="btn small" href="' . pm_h($link) . '" target="_blank" rel="noopener noreferrer">Open on Facebook</a>'
         . ' <button type="button" class="btn small" data-reframe="1">Refresh</button></div>'
-        . '<iframe class="fbplug" data-src="' . pm_h($src) . '" width="500" height="700" style="border:none" frameborder="0" allowfullscreen="true"'
+        . '<iframe class="fbplug" data-src="' . pm_h($src) . '" width="500" height="700" frameborder="0" allowfullscreen="true"'
         . ' allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share" title="' . pm_h((string)($pg['name'] ?? 'Facebook Page')) . ' on Facebook"></iframe>'
         . '<p class="hint">What visitors see right now. If it stays blank, your browser is blocking Facebook content: use Open on Facebook.</p></aside>';
 }

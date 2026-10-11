@@ -25,15 +25,15 @@ $btx = fn(string $do, string $extra = '') => '<input type="hidden" name="csrf" v
 ?>
 <div class="card bt" id="team">
   <h2>Your brand team</h2>
-  <p class="hint" style="margin-top:0">A small team works in a loop so you choose between good kits instead of building one from nothing. The <b>Creative director</b> proposes kits; the <b>Copy editor</b> and the <b>Art critic</b> score each one (readable, short, human, not a repeat, close to the brand colour); anything weak goes back for a second round. You get the best three. <b>Nothing changes until you press Use this kit.</b></p>
+  <p class="hint mt-0">A small team works in a loop so you choose between good kits instead of building one from nothing. The <b>Creative director</b> proposes kits; the <b>Copy editor</b> and the <b>Art critic</b> score each one (readable, short, human, not a repeat, close to the brand colour); anything weak goes back for a second round. You get the best three. <b>Nothing changes until you press Use this kit.</b></p>
   <div class="crew-row"><?php foreach ($roles as [$rn, $rd, $on]): ?><span class="crew-chip<?= $on ? '' : ' off' ?>" title="<?= pm_h($rd . ($on ? '' : ' (needs an AI key)')) ?>"><i></i><?= pm_h($rn) ?></span><?php endforeach; ?></div>
   <form method="post" class="findrow bt-run"><?= $btx('bt_run') ?>
     <button class="btn primary" <?= pm_studio_can_draw() ? '' : 'disabled title="This server cannot draw pictures"' ?>><?= $waiting ? 'Ask for a fresh set' : 'Ask the team for kits' ?></button>
-    <label class="check" style="margin:0"><input type="checkbox" name="words" value="1" <?= $aiOn ? 'checked' : 'disabled' ?>> also write the missing profile words</label>
-    <span class="hint" style="margin:0"><?= $aiOn ? 'About 2 to 3 AI calls, about a minute.' : 'No AI key: the team varies the look in code and keeps your wording.' ?></span>
+    <label class="check m-0"><input type="checkbox" name="words" value="1" <?= $aiOn ? 'checked' : 'disabled' ?>> also write the missing profile words</label>
+    <span class="hint m-0"><?= $aiOn ? 'About 2 to 3 AI calls, about a minute.' : 'No AI key: the team varies the look in code and keeps your wording.' ?></span>
   </form>
   <form method="post" class="inl"><?= $btx('bt_auto') ?>
-    <label class="check" style="margin:8px 0 0"><input type="checkbox" name="on" value="1" <?= !empty($bt['auto']) ? 'checked' : '' ?> onchange="this.form.requestSubmit()"> Let the team make a fresh set about once a month (it only proposes)</label></form>
+    <label class="check mt-2"><input type="checkbox" name="on" value="1" <?= !empty($bt['auto']) ? 'checked' : '' ?> onchange="this.form.requestSubmit()"> Let the team make a fresh set about once a month (it only proposes)</label></form>
   <?php if ($lastRun): ?>
   <details class="more"><summary class="hint" style="cursor:pointer">How the team worked on <?= pm_h(date('j M H:i', strtotime((string)$lastRun['at']))) ?> · best <?= (int)$lastRun['best'] ?> of 100 · <?= (int)$lastRun['calls'] ?> AI call<?= (int)$lastRun['calls'] === 1 ? '' : 's' ?></summary>
     <ul class="hint"><?php foreach ((array)$lastRun['log'] as $ln): ?><li><?= pm_h((string)$ln) ?></li><?php endforeach; ?></ul></details>
@@ -46,7 +46,7 @@ $btx = fn(string $do, string $extra = '') => '<input type="hidden" name="csrf" v
       <div class="btmeta"><b><?= pm_h((string)$p['name']) ?></b> <span class="sx-chip <?= (int)$p['score'] >= PM_BT_THRESHOLD ? 'ok' : 'warn' ?>" title="The art critic's score"><?= (int)$p['score'] ?>/100</span>
         <?= ($p['how'] ?? '') === 'code' ? '<span class="sx-chip">made in code</span>' : '' ?><?= (int)($p['round'] ?? 1) > 1 ? '<span class="sx-chip" title="Sent back by the critics and improved">round 2</span>' : '' ?></div>
       <p class="btwords"><b><?= pm_h((string)$p['headline']) ?></b><br><?= pm_h((string)$p['subline']) ?></p>
-      <?php if (!empty($p['why'])): ?><p class="hint" style="margin:0"><?= pm_h((string)$p['why']) ?></p><?php endif; ?>
+      <?php if (!empty($p['why'])): ?><p class="hint m-0"><?= pm_h((string)$p['why']) ?></p><?php endif; ?>
       <div class="sx-chips"><?php foreach ((array)$p['praise'] as $pr): ?><span class="sx-chip ok"><?= pm_h((string)$pr) ?></span><?php endforeach; ?><?php foreach (array_slice((array)$p['issues'], 0, 2) as $is): ?><span class="sx-chip warn" title="<?= pm_h((string)$is) ?>">to watch: <?= pm_h(mb_substr((string)$is, 0, 46)) ?></span><?php endforeach; ?></div>
       <div class="btns">
         <form method="post" class="inl" onsubmit="return confirm('Use this kit for every profile picture and cover, and as the cover wording?')"><?= $btx('bt_use', '<input type="hidden" name="id" value="' . pm_h((string)$p['id']) . '">') ?><button class="btn small primary">Use this kit</button></form>
@@ -74,12 +74,12 @@ $kind = ['place' => 'The place', 'work' => 'The work', 'people' => 'The people']
 ?>
 <div class="card bt" id="wording">
   <h2>Cover wording: your writers' room</h2>
-  <p class="hint" style="margin-top:0">Four writers, each with their own angle, write the headline and the supporting line for the cover; the <b>Copy editor</b> scores every option and sends weak ones back once. Anything that adds a number or a claim your facts do not give is thrown out before you see it. <b>Nothing changes until you press Use this wording.</b></p>
+  <p class="hint mt-0">Four writers, each with their own angle, write the headline and the supporting line for the cover; the <b>Copy editor</b> scores every option and sends weak ones back once. Anything that adds a number or a claim your facts do not give is thrown out before you see it. <b>Nothing changes until you press Use this wording.</b></p>
   <div class="crew-row"><?= $chips(array_keys(PM_CD_WRITERS), $aiOn) ?><?= $chips(['Copy editor'], true) ?></div>
-  <p class="hint" style="margin:0 0 8px">In use now: <b><?= pm_h($inUseHead) ?></b><?= $inUseLine !== '' ? ' · ' . pm_h($inUseLine) : '' ?></p>
+  <p class="hint mb-2">In use now: <b><?= pm_h($inUseHead) ?></b><?= $inUseLine !== '' ? ' · ' . pm_h($inUseLine) : '' ?></p>
   <form method="post" class="findrow bt-run"><?= $btx('cd_run') ?>
     <button class="btn primary"><?= $cdOpts ? 'Ask for fresh wording' : 'Ask the writers' ?></button>
-    <span class="hint" style="margin:0"><?= $aiOn ? 'One or two AI calls, about 20 seconds.' : 'No AI key: the desk re-cuts your own words (tagline, facts, about line).' ?></span>
+    <span class="hint m-0"><?= $aiOn ? 'One or two AI calls, about 20 seconds.' : 'No AI key: the desk re-cuts your own words (tagline, facts, about line).' ?></span>
   </form>
   <?php if ($cdRun): ?><details class="more"><summary class="hint" style="cursor:pointer">How the desk worked on <?= pm_h(date('j M H:i', strtotime((string)$cdRun['at']))) ?> · best <?= (int)$cdRun['best'] ?> of 100 · <?= (int)$cdRun['calls'] ?> AI call<?= (int)$cdRun['calls'] === 1 ? '' : 's' ?></summary>
     <ul class="hint"><?php foreach ((array)$cdRun['log'] as $ln): ?><li><?= pm_h((string)$ln) ?></li><?php endforeach; ?></ul></details><?php endif; ?>
@@ -89,7 +89,7 @@ $kind = ['place' => 'The place', 'work' => 'The work', 'people' => 'The people']
     <div class="btkit">
       <div class="btmeta"><span class="sx-chip"><?= pm_h((string)$o['writer']) ?></span> <span class="sx-chip <?= (int)$o['score'] >= PM_CD_THRESHOLD ? 'ok' : 'warn' ?>" title="The copy editor's score"><?= (int)$o['score'] ?>/100</span><?= (int)($o['round'] ?? 1) > 1 ? '<span class="sx-chip" title="Sent back by the editor and improved">round 2</span>' : '' ?></div>
       <p class="btwords"><b><?= pm_h((string)$o['headline']) ?></b><br><?= pm_h((string)$o['line']) ?></p>
-      <?php if (!empty($o['why'])): ?><p class="hint" style="margin:0"><?= pm_h((string)$o['why']) ?></p><?php endif; ?>
+      <?php if (!empty($o['why'])): ?><p class="hint m-0"><?= pm_h((string)$o['why']) ?></p><?php endif; ?>
       <div class="sx-chips"><?php foreach ((array)$o['praise'] as $pr): ?><span class="sx-chip ok"><?= pm_h((string)$pr) ?></span><?php endforeach; ?><?php foreach (array_slice((array)$o['issues'], 0, 2) as $is): ?><span class="sx-chip warn" title="<?= pm_h((string)$is) ?>">to watch: <?= pm_h(mb_substr((string)$is, 0, 46)) ?></span><?php endforeach; ?></div>
       <div class="btns">
         <form method="post" class="inl" onsubmit="return confirm('Use this as the cover wording everywhere?')"><?= $btx('cd_use', '<input type="hidden" name="id" value="' . pm_h((string)$o['id']) . '">') ?><button class="btn small primary">Use this wording</button></form>
@@ -103,12 +103,12 @@ $kind = ['place' => 'The place', 'work' => 'The work', 'people' => 'The people']
 
 <div class="card bt" id="photo">
   <h2>Cover photo: your photo desk</h2>
-  <p class="hint" style="margin-top:0">The <b>Photo scout</b> gathers the photos you already have (the cover photo in use, the picture your website shares, your photo library) and the <b>Photo critic</b> reads each one for a cover: size, shape, light, contrast, sharpness, and how busy it is where the headline sits, with a plain fix for every problem. The <b>Photo director</b> (AI) can write shot briefs for what to photograph next. Real photos only: nothing is generated or bought.</p>
+  <p class="hint mt-0">The <b>Photo scout</b> gathers the photos you already have (the cover photo in use, the picture your website shares, your photo library) and the <b>Photo critic</b> reads each one for a cover: size, shape, light, contrast, sharpness, and how busy it is where the headline sits, with a plain fix for every problem. The <b>Photo director</b> (AI) can write shot briefs for what to photograph next. Real photos only: nothing is generated or bought.</p>
   <div class="crew-row"><?= $chips(['Photo scout', 'Photo critic'], true) ?><?= $chips(['Photo director'], $aiOn) ?></div>
   <form method="post" class="findrow bt-run"><?= $btx('pd_run') ?>
     <button class="btn primary"><?= $pdPhotos || $pdShots ? 'Look again' : 'Ask the photo desk' ?></button>
-    <label class="check" style="margin:0"><input type="checkbox" name="brief" value="1" <?= $aiOn ? 'checked' : '' ?>> also write shot briefs<?= $aiOn ? '' : ' (plain ones without an AI key)' ?></label>
-    <span class="hint" style="margin:0">Reading photos is free; briefs are one or two AI calls.</span>
+    <label class="check m-0"><input type="checkbox" name="brief" value="1" <?= $aiOn ? 'checked' : '' ?>> also write shot briefs<?= $aiOn ? '' : ' (plain ones without an AI key)' ?></label>
+    <span class="hint m-0">Reading photos is free; briefs are one or two AI calls.</span>
   </form>
   <?php if ($pdRun): ?><details class="more"><summary class="hint" style="cursor:pointer">How the desk worked on <?= pm_h(date('j M H:i', strtotime((string)$pdRun['at']))) ?> · <?= (int)$pdRun['calls'] ?> AI call<?= (int)$pdRun['calls'] === 1 ? '' : 's' ?></summary>
     <ul class="hint"><?php foreach ((array)$pdRun['log'] as $ln): ?><li><?= pm_h((string)$ln) ?></li><?php endforeach; ?></ul></details><?php endif; ?>
@@ -119,10 +119,10 @@ $kind = ['place' => 'The place', 'work' => 'The work', 'people' => 'The people']
     <div class="btkit">
       <img class="pdthumb" src="?pdimg=<?= pm_h((string)$ph['key']) ?>&amp;b=<?= pm_h($vb) ?>&amp;v=<?= (int)$ph['mtime'] ?>" alt="<?= pm_h((string)$ph['label']) ?>" loading="lazy">
       <div class="btmeta"><b><?= pm_h((string)$ph['label']) ?></b> <span class="sx-chip <?= (int)$ph['score'] >= PM_PD_THRESHOLD ? 'ok' : ((int)$ph['score'] >= 55 ? 'warn' : 'bad') ?>" title="The photo critic's score for a cover"><?= (int)$ph['score'] ?>/100</span><?= $ph['key'] === 'current' ? '<span class="sx-chip">in use</span>' : '' ?></div>
-      <p class="hint" style="margin:0"><?= !empty($ph['w']) ? (int)$ph['w'] . ' × ' . (int)$ph['h'] . ' pixels' : '' ?></p>
+      <p class="hint m-0"><?= !empty($ph['w']) ? (int)$ph['w'] . ' × ' . (int)$ph['h'] . ' pixels' : '' ?></p>
       <div class="sx-chips"><?php foreach ((array)$ph['praise'] as $pr): ?><span class="sx-chip ok"><?= pm_h((string)$pr) ?></span><?php endforeach; ?></div>
       <?php if (!empty($ph['issues'])): ?><ul class="hint pdissues"><?php foreach (array_slice((array)$ph['issues'], 0, 3) as $is): ?><li><?= pm_h((string)$is) ?></li><?php endforeach; ?></ul><?php endif; ?>
-      <?php if (!empty($ph['fixes'])): ?><p class="hint" style="margin:0"><b>Fix:</b> <?= pm_h(implode(' ', array_slice((array)$ph['fixes'], 0, 2))) ?></p><?php endif; ?>
+      <?php if (!empty($ph['fixes'])): ?><p class="hint m-0"><b>Fix:</b> <?= pm_h(implode(' ', array_slice((array)$ph['fixes'], 0, 2))) ?></p><?php endif; ?>
       <?php if ($ph['key'] !== 'current'): ?><div class="btns"><form method="post" class="inl" onsubmit="return confirm('Use this photo as the cover photo and draw the kit again?')"><?= $btx('pd_use', '<input type="hidden" name="key" value="' . pm_h((string)$ph['key']) . '">') ?><button class="btn small primary">Use as the cover photo</button></form></div><?php endif; ?>
     </div>
     <?php endforeach; ?>
@@ -142,7 +142,7 @@ $kind = ['place' => 'The place', 'work' => 'The work', 'people' => 'The people']
         <dt>Keep calm for the headline</dt><dd><?= pm_h((string)$sh['text_space']) ?></dd>
         <dt>Avoid</dt><dd><?= pm_h((string)$sh['avoid']) ?></dd>
       </dl>
-      <?php if (!empty($sh['why'])): ?><p class="hint" style="margin:0"><?= pm_h((string)$sh['why']) ?></p><?php endif; ?>
+      <?php if (!empty($sh['why'])): ?><p class="hint m-0"><?= pm_h((string)$sh['why']) ?></p><?php endif; ?>
       <div class="sx-chips"><?php foreach ((array)$sh['praise'] as $pr): ?><span class="sx-chip ok"><?= pm_h((string)$pr) ?></span><?php endforeach; ?><?php foreach (array_slice((array)$sh['issues'], 0, 2) as $is): ?><span class="sx-chip warn" title="<?= pm_h((string)$is) ?>">to watch: <?= pm_h(mb_substr((string)$is, 0, 46)) ?></span><?php endforeach; ?></div>
       <div class="btns"><a class="btn small" href="#manual" onclick="document.getElementById('manual').open=true">I took it: upload it</a>
         <form method="post" class="inl"><?= $btx('pd_dismiss', '<input type="hidden" name="id" value="' . pm_h((string)$sh['id']) . '">') ?><button class="btn small ghost">Put aside</button></form></div>
@@ -155,7 +155,7 @@ $kind = ['place' => 'The place', 'work' => 'The work', 'people' => 'The people']
   <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_accounts"><input type="hidden" name="_sec" value="kit">
   <details class="card" id="manual">
     <summary><b>Write the wording or upload a photo yourself</b> <span class="muted">· the same boxes, for when you know what you want</span></summary>
-    <p class="hint" style="margin-top:0">Want something far better than a plain colour with words? <a href="?tab=social&amp;view=studio"><b>Open the Studio</b></a>: styles, your colours and words, and a new design with one press (or from the AI). What you choose there is used for every picture below.<?= $inUse ? ' <b>A Studio design is in use now</b>, so the pictures below come from it.' : '' ?></p>
+    <p class="hint mt-0">Want something far better than a plain colour with words? <a href="?tab=social&amp;view=studio"><b>Open the Studio</b></a>: styles, your colours and words, and a new design with one press (or from the AI). What you choose there is used for every picture below.<?= $inUse ? ' <b>A Studio design is in use now</b>, so the pictures below come from it.' : '' ?></p>
     <div class="split">
       <div>
         <label>Cover headline</label><input type="text" name="cover_head" value="<?= pm_h($cfg['cover_head']) ?>">

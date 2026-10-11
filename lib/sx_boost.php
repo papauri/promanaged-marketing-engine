@@ -479,10 +479,10 @@ function pm_plan_learnings(string $brand): string
 function pm_panel_plan_top_strategy(string $vb, array $ctx = []): string
 {
     $line = pm_plan_learnings($vb);
-    $h = '<div class="card sx-card" style="padding:12px 16px"><b style="font-size:13px">Why this week\'s mix</b><p style="margin:6px 0 0;font-size:13px;color:var(--muted,#667085)">'
+    $h = '<div class="card sx-card py-3 px-4"><b class="t-sm">Why this week\'s mix</b><p class="muted t-sm mt-1 mb-0">'
         . ($line !== '' ? pm_h($line) : 'Not enough data yet — the planner follows the default mix until the scoreboard has measured posts.') . '</p>';
     foreach (array_slice(pm_proactive($vb), 0, 3) as $pr) {
-        $h .= '<div style="margin-top:8px;font-size:12.5px"><b>' . pm_h($pr['where']) . '</b><br>' . pm_h($pr['comment']) . '</div>';
+        $h .= '<div class="mt-2 t-sm"><b>' . pm_h($pr['where']) . '</b><br>' . pm_h($pr['comment']) . '</div>';
     }
     return $h . '</div>';
 }

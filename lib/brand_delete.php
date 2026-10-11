@@ -242,7 +242,7 @@ function pm_brand_delete_form(string $id, string $csrf): string
     $name = pm_brand_name($id);
     $c = pm_brand_delete_plan($id);
     return '<form method="post" onsubmit="return confirm(\'Delete ' . pm_h(addslashes($name)) . ' for good?\')"><input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="brand_delete"><input type="hidden" name="id" value="' . pm_h($id) . '">'
-        . '<p class="hint" style="margin-top:0">This removes <b>' . pm_h(pm_brand_plan_words($c)) . '</b>. It does not touch any other business, and it cannot be undone from the app.</p>'
+        . '<p class="hint mt-0">This removes <b>' . pm_h(pm_brand_plan_words($c)) . '</b>. It does not touch any other business, and it cannot be undone from the app.</p>'
         . '<label class="check"><input type="checkbox" name="keep_backup" value="1" checked> Keep a backup file of its data first (in data/deleted/, so it can be restored by hand)</label>'
         . '<label>Type the business name to confirm: <b>' . pm_h($name) . '</b></label><input type="text" name="confirm_name" required autocomplete="off" placeholder="' . pm_h($name) . '">'
         . '<div class="btns"><button class="btn danger">Delete ' . pm_h($name) . ' for good</button></div></form>';
@@ -259,7 +259,7 @@ function pm_view_hidden_businesses(string $csrf): void
         . '<p class="hint">A hidden business has no daily agent run and is not in the menus; its leads and posts are kept. Bring it back, or delete it for good.</p>';
     foreach ($hid as $id => $r) {
         $name = pm_brand_name((string)$id);
-        echo '<div class="card" style="margin:8px 0"><div class="wahead"><div><b>' . pm_h($name) . '</b> <span class="muted">· hidden ' . pm_h(substr((string)$r['archived'], 0, 10)) . '</span></div>'
+        echo '<div class="card my-2"><div class="wahead"><div><b>' . pm_h($name) . '</b> <span class="muted">· hidden ' . pm_h(substr((string)$r['archived'], 0, 10)) . '</span></div>'
             . '<form method="post" class="inline"><input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="brand_unhide"><input type="hidden" name="id" value="' . pm_h((string)$id) . '"><button class="btn small">Bring it back</button></form></div>'
             . '<details class="more"><summary>Delete for good</summary>' . pm_brand_delete_form((string)$id, $csrf) . '</details></div>';
     }

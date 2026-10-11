@@ -24,17 +24,6 @@ $sgn = fn($v) => $v === null ? 'no reading yet' : ($v >= 0 ? '+' : '') . $v;
 $mwk = fn($v) => 'MWK ' . number_format((float)$v);
 $tz = fn($s) => $s === '' ? '–' : pm_h($s);
 ?>
-<style>
-.rs-wrap{overflow-x:auto}.rs{width:100%;border-collapse:collapse;font-size:13px}.rs th,.rs td{padding:6px 8px;border-bottom:1px solid var(--line,#e5e7eb);text-align:left;vertical-align:top}
-.rs th{font-weight:600;color:var(--muted,#667085);font-size:12px}.rs td.n,.rs th.n{text-align:right;white-space:nowrap}.rs tr.thin td{color:var(--muted,#667085)}
-.rs-report{white-space:pre-wrap;font:13px/1.55 inherit;margin:0;background:var(--bg,#f6f7f9);border-radius:8px;padding:12px 14px}
-.rs-heat td{text-align:center;min-width:64px;border:1px solid var(--line,#e5e7eb)}.rs-heat td small{display:block;color:var(--muted,#667085);font-size:11px}
-.rs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}.rs-grid label{font-size:12px;color:var(--muted,#667085);display:block}
-.rs-grid input,.rs-grid select{width:100%}.rs-note{font-size:12px;color:var(--muted,#667085);margin:6px 0}
-.rs-chip{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11px;border:1px solid var(--line,#e5e7eb);color:var(--muted,#667085);white-space:nowrap}
-.rs-chip.me{background:var(--warnbg,#fff7e0);border-color:#f0dcaa}
-@media (max-width:640px){.rs th,.rs td{padding:5px 4px;font-size:12px}}
-</style>
 <?= pm_social_nav('results') ?>
 
 <?php if (!$sc['ready']): ?>
@@ -70,7 +59,7 @@ $tz = fn($s) => $s === '' ? '–' : pm_h($s);
 </details>
 
 <div class="card">
-  <div class="findrow" style="justify-content:space-between"><h2 style="margin:0">This week</h2>
+  <div class="findrow" style="justify-content:space-between"><h2 class="m-0">This week</h2>
     <button type="button" class="btn small" data-copy="<?= pm_h(pm_social_week_text($wr)) ?>">Copy report</button></div>
   <pre class="rs-report"><?= pm_h(pm_social_week_text($wr)) ?></pre>
   <p class="rs-note">Built from your stored numbers only. A copy is emailed to the owner on Mondays (once a week). Figures you typed in are marked as entered by you.</p>
@@ -136,7 +125,7 @@ if ($sb['n']): ?>
 <h3>Enquiries and sales from social</h3>
 <div class="card">
   <?php $T = $fun['total']; ?>
-  <div class="kpis" style="margin-bottom:8px">
+  <div class="kpis mb-2">
     <div><b><?= (int)$T['leads'] ?></b><span>enquiries (90 days)</span></div>
     <div><b><?= (int)$T['replied'] ?></b><span>replied · <?= (int)$T['proposal'] ?> reached a proposal</span></div>
     <div><b><?= (int)$T['won'] ?></b><span>signed</span></div>
@@ -167,22 +156,22 @@ if ($sb['n']): ?>
   <?php else: ?>
     <p class="hint">No experiment is running. The Director starts the next one by itself from this fixed list, or you can start one:</p>
     <?php foreach (PM_SX_EXP_MENU as $key => $m): ?>
-      <form method="post" class="findrow" style="margin:4px 0;align-items:center"><?= $sx('experiment_start', '<input type="hidden" name="key" value="' . pm_h($key) . '">') ?><span style="flex:1 1 280px"><?= pm_h($m['hypothesis']) ?></span><button class="btn small">Start</button></form>
+      <form method="post" class="findrow my-1" style="align-items:center"><?= $sx('experiment_start', '<input type="hidden" name="key" value="' . pm_h($key) . '">') ?><span style="flex:1 1 280px"><?= pm_h($m['hypothesis']) ?></span><button class="btn small">Start</button></form>
     <?php endforeach; ?>
   <?php endif; ?>
   <?php $done = array_filter($exps, fn($e) => ($e['status'] ?? '') === 'done'); if ($done): ?>
     <h3>Finished</h3>
-    <?php foreach (array_reverse($done) as $e): ?><p style="margin:4px 0"><span class="rs-chip"><?= pm_h($e['verdict'] ?: 'done') ?></span><?= !empty($e['early']) ? ' <span class="rs-chip">stopped early</span>' : '' ?> <?= pm_h($e['learning'] !== '' ? $e['learning'] : $e['hypothesis']) ?> <span class="rs-note"><?= pm_h($e['start']) ?> to <?= pm_h($e['end'] ?? '') ?></span></p><?php endforeach; ?>
+    <?php foreach (array_reverse($done) as $e): ?><p class="my-1"><span class="rs-chip"><?= pm_h($e['verdict'] ?: 'done') ?></span><?= !empty($e['early']) ? ' <span class="rs-chip">stopped early</span>' : '' ?> <?= pm_h($e['learning'] !== '' ? $e['learning'] : $e['hypothesis']) ?> <span class="rs-note"><?= pm_h($e['start']) ?> to <?= pm_h($e['end'] ?? '') ?></span></p><?php endforeach; ?>
   <?php endif; ?>
 </div>
 
-<p class="rs-note" style="margin:14px 0 0">Facebook leaves out reach, saves and clicks, and nothing reaches TikTok, WhatsApp Status or Google: type those in under <a href="?tab=social&amp;view=numbers">Enter numbers</a>. What the scoreboard suggests for the mix, and which posts to bring back, are on <a href="?tab=social&amp;view=content">Social &gt; Content</a>.</p>
+<p class="rs-note mt-3">Facebook leaves out reach, saves and clicks, and nothing reaches TikTok, WhatsApp Status or Google: type those in under <a href="?tab=social&amp;view=numbers">Enter numbers</a>. What the scoreboard suggests for the mix, and which posts to bring back, are on <a href="?tab=social&amp;view=content">Social &gt; Content</a>.</p>
 
 <h3>Ads</h3>
 <div class="card">
   <?php if ($ads['source'] === 'none'): ?><p class="hint"><?= $ads['connected'] ? 'No ad spend in the last 7 days.' : 'Ads are not connected, so there are no ad numbers. If you run ads in Ads Manager, type the week in below.' ?><?= $ads['error'] !== '' ? ' Facebook said: ' . pm_h($ads['error']) : '' ?></p>
   <?php else: ?>
-    <div class="kpis" style="margin-bottom:8px">
+    <div class="kpis mb-2">
       <div><b><?= $mwk($ads['spend_mwk']) ?></b><span>spent, last 7 days</span></div>
       <div><b><?= (int)$ads['conversations'] ?></b><span>chats started</span></div>
       <div><b><?= $ads['cost_per_conversation'] !== null ? $mwk($ads['cost_per_conversation']) : '–' ?></b><span>per chat<?= (int)$g['max_cost_per_conv_mwk'] > 0 ? ' · limit ' . $mwk($g['max_cost_per_conv_mwk']) : '' ?></span></div>
@@ -196,7 +185,7 @@ if ($sb['n']): ?>
 
 <h3>What it costs</h3>
 <div class="card">
-  <div class="kpis" style="margin-bottom:8px">
+  <div class="kpis mb-2">
     <div><b><?= $cost28['tokens_per_post'] !== null ? number_format($cost28['tokens_per_post']) : '–' ?></b><span>AI tokens per published post (<?= $cost28['tokens_per_post_src'] === 'planner' ? 'as the planner recorded' : 'estimate: social AI use ÷ posts' ?>)</span></div>
     <div><b><?= number_format($cost28['social_tokens']) ?></b><span>social AI tokens, 28 days (all AI for this business: <?= number_format($cost28['tokens']) ?>)</span></div>
     <div><b><?= $mwk($cost28['token_cost_mwk']) ?></b><span>estimated AI cost at MWK <?= pm_h((string)$cost28['rate']) ?> per 1,000 tokens</span></div>

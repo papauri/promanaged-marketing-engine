@@ -1137,10 +1137,10 @@ function pm_opt_item_html(array $i, string $vb, string $csrf, string $back = '')
     $h = '<div class="sx-card opt-it" id="i-' . pm_h($i['key']) . '"><div class="sxh"><span class="sx-chip ' . $cls . '">' . $lab . '</span> <b>' . pm_h($i['title']) . '</b>'
         . ($i['ai'] ? ' <span class="sx-chip" title="Reworded by the AI from your facts; checked for new claims, numbers and links">AI</span>' : '') . ' <span class="muted">· ' . pm_h($i['why']) . '</span></div>';
     if ($i['current'] !== '') {
-        $h .= '<p class="hint" style="margin:6px 0 0">Now: ' . pm_h(mb_substr($i['current'], 0, 300)) . '</p>';
+        $h .= '<p class="hint mt-1">Now: ' . pm_h(mb_substr($i['current'], 0, 300)) . '</p>';
     }
     if ($i['note'] !== '') {
-        $h .= '<p class="hint" style="margin:4px 0 0">' . pm_h($i['note']) . '</p>';
+        $h .= '<p class="hint mt-1">' . pm_h($i['note']) . '</p>';
     }
     $ext = str_starts_with($i['link'], 'http');
     // a text to paste into a profile: one press copies it and opens the place it goes
@@ -1153,7 +1153,7 @@ function pm_opt_item_html(array $i, string $vb, string $csrf, string $back = '')
         if ($i['alts'] || $i['key'] === 'biz_tagline') { // ready suggestions: one press each
             $h .= '<div class="opt-alts">';
             if ($i['alts']) {
-                $h .= '<p class="hint" style="margin:8px 0 2px"><b>Ready to use</b> · one press each</p>';
+                $h .= '<p class="hint mt-2 mb-0"><b>Ready to use</b> · one press each</p>';
             }
             foreach ($i['alts'] as $a) {
                 $h .= '<form method="post" class="opt-alt">' . $fx((string)$i['do'], $hid('key', $i['key']) . $hid('val[' . $i['key'] . ']', $a['text']))
@@ -1163,7 +1163,7 @@ function pm_opt_item_html(array $i, string $vb, string $csrf, string $back = '')
             if ($i['key'] === 'biz_tagline' && function_exists('pm_agents_ready') && pm_agents_ready()) {
                 $h .= '<form method="post" class="inl">' . $fx('copy_write', $hid('keys[]', 'biz_tagline') . $hid('anchor', 'i-biz_tagline')) . '<button class="btn small" title="One small AI call: three lines written from your facts, checked for new claims, numbers and links">Write 3 more with AI</button></form>';
             }
-            $h .= '</div>' . ($i['alts'] ? '<p class="hint" style="margin:8px 0 0">Or edit it, or type your own:</p>' : '');
+            $h .= '</div>' . ($i['alts'] ? '<p class="hint mt-2">Or edit it, or type your own:</p>' : '');
         }
         $h .= '<form method="post" class="opt-form">' . $fx((string)$i['do'], $hid('key', $i['key']));
         if ($i['input'] === 'hours') {
@@ -1180,7 +1180,7 @@ function pm_opt_item_html(array $i, string $vb, string $csrf, string $back = '')
         } elseif ($i['input'] === 'text') {
             $h .= '<input type="text" name="val[' . pm_h($i['key']) . ']" value="' . pm_h($i['proposal']) . '" maxlength="' . (int)$i['limit'] . '" aria-label="' . pm_h($i['title']) . '" placeholder="Type it here" autocomplete="off">';
         } else {
-            $h .= '<p class="hint" style="margin:6px 0 0">' . pm_h($i['proposal']) . '</p>';
+            $h .= '<p class="hint mt-1">' . pm_h($i['proposal']) . '</p>';
         }
         return $h . '<div class="btns"><button class="btn small primary">' . pm_h($i['button'] ?: 'Apply') . '</button>' . ($follow !== '' ? '<button class="btn small" name="cascade" value="1"' . $asks('Save this') . '>' . pm_h(($i['button'] ?: 'Save') . ' and update ' . $follow) . '</button>' : '')
             . (in_array($i['input'], ['text', 'textarea'], true) && $i['proposal'] !== '' ? $cp($i['proposal']) : '') . $link . '</div></form></div>';

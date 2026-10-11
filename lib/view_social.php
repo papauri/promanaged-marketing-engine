@@ -206,10 +206,10 @@ $ruleItems = pm_aa_items_for($vb, ['post_times', 'post_times_clear', 'ch_instagr
 <details class="card" id="rules" <?= $ruleItems && array_filter($ruleItems, fn($i) => $i['state'] !== 'ok') ? 'open' : '' ?>>
   <summary><b>Publishing rules</b> <span class="muted">· auto-publish, where posts go by themselves, and when</span></summary>
   <form method="post" class="findrow"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="autopublish">
-    <label class="check" style="margin:0"><input type="checkbox" name="on" value="1" <?= $auto ? 'checked' : '' ?> <?= $canApprove ? '' : 'disabled' ?>> Auto-publish: posts the AI plans go out at their time without my approval</label>
+    <label class="check m-0"><input type="checkbox" name="on" value="1" <?= $auto ? 'checked' : '' ?> <?= $canApprove ? '' : 'disabled' ?>> Auto-publish: posts the AI plans go out at their time without my approval</label>
     <button class="btn small" <?= $canApprove ? '' : 'disabled title="Only an approver can change this"' ?>>Save</button></form>
   <form method="post" class="findrow"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="editor_toggle">
-    <label class="check" style="margin:0"><input type="checkbox" name="on" value="1" <?= pm_editor_on($vb) ? 'checked' : '' ?>> Have an editor review the posts the AI plans (weak ones go back once, in one more AI call)</label>
+    <label class="check m-0"><input type="checkbox" name="on" value="1" <?= pm_editor_on($vb) ? 'checked' : '' ?>> Have an editor review the posts the AI plans (weak ones go back once, in one more AI call)</label>
     <button class="btn small">Save</button></form>
   <form method="post"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_accounts"><input type="hidden" name="_sec" value="channels">
     <label>Post automatically to</label>

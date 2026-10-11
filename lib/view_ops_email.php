@@ -15,9 +15,9 @@ pm_brand_set($vb);
 <form method="post">
   <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="brand_save"><input type="hidden" name="id" value="<?= pm_h($b) ?>"><input type="hidden" name="_sec" value="email">
   <div class="card"><h2>Sending</h2>
-    <?php if ($envMail): ?><p class="hint" style="margin-top:0">The mail login comes from .env (<?= pm_h($pre) ?>SMTP_*), so it is read-only here.</p>
-    <?php else: ?><p class="hint" style="margin-top:0">Outreach and replies go from this business's own mailbox. Ask the person who runs the mail for the server details.</p><?php endif; ?>
-    <fieldset <?= $envMail ? 'disabled' : '' ?> style="border:0;padding:0;margin:0">
+    <?php if ($envMail): ?><p class="hint mt-0">The mail login comes from .env (<?= pm_h($pre) ?>SMTP_*), so it is read-only here.</p>
+    <?php else: ?><p class="hint mt-0">Outreach and replies go from this business's own mailbox. Ask the person who runs the mail for the server details.</p><?php endif; ?>
+    <fieldset <?= $envMail ? 'disabled' : '' ?> class="plain">
       <div class="row">
         <div><label>Mail server (SMTP host)</label><input type="text" name="b[smtp][host]" value="<?= pm_h((string)($sm['host'] ?? '')) ?>"></div>
         <div><label>Port</label><input type="number" name="b[smtp][port]" value="<?= (int)($sm['port'] ?? 465) ?>"></div>
@@ -56,9 +56,9 @@ pm_brand_set($vb);
         $hide = $vb === $b ? '' : 'hidden';
         ?>
     <div class="card" <?= $hide ?>><h2><?= pm_h($name) ?> · Sending</h2>
-      <?php if ($env): ?><p class="hint" style="margin-top:0">Read-only here: these come from the .env file (<?= $tr ? 'TM_' : '' ?>SMTP_*).</p>
-      <?php elseif ($tr && pm_mail_source('travel') === 'shared'): ?><p class="hint warnt" style="margin-top:0">Travel Malawi has no mail login of its own, so it sends through ProManaged IT's mailbox. Add TM_SMTP_HOST, TM_SMTP_USER and TM_SMTP_PASS to .env (or fill in the boxes below) to send from its own address.</p><?php endif; ?>
-      <fieldset <?= $env ? 'disabled' : '' ?> style="border:0;padding:0;margin:0">
+      <?php if ($env): ?><p class="hint mt-0">Read-only here: these come from the .env file (<?= $tr ? 'TM_' : '' ?>SMTP_*).</p>
+      <?php elseif ($tr && pm_mail_source('travel') === 'shared'): ?><p class="hint warnt mt-0">Travel Malawi has no mail login of its own, so it sends through ProManaged IT's mailbox. Add TM_SMTP_HOST, TM_SMTP_USER and TM_SMTP_PASS to .env (or fill in the boxes below) to send from its own address.</p><?php endif; ?>
+      <fieldset <?= $env ? 'disabled' : '' ?> class="plain">
       <div class="row">
         <div><label>Mail server (SMTP host)</label><input type="text" name="<?= $n('smtp') ?>[host]" value="<?= pm_h((string)($sm['host'] ?? '')) ?>"></div>
         <div><label>Port</label><input type="number" name="<?= $n('smtp') ?>[port]" value="<?= (int)($sm['port'] ?? 465) ?>"></div>

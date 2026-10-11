@@ -27,7 +27,7 @@ $e0 = pm_env();
   <?php if ($tinfo): ?>
     <p><?= !empty($tinfo['ok']) && $tinfo['type'] === 'PAGE' && !$tinfo['missing'] ? '<span class="pill hot">Healthy</span> Permanent Page token with every permission the app needs.'
         : '<span class="pill warn">Needs attention</span> ' . (empty($tinfo['ok']) ? pm_h($tinfo['error']) : ($tinfo['type'] !== 'PAGE' ? 'The saved token is a personal (user) token' . ($tinfo['expires'] ? ' that expires ' . date('j M H:i', $tinfo['expires']) : '') . ', not a Page token.' : '') . ($tinfo['missing'] ? ' Missing: ' . pm_h(implode(', ', $tinfo['missing'])) . '.' : '')) ?></p>
-  <?php else: ?><p class="hint" style="margin-top:0">Not connected yet.</p><?php endif; ?>
+  <?php else: ?><p class="hint mt-0">Not connected yet.</p><?php endif; ?>
   <?php $gg = pm_graph_guard(); ?><p class="hint">Facebook calls today: <?= (int)$gg['calls'] ?> (<?= (int)$gg['cached'] ?> answered from memory instead) · Facebook limit used: <?= (int)$gg['pct'] ?>%<?= (int)$gg['until'] > time() ? ' · <b>paused by Facebook until ' . date('H:i', (int)$gg['until']) . '</b>' : '' ?>. Above 75% the app shows the last known data instead of calling.</p>
   <?php if ($fb['ready']): ?><form method="post" class="inl"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_check"><input type="hidden" name="brand" value="<?= pm_h($vb) ?>"><button class="btn small">Check the connection now</button></form><?php endif; ?>
   <?php if (!empty($_SESSION['fb_pages'])): ?>
@@ -87,7 +87,7 @@ $e0 = pm_env();
 <form method="post">
   <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_accounts"><input type="hidden" name="_sec" value="links">
   <h3>Every platform</h3>
-  <p class="hint" style="margin-top:0">Where the business is on each platform, and how to connect it. What gets posted where is chosen under <a href="?tab=social">Social &gt; Plan</a>; the pictures are made in <a href="?tab=social&amp;view=kit">Brand &gt; Brand kit</a>.</p>
+  <p class="hint mt-0">Where the business is on each platform, and how to connect it. What gets posted where is chosen under <a href="?tab=social">Social &gt; Plan</a>; the pictures are made in <a href="?tab=social&amp;view=kit">Brand &gt; Brand kit</a>.</p>
   <?php foreach (pm_platforms() as $k => $p): [$st, $cls] = $status($k); ?>
   <details class="card plat" <?= $k === 'facebook' ? 'open' : '' ?>>
     <summary><b><?= pm_h($p['name']) ?></b> <span class="pill <?= $cls ?>"><?= pm_h($st) ?></span></summary>
