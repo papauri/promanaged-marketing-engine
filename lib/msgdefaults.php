@@ -11,7 +11,11 @@
 
 const PM_DM_VARS = ['first_name' => 'their first name', 'name' => 'their business', 'city' => 'their town', 'type' => 'kind of business', 'intro' => 'who is writing ("I\'m Grace from ...")',
     'sender' => 'your name', 'company' => 'your business name', 'tagline' => 'your tagline', 'phone' => 'your phone', 'email' => 'your email', 'website' => 'your website',
-    'address' => 'your address', 'title' => 'your job title', 'link' => 'your website link'];
+    'address' => 'your address', 'title' => 'your job title', 'link' => 'your website link', 'opening' => 'the line written for this lead (the AI writes it for Travel Malawi; otherwise who you are and how you came across them)'];
+
+/** The default opening line (who is writing and how they came across the lead), with {placeholders}. */
+const PM_DM_OPENING_TRAVEL = '{intro}, and I came across {name} while looking at places to stay in {city}.';
+const PM_DM_OPENING = 'I came across {name} in {city} and thought we might be able to help.';
 
 function pm_dm_all(): array
 {
@@ -57,6 +61,7 @@ function pm_dm_cfg(string $brand = ''): array
     foreach (['email_subject', 'email_body', 'whatsapp'] as $k) {
         $c[$k] = trim((string)($st[$k] ?? '')) !== '' ? (string)$st[$k] : (string)$seed[$k];
     }
+    $c['email_body'] = str_replace(PM_DM_OPENING_TRAVEL, '{opening}', $c['email_body']); // the line that was written out before {opening} existed
     foreach (['signature', 'wa_signature'] as $k) {
         $c[$k] = array_key_exists($k, $st) ? (string)$st[$k] : null;
         $c[$k . '_seed'] = (string)$seed[$k];
@@ -79,7 +84,7 @@ function pm_dm_first(array $lead): string
 }
 
 /** The words for every placeholder, for a lead (or [] for the signature alone), as the business in use. */
-function pm_dm_vars(array $lead = []): array
+function pm_dm_vars(array $lead = [], string $opening = ''): array
 {
     $s = pm_settings();
     $company = trim((string)($s['company_name'] ?? ''));
@@ -87,16 +92,18 @@ function pm_dm_vars(array $lead = []): array
     $me = trim(explode(' ', $sender)[0] ?? '');
     $link = pm_link_cfg()['url'];
     $city = trim((string)($lead['city'] ?? ''));
-    return ['first_name' => pm_dm_first($lead), 'name' => trim((string)($lead['name'] ?? '')) ?: 'your business', 'city' => $city !== '' && strcasecmp($city, 'Malawi') !== 0 ? $city : 'Malawi',
+    $v = ['first_name' => pm_dm_first($lead), 'name' => trim((string)($lead['name'] ?? '')) ?: 'your business', 'city' => $city !== '' && strcasecmp($city, 'Malawi') !== 0 ? $city : 'Malawi',
         'type' => trim((string)($lead['type'] ?? '')) ?: 'business', 'sender' => $sender, 'intro' => $me !== '' ? "I'm $me from $company" : "I am writing from $company", 'company' => $company,
         'tagline' => trim((string)($s['tagline'] ?? '')), 'phone' => trim((string)($s['phone'] ?? '')), 'email' => trim((string)($s['email'] ?? '')), 'website' => trim((string)($s['website'] ?? '')),
         'address' => trim((string)($s['address'] ?? '')), 'title' => $sender !== '' && $sender === trim((string)($s['signatory_name'] ?? '')) ? trim((string)($s['signatory_title'] ?? '')) : '',
         'link' => $link !== '' ? $link : (trim((string)($s['website'] ?? '')) !== '' ? 'https://' . preg_replace('#^https?://#i', '', trim((string)$s['website'])) : '')];
+    $v['opening'] = $opening !== '' ? $opening : pm_dm_fill(pm_brand() === 'travel' ? PM_DM_OPENING_TRAVEL : PM_DM_OPENING, $v);
+    return $v;
 }
 
 function pm_dm_fill(string $text, array $vars): string
 {
-    $t = (string)preg_replace_callback('/\{([a-z_]+)\}/', fn($m) => array_key_exists($m[1], $vars) ? (string)$vars[$m[1]] : $m[0], $text);
+    $t = (string)preg_replace_callback('/\{([A-Za-z_]+)\}/', fn($m) => array_key_exists(strtolower($m[1]), $vars) ? (string)$vars[strtolower($m[1])] : $m[0], $text); // {Email} works as {email}
     return (string)preg_replace(['/(Hello|Hi|Dear) +,/', '/[ \t]+,/'], ['$1,', ','], $t); // no name: "Hello,"
 }
 
@@ -106,7 +113,8 @@ function pm_dm_fill_lines(string $text, array $vars): string
     $out = [];
     foreach (preg_split('/\R/', str_replace("\r", '', $text)) ?: [] as $line) {
         $f = trim(pm_dm_fill($line, $vars));
-        if (preg_match('/\{[a-z_]+\}/', $line) && preg_match('/^[\s,.·|—–-]*$/u', $f)) {
+        $f = trim((string)preg_replace(['/^([—–-]) *, */u', '/ *,+ *$/', '/, *,/'], ['$1 ', '', ','], $f)); // "— , Company," -> "— Company"
+        if (preg_match('/\{[A-Za-z_]+\}/', $line) && preg_match('/^[\s,.·|—–-]*$/u', $f)) {
             continue;
         }
         $out[] = $f;
@@ -128,13 +136,14 @@ function pm_dm_wa_signature(): ?string
     return $c === null ? null : pm_dm_fill_lines($c, pm_dm_vars());
 }
 
-/** The default message for one lead: ['email_subject', 'email_body', 'whatsapp'] (no signature: the app adds that when it sends), as the business in use. */
-function pm_dm_render(array $lead): array
+/** The default message for one lead: ['email_subject', 'email_body', 'whatsapp'] (no signature: the app adds that when it sends), as the business in use. $opening is the line the AI wrote for {opening}. */
+function pm_dm_render(array $lead, string $opening = ''): array
 {
     $c = pm_dm_cfg();
-    $v = pm_dm_vars($lead);
+    $v = pm_dm_vars($lead, $opening);
     $subject = pm_dm_fill($c['email_subject'], $v);
-    return ['email_subject' => function_exists('pm_subject_tidy') ? pm_subject_tidy($subject, $lead) : $subject, 'email_body' => pm_dm_fill($c['email_body'], $v), 'whatsapp' => pm_dm_fill($c['whatsapp'], $v)];
+    $body = pm_dm_fill($c['email_body'], $v);
+    return ['email_subject' => function_exists('pm_subject_tidy') ? pm_subject_tidy($subject, $lead) : $subject, 'email_body' => pm_brand() === 'travel' ? pm_tm_pack_swap($body) : $body, 'whatsapp' => pm_dm_fill($c['whatsapp'], $v)];
 }
 
 /** Rows in the shape the writer returns, for leads drafted from the default message (no AI). */

@@ -16,9 +16,8 @@ function pm_view_sendschedule(string $vb, string $csrf): void
 <form method="post" id="sendschedule" class="card mt-3">
   <input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="sendschedule"><input type="hidden" name="brand" value="<?= pm_h($vb) ?>">
   <h2>When emails go out · <?= pm_h($bn) ?></h2>
-  <p class="hint mt-0">Approved emails are not sent at once: one goes out at a time, only on the days and between the hours below, so the mailbox looks like a person and not a machine.
-    Times are <?= pm_h(date_default_timezone_get()) ?> time. A task checks every 15 minutes (<code>schedule_agents.bat</code> on this computer, or the cron job on a server), so emails are never closer together than that.
-    The most per day is under <b>How much in a day</b> above. One email can be held for a later time when you approve it, or on the send queue.</p>
+  <p class="hint mt-0">One approved email goes out at a time, only on the days and hours below (<?= pm_h(date_default_timezone_get()) ?> time). The send task checks every 15 minutes, so emails are never closer than that.
+    The daily limit is under Limits per day above. A single email can be held for a later time when you approve it, or on the send queue.</p>
   <p class="hint"><span class="chip <?= $c['paused'] ? 'bad' : ($open ? 'ok' : 'warn') ?> dot"><?= $c['paused'] ? 'Paused' : ($open ? 'Open now' : 'Closed now') ?></span>
     <?= pm_h(date('D j M, H:i', $now)) ?>:
     <?= $c['paused'] ? 'nothing is sent until you untick Pause.' : ($open ? 'the next approved email goes out at the next check.' : ($next ? 'sending opens ' . pm_h(date('D j M, H:i', $next)) . '.' : 'no sending day is ticked.')) ?>

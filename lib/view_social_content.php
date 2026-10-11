@@ -11,12 +11,10 @@ $pil = pm_social_pillars($vb);
 $names = array_map(fn($p) => (string)$p['name'], $pil);
 $pilRows = $pil;
 $pilRows[] = ['name' => '', 'weight' => ''];
-$pilRows[] = ['name' => '', 'weight' => ''];
 $proofAll = pm_social_proof_all($vb);
 $proofUsable = count(array_filter($proofAll, fn($r) => !empty($r['consent']) && trim((string)($r['text'] ?? '')) !== ''));
 $proofRows = $proofAll;
 $proofRows[] = ['type' => 'quote'];
-$proofRows[] = ['type' => 'offer'];
 $mix = pm_sx_mix($vb);
 $rec = pm_recycle_candidates($vb);
 $irOpts = pm_swarm_waiting($vb, 'ideas');
@@ -25,15 +23,6 @@ $sx = fn(string $do, string $extra = '') => '<input type="hidden" name="csrf" va
 $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_x"><input type="hidden" name="back" value="social&amp;view=content">';
 ?>
 <?= pm_social_nav('content') ?>
-
-<div class="chipbar">
-  <a class="sx-chip" href="#pillars"><?= count($pil) ?> pillars</a>
-  <a class="sx-chip" href="#mix"><?= $mix ? 'a mix is suggested' : 'mix: not enough results yet' ?></a>
-  <a class="sx-chip" href="#ideas"><?= count($mine) ?> of your ideas</a>
-  <a class="sx-chip <?= $proofUsable ? 'ok' : '' ?>" href="#proof"><?= $proofUsable ?> proof item<?= $proofUsable === 1 ? '' : 's' ?> ready</a>
-  <a class="sx-chip" href="#tags">hashtags</a>
-  <a class="sx-chip" href="#recycle"><?= count($rec) ?> to bring back</a>
-</div>
 
 <div class="card" id="pillars">
   <h2>Pillars: the kinds of post, and how often</h2>
@@ -44,7 +33,7 @@ $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type
   </form>
 </div>
 
-<div class="card" id="mix">
+<?php if ($mix): ?><div class="card" id="mix">
   <h2>Suggested mix, from what worked</h2>
 <?php if (!$mix): ?><p class="hint m-0">Not enough results yet: at least 8 scored posts, and 3 in each of two pillars, are needed before a change is suggested. The scoreboard is on <a href="?tab=social&amp;view=results">Insights &gt; Results</a>.</p>
 <?php else: ?>
@@ -54,7 +43,7 @@ $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type
   <form method="post" class="btns"><?= $sx('apply_weights') ?><button class="btn primary small" data-confirm="Change the pillars to these shares? You can change them back above.">Apply the suggested mix</button>
     <span class="hint">70% of today's mix + 30% of what performed, at least 10% for every pillar. Nothing changes until you press the button.</span></form>
 <?php endif; ?>
-</div>
+</div><?php endif; ?>
 
 <div class="card" id="ideas">
   <h2>Idea bank</h2>
@@ -128,7 +117,7 @@ $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type
   </form>
 </div>
 
-<div class="card" id="recycle">
+<?php if ($rec): ?><div class="card" id="recycle">
   <h2>Bring back what worked</h2>
 <?php if (!$rec): ?><p class="hint m-0">No post is ready to come back yet. A post can return when it is among the best 20% by 7-day engagement, older than 45 days, not about a date or offer, and not used again in the last 90 days. At least 5 such posts are needed before one is picked.</p>
 <?php else: ?>
@@ -138,4 +127,4 @@ $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type
   </table></div>
   <p class="hint">A recycled post becomes a new draft with a fresh opening line and hashtags. It goes through the same checks and waits for your approval (unless Auto-publish is on).</p>
 <?php endif; ?>
-</div>
+</div><?php endif; ?>

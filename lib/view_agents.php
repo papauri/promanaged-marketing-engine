@@ -1,7 +1,7 @@
 <?php
 /**
  * The Agents screen. Included by index.php, so it shares its variables ($csrf, $tpl, $settings ...).
- * Layout, top to bottom: brand switch, find-a-business, run + progress, numbers, today's tasks, leads, then a "More" fold.
+ * Layout, top to bottom: find-a-business, run + progress, today's tasks (one closed line), leads, then a "More" fold. The numbers and the Director's strategy live on the Overview.
  */
 $bsel = (string)($_GET['brand'] ?? ($_SESSION['abrand'] ?? 'promanaged'));
 $_SESSION['abrand'] = pm_brand_norm($bsel);
@@ -66,11 +66,9 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
   <form method="post" class="findrow"><?= $post('', 'lookup') ?><?= $hid('brand', pm_brand()) ?>
     <input type="text" name="biz" required data-suggest data-web="1" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Find a business by name, <?= pm_brand() === 'travel' ? 'e.g. Mufasa Eco Lodge' : (pm_brand_is_custom(pm_brand()) ? '' : 'e.g. Sunbird Capital Hotel') ?>" aria-label="Business name">
     <input type="text" name="city" placeholder="City (optional)" aria-label="City" class="narrow">
-    <button class="btn">Find</button>
-    <button class="btn primary" name="proposal" value="1">Find + proposal</button>
+    <button class="btn primary">Find</button>
   </form>
   <p class="hint mt-1">Start typing: it suggests businesses you already know, then ones a web search finds (those are marked, and only fill the box).</p>
-  <form method="post" style="display:inline"><?= $post('', 'export') ?><button class="btn" title="Download all leads of this business as JSON (no mail server details)">Export</button></form>
 </div>
 
 <?php if (pm_brand() === 'travel'): $tmAll = pm_leads(); $tmTodo = pm_tm_rewrite_candidates($tmAll); $tmKept = pm_tm_rewrite_kept($tmAll); if ($tmTodo): ?>
@@ -120,27 +118,6 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
 </div>
 <?php endif; ?>
 
-<!-- 3. Numbers + today's strategy -->
-<div class="kpis">
-  <div><b><?= (int)$ds['leads'] ?></b><span>leads<?= ($ds['hot'] ?? 0) ? ' · ' . (int)$ds['hot'] . ' hot' : '' ?></span></div>
-  <div><b><?= (int)$ds['contacted'] ?> → <?= (int)$ds['replied'] ?></b><span>contacted → replied<?= $ds['contacted'] ? ' · ' . (int)$ds['reply_rate'] . '%' : '' ?></span></div>
-  <div><b><?= (int)$ds['proposals_sent'] ?> → <?= (int)$ds['signed'] ?></b><span>proposals → signed</span></div>
-  <div><b><?= $ds['signed_value'] ? pm_h(implode(' + ', array_map(fn($c, $v) => $c . ' ' . number_format($v), array_keys($ds['signed_value']), $ds['signed_value']))) : '—' ?></b><span>signed value</span></div>
-</div>
-<details class="card director" <?= $dir['priorities'] ? '' : '' ?>>
-  <summary><span class="lbl">Today's strategy</span> <?= pm_h($dir['headline']) ?></summary>
-  <?php if ($dir['priorities']): ?><ol><?php foreach ($dir['priorities'] as $pr): ?><li><?= pm_h($pr) ?></li><?php endforeach; ?></ol><?php endif; ?>
-  <?php if ($dir['focus']): ?><p class="hint">Searching more of: <b><?= pm_h(implode(', ', $dir['focus'])) ?></b><?= $dir['drop'] ? ' · less of: ' . pm_h(implode(', ', $dir['drop'])) : '' ?></p><?php endif; ?>
-  <?php if ($dir['experiment']): ?><p class="hint">Experiment this week: <?= pm_h($dir['experiment']) ?></p><?php endif; ?>
-  <?php $dst = (array)($dir['stats'] ?? []); $waitBits = array_filter([
-      (int)($dst['awaiting_reply'] ?? 0) ? (int)$dst['awaiting_reply'] . ' repl' . ((int)$dst['awaiting_reply'] === 1 ? 'y' : 'ies') . ' to answer' : '',
-      (int)($dst['followups_due'] ?? 0) ? (int)$dst['followups_due'] . ' follow-up' . ((int)$dst['followups_due'] === 1 ? '' : 's') . ' due (' . ((int)$dst['followups_due'] - (int)($dst['followups_to_draft'] ?? 0)) . ' drafted)' : '',
-      (int)($dst['drafts_unsent'] ?? 0) ? (int)$dst['drafts_unsent'] . ' draft' . ((int)$dst['drafts_unsent'] === 1 ? '' : 's') . ' to read' : '',
-      (int)($dst['approved_waiting'] ?? 0) ? (int)$dst['approved_waiting'] . ' approved, waiting to go out' : '']); ?>
-  <p class="hint"><b>On your desk now:</b> <?= $waitBits ? pm_h(implode(' · ', $waitBits)) : 'nothing is waiting' ?>. <span class="muted">Strategy written <?= !empty($dir['at']) ? pm_h(date('H:i', (int)$dir['at'])) : 'earlier today' ?>; it is rewritten by itself when this changes (at most every 90 minutes) and after each agent run.</span></p>
-  <div class="btns"><form method="post"><?= $post('', 'director') ?><button class="btn small">Refresh strategy</button></form>
-    <?php if ((int)($dst['followups_to_draft'] ?? 0) > 0): ?><form method="post"><?= $post('', 'followups_ai') ?><button class="btn small primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?> title="The Follow-up agent writes them for you to read; nothing is sent">Draft <?= (int)$dst['followups_to_draft'] ?> follow-up<?= (int)$dst['followups_to_draft'] === 1 ? '' : 's' ?> with AI</button></form><?php endif; ?></div>
-</details>
 <?php
 $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up task: its draft is ready, or the AI can write it now
     if (($t['kind'] ?? '') !== 'followup' || empty($t['lead']) || !isset($leadsAll[$t['lead']])) {
@@ -156,7 +133,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 
 <!-- 4. Today's tasks -->
 <?php if ($plan): ?>
-<div class="card"><h2>Today · <?= $ndone ?> of <?= count($plan) ?> done <span class="muted">· <?= $sentToday ?> of <?= (int)$acfg['send_cap'] ?> emails sent</span></h2>
+<details class="card today"><summary><b>Today</b> · <?= $ndone ?> of <?= count($plan) ?> done <span class="muted">· <?= $sentToday ?> of <?= (int)$acfg['send_cap'] ?> emails sent</span></summary>
   <?php foreach (array_slice($plan, 0, 6) as $t): ?>
     <div class="task <?= $t['done'] ? 'done' : '' ?>">
       <form method="post"><?= $post('', 'plan', $hid('task', $t['id']) . ($t['done'] ? '' : $hid('done', 1))) ?><button title="Mark done" aria-label="Mark done"><?= $t['done'] ? '✓' : '' ?></button></form>
@@ -168,7 +145,8 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     <?php foreach (array_slice($plan, 6) as $t): ?><div class="task <?= $t['done'] ? 'done' : '' ?>">
       <form method="post"><?= $post('', 'plan', $hid('task', $t['id']) . ($t['done'] ? '' : $hid('done', 1))) ?><button title="Mark done" aria-label="Mark done"><?= $t['done'] ? '✓' : '' ?></button></form>
       <span><?= pm_h($t['title']) ?></span><?= $taskExtra($t) ?></div><?php endforeach; ?></details><?php endif; ?>
-</div>
+<?php if ((int)(($dir['stats'] ?? [])['followups_to_draft'] ?? 0) > 0): ?><form method="post"><?= $post('', 'followups_ai') ?><button class="btn small primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?> title="The Follow-up agent writes them for you to read; nothing is sent">Draft <?= (int)$dst['followups_to_draft'] ?> follow-up<?= (int)$dst['followups_to_draft'] === 1 ? '' : 's' ?> with AI</button></form><?php endif; ?>
+</details>
 <?php endif; ?>
 
 <!-- 5. Leads -->
@@ -187,8 +165,11 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 </div>
 <?php endif; ?>
 <?php if ($nApprovable): ?>
-<form method="post" id="approveform" class="approvebar"><?= $post('', 'approve_send') ?><span class="muted"><?= $nApprovable ?> draft<?= $nApprovable === 1 ? '' : 's' ?> ready. Tick "Approve for sending" on the leads you have read, then</span> <button class="btn small primary">Approve selected</button>
-  <label class="muted">Not before <input type="datetime-local" name="send_after" aria-label="Send no earlier than (optional)"></label> <span class="muted">They then go out slowly, one at a time, in the sending hours (<a href="?tab=targeting#sendschedule">schedule</a>).</span></form>
+<form method="post" id="approveform" class="approvebar"><?= $post('', 'approve_send') ?>
+  <span><b><?= $nApprovable ?></b> draft<?= $nApprovable === 1 ? '' : 's' ?> ready to approve. Tick <i>Approve for sending</i> on the ones you have read.</span>
+  <label>Not before <input type="datetime-local" name="send_after" aria-label="Send no earlier than (optional)"></label>
+  <button class="btn primary">Approve selected</button>
+  <span class="hint">They go out one at a time in the <a href="?tab=targeting#sendschedule">sending hours</a>.</span></form>
 <?php endif; ?>
 <?php if ($hasApprove && function_exists('pm_view_send_queue') && count(array_filter($leadsAll, fn($x) => !empty($x['approved_at'])))) { pm_view_send_queue(pm_leads()); } ?>
 <?php if (!$shown && ($ftype !== '' || $fq !== '')): ?><div class="card empty">No <?= pm_h($ftype ?: 'leads') ?><?= $fq !== '' ? ' matching "' . pm_h($fq) . '"' : '' ?> in this list. <a href="?tab=agents&status=all<?= $ftype !== '' ? '&type=' . urlencode($ftype) : '' ?><?= $fq !== '' ? '&q=' . urlencode($fq) : '' ?>">Look in All</a></div>
@@ -364,6 +345,8 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     <div class="btns"><button class="btn small primary">Add lead</button></div>
   </form>
   <p class="hint">What the agents look for, their daily limits and how they answer are under <a href="?tab=targeting">Targeting and messages</a>.</p>
+  <h3>Export</h3>
+  <form method="post"><?= $post('', 'export') ?><button class="btn small" title="Download all leads of this business as JSON (no mail server details)">Download all leads</button></form>
 
   <?php $arch = array_filter(function_exists('pm_leads_archive') ? pm_leads_archive() : [], fn($x) => ($x['brand'] ?? 'promanaged') === pm_brand()); if ($arch):
       $aq = trim((string)($_GET['aq'] ?? '')); $ac = trim((string)($_GET['ac'] ?? '')); $at = trim((string)($_GET['at'] ?? ''));

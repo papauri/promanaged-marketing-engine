@@ -558,8 +558,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (($_POST['bt'] ?? '') === 'whatsapp') {
                 pm_redirect('whatsapp', $m, $k);
             }
-            if (($_POST['bt'] ?? '') === 'targeting') {
-                pm_redirect('targeting', $m, $k);
+            if (in_array($_POST['bt'] ?? '', ['targeting', 'home', 'ops'], true)) { // the page the button was on
+                pm_redirect(['home' => 'home', 'ops' => 'settings&section=connections'][$_POST['bt']] ?? 'targeting', $m, $k);
             }
             $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'unapprove_send', 'set_send_after', 'dismiss_unmatched'], true);
             if ($id !== '' && !$noLead) {
@@ -601,20 +601,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($do === 'config') {
             $list = fn($k) => array_values(array_filter(array_map('trim', explode(',', (string)($_POST['cfg'][$k] ?? '')))));
+            $grp = ($_POST['cfg']['_group'] ?? 'targeting') === 'ai' ? 'ai' : 'targeting'; // the Sales form saves who to look for, limits and replies; Operations saves the AI settings
             $c = $acfg;
-            $c['cities'] = $list('cities');
-            $c['sectors'] = $list('sectors');
-            $c['offerings'] = array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($_POST['cfg']['offerings'] ?? '')))));
-            $c['daily_token_budget'] = max(0, (int)($_POST['cfg']['daily_token_budget'] ?? 400000));
-            $c['quality'] = ($_POST['cfg']['quality'] ?? '') === 'balanced' ? 'balanced' : 'economy';
+            if ($grp === 'targeting') { $c['cities'] = $list('cities'); }
+            if ($grp === 'targeting') { $c['sectors'] = $list('sectors'); }
+            if ($grp === 'targeting') { $c['offerings'] = array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($_POST['cfg']['offerings'] ?? ''))))); }
+            if ($grp === 'ai') { $c['daily_token_budget'] = max(0, (int)($_POST['cfg']['daily_token_budget'] ?? 400000)); }
+            if ($grp === 'ai') { $c['quality'] = ($_POST['cfg']['quality'] ?? '') === 'balanced' ? 'balanced' : 'economy'; }
             $gm = (string)($_POST['cfg']['gemini_model'] ?? 'economy');
-            $c['reply_mode'] = ($_POST['cfg']['reply_mode'] ?? '') === 'auto' ? 'auto' : 'draft';
-            $c['wa_reply_mode'] = ($_POST['cfg']['wa_reply_mode'] ?? '') === 'draft' ? 'draft' : 'auto';
-            $c['gemini_model'] = ($gm === 'auto' || $gm === 'economy' || preg_match('/^gemini-[a-z0-9.\-]+$/', $gm)) ? $gm : 'economy';
-            foreach (['new_per_day' => [1, 50], 'scouts_per_day' => [1, 12], 'send_cap' => [0, 50], 'wa_cap' => [0, 150], 'followup_days' => [1, 30], 'max_followups' => [0, 5], 'parallel' => [1, 6]] as $k => [$lo, $hi]) {
+            if ($grp === 'targeting') { $c['reply_mode'] = ($_POST['cfg']['reply_mode'] ?? '') === 'auto' ? 'auto' : 'draft'; }
+            if ($grp === 'targeting') { $c['wa_reply_mode'] = ($_POST['cfg']['wa_reply_mode'] ?? '') === 'draft' ? 'draft' : 'auto'; }
+            if ($grp === 'ai') { $c['gemini_model'] = ($gm === 'auto' || $gm === 'economy' || preg_match('/^gemini-[a-z0-9.\-]+$/', $gm)) ? $gm : 'economy'; }
+            foreach (($grp === 'ai' ? ['parallel' => [1, 6]] : ['new_per_day' => [1, 50], 'scouts_per_day' => [1, 12], 'send_cap' => [0, 50], 'wa_cap' => [0, 150], 'followup_days' => [1, 30], 'max_followups' => [0, 5]]) as $k => [$lo, $hi]) {
                 $c[$k] = max($lo, min($hi, (int)($_POST['cfg'][$k] ?? $c[$k])));
             }
-            foreach (array_keys($c['enabled']) as $k) {
+            foreach ($grp === 'targeting' ? array_keys($c['enabled']) : [] as $k) {
                 $c['enabled'][$k] = !empty($_POST['cfg']['enabled'][$k]);
             }
             $raw = pm_load('agents_config', 'pm_agents_default_config');
@@ -628,7 +629,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $own = ['sectors', 'cities', 'new_per_day', 'scouts_per_day', 'send_cap', 'wa_cap', 'followup_days', 'max_followups', 'proposals_per_day', 'enabled'];
                 if (pm_brand_is_custom(pm_brand())) {
                     $own = array_merge($own, ['offerings', 'existing_clients']);
-                    $c['existing_clients'] = array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($_POST['cfg']['existing_clients'] ?? '')))));
+                    if ($grp === 'targeting') { $c['existing_clients'] = array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($_POST['cfg']['existing_clients'] ?? ''))))); }
                 }
                 $raw[pm_brand()] = array_intersect_key($c, array_flip($own));
                 pm_save('agents_config', $raw);
@@ -1905,6 +1906,14 @@ $history = pm_history();
 $cur = $settings['currency'];
 
 /** Editable rows for a list in the template. $cols = [key => [label, type, width]] */
+/** The package rows that belong to another business stay in the form (so saving keeps them) but are not shown: each row's type says which business it is for. */
+function pm_rows_hide_other_brands(string $html, string $vb): string
+{
+    return (string)preg_replace_callback('#<tr>(?:(?!</tr>).)*?<option value="([a-z_]+)" selected(?:(?!</tr>).)*</tr>#s', function ($m) use ($vb) {
+        return pm_brand_of_type($m[1]) !== $vb ? '<tr hidden>' . substr($m[0], 4) : $m[0];
+    }, $html);
+}
+
 function pm_rows_editor(string $name, array $cols, array $rows, string $addLabel = 'Add row'): string
 {
     $head = '<tr>';
@@ -2035,21 +2044,16 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
               <div><label>Monthly fee for this client (<span class="curcode"><?= pm_h($qc['code']) ?></span>)</label><input type="number" min="0" step="any" name="price_monthly" id="priceMonthly" value="<?= $v('price_monthly') ?>"></div>
             </div>
             <div class="pricebar">
-              <label class="check"><input type="checkbox" name="save_prices" value="1"> Also make these my standard prices</label>
-              <button class="btn small" name="do" value="save_prices" formnovalidate>Save as standard prices</button>
+              <button class="btn small" name="do" value="save_prices" formnovalidate title="Use these two prices for this package from now on (Template and prices)">Make these the package's standard prices</button>
             </div>
             <div class="mt-2"><label>Show prices in the quotation as</label>
               <select name="price_mode"><option value="exact" <?= ($d['price_mode'] ?? 'exact') === 'exact' ? 'selected' : '' ?>>Exact amounts</option><option value="from" <?= ($d['price_mode'] ?? '') === 'from' ? 'selected' : '' ?>>"From" prices (final price confirmed before they sign)</option></select></div>
             <p class="hint">Prices fill in from the package you pick. Change them to quote this client differently; the PDF shows the price you enter here.</p>
+            <?php if ($vb === 'travel'): ?><label class="check"><input type="checkbox" name="charge" value="1" <?= (array_key_exists('charge', $d) ? !empty($d['charge']) : !empty($settings['travel']['charging'])) ? 'checked' : '' ?>> Charge for onboarding <span class="muted">(unticked: the proposal says Free, no listing fee, no commission)</span></label><?php endif; ?>
           </div>
         </div>
 
-        <div class="card"><h2>Travel Malawi onboarding</h2>
-          <label class="check"><input type="checkbox" name="charge" value="1" <?= (array_key_exists('charge', $d) ? !empty($d['charge']) : !empty($settings['travel']['charging'])) ? 'checked' : '' ?>> Charge for onboarding</label>
-          <p class="hint">Only applies to the Stay Onboarding package. Leave it unticked while onboarding is free: the proposal then says Free and states there is no listing fee or commission. Tick it when you start charging, and set the price on the package.</p>
-        </div>
-
-        <div class="card"><h2>Extras</h2>
+        <details class="card"<?= array_filter((array)($d['extra_price'] ?? [])) || array_filter((array)($d['extras'] ?? [])) || (float)($d['discount_setup'] ?? 0) || (float)($d['discount_monthly'] ?? 0) ? ' open' : '' ?>><summary>Extras and discount (optional)</summary>
           <?php foreach ($tpl['extras'] as $i => $ex): if ($ex['period'] === 'note') continue; ?>
             <div class="ex"><span><?= pm_h($ex['name']) ?></span>
               <span class="fee"><input type="number" min="0" step="any" name="extra_price[<?= $i ?>]" value="<?= pm_h((string)($d['extra_price'][$i] ?? '')) ?>" title="Price"><small><?= $ex['period'] === 'month' ? 'per month' : 'once' ?></small></span>
@@ -2059,7 +2063,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
             <div><label>Discount on setup (%)</label><input type="number" min="0" max="100" step="any" name="discount_setup" value="<?= $v('discount_setup', '0') ?>"></div>
             <div><label>Discount on monthly (%)</label><input type="number" min="0" max="100" step="any" name="discount_monthly" value="<?= $v('discount_monthly', '0') ?>"></div>
           </div>
-        </div>
+        </details>
 
         <div class="card"><h2>Document</h2>
           <div class="seg">
@@ -2198,8 +2202,9 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
   <form method="post">
     <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="template">
     <div class="card"><h2>Packages and prices</h2>
-      <?= pm_rows_editor('packages', ['name' => ['Package', 'text', '20%'], 'type' => ['Business type', pm_types(), '16%'], 'suited' => ['Suited to', 'text', '32%'], 'setup' => ['Setup (' . $cur . ')', 'number', '14%'], 'monthly' => ['Monthly (' . $cur . ')', 'number', '14%']], $tpl['packages'], 'Add package') ?>
+      <?= pm_rows_hide_other_brands(pm_rows_editor('packages', ['name' => ['Package', 'text', '20%'], 'type' => ['Business type', pm_types(), '16%'], 'suited' => ['Suited to', 'text', '32%'], 'setup' => ['Setup (' . $cur . ')', 'number', '14%'], 'monthly' => ['Monthly (' . $cur . ')', 'number', '14%']], $tpl['packages'], 'Add package'), $vb) ?>
     </div>
+    <div <?= $vb === 'travel' ? 'hidden' : '' ?>><?php /* the industry-system wording is ProManaged IT's: it stays in the form for Travel Malawi but is not shown */ ?>
     <div class="card"><h2>Extras</h2>
       <?= pm_rows_editor('extras', ['name' => ['Extra', 'text', '38%'], 'price' => ['Price', 'number', '12%'], 'period' => ['Charged', ['month' => 'Per month', 'once' => 'Once', 'note' => 'Text only'], '14%'], 'note' => ['Fee wording', 'text', '32%']], $tpl['extras'], 'Add extra') ?>
       <p class="hint">"Per month" and "Once" extras can be added to a quote with a quantity. "Text only" just appears in the price list.</p>
@@ -2248,6 +2253,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
         <label class="mt-2">Message</label><textarea name="tpl[emails][<?= $ek ?>][body]" rows="12"><?= pm_h($tpl['emails'][$ek]['body']) ?></textarea>
       <?php endforeach; ?>
     </div>
+    </div>
     <button class="btn primary" style="max-width:260px">Save template</button>
   </form>
   <form class="mt-3" method="post" onsubmit="return confirm('Put every price and word back to the original template?')">
@@ -2255,9 +2261,9 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
     <button class="btn small">Reset to original</button>
   </form>
 
-  <h1 class="mt-6">Business lines</h1>
+  <h1 class="mt-6"><?= $vb === 'travel' ? 'Stay onboarding wording' : 'Business lines' ?></h1>
   <p class="sub">The wording above is for the industry management system. Packages for our other lines (software, websites, hardware, IT support) use their own wording below. Review every commitment, timeline and clause before you send one.</p>
-  <?php foreach (pm_line_names() as $ln => $lname): $L = $tpl['lines'][$ln]; ?>
+  <?php foreach (pm_line_names() as $ln => $lname): if (($ln === 'onboarding') !== ($vb === 'travel')) continue; $L = $tpl['lines'][$ln]; ?>
   <details class="card flush"><summary class="sum"><?= pm_h($lname) ?></summary>
     <form method="post" class="flush-body"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="lines"><input type="hidden" name="line" value="<?= $ln ?>">
       <?php foreach (PM_LINE_TEXT as $k => $lab): ?><label class="mt-2"><?= pm_h($lab) ?></label><textarea name="ln[<?= $k ?>]" rows="<?= in_array($k, ['intro', 'fees_note', 'steps_note', 'support_note', 'pain_intro'], true) ? 3 : 1 ?>"><?= pm_h((string)($L[$k] ?? '')) ?></textarea><?php endforeach; ?>

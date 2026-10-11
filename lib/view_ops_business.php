@@ -1,7 +1,6 @@
 <?php
 /** Operations > Business details: who each business is, how to reach it, its logo and how it signs. Included by view_settings.php. */
 require_once __DIR__ . '/view_share.php';
-pm_view_biz_grid($settings, $vb, $csrf);
 pm_view_hidden_businesses($csrf);
 
 if ($isCustom): // a business added in the app: one form, saved by brand_save (the details part only)

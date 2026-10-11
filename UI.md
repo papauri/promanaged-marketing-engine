@@ -60,3 +60,13 @@ Top bar 48px with the 3px `--accent` stripe; page head (department eyebrow, `h1`
 4. One filled `.btn.primary` per card; row actions use `.btn.small.primary`; destructive ones `.btn.danger` with `data-confirm`.
 5. Never rename the hooks `ui.js` and `app.js` rely on (`.dd .ddbtn .menu .open`, `[data-copy]`, `[data-confirm]`, `[data-busy]`, `.aigen`, `form.msg`, ...) or the `id=` anchors other pages link to.
 6. Load the page at 1280px and 390px wide and check nothing overflows.
+
+## One job per page (the cleanup rules)
+
+- **A number is shown once.** The Overview and Insights hold the figures (leads, replies, health, goals); Sales, Social and Brand pages do not repeat them as tiles. The Director's strategy and its Refresh button live on the Overview only.
+- **A status is said once.** A setup problem is shown by Operations > Health and as one row on the Overview; a page does not add its own banner for it (the Social plan keeps only its Connect Facebook card).
+- **A setting has one editor.** Who to look for, the limits, the replies and the agents on/off: Sales > Targeting. The AI engine, model and budget: Operations > Connections. The email text: one "Default first message" per business (Travel Malawi's AI email is the same text with the `{opening}` line written by the AI). Switching business or adding one: the top-left menu only. Prices: Template and prices (the proposal form only copies them).
+- **Empty states are one line, not a card.** A section with nothing in it is left out (Content: suggested mix, bring back what worked) until it has something to show.
+- **The page head is title, then one line of help.** Page-level buttons go in `.headacts`; none of them may repeat a tab or the top bar.
+- **Text boxes show what is typed.** `textarea` grows to its content (assets/app.js, up to 70% of the window), a list of words or towns is a `textarea` and not a one-line field, and long help text sits under the field, never in the label.
+- **Business-specific pages show only that business.** Template and prices shows the packages and wording of the business in use (the other business's rows stay in the form, hidden, so saving keeps them).

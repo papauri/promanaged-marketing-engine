@@ -34,11 +34,6 @@ $isVideo = fn($f) => (bool)preg_match('/\.(mp4|mov|m4v)$/i', (string)$f);
 <?php $nav = pm_social_nav(''); echo $nav; if (!str_contains($nav, 'sx-banner')) { echo pm_social_banner(); } ?>
 <?= pm_social_panels('plan_top', $vb) ?>
 
-<?php if ($notReady): ?>
-<div class="flash err" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span><b><?= count($notReady) ?> thing<?= count($notReady) === 1 ? '' : 's' ?> to set up before posting works well:</b> <?= pm_h(implode('; ', array_map(fn($r) => $r['label'], array_slice($notReady, 0, 3)))) ?><?= count($notReady) > 3 ? '…' : '' ?>.</span>
-  <a class="btn small" href="?tab=settings&amp;section=health">Open Setup health</a></div>
-<?php endif; ?>
-
 <?php if (!$sc['ready']): ?>
   <div class="card setup">
     <b>Connect the <?= pm_h($bname) ?> Facebook Page</b>

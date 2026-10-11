@@ -21,7 +21,27 @@ $stepHtml = fn(string $t): string => preg_match('/^([^:]{3,48}):\s(.+)$/su', $t,
 $tinfo = $fb['ready'] ? pm_fb_token_info($fb['token']) : null;
 $e0 = pm_env();
 ?>
+<?php
+$acfg = pm_agents_config($vb);
+$us = pm_usage_today();
+arsort($us['agents']);
+$aiHid = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="config"><input type="hidden" name="bt" value="ops"><input type="hidden" name="cfg[_group]" value="ai">';
+?>
 <h3><?= pm_h($bname) ?></h3>
+<form method="post" class="card" id="ai"><?= $aiHid ?>
+  <h2>The AI that writes and searches</h2>
+  <p class="hint mt-0">Shared by every business. <b>Today:</b> <?= number_format($us['total']) ?> tokens in <?= (int)$us['calls'] ?> calls<?= pm_budget() ? ' of a ' . number_format(pm_budget()) . ' budget' : '' ?><?= $us['agents'] ? ' (' . pm_h(implode(', ', array_map(fn($k, $v) => str_replace('_', ' ', $k) . ' ' . number_format($v), array_keys(array_slice($us['agents'], 0, 6, true)), array_slice($us['agents'], 0, 6, true)))) . ')' : '' ?>.
+    Searching with <?= pm_provider(true) === 'gemini' ? 'Gemini' : 'Claude' ?>, writing with <?= pm_provider(false) === 'gemini' ? 'Gemini' : 'Claude' ?>.</p>
+  <div class="row">
+    <div><label>Quality</label><select name="cfg[quality]"><option value="economy" <?= $acfg['quality'] === 'economy' ? 'selected' : '' ?>>Economy (cheapest)</option><option value="balanced" <?= $acfg['quality'] === 'balanced' ? 'selected' : '' ?>>Balanced (a stronger model for research and proposals)</option></select></div>
+    <div><label>Gemini model</label><select name="cfg[gemini_model]"><option value="economy" <?= $acfg['gemini_model'] === 'economy' ? 'selected' : '' ?>>Economy (recommended)</option><option value="auto" <?= $acfg['gemini_model'] === 'auto' ? 'selected' : '' ?>>Spread across the newest three</option>
+      <?php foreach (pm_gemini_top_models() as $gm): ?><option value="<?= pm_h($gm) ?>" <?= $acfg['gemini_model'] === $gm ? 'selected' : '' ?>><?= pm_h($gm) ?></option><?php endforeach; ?></select></div>
+    <div><label>Daily budget (tokens; 0 = no limit)</label><input type="number" name="cfg[daily_token_budget]" value="<?= (int)$acfg['daily_token_budget'] ?>"></div>
+    <div><label>Agents at once</label><input type="number" name="cfg[parallel]" value="<?= (int)$acfg['parallel'] ?>" min="1" max="6"></div>
+  </div>
+  <div class="btns"><button class="btn primary">Save the AI settings</button>
+    <button class="btn" name="do" value="refresh_models" title="Look up the newest Gemini models">Refresh the model list</button></div>
+</form>
 <div class="card">
   <h2>Facebook connection</h2>
   <?php if ($tinfo): ?>

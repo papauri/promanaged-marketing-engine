@@ -13,7 +13,7 @@ $sec = in_array($section ?? '', ['business', 'email', 'connections', 'health', '
 $bname = pm_brand_title($settings, $vb);
 $isCustom = pm_brand_is_custom($vb);
 $heads = [
-    'business' => ['Business details · ' . $bname, 'The name, contact details, logo and signing of each business. The work itself lives in its own department.', '<a class="btn primary" href="?tab=business&amp;new=1">+ Add a business</a>'],
+    'business' => ['Business details · ' . $bname, 'The name, contact details, logo and signing of the business in use. Switch business, or add one, from the menu at the top left.', ''],
     'email' => ['Email · ' . $bname, 'The mailbox every email goes out from, and whether it will reach inboxes.', ''],
     'connections' => ['Connections · ' . $bname, 'Facebook and the other platforms, the picture engine, the scheduler and the website enquiry form.', ''],
     'health' => ['Health and backups', 'What is connected, what is missing, and the weekly copies of your data.', ''],

@@ -1,14 +1,14 @@
 <?php
 /**
  * The first email to a Travel Malawi lead: a short personal opening written for that place (the only part the AI writes), then a standard part that is the same
- * for every stay and comes from the owner's own words in Sales > Targeting and messages > "First email to a stay": what the platform is, what a host gets, the set-up steps with
+ * for every stay and comes from the owner's own words in Sales > Targeting and messages > "Default first message" (its {opening} line is the only part the AI writes): what the platform is, what a host gets, the set-up steps with
  * the link, that it is free for now and why. Nothing in the standard part is invented: it is what the owner typed (the starting text uses only facts the app
  * already holds), and the whole email must pass the same wording rules as any first email (one plain link, no prices, no spam words, at most 190 words).
  */
 
 const PM_TM_LINK = 'https://ulendomalawi.com';
 
-/** The starting text of the standard part: the facts already in Travel Malawi's brain, in the order a host cares about them. */
+/** The starting text of the default message (and what is shown until the owner saves their own): the facts already in Travel Malawi's brain, in the order a host cares about them. */
 function pm_tm_email_defaults(): array
 {
     return [
@@ -88,9 +88,12 @@ function pm_tm_clean_opening(string $s): string
     return count((array)preg_split('/\s+/u', $s, -1, PREG_SPLIT_NO_EMPTY)) > 40 ? '' : $s;
 }
 
-/** The whole first email body (no sign-off: the app adds that): greeting, opening, then the standard part. $template leaves {placeholders} for the lead's words. */
+/** The first email to a stay: the Travel Malawi default message (Sales > Targeting and messages) with the line the AI wrote in place of {opening}. $template builds the starting text of that message instead, with {placeholders} left in. */
 function pm_tm_email_compose(array $lead, string $opening = '', bool $template = false): string
 {
+    if (!$template) {
+        return pm_dm_render($lead, $opening)['email_body'];
+    }
     $c = pm_tm_email_cfg();
     $c['benefits'] = array_map('pm_tm_pack_swap', $c['benefits']);
     $c['closing'] = pm_tm_pack_swap((string)$c['closing']);
@@ -98,7 +101,7 @@ function pm_tm_email_compose(array $lead, string $opening = '', bool $template =
     $open = trim($opening) !== '' ? trim($opening) : pm_tm_default_opening($lead);
     if ($template) { // the same email with {placeholders} where the lead's own words go: the starting text of the default message (lib/msgdefaults.php)
         $first = '{first_name}';
-        $open = '{intro}, and I came across {name} while looking at places to stay in {city}.';
+        $open = '{opening}';
     }
     $list = fn(array $rows, bool $numbered) => implode("\n", array_map(fn($i, $x) => ($numbered ? ($i + 1) . '. ' : '- ') . str_replace('{link}', (string)$c['link'], $x), array_keys($rows), $rows));
     $parts = [$first !== '' ? "Hello $first," : 'Hello,', $open, trim((string)$c['intro'])];
@@ -111,15 +114,6 @@ function pm_tm_email_compose(array $lead, string $opening = '', bool $template =
     $parts[] = trim(trim((string)$c['free']) . ' ' . trim((string)$c['why']));
     $parts[] = trim((string)$c['closing']);
     return implode("\n\n", array_values(array_filter($parts, fn($x) => trim((string)$x) !== '')));
-}
-
-/** Words and problems of the standard email as it is now saved, built for an example stay: ['body','words','problems','subject']. For Settings. */
-function pm_tm_email_check(): array
-{
-    $lead = ['name' => 'Example Lodge', 'city' => 'Zomba', 'contact' => 'Grace Phiri'];
-    $body = pm_tm_email_compose($lead);
-    $subject = 'Direct bookings for Example Lodge';
-    return ['body' => $body, 'subject' => $subject, 'words' => str_word_count($body), 'problems' => pm_outreach_lint($subject, $body, true)];
 }
 
 /** WRITER for Travel Malawi: the AI writes the subject, the personal opening and the WhatsApp message; the email is the opening plus the standard part. */

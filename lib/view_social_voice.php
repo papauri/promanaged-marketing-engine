@@ -25,9 +25,9 @@ $nFacts = count(array_filter(array_map('trim', $words)));
   <div class="card">
     <h2>Who we speak to, and how</h2>
     <div class="row">
-      <div><label>Who we are trying to reach</label><input type="text" name="<?= $n('audience') ?>" value="<?= pm_h((string)$brn['audience']) ?>"></div>
-      <div><label>Tone of voice</label><input type="text" name="<?= $n('voice') ?>" value="<?= pm_h((string)$brn['voice']) ?>" placeholder="e.g. warm, plain, a little dry"></div>
-      <div><label>Never say</label><input type="text" name="<?= $n('never') ?>" value="<?= pm_h((string)$brn['never']) ?>" placeholder="words or claims to keep out"></div>
+      <div><label>Who we are trying to reach</label><textarea name="<?= $n('audience') ?>" rows="2"><?= pm_h((string)$brn['audience']) ?></textarea></div>
+      <div><label>Tone of voice</label><textarea name="<?= $n('voice') ?>" rows="2" placeholder="e.g. warm, plain, a little dry"><?= pm_h((string)$brn['voice']) ?></textarea></div>
+      <div><label>Never say</label><textarea name="<?= $n('never') ?>" rows="2" placeholder="words or claims to keep out"><?= pm_h((string)$brn['never']) ?></textarea></div>
     </div>
   </div>
   <div class="btns formbar"><button class="btn primary">Save the voice</button></div>

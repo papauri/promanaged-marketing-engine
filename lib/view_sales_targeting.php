@@ -1,7 +1,7 @@
 <?php
 /**
- * Sales > Targeting and messages: how the sales team is told to work. What we sell and who to look for, the daily limits, how replies are handled, which agents are on, the standard wording of
- * the first email (Travel Malawi), the default first message and signatures of every business, and for a business added in the app who buys from it and its free first step. The team's roster and diary are here too. The leads themselves are Sales > Leads.
+ * Sales > Targeting and messages: how the sales team is told to work. Who to look for, the daily limits, how replies are handled and which agents are on; when approved emails go out; the default first
+ * message and signatures of the business; and, for a business added in the app, who buys from it and its free first step. The AI engine and its budget are Operations > Connections; the leads are Sales > Leads.
  * Needs $vb, $settings, $csrf.
  */
 pm_brand_set($vb);
@@ -10,36 +10,33 @@ $acfg = pm_agents_config($vb);
 $custom = pm_brand_is_custom($vb);
 $travel = $vb === 'travel';
 $waBiz = pm_wa_biz_cfg()['ready'];
+$agentWhat = ['scout' => 'finds businesses', 'contact' => 'finds the owner and WhatsApp', 'qualifier' => 'scores who deserves a message', 'research' => 'reads their website', 'writer' => 'drafts the first message',
+    'proposals' => 'tailors the quotation', 'followup' => 'nudges quiet leads'];
 $agent = fn(string $do, string $extra = '') => '<input type="hidden" name="csrf" value="' . $csrf . '"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="' . $do . '"><input type="hidden" name="bt" value="targeting">' . $extra;
-$data = pm_home_data($vb);
-$crew = pm_home_staff($vb, $data)['sales'];
-$agentLog = pm_home_activity($vb, 20);
-$us = pm_usage_today();
-arsort($us['agents']);
-echo pm_ui_head('Targeting and messages · ' . $bname, 'Who the team looks for, how much it may do in a day, how it answers, and the wording it uses. Nothing here sends anything.') . pm_ui_strip('targeting');
+echo pm_ui_head('Targeting and messages · ' . $bname, 'Who to look for, the daily limits, when emails go out, and the wording of the first message. Nothing here sends anything.') . pm_ui_strip('targeting');
 ?>
 
 <form method="post">
   <?= $agent('config') ?>
   <div class="card">
-    <h2>What we sell and who we look for</h2>
+    <h2>Who we look for</h2>
     <?php if (!$travel): ?><label>What we sell (one line each, "Name: description")</label>
     <textarea name="cfg[offerings]" rows="4"><?= pm_h(implode("\n", (array)$acfg['offerings'])) ?></textarea><?php endif; ?>
-    <div class="row">
-      <div><label>Types of business to look for (comma separated)</label><input type="text" name="cfg[sectors]" value="<?= pm_h(implode(', ', (array)$acfg['sectors'])) ?>"></div>
-      <div><label>Cities to search (comma separated)</label><input type="text" name="cfg[cities]" value="<?= pm_h(implode(', ', (array)$acfg['cities'])) ?>"></div>
-    </div>
-    <?php if ($custom): ?><label>Existing clients (one per line; they are never cold-pitched)</label>
+    <label>Types of business to look for <span class="muted">(comma separated)</span></label>
+    <textarea name="cfg[sectors]" rows="2"><?= pm_h(implode(', ', (array)$acfg['sectors'])) ?></textarea>
+    <label>Cities to search <span class="muted">(comma separated)</span></label>
+    <textarea name="cfg[cities]" rows="2"><?= pm_h(implode(', ', (array)$acfg['cities'])) ?></textarea>
+    <?php if ($custom): ?><label>Existing clients <span class="muted">(one per line; they are never cold-pitched)</span></label>
     <textarea name="cfg[existing_clients]" rows="3"><?= pm_h(implode("\n", (array)($acfg['existing_clients'] ?? []))) ?></textarea><?php endif; ?>
   </div>
 
   <div class="card">
-    <h2>How much in a day</h2>
+    <h2>Limits per day</h2>
     <div class="row">
-      <div><label>New leads per day</label><input type="number" name="cfg[new_per_day]" value="<?= (int)$acfg['new_per_day'] ?>"></div>
-      <div><label>Searches per day</label><input type="number" name="cfg[scouts_per_day]" value="<?= (int)$acfg['scouts_per_day'] ?>"></div>
-      <div><label>Emails per day (limit)</label><input type="number" name="cfg[send_cap]" value="<?= (int)$acfg['send_cap'] ?>"></div>
-      <div><label>WhatsApp messages per day (limit)</label><input type="number" name="cfg[wa_cap]" value="<?= (int)$acfg['wa_cap'] ?>"></div>
+      <div><label>New leads</label><input type="number" name="cfg[new_per_day]" value="<?= (int)$acfg['new_per_day'] ?>"></div>
+      <div><label>Searches</label><input type="number" name="cfg[scouts_per_day]" value="<?= (int)$acfg['scouts_per_day'] ?>"></div>
+      <div><label>Emails</label><input type="number" name="cfg[send_cap]" value="<?= (int)$acfg['send_cap'] ?>"></div>
+      <div><label>WhatsApp first messages</label><input type="number" name="cfg[wa_cap]" value="<?= (int)$acfg['wa_cap'] ?>"></div>
       <div><label>Follow up after (days)</label><input type="number" name="cfg[followup_days]" value="<?= (int)$acfg['followup_days'] ?>"></div>
       <div><label>Follow-ups at most</label><input type="number" name="cfg[max_followups]" value="<?= (int)$acfg['max_followups'] ?>"></div>
     </div>
@@ -47,36 +44,25 @@ echo pm_ui_head('Targeting and messages · ' . $bname, 'Who the team looks for, 
   </div>
 
   <div class="card">
-    <h2>Replies, and the AI that writes</h2>
+    <h2>Replies and the agents</h2>
     <div class="row">
-      <div><label>Email replies</label><select name="cfg[reply_mode]"><option value="draft" <?= $acfg['reply_mode'] === 'draft' ? 'selected' : '' ?>>Draft for my approval</option><option value="auto" <?= $acfg['reply_mode'] === 'auto' ? 'selected' : '' ?>>Auto-send simple, safe replies</option></select></div>
-      <div><label>WhatsApp Business answers<?= $waBiz ? '' : ' (off until WA_BIZ keys are in .env)' ?></label><select name="cfg[wa_reply_mode]"><option value="auto" <?= ($acfg['wa_reply_mode'] ?? 'auto') === 'auto' ? 'selected' : '' ?>>Answer simple questions by themselves</option><option value="draft" <?= ($acfg['wa_reply_mode'] ?? 'auto') === 'draft' ? 'selected' : '' ?>>Draft for my approval</option></select></div>
-      <div><label>Agents at once</label><input type="number" name="cfg[parallel]" value="<?= (int)$acfg['parallel'] ?>"></div>
-      <div><label>Daily AI budget (tokens; 0 = none)</label><input type="number" name="cfg[daily_token_budget]" value="<?= (int)$acfg['daily_token_budget'] ?>"></div>
-      <div><label>Quality</label><select name="cfg[quality]"><option value="economy" <?= $acfg['quality'] === 'economy' ? 'selected' : '' ?>>Economy (cheapest)</option><option value="balanced" <?= $acfg['quality'] === 'balanced' ? 'selected' : '' ?>>Balanced</option></select></div>
-      <div><label>Gemini model</label><select name="cfg[gemini_model]"><option value="economy" <?= $acfg['gemini_model'] === 'economy' ? 'selected' : '' ?>>Economy (recommended)</option><option value="auto" <?= $acfg['gemini_model'] === 'auto' ? 'selected' : '' ?>>Spread across the newest 3</option>
-        <?php foreach (pm_gemini_top_models() as $gm): ?><option value="<?= pm_h($gm) ?>" <?= $acfg['gemini_model'] === $gm ? 'selected' : '' ?>><?= pm_h($gm) ?></option><?php endforeach; ?></select></div>
+      <div><label>Email replies</label><select name="cfg[reply_mode]"><option value="draft" <?= $acfg['reply_mode'] === 'draft' ? 'selected' : '' ?>>Draft for my approval</option><option value="auto" <?= $acfg['reply_mode'] === 'auto' ? 'selected' : '' ?>>Answer simple questions by themselves</option></select></div>
+      <div><label>WhatsApp Business answers</label><select name="cfg[wa_reply_mode]"><option value="auto" <?= ($acfg['wa_reply_mode'] ?? 'auto') === 'auto' ? 'selected' : '' ?>>Answer simple questions by themselves</option><option value="draft" <?= ($acfg['wa_reply_mode'] ?? '') === 'draft' ? 'selected' : '' ?>>Draft for my approval</option></select>
+        <?php if (!$waBiz): ?><p class="hint">Off until the WhatsApp Business keys are in .env.</p><?php endif; ?></div>
     </div>
-    <p class="hint"><b>AI use today:</b> <?= number_format($us['total']) ?> tokens in <?= (int)$us['calls'] ?> calls<?= pm_budget() ? ' of a ' . number_format(pm_budget()) . ' budget' : '' ?><?= $us['agents'] ? ' (' . pm_h(implode(', ', array_map(fn($k, $v) => str_replace('_', ' ', $k) . ' ' . number_format($v), array_keys(array_slice($us['agents'], 0, 6, true)), array_slice($us['agents'], 0, 6, true)))) . ')' : '' ?>.
-      Searching with <?= pm_provider(true) === 'gemini' ? 'Gemini' : 'Claude' ?>, writing with <?= pm_provider(false) === 'gemini' ? 'Gemini' : 'Claude' ?>. Newest Gemini models today: <?= pm_h(implode(', ', pm_gemini_top_models())) ?>.</p>
-  </div>
-
-  <div class="card">
-    <h2>Who is on the team</h2>
-    <p class="hint mt-0">Tick the agents that may work. An agent that is ticked still needs an AI key; the reason an agent is off is shown beside it.</p>
-    <div class="crew">
+    <label>Agents that may work</label>
+    <div class="checks mt-0">
     <?php foreach ($acfg['enabled'] as $k => $on): ?>
-      <label class="check"><input type="checkbox" name="cfg[enabled][<?= $k ?>]" value="1" <?= $on ? 'checked' : '' ?>> <?= pm_h(ucfirst($k)) ?></label>
+      <label class="check" title="<?= pm_h($agentWhat[$k] ?? '') ?>"><input type="checkbox" name="cfg[enabled][<?= pm_h((string)$k) ?>]" value="1" <?= $on ? 'checked' : '' ?>> <?= pm_h(ucfirst((string)$k)) ?><?= isset($agentWhat[$k]) ? ' <span class="muted">· ' . pm_h($agentWhat[$k]) . '</span>' : '' ?></label>
     <?php endforeach; ?>
     </div>
-    <ul class="roster">
-    <?php foreach ($crew as $m): ?><li class="<?= $m['on'] ? 'on' : 'off' ?>"><div><b><?= pm_h($m['name']) ?></b><small><?= pm_h($m['what']) ?></small></div><em><?= $m['on'] ? 'on duty' : pm_h($m['why']) ?></em></li><?php endforeach; ?>
-    </ul>
-    <p class="hint">The Reply agent answers replies, the Follow-up agent nudges quiet leads, and the Director sets the day's strategy. To run every morning without opening the app, schedule <code>schedule_agents.bat</code>.</p>
+    <p class="hint">A ticked agent still needs an AI key: <a href="?tab=settings&amp;section=health">Health and backups</a> says which are off and why. The AI engine, its model and its daily budget are under <a href="?tab=settings&amp;section=connections">Operations &gt; Connections</a>. To run every morning without opening the app, schedule <code>schedule_agents.bat</code>.</p>
   </div>
   <div class="btns formbar"><button class="btn primary">Save the targeting</button></div>
 </form>
-<form method="post" class="inl"><?= $agent('refresh_models') ?><button class="btn small">Refresh the Gemini model list</button></form>
+
+<?php require_once __DIR__ . '/view_sendschedule.php'; pm_view_sendschedule($vb, $csrf); ?>
+<?php require_once __DIR__ . '/view_msgdefaults.php'; pm_view_msgdefaults($vb, $csrf); ?>
 
 <?php if ($custom):
     $c = (array)$settings['brands'][$vb];
@@ -125,39 +111,3 @@ echo pm_ui_head('Targeting and messages · ' . $bname, 'Who the team looks for, 
   <a class="btn small" href="?onepager=<?= pm_h($vb) ?>">Download the PDF</a>
 </div>
 <?php endif; ?>
-
-<?php if ($travel): $he = pm_tm_email_cfg(); $hk = pm_tm_email_check(); $hn = fn(string $k) => 's[travel][host_email][' . $k . ']'; ?>
-<form method="post">
-  <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="settings"><input type="hidden" name="_sec" value="messages"><input type="hidden" name="back" value="targeting">
-  <div class="card"><h2>First email to a stay</h2>
-    <p class="hint mt-0">Every first email to a stay opens with a line the AI writes for that place, then this text, which is the same for all of them. Write only what is true: nothing here is checked against the platform. Use <code>{link}</code> in a step where the link goes (one link is allowed in an email).</p>
-    <label>What Travel Malawi is</label><textarea name="<?= $hn('intro') ?>" rows="2"><?= pm_h((string)$he['intro']) ?></textarea>
-    <div class="row">
-      <div><label>Heading for what a host gets</label><input type="text" name="<?= $hn('benefits_title') ?>" value="<?= pm_h((string)$he['benefits_title']) ?>"></div>
-      <div><label>Heading for the steps</label><input type="text" name="<?= $hn('steps_title') ?>" value="<?= pm_h((string)$he['steps_title']) ?>"></div>
-      <div><label>The link</label><input type="text" name="<?= $hn('link') ?>" value="<?= pm_h((string)$he['link']) ?>" placeholder="https://ulendomalawi.com"></div>
-    </div>
-    <div class="row">
-      <div><label>What a host gets (one per line)</label><textarea name="<?= $hn('benefits') ?>" rows="4"><?= pm_h(implode("\n", $he['benefits'])) ?></textarea></div>
-      <div><label>The set-up steps (one per line)</label><textarea name="<?= $hn('steps') ?>" rows="4"><?= pm_h(implode("\n", $he['steps'])) ?></textarea></div>
-    </div>
-    <div class="row">
-      <div><label>That it is free</label><input type="text" name="<?= $hn('free') ?>" value="<?= pm_h((string)$he['free']) ?>"></div>
-      <div><label>Why it is free (leave empty to say nothing)</label><input type="text" name="<?= $hn('why') ?>" value="<?= pm_h((string)$he['why']) ?>"></div>
-      <div><label>The question at the end</label><input type="text" name="<?= $hn('closing') ?>" value="<?= pm_h((string)$he['closing']) ?>"></div>
-    </div>
-    <p class="hint <?= $hk['problems'] ? 'warnt' : '' ?>">With a sample opening it is <b><?= (int)$hk['words'] ?></b> words (first emails may be 20 to 190).<?= $hk['problems'] ? ' Fix before it can be sent: ' . pm_h(implode(' ', $hk['problems'])) : ' It passes the wording rules.' ?> Saved wording applies to new drafts; "Redraft" on the Leads screen applies it to unsent ones.</p>
-    <details class="more"><summary>See a sample email</summary><pre class="mt-2" style="white-space:pre-wrap;font:13px/1.5 inherit"><?= pm_h($hk['subject'] . "\n\n" . $hk['body']) ?></pre></details>
-  </div>
-  <div class="btns formbar"><button class="btn primary">Save the wording</button></div>
-</form>
-<?php endif; ?>
-
-<?php require_once __DIR__ . '/view_sendschedule.php'; pm_view_sendschedule($vb, $csrf); ?>
-<?php require_once __DIR__ . '/view_msgdefaults.php'; pm_view_msgdefaults($vb, $csrf); ?>
-
-<h3>The team's diary</h3>
-<div class="card">
-  <?php if (!$agentLog): ?><p class="hint m-0">Nothing yet. When the agents run, what they did is written here.</p><?php endif; ?>
-  <?php foreach ($agentLog as $e): ?><p class="hint log<?= $e['error'] ? ' t-bad' : '' ?>"><?= pm_h($e['at'] !== '' ? date('j M H:i', strtotime($e['at'])) : '') ?> · <b><?= pm_h($e['agent']) ?></b> · <?= pm_h($e['msg']) ?></p><?php endforeach; ?>
-</div>

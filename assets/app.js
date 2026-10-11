@@ -242,3 +242,18 @@
     setTimeout(tick, 1500);
   }
 })();
+
+/* Text boxes grow to show everything typed in them, so a message is never cut off (up to 70% of the window, then it scrolls). */
+(function () {
+  function grow(t) {
+    if (!t.offsetParent && !t.getClientRects().length) return;
+    t.style.height = 'auto';
+    var h = t.scrollHeight + 2;
+    if (h > 40) t.style.height = Math.min(h, Math.round(window.innerHeight * 0.7)) + 'px';
+  }
+  function all(root) { Array.prototype.forEach.call((root || document).querySelectorAll('textarea:not([data-nogrow])'), grow); }
+  document.addEventListener('input', function (e) { if (e.target.matches && e.target.matches('textarea:not([data-nogrow])')) grow(e.target); });
+  document.addEventListener('toggle', function (e) { if (e.target.open) all(e.target); }, true);
+  window.addEventListener('load', function () { all(); setTimeout(all, 300); });
+  window.addEventListener('resize', function () { all(); });
+})();

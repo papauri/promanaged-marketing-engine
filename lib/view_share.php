@@ -23,7 +23,7 @@ function pm_view_share(string $b, string $csrf): void
 <div id="share"></div>
 <form method="post" enctype="multipart/form-data" class="card mt-3"><?= $hid('upload') ?>
   <h2>Documents to share · <?= pm_h($bn) ?></h2>
-  <p class="hint mt-0">Upload a PDF once (for example the host starter pack). <b>Emails</b> can carry it as an attachment and a link; <b>WhatsApp</b> messages carry its link, because a chat link cannot attach a file. In your browser, <i>Print &gt; Save as PDF</i> makes one from any page.</p>
+  <p class="hint mt-0">Upload a PDF once, for example the host starter pack (<i>Print &gt; Save as PDF</i> makes one from any page). First emails attach it and carry its link; WhatsApp messages carry the link only. <a href="?tab=targeting#defaultmsg">See how the messages come out</a>.</p>
   <?php if ($state === 'none'): ?><p class="hint">No starter pack is ready yet. Until one is, messages only mention the website.</p>
   <?php else: ?><p class="hint"><span class="chip ok dot">Pack ready</span> <?= $state === 'attached' ? 'It is attached to first emails and its link goes in WhatsApp.' : 'Its link goes in first emails and WhatsApp messages.' ?></p><?php endif; ?>
   <div class="row">
@@ -79,15 +79,4 @@ function pm_view_share(string $b, string $csrf): void
   <div class="btns"><button class="btn primary">Save links</button><button class="btn" name="do" value="scan" title="Reads the home page, the sitemap and the menu; adds pages it has not seen">Read the website</button></div>
 </form>
 <?php
-    $em = trim(pm_share_email_block('', $b));
-    $wa = trim(pm_share_wa_block('', $b));
-    if ($em !== '' || $wa !== ''): ?>
-<div class="card mt-3"><h2>What gets added to messages</h2>
-  <div class="split">
-    <div><label>First email, under the message</label><pre><?= pm_h($em !== '' ? $em : 'Nothing.') ?></pre></div>
-    <div><label>First WhatsApp message, under the text</label><pre><?= pm_h($wa !== '' ? $wa : 'Nothing.') ?></pre></div>
-  </div>
-  <p class="hint">Follow-ups and replies do not repeat this. To send the pack to someone who asks for it, tick it on their reply (Agents) or use the quick replies on the WhatsApp page.</p>
-</div>
-<?php endif;
 }

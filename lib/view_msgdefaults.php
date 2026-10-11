@@ -15,16 +15,16 @@ function pm_view_msgdefaults(string $vb, string $csrf): void
 <form method="post" id="defaultmsg">
   <input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="msgdefault"><input type="hidden" name="brand" value="<?= pm_h($vb) ?>">
   <div class="card"><h2>Default first message · <?= pm_h($bn) ?></h2>
-    <p class="hint mt-0">The email and WhatsApp message you write once, the same for every lead, with no AI. A lead's card has a <b>Use default message</b> button, or choose below to draft every new lead from it.
-      Where the lead's own words go, write: <?= $vars ?>. The business's links and its PDF are added under the email and the WhatsApp message by themselves (Operations &gt; Business details).</p>
+    <p class="hint mt-0">Written once, the same for every lead. A lead's card has <b>Use default message</b>, or choose below to draft every new lead from it with no AI. Where a lead's own words go, write
+      <?= $vars ?>. The business's links and PDF are added under the email and the WhatsApp message by themselves (Operations &gt; Business details).</p>
     <label>New leads are drafted by</label>
     <div class="checks mt-0">
-      <label class="check"><input type="radio" name="dm[use]" value="ai" <?= $c['use'] === 'ai' ? 'checked' : '' ?>> The AI, a message written for each lead (the default message stays one press away on every lead)</label>
+      <label class="check"><input type="radio" name="dm[use]" value="ai" <?= $c['use'] === 'ai' ? 'checked' : '' ?>> <?= $vb === 'travel' ? 'The AI: it writes the subject, the WhatsApp message and the <code>{opening}</code> line for each lead; the rest of the email is the text below' : 'The AI: a message written for each lead (the default message stays one press away on every lead)' ?></label>
       <label class="check"><input type="radio" name="dm[use]" value="default" <?= $c['use'] === 'default' ? 'checked' : '' ?>> The default message below, for every lead, with no AI</label>
     </div>
     <label>Email subject</label><input type="text" name="dm[email_subject]" value="<?= pm_h($c['email_subject']) ?>" maxlength="120">
-    <label>Email</label><textarea name="dm[email_body]" rows="12"><?= pm_h($c['email_body']) ?></textarea>
-    <label>WhatsApp message</label><textarea name="dm[whatsapp]" rows="3"><?= pm_h($c['whatsapp']) ?></textarea>
+    <label>Email<?= $vb === 'travel' ? ' <span class="muted">· <code>{opening}</code> is the line written for each lead</span>' : '' ?></label><textarea name="dm[email_body]" rows="14" data-grow><?= pm_h($c['email_body']) ?></textarea>
+    <label>WhatsApp message</label><textarea name="dm[whatsapp]" rows="3" data-grow><?= pm_h($c['whatsapp']) ?></textarea>
     <p class="hint <?= $pv['problems'] ? 'warnt' : '' ?>">The email is <b><?= (int)$pv['words'] ?></b> words with an example lead (first emails may be 20 to 190, with at most one link in the text).<?= $pv['problems'] ? ' Fix before it can be sent: ' . pm_h(implode(' ', $pv['problems'])) : ' It passes the checks.' ?></p>
   </div>
   <div class="card"><h2>Signatures</h2>
