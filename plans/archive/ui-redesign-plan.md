@@ -254,7 +254,7 @@ None blocking. Defaults chosen: department colour is the only accent on a screen
 | 5 screens | done through CSS and class work | inline styles 259 -> 7, seven `<style>` blocks moved into app.css, utility classes, one filled primary per section. Not done: regrouping fields into max-6-field cards and designed empty states per view (optional polish) |
 | 6 dead CSS | done | 8 unused classes removed, legacy token aliases removed |
 | 7 responsive and a11y | done | 44px controls and 16px fields on touch or under 860px, tables scroll, no horizontal overflow on any of the 24 screens at 390px, aria-labels on remove buttons, reduced motion |
-| 8 close-out | open | write `UI.md`, README pointer, move this plan to `plans/archive/` |
+| 8 close-out | done | `UI.md` written, pointer in `README.txt`, plan and hand-off moved to `plans/archive/`. **Plan complete.** |
 
 `assets/app.css` is 780 lines: larger than the 650 target because the per-view CSS and utilities now live there instead of in 7 `<style>` blocks and 259 inline styles.
 Known failing, not UI: `tests/test_measure.php` (2 data-dependent checks).

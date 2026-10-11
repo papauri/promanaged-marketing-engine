@@ -1,6 +1,6 @@
 <?php
 /**
- * Guard test for the UI redesign (plans/ui-redesign-plan.md, Phase 0).
+ * Guard test for the UI redesign (plans/archive/ui-redesign-plan.md, Phase 0).
  * Measures the UI's "today" values and fails only when they get worse, so each later phase can tighten one budget
  * constant after it removes its offenders. Every check prints today's count next to its budget; a failure lists the
  * first 10 offenders.

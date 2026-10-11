@@ -1,0 +1,62 @@
+# UI system (one page)
+
+Every screen of the firm uses one stylesheet, `assets/app.css`, in seven ordered sections: **1 tokens, 2 base, 3 shell, 4 components, 5 patterns, 6 pages, 7 responsive and print**. Each selector is defined once. Add to the section it belongs to; do not append override layers. `tests/test_ui_system.php` guards all of this (budgets at 0 or 1) and `tests/test_departments.php` guards the markup contracts.
+
+## Tokens (the single `:root` block)
+
+| Group | Tokens |
+|---|---|
+| Surface and line | `--bg #f5f6f8`, `--surface #fff`, `--surface-2 #f9fafb`, `--line #e4e7ec`, `--line-strong #cdd2d9` |
+| Text | `--ink #111827`, `--ink-2 #374151`, `--muted #667085` (also for placeholders) |
+| Status (text / bg / line) | `--ok`, `--warn`, `--bad`, each with `-bg` and `-line`. "Info" is `--dept` mixed into white |
+| Accents | `--accent` = the business (set in `<head>`: top stripe, business switcher, brand previews only). `--dept` = the department (set on `<body>`): primary buttons, active tab, links, focus ring, selected state |
+| Type | `--fs-1 12` caption, chip, hint, table head - `--fs-2 13` dense body, small buttons, table cells - `--fs-3 14` body, buttons, fields - `--fs-4 16` feature titles - `--fs-5 20` page title - `--fs-6 24` big numbers. Weights 400, 500, 600 only |
+| Space | `--s-1 4`, `--s-2 8`, `--s-3 12`, `--s-4 16`, `--s-5 24`, `--s-6 32`. Nothing else for margin, padding, gap |
+| Radius | `--r-ctl 8` (things you click or type in), `--r-card 12` (cards, menus), `--r-pill`, `50%` for circles |
+| Shadow | `--sh-card`, `--sh-pop`, `--sh-bar` |
+| Controls | `--ctl 36px`, `--ctl-sm 28px`; both become 44px on touch or under 860px, and fields go to 16px |
+| Layout | `--page-w 1180px`; pages with `.withpage` use 1560px |
+
+Department colours live only in `pm_ui_nav()` (`lib/ui.php`); each passes 4.5:1 with white text (checked by the guard test).
+
+## Buttons: four levels, plus danger and icon
+
+| Level | Markup | Use |
+|---|---|---|
+| Filled | `.btn.primary` | The one main action of a card, section or form. **At most one per card/section/form** |
+| Tonal | `.btn.small.primary` | The main action of each row in a list or table (same class, rendered light automatically) |
+| Outline | `.btn` | Everything else |
+| Ghost | `.btn.ghost`, `button.link` | Open, Copy, Undo, Details |
+| Danger | `.btn.danger` | Delete, Remove, Reject (outlined, never filled; keep `data-confirm`) |
+| Icon | `button.icon` | Remove x, close. Always with `aria-label` |
+
+Two heights only: 36 and `.small` 28. In a `.btns` group: primary first, outline, ghost, danger last.
+
+## Chips, cards, fields, tables
+
+- **Chip**: `.chip` (alias `.pill`, `.sx-chip`, `.rs-chip`, `.pick`), 20px, pill, 12/500. Variants `.ok .warn .bad .info`; `.chip.dot` adds a dot. Status always has a word, never colour alone.
+- **Card**: `.card` is the base (white, 1px line, radius 12, light shadow). The other card classes (`.sx-card`, `.bizcard`, `.dept`, `.lpcard`, ...) share the same base in one selector list. Variants: `.card.flat` (a card inside a card is flat automatically), `.card.item` (repeated items), `.card.empty` (one sentence, one button), `.card.ok|warn|bad` (banners; also `.flash.ok|err`). Card head: `.card-head` with an `h2` (14/600).
+- **Fields**: label above (12 muted), control 36px, `.hint` under it (12 muted). Grid `.row` (auto-fit, min 240px, gap 12). At most 6 fields per card. Save bar `.formbar` is sticky at the bottom of the page.
+- **Tables**: `table.grid`, `.sx-table`, `.rs`, `.hist` share one look (head 12/600 muted, cells 13px, bottom borders, row hover; `td.num` right-aligned with tabular numbers). They scroll sideways under 860px.
+- **List rows**: `.sx-checks li`, `.idearow`, `.roster li`, `.nextlist li`, `.hq-needrow`: title and muted meta on the left, chip, actions on the right.
+
+## Page templates
+
+Every screen is one of: **A Dashboard** (`view_home.php`), **B Queue** (toolbar, dense rows, sticky bulk bar: Leads, WhatsApp, Plan, Inbox, Lead posts, Content), **C Settings** (stack of titled cards with a sticky save bar: Operations pages, Voice, Targeting, Enter numbers, business wizard), **D Fix-it list** (score, one collapsible card per area: Profiles, Audit, Channels, Growth), **E Gallery** (equal cards, preview on top: Studio, Brand kit), **F Report** (tiles, one table or chart per card: Results, Outbound, Drafts). Proposal tabs follow B and C (markup in `index.php`).
+
+## Shell
+
+Top bar 48px with the 3px `--accent` stripe; page head (department eyebrow, `h1`, one-line `p.sub`, actions) about 60px; tab strip 36px with a 2px `--dept` underline. The first card starts about 184px from the top of the window. Under 860px the bar wraps, tabs scroll, grids collapse.
+
+## Utilities (use these instead of `style=`)
+
+`.stack`, `.cluster`, `.grow`, `.right` (`margin-left:auto`), `.nowrap`, `.tnum`, `.t-xs`, `.t-sm`, `.t-md`, `.mt-0..6`, `.mb-0..3`, `.w-full`, `.center`. Inline `style=` is allowed only for data-driven custom properties (`--bz`, `--dept`, `--v`, `--w`) and bar widths in `%`.
+
+## Adding a new screen
+
+1. Register the page once in `pm_ui_nav()` (`lib/ui.php`); the top bar, tabs, department label and colour follow from it. `tests/test_departments.php` fails if a setting gets a second editor.
+2. Start the view with `pm_ui_head($title, $sub, $actions)`; pick the template (A to F) and reuse its pattern.
+3. Compose with the components above. No `<style>` block, no `style=` except the data-driven exceptions, no new font size, radius, colour or spacing value; if something is missing, add one rule to the right section of `app.css`.
+4. One filled `.btn.primary` per card; row actions use `.btn.small.primary`; destructive ones `.btn.danger` with `data-confirm`.
+5. Never rename the hooks `ui.js` and `app.js` rely on (`.dd .ddbtn .menu .open`, `[data-copy]`, `[data-confirm]`, `[data-busy]`, `.aigen`, `form.msg`, ...) or the `id=` anchors other pages link to.
+6. Run `php tests/test_ui_system.php` and load the page at 1280px and 390px wide.

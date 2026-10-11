@@ -9,7 +9,7 @@ Open this folder in VS Code, open the Cline panel, choose provider **DeepSeek**,
 
 ## Preamble (paste at the top of every task)
 ```
-Read @plans/ui-redesign-plan.md. Follow its "Safety rules" and "Constraints" exactly.
+Read @plans/archive/ui-redesign-plan.md. Follow its "Safety rules" and "Constraints" exactly.
 Implement only the phase named below. Do not explore beyond the files listed in that phase.
 Never press an action button in the live app (they send email and post to Facebook); only load pages.
 Never edit or delete anything in data/. Keep the server on 127.0.0.1:8085 running.

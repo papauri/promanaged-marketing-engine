@@ -11,6 +11,10 @@ MARKETING PLAN
   nothing in it is built until the owner accepts it. When the register is empty
   the file is wiped and the cycle starts over.
 
+UI DESIGN SYSTEM
+  UI.md is the one-page design system: the tokens, the four button levels, the chip, card, field and table rules, the page templates, the utility classes and how to add a screen.
+  plans/archive/ui-redesign-plan.md is the finished redesign plan. tests/test_ui_system.php keeps the CSS and the screens inside it.
+
 START ON THIS COMPUTER
   Double-click start.bat  (opens http://127.0.0.1:8085)
   or:  php -S 127.0.0.1:8000 router.php     (always include router.php)
