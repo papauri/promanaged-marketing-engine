@@ -1429,24 +1429,22 @@ function pm_studio_shuffle(string $brand, array $spec): array
  * Asks the AI for a design: style, four colours, texture, alignment, and the words. Returns [spec, note]. The look is always accepted (after the colour and style checks); the words are kept
  * only if they pass the facts-only guard. Throws when the AI cannot be reached.
  */
-function pm_studio_ai(string $brand, array $base): array
+/** The art director's rules: what makes a design look made by a person. Used by the one-design idea here and by the Brand team's several-kit round. */
+function pm_studio_art_rules(): string
 {
-    $f = pm_opt_facts($brand);
-    $acc = (string)(pm_settings()['accent_color'] ?? '#17375E');
-    $system = pm_agents_company_brief('tiny') . "\nYou are the art director for " . $f['name'] . ' (Malawi). You choose the design of its social media profile picture and cover; code draws it, so you only choose. '
-        . 'The look must feel made by a person: neo-naturalism, editorial, paper and print. Choose a muted, earthy palette (clay, sage, olive, ochre, ink, bone, sand, rosewood) with a calm base and ONE stronger accent; stay close to the brand colour. '
+    return 'The look must feel made by a person: neo-naturalism, editorial, paper and print. Choose a muted, earthy palette (clay, sage, olive, ochre, ink, bone, sand, rosewood) with a calm base and ONE stronger accent; stay close to the brand colour. '
         . 'Never use purple, indigo, violet, neon, glowing or blue-to-purple gradients, glassmorphism or generic tech blue: they look machine-made. Prefer the styles paper, cutout, terrazzo, weave, dusk, waves or minimal; use a digital style only for a technology business and say why. '
         . 'Give four colours (hex: bg1 base, bg2 second tone, accent one highlight, ink the writing colour with strong contrast on the backgrounds), a texture (paper or grain), and the words. '
         . 'Words: eyebrow (the business name or a 2-3 word label, up to 40 characters), headline (up to 60 characters, what the business does or stands for), subline (up to 100 characters, one plain supporting line), whisper (up to 3 short items such as the website or a town the business serves; contact details only from the facts). '
         . 'Use ONLY what the facts say: no number, price, award, ranking or claim that is not in them, no link, hashtag, emoji or exclamation mark, never "best" or "leading". Reply JSON only.';
-    $user = json_encode(['business' => $f['name'], 'tagline' => $f['tagline'], 'about' => mb_substr($f['about'], 0, 400), 'audience' => mb_substr($f['audience'], 0, 200), 'facts' => array_slice($f['facts'], 0, 6),
-            'website' => $f['site'], 'phone' => $f['phone'], 'brand_colour' => $acc, 'styles' => PM_SD_STYLES, 'profile_styles' => PM_SD_PSTYLES, 'textures' => array_keys(PM_SD_TEXTURES),
-            'current_style' => $base['style'], 'avoid' => 'repeating the current style'], JSON_UNESCAPED_UNICODE)
-        . "\nJSON: {\"style\":\"\",\"pstyle\":\"\",\"palette\":{\"bg1\":\"#\",\"bg2\":\"#\",\"accent\":\"#\",\"ink\":\"#\"},\"texture\":\"\",\"align\":\"left|center|right\",\"eyebrow\":\"\",\"headline\":\"\",\"subline\":\"\",\"whisper\":[],\"monogram\":\"\",\"why\":\"one sentence\"}";
-    $out = pm_agent_json(pm_claude($system, $user, false, 700, 'write'));
-    if (!is_array($out) || empty($out['style'])) {
-        throw new RuntimeException('The AI did not return a design. Try again.');
-    }
+}
+
+/**
+ * Turns what the AI chose into a design the code can draw: a photo style needs a photo, the look is accepted after the colour and style checks, the words are kept only if they pass the
+ * facts-only guard, and colours that look generated are softened. Returns [spec, softened].
+ */
+function pm_studio_accept(string $brand, array $out, array $base): array
+{
     if (isset($out['style']) && $out['style'] === 'photo' && pm_hero_path($brand) === '') {
         $out['style'] = $base['style'] === 'aurora' ? 'dusk' : 'aurora'; // no photo to use
     }
@@ -1457,6 +1455,27 @@ function pm_studio_ai(string $brand, array $base): array
         [$spec, $softened] = pm_sd_humanize($spec);
         $spec['ink'] = pm_sd_tohex(pm_sd_ink_for(pm_sd_hex($spec['bg1']), pm_sd_hex($spec['bg2']), pm_sd_hex($spec['ink'])));
     }
+    return [$spec, $softened];
+}
+
+/**
+ * Asks the AI for a design: style, four colours, texture, alignment, and the words. Returns [spec, note]. The look is always accepted (after the colour and style checks); the words are kept
+ * only if they pass the facts-only guard. Throws when the AI cannot be reached.
+ */
+function pm_studio_ai(string $brand, array $base): array
+{
+    $f = pm_opt_facts($brand);
+    $acc = (string)(pm_settings()['accent_color'] ?? '#17375E');
+    $system = pm_agents_company_brief('tiny') . "\nYou are the art director for " . $f['name'] . ' (Malawi). You choose the design of its social media profile picture and cover; code draws it, so you only choose. ' . pm_studio_art_rules();
+    $user = json_encode(['business' => $f['name'], 'tagline' => $f['tagline'], 'about' => mb_substr($f['about'], 0, 400), 'audience' => mb_substr($f['audience'], 0, 200), 'facts' => array_slice($f['facts'], 0, 6),
+            'website' => $f['site'], 'phone' => $f['phone'], 'brand_colour' => $acc, 'styles' => PM_SD_STYLES, 'profile_styles' => PM_SD_PSTYLES, 'textures' => array_keys(PM_SD_TEXTURES),
+            'current_style' => $base['style'], 'avoid' => 'repeating the current style'], JSON_UNESCAPED_UNICODE)
+        . "\nJSON: {\"style\":\"\",\"pstyle\":\"\",\"palette\":{\"bg1\":\"#\",\"bg2\":\"#\",\"accent\":\"#\",\"ink\":\"#\"},\"texture\":\"\",\"align\":\"left|center|right\",\"eyebrow\":\"\",\"headline\":\"\",\"subline\":\"\",\"whisper\":[],\"monogram\":\"\",\"why\":\"one sentence\"}";
+    $out = pm_agent_json(pm_claude($system, $user, false, 700, 'write'));
+    if (!is_array($out) || empty($out['style'])) {
+        throw new RuntimeException('The AI did not return a design. Try again.');
+    }
+    [$spec, $softened] = pm_studio_accept($brand, $out, $base);
     $note = trim((string)preg_replace('/\s+/u', ' ', strip_tags(is_scalar($out['why'] ?? null) ? (string)$out['why'] : '')));
     $dropped = $spec['_dropped'];
     $msg = ($note !== '' ? mb_substr($note, 0, 160) . ' ' : '') . ($softened ? '(The colours were softened so they look natural.) ' : '') . ($dropped ? '(Some of its words were not used because they added a claim or a number: ' . implode(', ', $dropped) . '.)' : '');

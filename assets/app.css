@@ -748,3 +748,18 @@ fieldset + .row, fieldset + label, .row + fieldset { margin-top:12px; }
 .layout .sticky .card:has(> .btn) > .btn { width:100%; margin:0; }
 .layout .sticky .card:has(> .btn) > label.check { margin:0; }
 .layout .sticky .card:has(> .btn) > .hint { margin:2px 0 0; }
+
+/* ---- the brand team (Brand > Brand kit) ---- */
+.crew-row { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 12px; }
+.crew-chip { display:inline-flex; align-items:center; gap:7px; padding:4px 11px; border:1px solid var(--line); border-radius:99px; background:var(--card); font-size:12.5px; font-weight:500; }
+.crew-chip i { width:8px; height:8px; border-radius:50%; background:#16a34a; }
+.crew-chip.off { color:var(--muted); background:var(--bg); }
+.crew-chip.off i { background:#d0d5dd; }
+.bt-run { margin-bottom:4px; }
+.btgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; margin-top:16px; }
+.btkit { display:flex; flex-direction:column; gap:8px; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--card); }
+.btpics { position:relative; margin-bottom:26px; }
+.btcover { display:block; width:100%; height:auto; aspect-ratio:820/312; object-fit:cover; border-radius:9px; background:#e9e4da; }
+.btprof { position:absolute; left:10px; bottom:-26px; width:20%; aspect-ratio:1; border-radius:50%; border:3px solid #fff; background:#fff; box-shadow:0 2px 8px rgba(0, 0, 0, .18); }
+.btmeta { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.btwords { margin:0; line-height:1.4; }

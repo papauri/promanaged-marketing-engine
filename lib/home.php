@@ -30,10 +30,14 @@ function pm_home_staff(string $brand, array $d): array
             $row('Planner', 'Writes the week\'s posts for your approval', $fb || (int)($d['social']['planned'] ?? 0) > 0, 'connect the Facebook Page'),
             $row('Community manager', 'Answers and tidies comments (autopilot)', $fb && ($d['social']['autopilot'] ?? 'safe') !== 'off', $fb ? 'autopilot is off' : 'connect the Facebook Page'),
             $row('Playbook', 'Who to engage today, with the words', $fb, 'connect the Facebook Page'),
+            $row('Editor', 'Reads the AI\'s posts and sends weak ones back once', $ai && function_exists('pm_editor_on') && pm_editor_on($brand), $ai ? 'switched off in the Plan\'s Publishing rules' : $needAi),
         ],
         'brand' => [
-            $row('Art director', 'Designs the covers and profile pictures', function_exists('pm_studio_can_draw') && pm_studio_can_draw(), 'this server cannot draw pictures'),
-            $row('Copywriter', 'Writes the profile words', $ai, $needAi),
+            $row('Creative director', 'Proposes whole kits and sends weak ones back for another round', $ai && function_exists('pm_studio_can_draw') && pm_studio_can_draw(), $ai ? 'this server cannot draw pictures' : $needAi),
+            $row('Copywriter', 'Writes the profile words, three options each', $ai, $needAi),
+            $row('Copy editor', 'Holds every kit and post to the human-voice rules', true),
+            $row('Art critic', 'Scores each kit: readable, short, human, fresh', true),
+            $row('Producer', 'Draws the best three for you to choose from', function_exists('pm_studio_can_draw') && pm_studio_can_draw(), 'this server cannot draw pictures'),
         ],
         'insights' => [
             $row('Director', 'Reads the numbers and sets today\'s strategy', $ai, $needAi),
@@ -114,7 +118,7 @@ function pm_home_data(string $brand): array
             'social' => ['ready' => $fb['ready'], 'ig' => $fb['ig_id'] !== '', 'autopilot' => $fb['ready'] ? pm_autopilot_level($brand) : 'off', 'planned' => $planned, 'waiting' => $waitingPosts, 'published28' => $pub28,
                 'playbook_day' => (string)($pb['day'] ?? ''), 'playbook_open' => $pbOpen, 'playbook_total' => count((array)($pb['tasks'] ?? [])), 'followers' => (int)($page['followers'] ?? $page['fans'] ?? 0)],
             'brand' => ['score' => isset($opt['score']) ? (int)$opt['score'] : null, 'fixable' => (int)($opt['fixable'] ?? 0), 'checked' => (string)($opt['at'] ?? ''), 'design' => $design ? (string)(PM_SD_STYLES[$design['style']] ?? 'custom') : '',
-                'copy' => count((array)(pm_opt_store($brand)['copy'] ?? [])), 'todo' => (array)($opt['todo'] ?? [])],
+                'copy' => count((array)(pm_opt_store($brand)['copy'] ?? [])), 'todo' => (array)($opt['todo'] ?? []), 'kits' => function_exists('pm_bt_pending') ? count(pm_bt_pending($brand)) : 0],
             'insights' => ['enquiries28' => function_exists('pm_sx_social_leads_count') ? pm_sx_social_leads_count($brand, 28) : 0, 'published28' => $pub28, 'won' => (int)$ps['won'], 'proposals' => (int)$ps['proposals_sent'], 'leads' => (int)$ps['leads'],
                 'goal_posts' => function_exists('pm_social_goals') ? (int)pm_social_goals($brand)['posts_per_week'] : 0],
             'ops' => ['ai' => pm_agents_ready(), 'scheduler_age' => function_exists('pm_social_heartbeat_age') ? pm_social_heartbeat_age() : null, 'mail' => $okOf('smtp_' . $brand), 'imap' => $okOf('imap_' . $brand),
@@ -141,7 +145,7 @@ function pm_home_depts(string $brand, array $d): array
     // Social
     [$soSt, $soTxt] = !$so['ready'] ? ['todo', 'Connect the Facebook Page to start'] : ($so['waiting'] > 0 ? ['warn', $n($so['waiting'], 'post waits', 'posts wait') . ' for your approval'] : ($so['planned'] === 0 ? ['warn', 'Nothing is scheduled to post'] : ['ok', $n($so['planned'], 'post', 'posts') . ' lined up']));
     // Brand
-    [$bSt, $bTxt] = $br['score'] === null ? ['todo', 'No check yet: see how the profiles stand'] : ($br['score'] < 60 ? ['warn', 'Page health ' . $br['score'] . '%: ' . $n($br['fixable'], 'fix is', 'fixes are') . ' ready'] : ['ok', 'Page health ' . $br['score'] . '%']);
+    [$bSt, $bTxt] = $br['kits'] > 0 ? ['warn', $n($br['kits'], 'new kit from the brand team waits', 'new kits from the brand team wait') . ' for your choice'] : ($br['score'] === null ? ['todo', 'No check yet: see how the profiles stand'] : ($br['score'] < 60 ? ['warn', 'Page health ' . $br['score'] . '%: ' . $n($br['fixable'], 'fix is', 'fixes are') . ' ready'] : ['ok', 'Page health ' . $br['score'] . '%']));
     // Insights
     [$iSt, $iTxt] = $in['leads'] === 0 ? ['todo', 'Numbers appear once the first leads are in'] : ['ok', $n($in['enquiries28'], 'enquiry', 'enquiries') . ' from social in 4 weeks'];
     // Operations

@@ -121,6 +121,12 @@ accepted by being made; they are logged in the Done log below, not in the regist
 
 ## 6 · Done log
 
+### Owner question in chat, 2026-10-11 — "how come pages like brand kits are not smart and not harnessing loops of agent swarms and AI to generate posts and brand kits"
+
+- **Brand team** (`lib/sx_brandteam.php`): Researcher, Creative director (AI, one call for four kits), Copy editor and Art critic (code, score 0 to 100), a second round for weak kits (notes go back), Producer (drafts), Copywriter (profile words). Max three AI calls a run; code-only fallback; nothing applied without "Use this kit"; the scheduler proposes about monthly. Shared helpers extracted from the Studio: `pm_studio_art_rules`, `pm_studio_accept`.
+- **Post editor** (`lib/sx_editor.php`): code scores the planner's captions, one more AI call rewrites the weak ones together, guarded, kept only when clearly better; switch in the Plan's Publishing rules.
+- `tests/test_swarm.php` (73). Honest limit: the loops make proposals and drafts; the owner still approves everything.
+
 ### Owner request in chat, 2026-10-11 — "UI/UX like a legit marketing firm, every function a department; proper polish; fewer tokens per goal"
 
 - **Follow-up from the owner: "fix every department's UI, grouping and text boxes, no duplicate functionality, every department has a job"**: every page is now listed once under the department whose job it is (`pm_ui_nav`); each setting has one editor (`tests/test_departments.php` guards it). Moves: pillars, proof bank, mix, recycle and a new idea bank/hashtags to Social > Content (`lib/sx_content.php`); comments, moderation and autopilot to Social > Inbox; the Plan got Publishing rules and lost the readiness list, comments and "On the Page now"; profile words to Brand > Profiles; the AI's knowledge to Brand > Voice; branding pictures to Brand > Brand kit; Facebook connection, platform links, picture engine and enquiry form to Operations > Connections; the settings screen split into five sections with section-scoped saves (`lib/settings_save.php`, `social_accounts` `_sec`); agent settings, targeting and the first-email wording to Sales > Targeting and messages; typed-in numbers to Insights > Enter numbers; "Log an enquiry" to Sales > WhatsApp; the Audit no longer repeats the settings. Removed `view_social_accounts.php` and `view_brand_settings.php`. Tests: `test_departments.php` (103), `test_home.php` (145), `test_pages.php` (205).

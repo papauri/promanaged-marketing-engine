@@ -261,6 +261,18 @@ THE FIRM AS DEPARTMENTS: EVERY DEPARTMENT HAS ONE JOB, EVERY SETTING ONE OWNER (
   added: details, email, voice, targeting, social), so a form on one page can never blank a field that lives on another. A form that names no part saves everything, as before.
   The overview shows a greeting, the Director's brief, six numbers, what needs you now, one card per department (state, numbers, team on duty with the reason for anyone off, next steps),
   every business at a glance and the team's diary. It reads stored data only (no AI, no network), so it opens at once. tests/test_home.php.
+AGENT LOOPS: THE BRAND TEAM (lib/sx_brandteam.php) AND THE POST EDITOR (lib/sx_editor.php)
+  Brand > Brand kit opens with a brand team that works in a loop and hands the owner a choice instead of an empty form. Researcher (code) reads the facts, voice, brand colour, the design in use and the
+  looks used lately. Creative director (AI, ONE call) proposes four different kits: style, colours, texture and the words. Copy editor and Art critic (code, free) score each kit 0 to 100: readable,
+  short, human-sounding, no stock phrases, facts-only, not a repeat of the style or colours in use, suits the business, ties back to the brand colour. If the best kit is under 78, the critics' notes
+  go back to the Creative director for ONE more round (three new kits, told which styles were tried). Producer (code) draws the best three as drafts. Copywriter (AI, one call) writes the missing
+  profile words (three options each) when asked. At most three AI calls a run; with no AI key, or when the AI is down, the team still varies the look in code. Nothing is applied until the owner
+  presses "Use this kit" (that sets the design, the cover wording and redraws every platform's pictures). The scheduler makes a fresh set about once a month, only when nothing is waiting, and only
+  proposes (switch: "Let the team make a fresh set..."). Data: data/brand_team.json. The Overview shows the team on the Brand card and says when kits are waiting.
+  The Plan has an editor too: after the planner's AI writes the captions, the code scores each one (length, stock openers and phrases, the same opening as another post or a recent one, nothing specific
+  from the facts, lists of three, long sentences). Posts under 75 go back, together, in ONE more AI call with the exact problems; a rewrite is used only if it passes the same guards (no new number,
+  link or claim) and scores clearly better, otherwise the original stays. A batch where every post passes costs nothing extra. Each reviewed post shows an "Editor 86" chip (or "reworded").
+  Switch: Social > Plan > Publishing rules. tests/test_swarm.php.
 THE HUMAN VOICE (lib/human.php) AND HAND-MADE LOOKS (lib/sx_studio.php) THROUGHOUT THE MARKETING DEPARTMENT
   Everything a customer reads that an AI helped write goes through two things. (1) PM_HUMAN_RULES, a few lines added to the writers' instructions (first email, follow-up, win-back,
   Travel Malawi, compose, replies, the proposal email, posts, the playbook, profile words): plain everyday words, one specific detail instead of a general claim, and a list of stock

@@ -1,6 +1,6 @@
 <?php
 /**
- * Brand > Brand kit: the cover wording, a hero photo, and the profile picture and cover for every platform at the size it asks for. The look comes from the Studio design in use (or the plain
+ * Brand > Brand kit: the brand team (a loop of agents that proposes whole kits for you to choose from), the cover wording, a hero photo, and the profile picture and cover for every platform at the size it asks for. The look comes from the Studio design in use (or the plain
  * classic one). Where each profile lives and how to connect it is Operations > Connections. Needs $vb, $settings, $csrf.
  */
 pm_brand_set($vb);
@@ -13,6 +13,51 @@ $built = is_dir(pm_kit_dir($vb)) && glob(pm_kit_dir($vb) . '/*.png');
 $inUse = function_exists('pm_studio_saved') ? pm_studio_saved($vb) : null;
 ?>
 <?= pm_social_nav('kit') ?>
+<?php
+$bt = pm_bt_store($vb);
+$waiting = array_values(array_filter((array)$bt['proposals'], fn($p) => ($p['status'] ?? '') === 'new'));
+$lastRun = (array)($bt['runs'][0] ?? []);
+$aiOn = pm_agents_ready();
+$roles = [['Researcher', 'Reads the facts, the voice and the brand colour', true], ['Creative director', 'Proposes several kits in one AI call', $aiOn], ['Copy editor', 'Holds the words to the human-voice rules', true],
+    ['Art critic', 'Scores every kit and sends weak ones back', true], ['Producer', 'Draws the best three for you', true], ['Copywriter', 'Writes the missing profile words', $aiOn]];
+$pv = fn(string $kind, string $id, int $w, int $h = 0) => '?studio=' . $kind . '&b=' . urlencode($vb) . '&id=' . $id . '&w=' . $w . ($kind === 'cover' ? '&h=' . $h . '&t=facebook' : '') . '&v=' . PM_SD_VERSION;
+$btx = fn(string $do, string $extra = '') => '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="' . pm_h($do) . '">' . $extra;
+?>
+<div class="card bt" id="team">
+  <h2>Your brand team</h2>
+  <p class="hint" style="margin-top:0">A small team works in a loop so you choose between good kits instead of building one from nothing. The <b>Creative director</b> proposes kits; the <b>Copy editor</b> and the <b>Art critic</b> score each one (readable, short, human, not a repeat, close to the brand colour); anything weak goes back for a second round. You get the best three. <b>Nothing changes until you press Use this kit.</b></p>
+  <div class="crew-row"><?php foreach ($roles as [$rn, $rd, $on]): ?><span class="crew-chip<?= $on ? '' : ' off' ?>" title="<?= pm_h($rd . ($on ? '' : ' (needs an AI key)')) ?>"><i></i><?= pm_h($rn) ?></span><?php endforeach; ?></div>
+  <form method="post" class="findrow bt-run"><?= $btx('bt_run') ?>
+    <button class="btn primary" <?= pm_studio_can_draw() ? '' : 'disabled title="This server cannot draw pictures"' ?>><?= $waiting ? 'Ask for a fresh set' : 'Ask the team for kits' ?></button>
+    <label class="check" style="margin:0"><input type="checkbox" name="words" value="1" <?= $aiOn ? 'checked' : 'disabled' ?>> also write the missing profile words</label>
+    <span class="hint" style="margin:0"><?= $aiOn ? 'About 2 to 3 AI calls, about a minute.' : 'No AI key: the team varies the look in code and keeps your wording.' ?></span>
+  </form>
+  <form method="post" class="inl"><?= $btx('bt_auto') ?>
+    <label class="check" style="margin:8px 0 0"><input type="checkbox" name="on" value="1" <?= !empty($bt['auto']) ? 'checked' : '' ?> onchange="this.form.requestSubmit()"> Let the team make a fresh set about once a month (it only proposes)</label></form>
+  <?php if ($lastRun): ?>
+  <details class="more"><summary class="hint" style="cursor:pointer">How the team worked on <?= pm_h(date('j M H:i', strtotime((string)$lastRun['at']))) ?> · best <?= (int)$lastRun['best'] ?> of 100 · <?= (int)$lastRun['calls'] ?> AI call<?= (int)$lastRun['calls'] === 1 ? '' : 's' ?></summary>
+    <ul class="hint"><?php foreach ((array)$lastRun['log'] as $ln): ?><li><?= pm_h((string)$ln) ?></li><?php endforeach; ?></ul></details>
+  <?php endif; ?>
+  <?php if ($waiting): ?>
+  <div class="btgrid">
+    <?php foreach ($waiting as $p): ?>
+    <div class="btkit">
+      <div class="btpics"><img class="btcover" src="<?= pm_h($pv('cover', (string)$p['id'], 440, 167)) ?>" alt="Cover of <?= pm_h((string)$p['name']) ?>" loading="lazy"><img class="btprof" src="<?= pm_h($pv('profile', (string)$p['id'], 140)) ?>" alt="" loading="lazy"></div>
+      <div class="btmeta"><b><?= pm_h((string)$p['name']) ?></b> <span class="sx-chip <?= (int)$p['score'] >= PM_BT_THRESHOLD ? 'ok' : 'warn' ?>" title="The art critic's score"><?= (int)$p['score'] ?>/100</span>
+        <?= ($p['how'] ?? '') === 'code' ? '<span class="sx-chip">made in code</span>' : '' ?><?= (int)($p['round'] ?? 1) > 1 ? '<span class="sx-chip" title="Sent back by the critics and improved">round 2</span>' : '' ?></div>
+      <p class="btwords"><b><?= pm_h((string)$p['headline']) ?></b><br><?= pm_h((string)$p['subline']) ?></p>
+      <?php if (!empty($p['why'])): ?><p class="hint" style="margin:0"><?= pm_h((string)$p['why']) ?></p><?php endif; ?>
+      <div class="sx-chips"><?php foreach ((array)$p['praise'] as $pr): ?><span class="sx-chip ok"><?= pm_h((string)$pr) ?></span><?php endforeach; ?><?php foreach (array_slice((array)$p['issues'], 0, 2) as $is): ?><span class="sx-chip warn" title="<?= pm_h((string)$is) ?>">to watch: <?= pm_h(mb_substr((string)$is, 0, 46)) ?></span><?php endforeach; ?></div>
+      <div class="btns">
+        <form method="post" class="inl" onsubmit="return confirm('Use this kit for every profile picture and cover, and as the cover wording?')"><?= $btx('bt_use', '<input type="hidden" name="id" value="' . pm_h((string)$p['id']) . '">') ?><button class="btn small primary">Use this kit</button></form>
+        <a class="btn small" href="?tab=social&amp;view=studio&amp;d=<?= pm_h((string)$p['id']) ?>">Adjust in the Studio</a>
+        <form method="post" class="inl"><?= $btx('bt_dismiss', '<input type="hidden" name="id" value="' . pm_h((string)$p['id']) . '">') ?><button class="btn small ghost">Put aside</button></form>
+      </div>
+    </div>
+    <?php endforeach; ?>
+  </div>
+  <?php elseif (!$lastRun): ?><p class="hint">No kits yet. Ask the team: it takes about a minute.</p><?php else: ?><p class="hint">Every kit from the last set was used or put aside. Ask for a fresh set whenever you like.</p><?php endif; ?>
+</div>
 
 <form method="post" enctype="multipart/form-data">
   <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_accounts"><input type="hidden" name="_sec" value="kit">

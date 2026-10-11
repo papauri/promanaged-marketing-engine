@@ -504,6 +504,14 @@ function pm_sx_build(string $brand, int $n, string $start, string $focus, bool $
             $copies[(int)$r['i']] = ['caption' => $cap, 'headline' => pm_sx_clean_ai((string)($r['headline'] ?? '')), 'sub' => pm_sx_clean_ai((string)($r['sub'] ?? '')), 'slides' => $sl,
                 'video' => pm_sx_clean_video($r['video'] ?? null, (string)$slots[(int)$r['i']]['cta']), 'hook' => $slots[(int)$r['i']]['hook_pattern']];
         }
+        $edit = []; // the editor: weak captions go back once, in one more call; a failed review keeps what the planner wrote
+        if ($copies && function_exists('pm_editor_review') && pm_editor_on($brand)) {
+            try {
+                [$copies, $edit] = pm_editor_review($brand, $slots, $copies, $aiIdx);
+            } catch (Throwable) {
+                $edit = [];
+            }
+        }
         $tokens = function_exists('pm_usage_mark') ? max(0, pm_usage_mark() - $t0) : 0;
     }
     $rows = [];
@@ -525,6 +533,9 @@ function pm_sx_build(string $brand, int $n, string $start, string $focus, bool $
             }
         }
         $row['_slot'] = $i;
+        if (isset($edit[$i])) {
+            $row['editor'] = $edit[$i];
+        }
         $rows[] = $row;
     }
     $per = $aiIdx ? (int)round($tokens / count($rows)) : 0;
