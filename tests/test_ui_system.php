@@ -36,8 +36,8 @@ foreach (['page_opt', 'cover_studio', 'social_bank', 'page_audit', 'social_chann
 }
 
 /* ---- Budgets: today's measured values (each later phase tightens them toward the plan's targets). ---- */
-const UI_BUDGET_FONT = 29;        // font-size values outside the scale, minus exceptions (plan target: 0)
-const UI_BUDGET_RADIUS = 67;      // border-radius values outside the tokens (plan target: 0)
+const UI_BUDGET_FONT = 0;         // font-size values outside the scale, minus exceptions (plan target: 0)
+const UI_BUDGET_RADIUS = 0;       // border-radius values outside the tokens (plan target: 0)
 const UI_BUDGET_ROOTS = 4;        // :root blocks in app.css (plan target: 1)
 const UI_BUDGET_STYLE_BLOCKS = 7; // <style> blocks in lib/view_*.php + lib/sx_*.php (plan target: 0)
 const UI_BUDGET_INLINE = 259;     // style= attributes with banned properties (plan target: at most 40, all data-driven)
@@ -274,29 +274,52 @@ t('Font sizes in app.css stay on the scale', function () {
     $exceptions = ['.go', '.bizcard.add', '.lpshot b', '.spin']; // decorative glyphs up to 26px, lead-post serif, spinner
     $offenders = [];
     foreach (ui_css() as $i => $line) {
-        if (!str_contains($line, 'font-size:')) {
-            continue;
-        }
-        if (preg_match_all('/font-size\s*:\s*([^;}]+)/', $line, $m)) {
-            foreach ($m[1] as $value) {
-                $value = trim($value);
-                if (!preg_match('/^([\d.]+)px$/i', $value, $n)) {
-                    $offenders[] = 'line ' . ($i + 1) . ' non-px value ' . $value;
-                    continue;
-                }
-                $px = (float)$n[1];
-                if (in_array($px, $scale, true)) {
-                    continue;
-                }
-                $exempt = false;
-                foreach ($exceptions as $sel) {
-                    if (str_contains($line, $sel)) {
-                        $exempt = $px <= 26;
-                        break;
+        if (str_contains($line, 'font-size:')) {
+            if (preg_match_all('/font-size\s*:\s*([^;}]+)/', $line, $m)) {
+                foreach ($m[1] as $value) {
+                    $value = trim($value);
+                    if (preg_match('/^var\(--fs-/', $value)) {
+                        continue; // a type-scale token
+                    }
+                    if (!preg_match('/^([\d.]+)px$/i', $value, $n)) {
+                        $offenders[] = 'line ' . ($i + 1) . ' non-px value ' . $value;
+                        continue;
+                    }
+                    $px = (float)$n[1];
+                    if (in_array($px, $scale, true)) {
+                        continue;
+                    }
+                    $exempt = false;
+                    foreach ($exceptions as $sel) {
+                        if (str_contains($line, $sel)) {
+                            $exempt = $px <= 26;
+                            break;
+                        }
+                    }
+                    if (!$exempt) {
+                        $offenders[] = 'line ' . ($i + 1) . ' ' . $value;
                     }
                 }
-                if (!$exempt) {
-                    $offenders[] = 'line ' . ($i + 1) . ' ' . $value;
+            }
+        }
+        if (preg_match('/font\s*:/', $line) && !preg_match('/font-(family|weight|style|variant)/', $line)) {
+            // the font: shorthand carries a size too
+            if (preg_match('/font\s*:\s*([^;}]+)/', $line, $m) && preg_match_all('/(\d+(?:\.\d+)?)px/', $m[1], $n)) {
+                foreach ($n[1] as $value) {
+                    $px = (float)$value;
+                    if (in_array($px, $scale, true)) {
+                        continue;
+                    }
+                    $exempt = false;
+                    foreach ($exceptions as $sel) {
+                        if (str_contains($line, $sel)) {
+                            $exempt = $px <= 26;
+                            break;
+                        }
+                    }
+                    if (!$exempt) {
+                        $offenders[] = 'line ' . ($i + 1) . ' font ' . $value . 'px';
+                    }
                 }
             }
         }
@@ -316,12 +339,13 @@ t('Border radii in app.css stay on the tokens', function () {
         }
         if (preg_match_all('/border-radius\s*:\s*([^;}]+)/', $line, $m)) {
             foreach ($m[1] as $value) {
-                $value = trim($value);
-                if (preg_match('/^var\(--r-/', $value)) {
-                    continue;
-                }
-                if (!in_array($value, $allowed, true)) {
-                    $offenders[] = 'line ' . ($i + 1) . ' ' . $value;
+                foreach (preg_split('/\s+/', trim($value)) as $part) {
+                    if (preg_match('/^var\(--r-/', $part)) {
+                        continue;
+                    }
+                    if (!in_array($part, $allowed, true)) {
+                        $offenders[] = 'line ' . ($i + 1) . ' ' . $part;
+                    }
                 }
             }
         }
@@ -432,7 +456,14 @@ t('At most one filled primary button per card or form', function () {
 t('Every text pair meets WCAG AA', function () {
     $css = (string)file_get_contents(PM_ROOT . '/assets/app.css');
     $tok = ui_css_tokens($css);
-    $hex = fn($v) => preg_match('/^#[0-9a-fA-F]{3,8}$/', (string)$v) ? (string)$v : '';
+    // resolve one level of alias chains (--okbg:var(--ok-bg) -> #ecf8f0)
+    $resolve = function (string $v) use (&$resolve, $tok): string {
+        if (preg_match('/^var\((--[a-z0-9-]+)\)$/', trim($v), $m) && isset($tok[$m[1]])) {
+            return $resolve($tok[$m[1]]);
+        }
+        return $v;
+    };
+    $hex = fn($v) => preg_match('/^#[0-9a-fA-F]{3,8}$/', $resolve((string)$v)) ? $resolve((string)$v) : '';
     $surface = $hex($tok['--surface'] ?? '') ?: $hex($tok['--card'] ?? '') ?: '#ffffff';
     $badFg = $hex($tok['--bad'] ?? '') ?: $hex($tok['--danger'] ?? '');
     $badBg = $hex($tok['--badbg'] ?? '');
