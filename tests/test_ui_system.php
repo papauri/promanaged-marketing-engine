@@ -38,7 +38,7 @@ foreach (['page_opt', 'cover_studio', 'social_bank', 'page_audit', 'social_chann
 /* ---- Budgets: today's measured values (each later phase tightens them toward the plan's targets). ---- */
 const UI_BUDGET_FONT = 0;         // font-size values outside the scale, minus exceptions (plan target: 0)
 const UI_BUDGET_RADIUS = 0;       // border-radius values outside the tokens (plan target: 0)
-const UI_BUDGET_ROOTS = 4;        // :root blocks in app.css (plan target: 1)
+const UI_BUDGET_ROOTS = 1;        // :root blocks in app.css (plan target: 1)
 const UI_BUDGET_STYLE_BLOCKS = 7; // <style> blocks in lib/view_*.php + lib/sx_*.php (plan target: 0)
 const UI_BUDGET_INLINE = 259;     // style= attributes with banned properties (plan target: at most 40, all data-driven)
 const UI_BUDGET_PRIMARY = 3;      // most non-small .btn.primary in one container (plan target: 1)
