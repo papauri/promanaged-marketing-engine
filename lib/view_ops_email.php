@@ -68,7 +68,7 @@ pm_brand_set($vb);
         <div><label>Send from (email)</label><input type="text" name="<?= $n('smtp') ?>[from_email]" value="<?= pm_h((string)($sm['from_email'] ?? '')) ?>"></div>
       </div>
       </fieldset>
-      <div class="row"><div><label>Send from (name)</label><input type="text" name="<?= $n('smtp') ?>[from_name]" value="<?= pm_h((string)($sm['from_name'] ?? $name)) ?>"></div></div>
+      <div class="row short"><div><label>Send from (name)</label><input type="text" name="<?= $n('smtp') ?>[from_name]" value="<?= pm_h((string)($sm['from_name'] ?? $name)) ?>"></div></div>
       <label class="check"><input type="checkbox" name="<?= $n('smtp') ?>[bcc_self]" value="1" <?= !empty($sm['bcc_self']) ? 'checked' : '' ?>> Send me a copy of every email</label>
     </div>
         <?php

@@ -698,3 +698,53 @@ details.card > summary b { font-weight:600; }
   .eyebrows .job { border-left:0; padding-left:0; }
 }
 .row.pillrow { grid-template-columns:minmax(0, 1fr) 120px; margin-bottom:8px; }
+
+/* =====================================================================================================================
+   v6 · one rhythm for controls: chips never stretch, buttons beside fields match them, form columns line up, the save bar sits inside the page
+   ===================================================================================================================== */
+:root { --ctl:38px; --ctl-sm:32px; }
+/* chips, pills and tags: their text is centred, and a flex parent never stretches them */
+.pill, .sx-chip, .chip, .pick, .rs-chip { display:inline-flex; align-items:center; justify-content:center; align-self:center; line-height:1.4; text-align:center; }
+.sx-chip.bad { text-align:left; justify-content:flex-start; }
+.lead .tags, .btns, .findrow, .sxh, .sxb, .sx-chips, .opt-chans, .chips, .shead, .runtop, .acts, .headacts, .wahead, .opt-sum, .opt-top, .chipbar, form.inline, .inl { align-items:center; }
+.lead .tags { justify-content:flex-end; }
+/* a small button that shares a line with a field or a full-size button takes their height */
+.findrow:has(input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select) .btn.small,
+form.inline:has(input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select) .btn.small,
+.inl:has(input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select) .btn.small,
+.btns:has(> .btn:not(.small)) .btn.small,
+.btns:has(> form > .btn:not(.small)) .btn.small,
+.btns:has(input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select) .btn.small { height:var(--ctl); }
+.findrow > .btn, .findrow > button { flex:none; }
+/* form columns: same columns on every row, fields on a row share a baseline even when one label wraps */
+.row { grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); align-items:end; }
+.row > div > label:first-child, .row > label:first-child { margin-top:0; }
+.row.pillrow { grid-template-columns:minmax(0, 1fr) 120px; }
+.row > div > input, .row > div > select, .row > div > textarea { width:100%; }
+/* a hint with a button in it keeps the button on the right instead of mid-sentence */
+p.hint:has(> .btn), p.hint:has(> button.btn) { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+/* the save bar is a card that floats at the foot of the page, as wide as the content */
+.formbar { margin:16px 0 0; padding:10px 14px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:0 -6px 20px rgba(16, 24, 40, .07); align-items:center; }
+/* nested cards line up with the card that holds them */
+.card .sx-card { padding:12px 14px; margin:10px 0; border-radius:10px; }
+.card > .sx-card:first-of-type { margin-top:6px; }
+details.card > summary { min-height:24px; }
+table.grid td, table.grid th { vertical-align:middle; }
+@media (max-width:860px) {
+  .formbar { margin:16px 0 0; padding:10px 12px; }
+  .row { grid-template-columns:1fr; }
+  .lead .tags { justify-content:flex-start; }
+}
+.row.short { grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); }
+.rs-grid, .wiz .two { align-items:end; }
+.rs-grid > div, .row > div { display:flex; flex-direction:column; justify-content:flex-end; }
+fieldset + .row, fieldset + label, .row + fieldset { margin-top:12px; }
+.formbar { margin-bottom:14px; }
+.formbar input[type=email], .formbar input[type=text] { flex:1 1 300px; width:auto !important; min-width:300px !important; max-width:420px; }
+.dstats { flex:1 1 auto; align-content:start; }
+.dept header { min-height:64px; }
+/* the proposal's action column: one width, one rhythm */
+.layout .sticky .card:has(> .btn) { display:flex; flex-direction:column; gap:8px; }
+.layout .sticky .card:has(> .btn) > .btn { width:100%; margin:0; }
+.layout .sticky .card:has(> .btn) > label.check { margin:0; }
+.layout .sticky .card:has(> .btn) > .hint { margin:2px 0 0; }
