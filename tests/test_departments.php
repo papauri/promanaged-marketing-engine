@@ -278,6 +278,7 @@ t('No setting has two editors', function () {
         "'results_save'" => 'view_social_numbers.php', "'ads_manual'" => 'view_social_numbers.php', "'apply_weights'" => 'view_social_content.php', "'recycle'" => 'view_social_content.php',
         "'idea_add'" => 'view_social_content.php', '[host_email]' => 'view_sales_targeting.php', "host_email') ?>" => null, 'name="b[tg_segments]"' => 'view_sales_targeting.php',
         'brand_archive' => 'view_ops_business.php', "\$n('company_name')" => 'view_ops_business.php',
+        "'cd_run'" => 'view_social_kit.php', "'pd_run'" => 'view_social_kit.php', "'bt_run'" => 'view_social_kit.php', "'ir_run'" => 'view_social_content.php', 'name="hero"' => 'view_social_kit.php',
     ];
     $own = array_filter($own, fn($v) => $v !== null);
     $files = glob(dirname(__DIR__) . '/lib/view_*.php');

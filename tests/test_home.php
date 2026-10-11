@@ -11,7 +11,7 @@ $GLOBALS['PM_GRAPH_STUB'] = function () {
     throw new RuntimeException('the overview must not call Facebook');
 };
 pm_brand_set('promanaged');
-foreach (['leads', 'social_posts', 'agent_log', 'director', 'engage_playbook', 'page_opt', 'cover_studio'] as $f) {
+foreach (['leads', 'social_posts', 'agent_log', 'director', 'engage_playbook', 'page_opt', 'cover_studio', 'brand_team', 'desks'] as $f) {
     pm_save($f, []);
 }
 

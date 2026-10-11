@@ -121,6 +121,11 @@ accepted by being made; they are logged in the Done log below, not in the regist
 
 ## 6 · Done log
 
+### Owner request in chat, 2026-10-11 — "things like wording and photo also need agent swarms for different suggestions; remember you are a multi-agent marketing firm"
+
+- **One loop for every desk** (`lib/sx_swarm.php`): propose, score in code, send weak ones back once, owner chooses. New desks on it: **Copy desk** (cover wording: four writers, one call, facts-only guard before scoring), **Photo desk** (photo scout and critic read every candidate with GD for free, plus AI shot briefs), **Idea room** (four specialists, post ideas into the bank). The manual boxes stay, folded.
+- Extracted: `pm_studio_redraw_kit`, `pm_content_add_idea`. Roster on the Overview lists the new specialists. `tests/test_desks.php` (80); single-owner guard extended.
+
 ### Owner question in chat, 2026-10-11 — "how come pages like brand kits are not smart and not harnessing loops of agent swarms and AI to generate posts and brand kits"
 
 - **Brand team** (`lib/sx_brandteam.php`): Researcher, Creative director (AI, one call for four kits), Copy editor and Art critic (code, score 0 to 100), a second round for weak kits (notes go back), Producer (drafts), Copywriter (profile words). Max three AI calls a run; code-only fallback; nothing applied without "Use this kit"; the scheduler proposes about monthly. Shared helpers extracted from the Studio: `pm_studio_art_rules`, `pm_studio_accept`.

@@ -14,16 +14,16 @@ function pm_content_ideas(string $brand): array
     return array_values(array_filter((array)(pm_bank_get($brand)['ideas'] ?? []), fn($i) => is_array($i) && trim((string)($i['text'] ?? '')) !== ''));
 }
 
-function pm_do_idea_add(string $vb): array
+/** Adds one idea to the bank (the idea form and the idea room both come here). Returns [ok, message]. */
+function pm_content_add_idea(string $vb, string $text, string $pillar = ''): array
 {
-    $text = trim((string)preg_replace('/\s+/u', ' ', strip_tags((string)($_POST['text'] ?? ''))));
+    $text = trim((string)preg_replace('/\s+/u', ' ', strip_tags($text)));
     if (mb_strlen($text) < 8) {
-        return ['msg' => 'Write the idea in a sentence or two (at least 8 characters), so a post can be written from it.', 'kind' => 'err', 'to' => PM_CONTENT_TO . '#ideas'];
+        return [false, 'Write the idea in a sentence or two (at least 8 characters), so a post can be written from it.'];
     }
     $text = mb_substr($text, 0, 240);
     $names = array_map(fn($p) => (string)$p['name'], pm_social_pillars($vb));
-    $pillar = trim((string)($_POST['pillar'] ?? ''));
-    $pillar = in_array($pillar, $names, true) ? $pillar : '';
+    $pillar = in_array(trim($pillar), $names, true) ? trim($pillar) : '';
     $msg = '';
     pm_bank_set($vb, function (array $b) use ($text, $pillar, &$msg) {
         foreach ((array)$b['ideas'] as $x) {
@@ -39,9 +39,14 @@ function pm_do_idea_add(string $vb): array
         $b['ideas'][] = ['id' => 'o' . substr(sha1($text), 0, 9), 'text' => $text, 'pillar' => $pillar, 'active' => true];
         return $b;
     });
-    return $msg !== '' ? ['msg' => $msg, 'kind' => 'err', 'to' => PM_CONTENT_TO . '#ideas'] : ['msg' => 'Added. The planner can write a post from it in the next plan.', 'kind' => 'ok', 'to' => PM_CONTENT_TO . '#ideas'];
+    return $msg !== '' ? [false, $msg] : [true, 'Added. The planner can write a post from it in the next plan.'];
 }
 
+function pm_do_idea_add(string $vb): array
+{
+    [$ok, $m] = pm_content_add_idea($vb, (string)($_POST['text'] ?? ''), (string)($_POST['pillar'] ?? ''));
+    return ['msg' => $m, 'kind' => $ok ? 'ok' : 'err', 'to' => PM_CONTENT_TO . '#ideas'];
+}
 function pm_do_idea_toggle(string $vb): array
 {
     $id = preg_replace('/[^a-z0-9]/i', '', (string)($_POST['id'] ?? ''));

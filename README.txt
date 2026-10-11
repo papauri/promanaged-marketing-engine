@@ -273,6 +273,19 @@ AGENT LOOPS: THE BRAND TEAM (lib/sx_brandteam.php) AND THE POST EDITOR (lib/sx_e
   from the facts, lists of three, long sentences). Posts under 75 go back, together, in ONE more AI call with the exact problems; a rewrite is used only if it passes the same guards (no new number,
   link or claim) and scores clearly better, otherwise the original stays. A batch where every post passes costs nothing extra. Each reviewed post shows an "Editor 86" chip (or "reworded").
   Switch: Social > Plan > Publishing rules. tests/test_swarm.php.
+MORE DESKS, SAME SHAPE: COPY DESK, PHOTO DESK, IDEA ROOM (lib/sx_swarm.php, sx_copydesk.php, sx_photodesk.php, sx_idearoom.php)
+  Every desk is a small swarm on one loop (pm_swarm_loop): specialists propose, code critics score every proposal 0 to 100, weak ones go back for ONE more round, the owner chooses; nothing is applied
+  or published without the owner's button; with no AI key the desk falls back to what code can do. Data for all three: data/desks.json {brand: {wording | photo | ideas: {options, runs, photos}}}.
+  Copy desk (Brand > Brand kit > "Cover wording: your writers' room"): four writers with four angles (Benefit, Place, Proof, Plain speaker) write two cover headlines and lines each in ONE AI call; the
+  facts-only guard throws out any option with a number or claim the facts do not give BEFORE scoring; the Copy editor scores length, name-only, machine words, stock phrases and openers, specificity to
+  the business, sameness with the wording in use. "Use this wording" sets the cover wording, rewrites the words of the design in use and redraws the kit.
+  Photo desk ("Cover photo: your photo desk"): the Photo scout gathers the cover photo in use, the picture the website shares and the consented photo-library pictures; the Photo critic reads each with
+  the image library for a cover (size, shape, light, contrast, sharpness, how busy the headline area is) and gives a plain fix per problem, free; the Photo director (AI, optional, one or two calls)
+  writes shot briefs for the photos to take next (place, work, people with permission), scored by code (concrete subject, calm space for the headline, no stock or generated pictures). Real photos
+  only. "Use as the cover photo" copies a candidate in as the hero photo and redraws the kit. Previews are served by ?pdimg= (the library is private).
+  Idea room (Social > Content > Idea bank): Educator, Storyteller, Proof-finder and Local watcher give two post ideas each in one call; the Idea editor scores specificity, novelty against the bank and
+  recent posts, stock phrases; "Add to my ideas" puts one in the bank for the planner. The manual boxes (cover wording, hero upload) are still there, folded under "Write the wording or upload a photo
+  yourself". tests/test_desks.php.
 THE HUMAN VOICE (lib/human.php) AND HAND-MADE LOOKS (lib/sx_studio.php) THROUGHOUT THE MARKETING DEPARTMENT
   Everything a customer reads that an AI helped write goes through two things. (1) PM_HUMAN_RULES, a few lines added to the writers' instructions (first email, follow-up, win-back,
   Travel Malawi, compose, replies, the proposal email, posts, the playbook, profile words): plain everyday words, one specific detail instead of a general claim, and a list of stock

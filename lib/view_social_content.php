@@ -19,6 +19,7 @@ $proofRows[] = ['type' => 'quote'];
 $proofRows[] = ['type' => 'offer'];
 $mix = pm_sx_mix($vb);
 $rec = pm_recycle_candidates($vb);
+$irOpts = pm_swarm_waiting($vb, 'ideas');
 $num = fn($v, $dash = '–') => $v === null || $v === '' ? $dash : number_format((float)$v);
 $sx = fn(string $do, string $extra = '') => '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="' . pm_h($do) . '">' . $extra;
 $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_x"><input type="hidden" name="back" value="social&amp;view=content">';
@@ -58,6 +59,18 @@ $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type
 <div class="card" id="ideas">
   <h2>Idea bank</h2>
   <p class="hint" style="margin-top:0">Ideas the planner may turn into posts. Yours sit beside the built-in starters for <?= pm_h($bname) ?>. Ideas the Audit suggests are added here too.</p>
+  <div class="ideaboom">
+    <div class="crew-row"><?php foreach (array_keys(PM_IR_SPECIALISTS) as $sp): ?><span class="crew-chip<?= pm_agents_ready() ? '' : ' off' ?>"><i></i><?= pm_h($sp) ?></span><?php endforeach; ?><span class="crew-chip"><i></i>Idea editor</span></div>
+    <form method="post" class="findrow bt-run"><?= $sx('ir_run') ?><button class="btn"><?= $irOpts ? 'Ask the idea room again' : 'Ask the idea room for ideas' ?></button>
+      <span class="hint" style="margin:0"><?= pm_agents_ready() ? 'Four specialists, one AI call; an editor scores every idea.' : 'No AI key: ideas are built from your own facts.' ?></span></form>
+    <?php foreach ($irOpts as $o): ?>
+    <div class="idearow">
+      <span><span class="sx-chip"><?= pm_h((string)$o['by']) ?></span> <?= pm_h((string)$o['text']) ?> <span class="sx-chip <?= (int)$o['score'] >= PM_IR_THRESHOLD ? 'ok' : 'warn' ?>"><?= (int)$o['score'] ?>/100</span><?php foreach (array_slice((array)$o['issues'], 0, 1) as $is): ?> <span class="sx-chip warn" title="<?= pm_h((string)$is) ?>">to watch</span><?php endforeach; ?></span>
+      <form method="post" class="inl"><?= $sx('ir_add', '<input type="hidden" name="id" value="' . pm_h((string)$o['id']) . '">') ?><button class="btn small primary">Add to my ideas</button></form>
+      <form method="post" class="inl"><?= $sx('ir_dismiss', '<input type="hidden" name="id" value="' . pm_h((string)$o['id']) . '">') ?><button class="btn small ghost">Put aside</button></form>
+    </div>
+    <?php endforeach; ?>
+  </div>
   <form method="post" class="findrow"><?= $sx('idea_add') ?>
     <input type="text" name="text" maxlength="240" placeholder="An idea for a post, in a sentence or two" aria-label="New idea" style="flex:1 1 320px" required>
     <select name="pillar" aria-label="Pillar" class="narrow"><option value="">Any pillar</option><?php foreach ($names as $n): ?><option><?= pm_h($n) ?></option><?php endforeach; ?></select>

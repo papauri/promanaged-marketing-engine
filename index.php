@@ -316,6 +316,26 @@ if (isset($_GET['onepager']) && is_string($_GET['onepager'])) {
     exit;
 }
 
+// ---------- Photo desk: a small picture of a candidate cover photo (the library is private, so it is served here) ----------
+if (isset($_GET['pdimg'])) {
+    $pb = (string)($_GET['b'] ?? '');
+    $pk = (string)$_GET['pdimg'];
+    if (!pm_brand_valid($pb) || !preg_match('/^(current|site|lib-[A-Za-z0-9_-]{3,40})$/', $pk)) {
+        http_response_code(404);
+        exit;
+    }
+    pm_brand_set($pb);
+    $pf = pm_pd_path($pb, $pk);
+    $pj = $pf !== '' ? pm_pd_thumb($pf, 520) : '';
+    if ($pj === '') {
+        http_response_code(404);
+        exit;
+    }
+    header('Content-Type: image/jpeg');
+    header('Cache-Control: private, max-age=600');
+    echo $pj;
+    exit;
+}
 // ---------- Link thumbnail (data/ is private, so it is served here) ----------
 if (isset($_GET['thumb'])) {
     $tf = pm_link_thumb_path(pm_brand_norm($_GET['thumb']));

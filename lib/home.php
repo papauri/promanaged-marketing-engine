@@ -30,13 +30,17 @@ function pm_home_staff(string $brand, array $d): array
             $row('Planner', 'Writes the week\'s posts for your approval', $fb || (int)($d['social']['planned'] ?? 0) > 0, 'connect the Facebook Page'),
             $row('Community manager', 'Answers and tidies comments (autopilot)', $fb && ($d['social']['autopilot'] ?? 'safe') !== 'off', $fb ? 'autopilot is off' : 'connect the Facebook Page'),
             $row('Playbook', 'Who to engage today, with the words', $fb, 'connect the Facebook Page'),
+            $row('Idea room', 'Four specialists suggest post ideas; an editor scores them', $ai, $needAi),
             $row('Editor', 'Reads the AI\'s posts and sends weak ones back once', $ai && function_exists('pm_editor_on') && pm_editor_on($brand), $ai ? 'switched off in the Plan\'s Publishing rules' : $needAi),
         ],
         'brand' => [
             $row('Creative director', 'Proposes whole kits and sends weak ones back for another round', $ai && function_exists('pm_studio_can_draw') && pm_studio_can_draw(), $ai ? 'this server cannot draw pictures' : $needAi),
             $row('Copywriter', 'Writes the profile words, three options each', $ai, $needAi),
-            $row('Copy editor', 'Holds every kit and post to the human-voice rules', true),
+            $row('Writers\' room', 'Four writers, four angles, for the cover wording', $ai, $needAi),
+            $row('Copy editor', 'Holds every kit, line and post to the human-voice rules', true),
             $row('Art critic', 'Scores each kit: readable, short, human, fresh', true),
+            $row('Photo critic', 'Reads every photo for a cover and says how to fix it', function_exists('pm_studio_can_draw') && pm_studio_can_draw(), 'this server cannot read pictures'),
+            $row('Photo director', 'Writes shot briefs for the photos to take next', $ai, $needAi),
             $row('Producer', 'Draws the best three for you to choose from', function_exists('pm_studio_can_draw') && pm_studio_can_draw(), 'this server cannot draw pictures'),
         ],
         'insights' => [

@@ -1484,6 +1484,15 @@ function pm_studio_ai(string $brand, array $base): array
 
 /* ---------------- making it the design everywhere ---------------- */
 
+/** Throws away the kit pictures and draws them again (after the design, the wording or the photo changed). */
+function pm_studio_redraw_kit(string $brand): void
+{
+    foreach (glob(pm_kit_dir($brand) . '/{profile,cover}-*.png', GLOB_BRACE) ?: [] as $old) {
+        @unlink($old);
+    }
+    pm_kit_build($brand);
+}
+
 /** Saves a draft as the business's design and draws the kit pictures again from it. Returns [ok, message]. */
 function pm_studio_use(string $brand, string $id): array
 {
@@ -1495,10 +1504,7 @@ function pm_studio_use(string $brand, string $id): array
         $d['design'] = array_diff_key($spec, ['_dropped' => 1]);
         return $d;
     });
-    foreach (glob(pm_kit_dir($brand) . '/{profile,cover}-*.png', GLOB_BRACE) ?: [] as $old) {
-        @unlink($old);
-    }
-    pm_kit_build($brand);
+    pm_studio_redraw_kit($brand);
     return [true, 'Saved as the design for every profile picture and cover (' . (PM_SD_STYLES[$spec['style']] ?? 'custom') . '). Download them, or set them on Facebook.'];
 }
 
