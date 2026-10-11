@@ -5,6 +5,7 @@
  * Safe to include from index.php, run_agents.php, send_due.php and enquire.php.
  */
 require_once __DIR__ . '/store.php';
+require_once __DIR__ . '/sendschedule.php'; // when sending is open, and the time a single email waits for
 if (!function_exists('pm_leads')) {
     require_once __DIR__ . '/agents.php';
 }
@@ -18,12 +19,10 @@ function pm_now(): int
     return ($t !== false && $t !== '' && ($x = strtotime($t)) !== false) ? $x : time();
 }
 
-/** Mon-Fri 08:00-16:30 Africa/Blantyre. */
-function pm_send_window(?int $ts = null): bool
+/** Is sending open for a business (the one in use unless named) at $ts? Its own days and hours (Sales > Targeting and messages > When emails go out); Mon-Fri 08:00-16:30 Africa/Blantyre until it saves its own. */
+function pm_send_window(?int $ts = null, ?string $brand = null): bool
 {
-    $ts ??= pm_now();
-    $m = (int)date('G', $ts) * 60 + (int)date('i', $ts);
-    return (int)date('N', $ts) <= 5 && $m >= 480 && $m <= 990;
+    return pm_ss_open($brand ?? pm_brand(), $ts ?? pm_now());
 }
 
 function pm_ob_read(string $name): array
@@ -464,7 +463,7 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     }
     $L['last_contacted'] = $L['last_out'] = $now;
     $L['status'] = 'contacted';
-    unset($L['approved_at'], $L['send_fail_at']);
+    unset($L['approved_at'], $L['send_fail_at'], $L['send_after']);
     if ($which === 'followup_draft') {
         if (function_exists('pm_followup_log_sent')) { // C2-A03: remember the subject arm so the follow-up experiment can score it
             pm_followup_log_sent($L, $d, $now);
@@ -502,7 +501,7 @@ function pm_approve_for_send(array &$leads, array $ids): int
             continue;
         }
         $leads[$id]['approved_at'] = date('Y-m-d H:i:s');
-        pm_lead_note($leads[$id], 'Approved for sending (goes out slowly during working hours)');
+        pm_lead_note($leads[$id], 'Approved for sending (goes out slowly, in the sending hours of the business)');
         $n++;
     }
     if ($n) {
@@ -517,7 +516,7 @@ function pm_unapprove(array &$leads, array $ids): int
     $n = 0;
     foreach ($ids as $id) {
         if (!empty($leads[$id]['approved_at'])) {
-            unset($leads[$id]['approved_at']);
+            unset($leads[$id]['approved_at'], $leads[$id]['send_after']);
             pm_lead_note($leads[$id], 'Taken out of the send queue');
             $n++;
         }
@@ -535,20 +534,10 @@ function pm_send_queue(array $leads, ?string $brand = null): array
     return $q;
 }
 
-/** 'sends ~HH:MM' or 'sends next working morning'. $pos = place in the queue (0 = next); $left = sends left under today's cap. */
+/** When an approved email is expected to go, in words ('sends ~14:30', 'scheduled ~Wed 09:00'). $pos = place in the queue (0 = next); $left = sends left under today's cap. */
 function pm_approved_eta(array $lead, int $pos = 0, ?int $left = null): string
 {
-    if (empty($lead['approved_at'])) {
-        return '';
-    }
-    $now = pm_now();
-    $morning = 'sends next working morning';
-    if (($left !== null && $pos >= $left) || !pm_send_window($now)) {
-        return $morning;
-    }
-    $next = max($now, (int)(pm_ob_read('send_state')['next_send_at'] ?? 0)) + $pos * 900; // the task runs every 15 minutes, one email each
-    $t = (int)(ceil($next / 900) * 900);
-    return pm_send_window($t) && date('Y-m-d', $t) === date('Y-m-d', $now) ? 'sends ~' . date('H:i', $t) : $morning;
+    return pm_ss_eta($lead, $pos, $left);
 }
 
 /* ---------------- Public web forms: token, rate limit, SSRF guard, web leads ---------------- */

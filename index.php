@@ -561,7 +561,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (($_POST['bt'] ?? '') === 'targeting') {
                 pm_redirect('targeting', $m, $k);
             }
-            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'unapprove_send', 'dismiss_unmatched'], true);
+            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'unapprove_send', 'set_send_after', 'dismiss_unmatched'], true);
             if ($id !== '' && !$noLead) {
                 pm_redirect(!empty($_POST['rl']) ? 'agents&lead=' . $id : 'agents' . $keep . '#l' . $id, $m, $k);
             }
@@ -748,7 +748,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $n = 0;
                 foreach ($ids as $i2) {
                     if (!empty($leads[$i2]['approved_at'])) {
-                        unset($leads[$i2]['approved_at']);
+                        unset($leads[$i2]['approved_at'], $leads[$i2]['send_after']);
                         pm_lead_note($leads[$i2], 'Taken out of the send queue');
                         $n++;
                     }
@@ -759,8 +759,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!function_exists('pm_approve_for_send')) {
                 $back('Approve-and-send is not available in this install.', 'err');
             }
+            $was = array_filter($ids, fn($i2) => !empty($leads[$i2]['approved_at']));
             $n = pm_approve_for_send($leads, $ids);
-            $back($n . ' of ' . count($ids) . ' approved. They go out slowly during working hours' . ($n < count($ids) ? '; the rest need a verified email address and a clean draft.' : '.'), $n ? 'ok' : 'err');
+            $when = pm_ss_parse((string)($_POST['send_after'] ?? '')); // optional: not before this time
+            $when !== '' && pm_ss_set_after($leads, array_diff($ids, $was), $when);
+            $back($n . ' of ' . count($ids) . ' approved. They go out slowly in the sending hours' . ($when !== '' ? ', not before ' . $when : '') . ($n < count($ids) ? '; the rest need a verified email address and a clean draft.' : '.'), $n ? 'ok' : 'err');
+        }
+        if ($do === 'set_send_after') { // the send queue: give approved emails a "not before" time, or clear it
+            $ids = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? []))));
+            $when = !empty($_POST['clear']) ? '' : pm_ss_parse((string)($_POST['send_after'] ?? ''));
+            if (empty($_POST['clear']) && $when === '') {
+                $back('Pick a time in the future first.', 'err');
+            }
+            $n = pm_ss_set_after($leads, $ids, $when);
+            $back($when !== '' ? "$n scheduled to go no earlier than $when." : "$n cleared: they go out at the next open time.", $n ? 'ok' : 'err');
         }
         if ($do === 'attach_unmatched' || $do === 'dismiss_unmatched') {
             $uid = (string)($_POST['uid'] ?? '');
@@ -1655,6 +1667,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $b = pm_brand_norm($_POST['brand'] ?? '');
         $m = pm_link_refresh($b);
         pm_redirect('settings&section=business&brand=' . $b, $m['url'] === '' ? 'Add a link first.' : ($m['ok'] ? 'Preview updated from ' . $m['url'] . '.' : 'Could not read ' . $m['url'] . '. Check the address.'), $m['ok'] ? 'ok' : 'err');
+    }
+
+    if ($action === 'sendschedule') { // the days, hours and spacing of sending emails (lib/sendschedule.php)
+        $b = pm_brand_norm($_POST['brand'] ?? '');
+        [$ssMsg, $ssKind] = pm_ss_save($b);
+        pm_redirect('targeting#sendschedule', $ssMsg, $ssKind);
     }
 
     if ($action === 'msgdefault') { // the default first email and WhatsApp message, and the signature (lib/msgdefaults.php)

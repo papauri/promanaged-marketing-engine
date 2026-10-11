@@ -188,7 +188,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <?php endif; ?>
 <?php if ($nApprovable): ?>
 <form method="post" id="approveform" class="approvebar"><?= $post('', 'approve_send') ?><span class="muted"><?= $nApprovable ?> draft<?= $nApprovable === 1 ? '' : 's' ?> ready. Tick "Approve for sending" on the leads you have read, then</span> <button class="btn small primary">Approve selected</button>
-  <span class="muted">They then go out slowly, one at a time, in working hours.</span></form>
+  <label class="muted">Not before <input type="datetime-local" name="send_after" aria-label="Send no earlier than (optional)"></label> <span class="muted">They then go out slowly, one at a time, in the sending hours (<a href="?tab=targeting#sendschedule">schedule</a>).</span></form>
 <?php endif; ?>
 <?php if ($hasApprove && function_exists('pm_view_send_queue') && count(array_filter($leadsAll, fn($x) => !empty($x['approved_at'])))) { pm_view_send_queue(pm_leads()); } ?>
 <?php if (!$shown && ($ftype !== '' || $fq !== '')): ?><div class="card empty">No <?= pm_h($ftype ?: 'leads') ?><?= $fq !== '' ? ' matching "' . pm_h($fq) . '"' : '' ?> in this list. <a href="?tab=agents&status=all<?= $ftype !== '' ? '&type=' . urlencode($ftype) : '' ?><?= $fq !== '' ? '&q=' . urlencode($fq) : '' ?>">Look in All</a></div>

@@ -12,8 +12,8 @@ function pm_view_send_queue(array $leads): void
     $br = pm_send_breaker();
     ?>
     <div class="card"><h2>Send queue <span class="pill"><?= count($q) ?></span></h2>
-      <p class="hint">Approved emails go out one at a time, Mon-Fri 08:00-16:30, a few minutes apart. Today: <?= pm_sent_today($leads) ?> sent, room for <?= $left ?> more (the daily limit rises as the mailbox warms up).
-        <?= pm_send_window() ? '' : 'It is outside sending hours now.' ?></p>
+      <p class="hint">Approved emails go out one at a time, <?= pm_h(pm_ss_summary(pm_brand())) ?>. Today: <?= pm_sent_today($leads) ?> sent, room for <?= $left ?> more (the daily limit rises as the mailbox warms up).
+        <?= pm_send_window() ? '' : 'Sending is closed now.' ?> <a href="?tab=targeting#sendschedule">Change the schedule</a></p>
       <?php if ($br['blocked']): ?><p class="flash err"><?= pm_h($br['why']) ?></p><?php endif; ?>
       <?php if (!$q): ?><p class="hint">Nothing approved yet. Approve drafts to start the drip.</p><?php endif; ?>
       <?php $i = 0; foreach ($q as $l): ?>
@@ -21,6 +21,9 @@ function pm_view_send_queue(array $leads): void
           <span><b><?= pm_h($l['name'] ?? '') ?></b> <span class="muted"><?= pm_h($l['email'] ?? '') ?></span></span>
           <span><span class="pill"><?= (int)($l['score'] ?? 0) ?></span> <span class="muted"><?= pm_h(pm_approved_eta($l, $i++, $left)) ?></span></span>
         </div>
+        <form method="post" class="cluster mb-2"><input type="hidden" name="csrf" value="<?= pm_h((string)($_SESSION['csrf'] ?? '')) ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="set_send_after"><input type="hidden" name="ids[]" value="<?= pm_h((string)($l['id'] ?? '')) ?>">
+          <input type="datetime-local" name="send_after" value="<?= pm_h(str_replace(' ', 'T', (string)($l['send_after'] ?? ''))) ?>" aria-label="Send no earlier than">
+          <button class="btn small">Send no earlier than</button><?php if (!empty($l['send_after'])): ?><button class="btn small ghost" name="clear" value="1">Clear</button><?php endif; ?></form>
       <?php endforeach; ?>
     </div>
     <?php

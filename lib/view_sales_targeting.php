@@ -153,6 +153,7 @@ echo pm_ui_head('Targeting and messages · ' . $bname, 'Who the team looks for, 
 </form>
 <?php endif; ?>
 
+<?php require_once __DIR__ . '/view_sendschedule.php'; pm_view_sendschedule($vb, $csrf); ?>
 <?php require_once __DIR__ . '/view_msgdefaults.php'; pm_view_msgdefaults($vb, $csrf); ?>
 
 <h3>The team's diary</h3>

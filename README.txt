@@ -17,6 +17,11 @@ SHARE KIT (PDFs and website links in emails and WhatsApp)
   how-it-works pages of the business's own site (also sites drawn in the browser) and switches the best ones on. Code: lib/sharekit.php, lib/view_share.php.
   On a server the PDFs live in data/share/, so copy data/ there or paste a link to a copy on your website.
 
+SENDING SCHEDULE (when approved emails go out)
+  Sales > Targeting and messages > "When emails go out", per business: the days, the hours (Africa/Blantyre), about how many minutes between emails, and a pause switch. The send task
+  (schedule_agents.bat, every 15 minutes) sends one approved email per run, only while its business is open. One email can also be held for a later time: "Not before" when approving,
+  or "Send no earlier than" on the send queue. Without a saved schedule: Mon-Fri 08:00-16:30. Code: lib/sendschedule.php; data/send_schedule.json.
+
 DEFAULT FIRST MESSAGE (apart from the AI)
   Sales > Targeting and messages > "Default first message", per business: an email, a WhatsApp message and the signatures, written once with {placeholders} ({first_name}, {name}, {city},
   {intro}, {sender}, {company}, {phone}, {website}...). A lead's card has "Use default message"; or set the business to draft every new lead from it with no AI. The share-kit links and PDF

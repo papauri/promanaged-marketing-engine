@@ -1,7 +1,7 @@
 <?php
 /**
  * Slow drip sender. Run every 15 minutes (schedule_agents.bat): sends AT MOST ONE owner-approved email per run,
- * only Mon-Fri 08:00-16:30, then waits a random 4-8 minutes. Owner approval (approved_at) is the consent; no auto switch needed.
+ * only in the days and hours each business chose (default Mon-Fri 08:00-16:30), then waits about the business's own spacing (lib/sendschedule.php). Owner approval (approved_at) is the consent; no auto switch needed.
  * Stops at the warm-up daily cap and when the bounce breaker trips. Command line only.
  */
 if (PHP_SAPI !== 'cli') {
@@ -16,7 +16,7 @@ if (!function_exists('pm_mail')) { // a test bootstrap may define its own
 require_once __DIR__ . '/outbound.php';
 
 $now = pm_now();
-if (!pm_send_window($now)) {
+if (!array_filter(pm_brand_ids(), fn($b) => pm_send_window($now, $b))) { // no business is open for sending (its days, hours or a pause)
     exit(0);
 }
 $lock = @fopen(PM_DATA . '/send_due.lock', 'c');
@@ -40,11 +40,16 @@ if ($br['blocked']) {
 $cands = [];
 foreach (pm_brand_ids() as $b) {
     pm_brand_set($b);
+    if (!pm_send_window($now, $b)) {
+        continue; // this business is closed for sending now (its own days and hours, or paused)
+    }
     if (pm_sent_today($leads) >= pm_effective_send_cap(pm_agents_config())) {
         continue; // today's (warm-up) limit for this brand is used up
     }
     foreach (pm_send_queue($leads, $b) as $id => $l) {
-        $cands[] = [$id, (int)($l['score'] ?? 0)];
+        if (pm_ss_due($l, $now)) { // an email told to wait for a time waits for it
+            $cands[] = [$id, (int)($l['score'] ?? 0)];
+        }
     }
 }
 usort($cands, fn($x, $y) => $y[1] <=> $x[1]); // best score first, across brands
@@ -76,7 +81,8 @@ foreach (array_slice($cands, 0, 15) as [$id]) {
         pm_agent_log('Sender', ($which === 'drafts' ? 'Sent first email to ' : 'Sent follow-up to ') . $l['name'] . ' (score ' . (int)($l['score'] ?? 0) . ')');
         $dirty = false; // pm_send_first saved everything
         $done = true;
-        echo "sent: {$l['name']}\n";
+        $sentBrand = (string)($l['brand'] ?? 'promanaged');
+        echo "sent:{$l['name']}\n";
         break;
     }
     if ($r['kind'] === 'breaker') {
@@ -85,7 +91,7 @@ foreach (array_slice($cands, 0, 15) as [$id]) {
     if ($r['kind'] === 'cap') {
         continue; // approval stays for tomorrow
     }
-    unset($leads[$id]['approved_at']);
+    unset($leads[$id]['approved_at'], $leads[$id]['send_after']);
     pm_lead_note($leads[$id], 'Not sent: ' . $r['msg']);
     pm_agent_log('Sender', 'Did not send to ' . $l['name'] . ': ' . $r['msg']);
     $dirty = true;
@@ -99,9 +105,10 @@ if ($dirty) {
     pm_leads_save($leads);
 }
 if ($done) {
-    pm_ob_update('send_state', function ($s) use ($now) {
+    $gap = pm_ss_next_gap($sentBrand ?? 'promanaged'); // about the business's own spacing
+    pm_ob_update('send_state', function ($s) use ($now, $gap) {
         unset($s['paused_note']);
-        $s['next_send_at'] = $now + random_int(240, 480);
+        $s['next_send_at'] = $now + $gap;
         $s['last_run'] = date('Y-m-d H:i:s', $now);
         return $s;
     });
