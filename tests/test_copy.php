@@ -145,4 +145,28 @@ t('The handlers and the screen', function () {
     $GLOBALS['PM_AI_STUB'] = null;
 });
 
+t('The one-line description is written, offered and saved like the other profile words', function () {
+    pm_update('settings', function (array $s) {
+        $s['tagline'] = '';
+        return $s;
+    }, 'pm_default_settings');
+    $GLOBALS['PM_AI_STUB'] = fn($sys, $user) => json_encode(['items' => [['key' => 'biz_tagline', 'plain' => 'Business systems and IT support for companies in Malawi', 'specific' => 'Software, websites and IT support for hotels and shops in Lilongwe',
+        'short' => 'Business systems built in Malawi']]]);
+    $_POST = ['keys' => ['biz_tagline'], 'anchor' => 'i-biz_tagline'];
+    $r = pm_social_ext_run('copy_write', 'promanaged');
+    pm_t_assert($r['kind'] === 'ok' && $r['to'] === 'social&view=optimise#i-biz_tagline' && count(pm_copy_store('promanaged')['biz_tagline']['options']) === 3, 'three options are written, and the owner lands back on the card that asked: ' . $r['msg']);
+    $items = [];
+    foreach (pm_opt_run('promanaged', false)['channels'] as $c) {
+        foreach ($c['items'] as $i) {
+            $items[$i['key']] = $i;
+        }
+    }
+    $from = array_unique(array_column($items['biz_tagline']['alts'], 'from'));
+    pm_t_assert($items['biz_tagline']['state'] === 'missing' && in_array('Written by the AI', $from, true) && $items['biz_tagline']['alts'][0]['text'] === pm_copy_store('promanaged')['biz_tagline']['options'][0]['text'], 'they head the ready suggestions on the card');
+    [$ok, $m] = pm_copy_use('promanaged', 'biz_tagline', 1, true);
+    pm_t_assert($ok && pm_settings()['tagline'] === 'Software, websites and IT support for hotels and shops in Lilongwe', 'one press saves the chosen one as the business\'s line: ' . $m);
+    $_POST = [];
+    $GLOBALS['PM_AI_STUB'] = null;
+});
+
 pm_t_done();

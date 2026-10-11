@@ -14,6 +14,14 @@ const PM_OPT_CHANNELS = ['business' => 'Business details', 'facebook' => 'Facebo
 const PM_OPT_VERTICALS = ['PROF_SERVICES' => 'Professional services', 'TRAVEL' => 'Travel and transport', 'HOTEL' => 'Hotel and lodging', 'RETAIL' => 'Retail', 'RESTAURANT' => 'Restaurant', 'HEALTH' => 'Health',
     'EDU' => 'Education', 'FINANCE' => 'Finance', 'AUTO' => 'Automotive', 'BEAUTY' => 'Beauty and personal care', 'GROCERY' => 'Grocery', 'EVENT_PLAN' => 'Event planning', 'NONPROFIT' => 'Non-profit', 'OTHER' => 'Other'];
 
+/** After a business detail is saved, the channel fields built from it, so one press can fill the ones that are still missing or weak (never one that is already good). */
+const PM_OPT_FOLLOW = ['biz_tagline' => ['fb_about', 'wa_about'], 'biz_phone' => ['fb_phone'], 'biz_email' => ['fb_email', 'wa_email'], 'biz_website' => ['fb_website', 'wa_websites'], 'biz_address' => ['wa_address']];
+/** Towns a business may name in its own words; one found there is offered as the address to confirm. */
+const PM_OPT_TOWNS = ['Lilongwe', 'Blantyre', 'Mzuzu', 'Zomba', 'Mangochi', 'Salima', 'Kasungu', 'Karonga', 'Liwonde', 'Nkhata Bay', 'Nkhotakota', 'Dedza', 'Balaka', 'Ntcheu', 'Mulanje', 'Thyolo', 'Rumphi',
+    'Mchinji', 'Dowa', 'Mzimba', 'Nsanje', 'Chikwawa', 'Mwanza', 'Monkey Bay', 'Cape Maclear', 'Senga Bay', 'Chintheche', 'Likoma'];
+/** Verbs a business description starts with ("We install ...", "Builds ..."): taking the verb off leaves what the business offers. */
+const PM_OPT_VERBS = 'install|build|sell|supply|provide|offer|make|repair|deliver|design|source|rent|arrange|organise|organize|manage|print|train|teach|grow|cook';
+
 /* ---------------- storage ---------------- */
 
 function pm_opt_store(string $brand): array
@@ -285,11 +293,12 @@ function pm_opt_wa_profile(string $brand, ?array $set = null): array
 /**
  * state: ok | weak | missing. how: api (applied to the channel), app (applied inside this app), manual (copy, open, tick), go (a link to the place that fixes it).
  * input: text | textarea | hours | select | none. bulk: may be included in "apply everything that can be applied".
+ * alts: more ready suggestions, each ['text', 'from'], used with one press. follow: the channels (Facebook, WhatsApp) a saved detail can then fill in with one more press.
  */
 function pm_opt_it(string $ch, string $key, string $title, string $state, int $weight, string $why, array $o = []): array
 {
     return array_replace(['channel' => $ch, 'key' => $key, 'title' => $title, 'state' => $state, 'weight' => $weight, 'why' => $why, 'current' => '', 'proposal' => '', 'how' => 'manual', 'input' => 'none',
-        'limit' => 0, 'link' => '', 'link_label' => '', 'button' => '', 'bulk' => false, 'tick' => '', 'ai' => false, 'note' => '', 'options' => [], 'do' => 'opt_apply'], $o);
+        'limit' => 0, 'link' => '', 'link_label' => '', 'button' => '', 'bulk' => false, 'tick' => '', 'ai' => false, 'note' => '', 'options' => [], 'do' => 'opt_apply', 'alts' => [], 'follow' => []], $o);
 }
 
 /** Done ticks for manual items live with the other ticks (data/social_channels.json). */
@@ -298,22 +307,233 @@ function pm_opt_ticked(string $brand, string $tick): bool
     return $tick !== '' && !empty(pm_channels_cfg($brand)['ticks'][$tick]);
 }
 
-/** Where the business stands on its own details, which every channel suggestion is built from. */
+/* ---------------- ready suggestions for the business details (worked out in code, from words the owner or the profiles already have) ---------------- */
+
+/** Is WhatsApp Business connected for this business? */
+function pm_opt_wa_on(string $brand): bool
+{
+    if (!function_exists('pm_wa_biz_cfg') && is_file(__DIR__ . '/wa_biz.php')) {
+        require_once __DIR__ . '/wa_biz.php';
+    }
+    return function_exists('pm_wa_biz_cfg') && !empty(pm_wa_biz_cfg($brand)['ready']);
+}
+
+/** What the connected profiles already say, read once: ['facebook' => Page fields, 'instagram' => ..., 'whatsapp' => ...], each an empty list when not connected or not readable. */
+function pm_opt_live(string $brand): array
+{
+    $out = ['facebook' => [], 'instagram' => [], 'whatsapp' => []];
+    foreach (['facebook' => 'pm_opt_fb_read', 'instagram' => 'pm_opt_ig_read', 'whatsapp' => 'pm_opt_wa_profile'] as $k => $fn) {
+        try {
+            [$ok, $d] = $fn($brand);
+            $out[$k] = $ok && is_array($d) ? $d : [];
+        } catch (Throwable) {
+        }
+    }
+    return $out;
+}
+
+/** Adds a ready suggestion [text, from] unless the same words are already listed or are what the business already has. */
+function pm_opt_alt(array &$alts, string $text, string $from, string $have = ''): void
+{
+    $norm = fn(string $v) => mb_strtolower(rtrim(trim($v), '. '));
+    if (trim($text) === '' || $norm($text) === $norm($have)) {
+        return;
+    }
+    foreach ($alts as $a) {
+        if ($norm($a['text']) === $norm($text)) {
+            return;
+        }
+    }
+    $alts[] = ['text' => trim($text), 'from' => $from];
+}
+
+/** A text cut down to a one-line description: its first line, without brackets, a full stop or contact details, within $limit at a natural break. '' when nothing usable is left. */
+function pm_opt_oneline(string $t, int $limit = 120): string
+{
+    $t = (string)(preg_split('/\R|\s\|\s/u', strip_tags($t))[0] ?? '');
+    $t = trim((string)preg_replace('/\s+/u', ' ', (string)preg_replace('/\s*\([^)]*\)/u', '', $t)));
+    $t = rtrim($t, ' .;:,');
+    if ($t === '' || preg_match('~https?://|www\.|@|\d{5,}|\d{3}[ -]\d{3}~u', $t)) {
+        return '';
+    }
+    if (mb_strlen($t) > $limit) {
+        $cut = mb_substr($t, 0, $limit);
+        $at = 0;
+        foreach ([', ', '; ', ' and ', ' – ', ' - ', ' — '] as $n) {
+            $p = mb_strrpos($cut, $n);
+            $at = $p !== false && $p > $at ? $p : $at;
+        }
+        if ($at < 30) {
+            return '';
+        }
+        $t = rtrim(mb_substr($t, 0, $at), ' ,;–—-');
+    }
+    return mb_strlen($t) >= 15 ? mb_strtoupper(mb_substr($t, 0, 1)) . mb_substr($t, 1) : '';
+}
+
+/** "We install solar systems for homes" / "Builds software" -> "Solar systems for homes" / "Software": what is offered, without the verb. '' when a second verb is left (then it is not one simple offer). */
+function pm_opt_offer_phrase(string $sentence): string
+{
+    $s = trim((string)preg_replace('/\s+/u', ' ', (string)preg_replace('/\s*\([^)]*\)/u', '', $sentence)));
+    $s = rtrim($s, ' .');
+    $v = '(?:' . PM_OPT_VERBS . ')(?:s|es)?';
+    if (!preg_match('/^(?:we(?: also)?|our team)?\s*' . $v . '(?:\s+and\s+' . $v . ')?\s+(?!a\b|an\b|the\b|to\b|with\b|for\b)(.{12,})$/iu', $s, $m) || preg_match('/\b(?:' . PM_OPT_VERBS . ')(?:s|es|ing)?\b/iu', $m[1])) {
+        return '';
+    }
+    return pm_opt_oneline($m[1]);
+}
+
+/** "Builds software and websites..." -> "ProManaged IT builds software and websites...": a description that starts with a verb and no subject gets the name in front. '' otherwise. */
+function pm_opt_name_led(string $name, string $sentence): string
+{
+    $s = trim((string)preg_replace('/\s+/u', ' ', (string)preg_replace('/\s*\([^)]*\)/u', '', $sentence)));
+    if ($name === '' || !preg_match('/^(?:' . PM_OPT_VERBS . ')(?:s|es)\b/iu', $s)) {
+        return '';
+    }
+    return pm_opt_oneline($name . ' ' . mb_strtolower(mb_substr($s, 0, 1)) . mb_substr($s, 1));
+}
+
+/** Ready one-line descriptions, best first: the words the owner chose or had written, what the profiles already say, then the business description cut down. At most five. */
+function pm_opt_tagline_alts(array $f, array $st, array $live): array
+{
+    $alts = [];
+    $have = $f['tagline'];
+    $chosen = trim((string)($st['ai']['biz_tagline'] ?? ''));
+    if ($chosen !== '') {
+        pm_opt_alt($alts, $chosen, 'The wording you chose', $have);
+    }
+    foreach ((array)($st['copy']['biz_tagline']['options'] ?? []) as $o) {
+        pm_opt_alt($alts, (string)($o['text'] ?? ''), 'Written by the AI', $have);
+    }
+    foreach (['Facebook Page' => $live['facebook']['about'] ?? '', 'Instagram profile' => $live['instagram']['biography'] ?? '', 'WhatsApp Business profile' => $live['whatsapp']['about'] ?? ''] as $where => $txt) {
+        pm_opt_alt($alts, pm_opt_oneline((string)$txt), 'Already on your ' . $where, $have);
+    }
+    $first = (string)(pm_ch_sentences($f['about'])[0] ?? '');
+    pm_opt_alt($alts, pm_opt_offer_phrase($first), 'What you offer, from your description', $have);
+    pm_opt_alt($alts, pm_opt_name_led($f['name'], $first), 'Your description, with the name in front', $have);
+    pm_opt_alt($alts, pm_opt_oneline($first), 'Your description, shortened', $have);
+    $source = implode(' ', array_filter(array_map('strval', [$f['name'], $f['tagline'], $f['about'], $f['audience'], implode(' ', $f['facts']), $live['facebook']['about'] ?? '', $live['instagram']['biography'] ?? '', $live['whatsapp']['about'] ?? ''])));
+    return array_slice(array_values(array_filter($alts, fn($a) => mb_strlen($a['text']) <= 120 && pm_opt_ai_ok($a['text'], 120, $source))), 0, 5);
+}
+
+/** Ready addresses: what the Facebook Page or the WhatsApp profile already shows, and a town the business names in its own words ("Lilongwe, Malawi") for the owner to confirm. */
+function pm_opt_address_alts(string $brand, array $f, array $live): array
+{
+    $alts = [];
+    $loc = (array)($live['facebook']['location'] ?? []);
+    if (trim((string)($loc['street'] ?? '')) !== '' || trim((string)($loc['city'] ?? '')) !== '') {
+        pm_opt_alt($alts, implode(', ', array_filter(array_map(fn($k) => trim((string)($loc[$k] ?? '')), ['street', 'city', 'country']))), 'Already on your Facebook Page', $f['address']);
+    }
+    $wa = trim((string)($live['whatsapp']['address'] ?? ''));
+    if (mb_strlen($wa) >= 5 && !preg_match('/^malawi$/i', $wa)) {
+        pm_opt_alt($alts, $wa, 'Already on your WhatsApp Business profile', $f['address']);
+    }
+    $text = $f['about'] . ' ' . implode(' ', $f['facts']) . ' ' . $f['audience'];
+    $found = [];
+    foreach (PM_OPT_TOWNS as $town) {
+        if (preg_match('/\b' . preg_quote($town, '/') . '\b/iu', $text, $m, PREG_OFFSET_CAPTURE)) {
+            $found[$town] = $m[0][1];
+        }
+    }
+    asort($found);
+    $market = trim((string)(pm_brand_profile($brand)['market'] ?? '')) ?: 'Malawi';
+    foreach (array_slice(array_keys($found), 0, 2) as $town) {
+        pm_opt_alt($alts, $town . ', ' . $market, 'A town named in your description: confirm it, add the street', $f['address']);
+    }
+    return array_slice($alts, 0, 4);
+}
+
+/** Ready phone numbers, email addresses and websites already shown on the connected profiles (and the address emails are sent from). $kind: phone | email | website. */
+function pm_opt_contact_alts(string $brand, string $kind, array $f, array $live): array
+{
+    $alts = [];
+    $fb = (array)$live['facebook'];
+    if ($kind === 'phone') {
+        $p = trim((string)($fb['phone'] ?? $fb['whatsapp_number'] ?? ''));
+        if (preg_match_all('/\d/', $p) >= 7) {
+            pm_opt_alt($alts, $p, 'Already on your Facebook Page', $f['phone']);
+        }
+    } elseif ($kind === 'email') {
+        $s = pm_brand_block(pm_load('settings', 'pm_default_settings'), $brand);
+        foreach ([[(string)(((array)($fb['emails'] ?? []))[0] ?? ''), 'Already on your Facebook Page'], [(string)($live['whatsapp']['email'] ?? ''), 'Already on your WhatsApp Business profile'],
+            [(string)($s['smtp']['from_email'] ?? ''), 'The address your emails are sent from'], [(string)($s['smtp']['username'] ?? ''), 'The address your emails are sent from']] as [$e, $from]) {
+            if (filter_var(trim($e), FILTER_VALIDATE_EMAIL)) {
+                pm_opt_alt($alts, strtolower(trim($e)), $from, $f['email']);
+            }
+        }
+    } else {
+        foreach ([[(string)($fb['website'] ?? ''), 'Already on your Facebook Page'], [(string)($live['instagram']['website'] ?? ''), 'Already on your Instagram profile'], [(string)(((array)($live['whatsapp']['websites'] ?? []))[0] ?? ''), 'Already on your WhatsApp Business profile']] as [$u, $from]) {
+            if (pm_clean_url($u) !== '') {
+                pm_opt_alt($alts, preg_replace('#^https?://#i', '', rtrim(pm_clean_url($u), '/')), $from, $f['website']);
+            }
+        }
+    }
+    return array_slice($alts, 0, 3);
+}
+
+/** Ready descriptions of what the business does, taken from the longer texts already on its profiles. */
+function pm_opt_about_alts(array $f, array $live): array
+{
+    $alts = [];
+    foreach (['Facebook Page description' => $live['facebook']['description'] ?? '', 'WhatsApp Business description' => $live['whatsapp']['description'] ?? '', 'Facebook Page intro' => $live['facebook']['about'] ?? ''] as $where => $txt) {
+        $t = trim((string)preg_replace('/\s+/u', ' ', strip_tags((string)$txt)));
+        if (mb_strlen($t) >= 60 && mb_strlen($t) <= 600 && !preg_match('~https?://|www\.|@|\+\d|\d{3}[ -]\d{3}~u', $t)) {
+            pm_opt_alt($alts, $t, 'Already on your ' . $where, $f['about']);
+        }
+    }
+    return array_slice($alts, 0, 2);
+}
+
+/** The channels a saved detail can fill in with one more press (only the connected ones): ['Facebook', 'WhatsApp']. */
+function pm_opt_follow_labels(string $brand, string $key): array
+{
+    $out = [];
+    foreach (PM_OPT_FOLLOW[$key] ?? [] as $k) {
+        if (str_starts_with($k, 'fb_') && pm_social_cfg($brand)['ready']) {
+            $out['Facebook'] = 'Facebook';
+        } elseif (str_starts_with($k, 'wa_') && pm_opt_wa_on($brand)) {
+            $out['WhatsApp'] = 'WhatsApp';
+        }
+    }
+    return array_values($out);
+}
+
+/** Where the business stands on its own details, which every channel suggestion is built from. A detail that is missing comes with ready suggestions (what the profiles already say, the owner's own words). */
 function pm_opt_check_business(string $brand, array $f, array $st): array
 {
     $it = [];
     $set = fn($v) => trim((string)$v) !== '';
-    $it[] = pm_opt_it('business', 'biz_phone', 'Phone / WhatsApp number', $set($f['phone']) ? 'ok' : 'missing', 3, 'Every profile shows it, and customers on WhatsApp need it.', ['current' => $f['phone'], 'how' => 'app', 'input' => 'text', 'limit' => 30, 'button' => 'Save the number']);
-    $it[] = pm_opt_it('business', 'biz_email', 'Business email', $set($f['email']) ? 'ok' : 'missing', 2, 'Profiles and the Google listing ask for it.', ['current' => $f['email'], 'how' => 'app', 'input' => 'text', 'limit' => 120, 'button' => 'Save the email']);
-    $it[] = pm_opt_it('business', 'biz_website', 'Website', $set($f['website']) ? 'ok' : 'missing', 2, 'The link every profile points to.', ['current' => $f['website'], 'how' => 'app', 'input' => 'text', 'limit' => 200, 'button' => 'Save the website']);
+    $liveNow = null;
+    $live = function () use ($brand, &$liveNow) { // the profiles are read once, and only when some detail needs a suggestion
+        return $liveNow ??= pm_opt_live($brand);
+    };
+    $alts = fn(bool $needs, callable $make) => $needs ? $make($live()) : [];
+    $pick = fn(array $a) => ['alts' => $a, 'proposal' => $a[0]['text'] ?? ''];
+    $a = $alts(!$set($f['phone']), fn($l) => pm_opt_contact_alts($brand, 'phone', $f, $l));
+    $it[] = pm_opt_it('business', 'biz_phone', 'Phone / WhatsApp number', $set($f['phone']) ? 'ok' : 'missing', 3, 'Every profile shows it, and customers on WhatsApp need it.', ['current' => $f['phone'], 'how' => 'app', 'input' => 'text', 'limit' => 30, 'button' => 'Save the number',
+        'follow' => pm_opt_follow_labels($brand, 'biz_phone')] + $pick($a));
+    $a = $alts(!$set($f['email']), fn($l) => pm_opt_contact_alts($brand, 'email', $f, $l));
+    $it[] = pm_opt_it('business', 'biz_email', 'Business email', $set($f['email']) ? 'ok' : 'missing', 2, 'Profiles and the Google listing ask for it.', ['current' => $f['email'], 'how' => 'app', 'input' => 'text', 'limit' => 120, 'button' => 'Save the email',
+        'follow' => pm_opt_follow_labels($brand, 'biz_email')] + $pick($a));
+    $a = $alts(!$set($f['website']), fn($l) => pm_opt_contact_alts($brand, 'website', $f, $l));
+    $it[] = pm_opt_it('business', 'biz_website', 'Website', $set($f['website']) ? 'ok' : 'missing', 2, 'The link every profile points to.', ['current' => $f['website'], 'how' => 'app', 'input' => 'text', 'limit' => 200, 'button' => 'Save the website',
+        'follow' => pm_opt_follow_labels($brand, 'biz_website')] + $pick($a));
+    $a = $alts(!$f['address_real'], fn($l) => pm_opt_address_alts($brand, $f, $l));
     $it[] = pm_opt_it('business', 'biz_address', 'Town and street', $f['address_real'] ? 'ok' : ($set($f['address']) ? 'weak' : 'missing'), 2, 'Maps, Google and Facebook need a real place, not just the country.',
-        ['current' => $f['address'], 'proposal' => '', 'how' => 'app', 'input' => 'text', 'limit' => 200, 'button' => 'Save the address', 'note' => 'Type the street, area and town, for example "Area 3, Lilongwe".']);
-    $it[] = pm_opt_it('business', 'biz_tagline', 'One-line description', mb_strlen($f['tagline']) >= 15 ? 'ok' : ($set($f['tagline']) ? 'weak' : 'missing'), 2, 'It becomes the intro on most profiles.', ['current' => $f['tagline'], 'how' => 'app', 'input' => 'text', 'limit' => 120, 'button' => 'Save the line']);
+        ['current' => $f['address'], 'how' => 'app', 'input' => 'text', 'limit' => 200, 'button' => 'Save the address', 'follow' => pm_opt_follow_labels($brand, 'biz_address'),
+            'note' => ($a ? 'Check it, add the street if you can, then save.' : 'Type the street, area and town, for example "Area 3, Lilongwe".')] + $pick($a));
+    $tagOk = mb_strlen($f['tagline']) >= 15;
+    $a = $alts(!$tagOk, fn($l) => pm_opt_tagline_alts($f, $st, $l));
+    $it[] = pm_opt_it('business', 'biz_tagline', 'One-line description', $tagOk ? 'ok' : ($set($f['tagline']) ? 'weak' : 'missing'), 2, 'It becomes the intro on most profiles.', ['current' => $f['tagline'], 'how' => 'app', 'input' => 'text', 'limit' => 120,
+        'button' => 'Save the line', 'follow' => pm_opt_follow_labels($brand, 'biz_tagline'), 'note' => !$tagOk && !$a ? 'Write what the business does and for whom (Brand > Voice) and ready lines appear here.' : ''] + $pick($a));
     $hrs = pm_opt_hours($brand);
     $it[] = pm_opt_it('business', 'biz_hours', 'Opening hours', !empty($st['hours_confirmed']) ? 'ok' : 'missing', 3, 'Visitors check them first; Facebook, Google and WhatsApp all ask for the same hours.',
         ['current' => !empty($st['hours_confirmed']) ? pm_opt_hours_text($hrs) : '', 'proposal' => pm_opt_hours_text($hrs), 'how' => 'app', 'input' => 'hours', 'button' => 'Save these hours', 'note' => 'This is a starting point, not a fact: set your real hours, then save.']);
-    $it[] = pm_opt_it('business', 'biz_about', 'What the business does and for whom', mb_strlen($f['about']) >= 60 ? 'ok' : 'missing', 3, 'The suggestions below are written from it; without it they stay thin.',
-        ['current' => $f['about'], 'how' => 'go', 'link' => '?tab=social&view=voice&brand=' . $brand, 'link_label' => 'Open Brand > Voice', 'note' => 'Brand > Voice (or add the website and press "Study the business again").']);
+    $aboutOk = mb_strlen($f['about']) >= 60;
+    $a = $alts(!$aboutOk, fn($l) => pm_opt_about_alts($f, $l));
+    $it[] = pm_opt_it('business', 'biz_about', 'What the business does and for whom', $aboutOk ? 'ok' : 'missing', 3, 'The suggestions below are written from it; without it they stay thin.',
+        array_replace(['current' => $f['about'], 'how' => 'go', 'link' => '?tab=social&view=voice&brand=' . $brand, 'link_label' => 'Open Brand > Voice', 'note' => 'Brand > Voice (or add the website and press "Study the business again").'],
+            $a ? ['how' => 'app', 'input' => 'textarea', 'limit' => 600, 'rows' => 4, 'button' => 'Save as the description', 'note' => 'The text on your profiles says it already. Read it, edit it, then save it as the description every suggestion is written from (change it any time in Brand > Voice).'] + $pick($a) : []));
     return $it;
 }
 
@@ -776,6 +996,14 @@ function pm_opt_apply(string $brand, string $key, string $val = '', array $hr = 
             case 'biz_tagline':
                 pm_opt_set_detail($brand, substr($key, 4), $key === 'biz_website' ? preg_replace('#^https?://#i', '', rtrim($v, '/')) : $v);
                 return $done(true, $found['title'] . ' saved. The suggestions on every channel now use it.');
+            case 'biz_about':
+                pm_update('settings', function (array $s) use ($brand, $v) {
+                    $blk = pm_brand_block($s, $brand);
+                    $blk['brain'] = array_replace((array)($blk['brain'] ?? []), ['about' => $v]);
+                    pm_brand_block_put($s, $brand, $blk);
+                    return $s;
+                }, 'pm_default_settings');
+                return $done(true, 'The description is saved. The suggestions on every channel are written from it now.');
             case 'g_review_link':
                 pm_channels_update($brand, function (array $c) use ($v) {
                     $c['google_review_url'] = mb_substr($v, 0, 300);
@@ -808,8 +1036,8 @@ function pm_opt_apply(string $brand, string $key, string $val = '', array $hr = 
     }
 }
 
-/** Applies every suggestion marked bulk-safe (complete, from the business's own details, nothing the owner still has to type). Returns [applied, failed[], messages[]]. */
-function pm_opt_apply_all(string $brand): array
+/** Applies every suggestion marked bulk-safe (complete, from the business's own details, nothing the owner still has to type); $only limits it to those keys. Returns [applied, failed[], messages[]]. */
+function pm_opt_apply_all(string $brand, ?array $only = null): array
 {
     $brand = pm_brand_norm($brand);
     $run = pm_opt_run($brand, false);
@@ -818,7 +1046,7 @@ function pm_opt_apply_all(string $brand): array
     $msgs = [];
     foreach ($run['channels'] as $c) {
         foreach ($c['items'] as $i) {
-            if ($i['state'] === 'ok' || !$i['bulk'] || !in_array($i['how'], ['api', 'app'], true)) {
+            if ($i['state'] === 'ok' || !$i['bulk'] || !in_array($i['how'], ['api', 'app'], true) || ($only !== null && !in_array($i['key'], $only, true))) {
                 continue;
             }
             $hr = [];
@@ -830,7 +1058,7 @@ function pm_opt_apply_all(string $brand): array
             [$ok, $m] = pm_opt_apply($brand, $i['key'], (string)$i['proposal'], $hr);
             if ($ok) {
                 $applied++;
-                $msgs[] = $i['title'];
+                $msgs[] = (PM_OPT_CHANNELS[$i['channel']] ?? $i['channel']) . ' ' . lcfirst($i['title']);
             } else {
                 $fail[] = $i['title'] . ': ' . $m;
             }
@@ -914,8 +1142,29 @@ function pm_opt_item_html(array $i, string $vb, string $csrf, string $back = '')
     if ($i['note'] !== '') {
         $h .= '<p class="hint" style="margin:4px 0 0">' . pm_h($i['note']) . '</p>';
     }
-    $link = $i['link'] !== '' ? '<a class="btn small" href="' . pm_h($i['link']) . '" ' . (str_starts_with($i['link'], 'http') ? 'target="_blank" rel="noopener noreferrer"' : '') . '>' . pm_h($i['link_label'] ?: 'Open') . '</a>' : '';
+    $ext = str_starts_with($i['link'], 'http');
+    // a text to paste into a profile: one press copies it and opens the place it goes
+    $paste = $ext && $i['proposal'] !== '' && $i['how'] === 'manual' && (in_array($i['input'], ['text', 'textarea'], true) || in_array($i['key'], ['g_hours', 'g_services', 'ig_website', 'fb_address'], true));
+    $link = $i['link'] !== '' ? '<a class="btn small' . ($paste ? ' primary' : '') . '" href="' . pm_h($i['link']) . '" ' . ($ext ? 'target="_blank" rel="noopener noreferrer"' : '') . ($paste ? ' data-copy="' . pm_h($i['proposal']) . '"' : '') . '>'
+        . pm_h($paste ? preg_replace('/^Open /', 'Copy and open ', $i['link_label'] ?: 'Open') : ($i['link_label'] ?: 'Open')) . '</a>' : '';
+    $follow = implode(' and ', $i['follow']);
+    $asks = fn(string $what) => ' onclick="return confirm(' . pm_h(json_encode("$what, then fill in the $follow fields built from it that are still missing or weak? Anything already good is left alone.")) . ')"';
     if (in_array($i['how'], ['api', 'app'], true)) {
+        if ($i['alts'] || $i['key'] === 'biz_tagline') { // ready suggestions: one press each
+            $h .= '<div class="opt-alts">';
+            if ($i['alts']) {
+                $h .= '<p class="hint" style="margin:8px 0 2px"><b>Ready to use</b> · one press each</p>';
+            }
+            foreach ($i['alts'] as $a) {
+                $h .= '<form method="post" class="opt-alt">' . $fx((string)$i['do'], $hid('key', $i['key']) . $hid('val[' . $i['key'] . ']', $a['text']))
+                    . '<div class="opt-alt-t"><span>' . pm_h($a['text']) . '</span><small class="muted">' . pm_h($a['from']) . '</small></div><div class="btns">'
+                    . '<button class="btn small primary">Use this</button>' . ($follow !== '' ? '<button class="btn small" name="cascade" value="1"' . $asks('Save this') . '>Use and update ' . pm_h($follow) . '</button>' : '') . '</div></form>';
+            }
+            if ($i['key'] === 'biz_tagline' && function_exists('pm_agents_ready') && pm_agents_ready()) {
+                $h .= '<form method="post" class="inl">' . $fx('copy_write', $hid('keys[]', 'biz_tagline') . $hid('anchor', 'i-biz_tagline')) . '<button class="btn small" title="One small AI call: three lines written from your facts, checked for new claims, numbers and links">Write 3 more with AI</button></form>';
+            }
+            $h .= '</div>' . ($i['alts'] ? '<p class="hint" style="margin:8px 0 0">Or edit it, or type your own:</p>' : '');
+        }
         $h .= '<form method="post" class="opt-form">' . $fx((string)$i['do'], $hid('key', $i['key']));
         if ($i['input'] === 'hours') {
             $h .= pm_opt_hours_grid(pm_opt_hours($vb));
@@ -933,12 +1182,13 @@ function pm_opt_item_html(array $i, string $vb, string $csrf, string $back = '')
         } else {
             $h .= '<p class="hint" style="margin:6px 0 0">' . pm_h($i['proposal']) . '</p>';
         }
-        return $h . '<div class="btns"><button class="btn small primary">' . pm_h($i['button'] ?: 'Apply') . '</button>' . (in_array($i['input'], ['text', 'textarea'], true) && $i['proposal'] !== '' ? $cp($i['proposal']) : '') . $link . '</div></form></div>';
+        return $h . '<div class="btns"><button class="btn small primary">' . pm_h($i['button'] ?: 'Apply') . '</button>' . ($follow !== '' ? '<button class="btn small" name="cascade" value="1"' . $asks('Save this') . '>' . pm_h(($i['button'] ?: 'Save') . ' and update ' . $follow) . '</button>' : '')
+            . (in_array($i['input'], ['text', 'textarea'], true) && $i['proposal'] !== '' ? $cp($i['proposal']) : '') . $link . '</div></form></div>';
     }
     if ($i['proposal'] !== '') {
         $h .= '<pre class="opt-pre">' . pm_h($i['proposal']) . '</pre>';
     }
-    $h .= '<div class="sxb">' . ($i['proposal'] !== '' ? $cp($i['proposal']) : '') . $link;
+    $h .= '<div class="sxb">' . ($i['proposal'] !== '' && !$paste ? $cp($i['proposal']) : '') . $link;
     if ($i['tick'] !== '') {
         $h .= '<form method="post" class="inl">' . $fx('opt_done', $hid('tick', $i['tick'])) . '<button class="btn small primary">I did it</button></form>';
     }
@@ -947,11 +1197,37 @@ function pm_opt_item_html(array $i, string $vb, string $csrf, string $back = '')
 
 /* ---------------- form handlers (POST action=social_ext&do=...) ---------------- */
 
+/**
+ * After a business detail is saved: fills in the channel fields built from it that are still missing or weak (never one that is already good, never one that disagrees on purpose).
+ * Returns a sentence for the owner: what was updated, what was left alone.
+ */
+function pm_opt_follow(string $brand, string $key): string
+{
+    $keys = PM_OPT_FOLLOW[$key] ?? [];
+    if (!$keys) {
+        return '';
+    }
+    $left = [];
+    foreach (pm_opt_run($brand, false)['channels'] as $c) {
+        foreach ($c['items'] as $i) {
+            if (in_array($i['key'], $keys, true) && $i['state'] !== 'ok' && !$i['bulk']) {
+                $left[] = (PM_OPT_CHANNELS[$i['channel']] ?? $i['channel']) . ' ' . lcfirst($i['title']);
+            }
+        }
+    }
+    [$n, $fail, $titles] = pm_opt_apply_all($brand, $keys);
+    $say = $n > 0 ? ' Also updated: ' . implode(', ', $titles) . '.' : ' Nothing else needed updating on the connected channels.';
+    return $say . ($fail ? ' Could not update: ' . implode(' ', array_slice($fail, 0, 2)) : '') . ($left ? ' Left alone: ' . implode(', ', array_slice($left, 0, 3)) . '.' : '');
+}
+
 function pm_do_opt_apply(string $vb): array
 {
     $key = preg_replace('/[^a-z0-9_]/', '', (string)($_POST['key'] ?? ''));
     $val = $_POST['val'][$key] ?? '';
     [$ok, $m] = pm_opt_apply($vb, $key, is_scalar($val) ? (string)$val : '', (array)($_POST['hr'] ?? []));
+    if ($ok && !empty($_POST['cascade'])) {
+        $m .= pm_opt_follow($vb, $key);
+    }
     return ['msg' => $m, 'kind' => $ok ? 'ok' : 'err', 'to' => ($_POST['back'] ?? '') === 'audit' ? 'social&view=audit#i-' . $key : 'social&view=optimise#c-' . pm_opt_anchor($key)];
 }
 

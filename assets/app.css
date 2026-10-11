@@ -775,3 +775,11 @@ dl.shot dt { color:var(--muted); font-size:12px; padding-top:1px; }
 dl.shot dd { margin:0; }
 .ideaboom { margin:4px 0 10px; padding:12px 14px; border:1px solid var(--line); border-radius:12px; background:var(--bg); }
 h3 + .btgrid { margin-top:6px; }
+
+/* Profiles: ready suggestions for a missing detail, one press each (text on the left, its source under it, the buttons on the right) */
+.opt-alts { margin:4px 0 0; }
+.opt-alt { display:flex; align-items:center; justify-content:space-between; gap:10px 14px; flex-wrap:wrap; margin:6px 0; padding:9px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; }
+.opt-alt-t { flex:1 1 260px; min-width:0; }
+.opt-alt-t span { display:block; overflow-wrap:anywhere; }
+.opt-alt-t small { display:block; margin-top:2px; font-size:12px; }
+.opt-alt .btns { margin:0; flex:none; }

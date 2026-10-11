@@ -8,6 +8,7 @@
 
 /** key => [label, limit, what it is, group]. The keys are the Optimise item keys, so a chosen option shows up there as the suggestion. */
 const PM_COPY_FIELDS = [
+    'biz_tagline' => ['One-line description', 120, 'The line under the business name; it becomes the intro on most profiles.', 'business'],
     'fb_about' => ['Facebook intro', 101, 'The line under the Page name in search results.', 'facebook'],
     'fb_description' => ['Facebook description', 250, 'What visitors read on the About tab.', 'facebook'],
     'ig_bio' => ['Instagram bio', 150, 'Who you are, who it is for, how to reach you.', 'instagram'],
@@ -19,9 +20,9 @@ const PM_COPY_FIELDS = [
     'tt_bio' => ['TikTok bio', 80, 'Short enough to read at a glance.', 'tiktok'],
     'yt_bio' => ['YouTube channel description', 300, 'About the channel.', 'youtube'],
 ];
-const PM_COPY_GROUPS = ['facebook' => 'Facebook', 'instagram' => 'Instagram', 'whatsapp' => 'WhatsApp Business', 'google' => 'Google Business', 'linkedin' => 'LinkedIn', 'x' => 'X', 'tiktok' => 'TikTok', 'youtube' => 'YouTube'];
+const PM_COPY_GROUPS = ['business' => 'Business details', 'facebook' => 'Facebook', 'instagram' => 'Instagram', 'whatsapp' => 'WhatsApp Business', 'google' => 'Google Business', 'linkedin' => 'LinkedIn', 'x' => 'X', 'tiktok' => 'TikTok', 'youtube' => 'YouTube'];
 const PM_COPY_VOICES = ['plain' => 'Plain and warm', 'specific' => 'Specific and confident', 'short' => 'Short and memorable'];
-const PM_COPY_APPLY = ['fb_about', 'fb_description', 'wa_about', 'wa_description']; // the ones an app can put on the channel
+const PM_COPY_APPLY = ['biz_tagline', 'fb_about', 'fb_description', 'wa_about', 'wa_description']; // the ones an app can put on the channel (the first is saved as the business's own line)
 
 /** What the code would suggest with no AI. */
 function pm_copy_plain(string $brand, string $key): string
@@ -30,6 +31,7 @@ function pm_copy_plain(string $brand, string $key): string
     $f = pm_opt_facts($brand);
     $bios = pm_bio_pack($brand);
     return match ($key) {
+        'biz_tagline' => (string)(pm_opt_tagline_alts($f, [], [])[0]['text'] ?? ''),
         'fb_about' => (string)($bios['facebook']['text'] ?? ''), 'ig_bio' => (string)($bios['instagram']['text'] ?? ''), 'x_bio' => (string)($bios['x']['text'] ?? ''), 'tt_bio' => (string)($bios['tiktok']['text'] ?? ''),
         'li_tagline' => (string)($bios['linkedin']['text'] ?? ''), 'wa_about' => pm_bio_fit([$f['tagline'], 'Malawi'], $limit), default => pm_opt_long($f, $limit),
     };
@@ -131,6 +133,7 @@ function pm_copy_use(string $brand, string $key, int $i, bool $apply): array
 
 function pm_do_copy_write(string $vb): array
 {
+    $at = preg_replace('/[^a-z0-9_-]/i', '', (string)($_POST['anchor'] ?? '')) ?: 'words'; // back to the card that asked
     $keys = array_values(array_filter((array)($_POST['keys'] ?? []), 'is_string'));
     $groups = array_values(array_filter((array)($_POST['groups'] ?? []), 'is_string'));
     foreach (PM_COPY_FIELDS as $k => [, , , $g]) {
@@ -139,14 +142,14 @@ function pm_do_copy_write(string $vb): array
         }
     }
     if (!pm_agents_ready() && !isset($GLOBALS['PM_AI_STUB'])) {
-        return ['msg' => 'The AI needs a key in .env first. The plain suggestions on Optimise work without it.', 'kind' => 'err', 'to' => 'social&view=optimise#words'];
+        return ['msg' => 'The AI needs a key in .env first. The plain suggestions on Optimise work without it.', 'kind' => 'err', 'to' => 'social&view=optimise#' . $at];
     }
     try {
         [$n, $m] = pm_copy_write($vb, $keys);
     } catch (Throwable $e) {
-        return ['msg' => 'The AI could not write them: ' . mb_substr($e->getMessage(), 0, 120) . '. Nothing changed.', 'kind' => 'err', 'to' => 'social&view=optimise#words'];
+        return ['msg' => 'The AI could not write them: ' . mb_substr($e->getMessage(), 0, 120) . '. Nothing changed.', 'kind' => 'err', 'to' => 'social&view=optimise#' . $at];
     }
-    return ['msg' => $m, 'kind' => $n > 0 ? 'ok' : 'err', 'to' => 'social&view=optimise#words'];
+    return ['msg' => $m, 'kind' => $n > 0 ? 'ok' : 'err', 'to' => 'social&view=optimise#' . $at];
 }
 
 function pm_do_copy_use(string $vb): array

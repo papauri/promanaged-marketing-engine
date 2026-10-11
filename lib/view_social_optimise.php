@@ -63,7 +63,7 @@ $item = fn(array $i): string => pm_opt_item_html($i, $vb, $csrf);
   <h2>Profile words</h2>
   <p class="hint" style="margin-top:0">The intro, description and bio for each channel, written like a person who does this for a living: three options each (plain and warm, specific and confident, short and memorable), in one AI call for the profiles you tick. They use only your facts, fit each platform's limit and are checked for the wording people now recognise as machine-written. Choose one and it becomes the suggestion on Optimise and the Audit; Facebook and WhatsApp can apply it straight away.</p>
   <form method="post"><?= $fx('copy_write') ?>
-    <div class="btns" style="margin-top:0"><?php foreach (PM_COPY_GROUPS as $gk => $gl): ?><label class="check"><input type="checkbox" name="groups[]" value="<?= $gk ?>" <?= in_array($gk, ['facebook', 'instagram', 'whatsapp', 'google'], true) ? 'checked' : '' ?>> <?= pm_h($gl) ?></label><?php endforeach; ?></div>
+    <div class="btns" style="margin-top:0"><?php foreach (PM_COPY_GROUPS as $gk => $gl): ?><label class="check"><input type="checkbox" name="groups[]" value="<?= $gk ?>" <?= in_array($gk, ['business', 'facebook', 'instagram', 'whatsapp', 'google'], true) ? 'checked' : '' ?>> <?= pm_h($gl) ?></label><?php endforeach; ?></div>
     <div class="btns"><button class="btn primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?>>Write 3 options for each (AI)</button><?php if ($copyStore): ?><button class="btn small" name="do" value="copy_clear">Clear the options</button><?php endif; ?></div>
   </form>
   <?php foreach (PM_COPY_FIELDS as $k => [$label, $limit, $what, $grp]): $cur = $copyStore[$k] ?? null; $plain = $plainOf($k); $chosen = trim((string)(pm_opt_store($vb)['ai'][$k] ?? '')); ?>
@@ -76,7 +76,7 @@ $item = fn(array $i): string => pm_opt_item_html($i, $vb, $csrf);
       <p style="margin:6px 0"><?= pm_h($o['text']) ?></p>
       <div class="btns" style="margin-top:4px">
         <form method="post" class="inl"><?= $fx('copy_use', $hid('key', $k) . $hid('i', (string)$i)) ?><button class="btn small">Use this one</button></form>
-        <?php if (in_array($k, PM_COPY_APPLY, true)): ?><form method="post" class="inl" onsubmit="return confirm('Put this on the <?= $grp === 'facebook' ? 'Facebook Page' : 'WhatsApp Business profile' ?> now?')"><?= $fx('copy_use', $hid('key', $k) . $hid('i', (string)$i) . $hid('apply', '1')) ?><button class="btn small primary">Apply to <?= $grp === 'facebook' ? 'Facebook' : 'WhatsApp' ?></button></form><?php endif; ?>
+        <?php if (in_array($k, PM_COPY_APPLY, true)): $biz = $grp === 'business'; ?><form method="post" class="inl" onsubmit="return confirm('<?= $biz ? 'Save this as the one-line description? Every channel suggestion is built from it.' : 'Put this on the ' . ($grp === 'facebook' ? 'Facebook Page' : 'WhatsApp Business profile') . ' now?' ?>')"><?= $fx('copy_use', $hid('key', $k) . $hid('i', (string)$i) . $hid('apply', '1')) ?><button class="btn small primary"><?= $biz ? 'Save as the line' : 'Apply to ' . ($grp === 'facebook' ? 'Facebook' : 'WhatsApp') ?></button></form><?php endif; ?>
         <button type="button" class="btn small" data-copy="<?= pm_h($o['text']) ?>">Copy</button>
       </div>
     </div>

@@ -469,4 +469,119 @@ t('Deleting a business removes its Optimise data', function () {
     pm_t_assert(in_array('page_opt', PM_BRAND_MAP_FILES, true), 'page_opt.json is swept when a business is deleted');
 });
 
+t('Something missing comes with ready suggestions', function () use (&$PAGE, &$IG, &$WA, $items) {
+    pm_update('settings', function (array $s) {
+        $s['tagline'] = '';
+        $s['phone'] = '';
+        $s['email'] = '';
+        $s['website'] = '';
+        $s['address'] = 'Malawi';
+        $s['smtp']['from_email'] = 'sales@promanaged-it.com';
+        return $s;
+    }, 'pm_default_settings');
+    pm_opt_update('promanaged', function ($d) {
+        $d['ai'] = [];
+        $d['copy'] = [];
+        return $d;
+    });
+    $PAGE = array_replace($PAGE, ['about' => '', 'description' => '', 'phone' => '+265 999 000 111', 'emails' => ['Info@ProManaged-IT.com'], 'website' => 'https://www.promanaged-it.com/', 'hours' => [],
+        'location' => ['street' => 'Area 3', 'city' => 'Lilongwe', 'country' => 'Malawi']]);
+    $IG = array_replace($IG, ['biography' => 'Software for Malawian businesses. DM us!', 'website' => '']);
+    $WA = ['about' => 'Business systems built in Malawi', 'address' => '', 'description' => '', 'email' => 'wa@promanaged-it.com', 'websites' => [], 'vertical' => 'UNDEFINED'];
+    $i = $items();
+    $tag = $i['biz_tagline'];
+    pm_t_assert($tag['state'] === 'missing' && count($tag['alts']) >= 3 && $tag['proposal'] === $tag['alts'][0]['text'], 'a missing one-line description already has suggestions, the first one filled in: ' . json_encode(array_column($tag['alts'], 'text')));
+    pm_t_assert(!array_filter($tag['alts'], fn($a) => mb_strlen($a['text']) > 120 || str_contains($a['text'], '!') || preg_match('/\d{3}/', $a['text'])), 'each fits 120 characters and carries no exclamation mark or phone number');
+    $from = implode(' | ', array_column($tag['alts'], 'from'));
+    pm_t_assert(str_contains($from, 'Already on your WhatsApp Business profile') && str_contains($from, 'with the name in front') && str_contains($from, 'shortened'), 'they come from what the profiles already say and from the business description: ' . $from);
+    pm_t_assert(!array_filter($tag['alts'], fn($a) => str_contains($a['text'], 'DM us')), 'an Instagram bio that shouts "DM us!" is not offered as a description');
+    pm_t_assert((bool)array_filter($tag['alts'], fn($a) => str_starts_with($a['text'], 'ProManaged IT builds ')), 'a description that starts with a verb gets the name in front');
+    pm_t_eq($tag['follow'], ['Facebook', 'WhatsApp'], 'and it can update Facebook and WhatsApp when saved');
+    pm_t_eq(array_column($i['biz_phone']['alts'], 'text'), ['+265 999 000 111'], 'a missing phone number is offered from the Facebook Page');
+    pm_t_eq(array_column($i['biz_email']['alts'], 'text'), ['info@promanaged-it.com', 'wa@promanaged-it.com', 'sales@promanaged-it.com'], 'a missing email from the Page, the WhatsApp profile and the address emails go out from');
+    pm_t_eq(array_column($i['biz_website']['alts'], 'text'), ['www.promanaged-it.com'], 'a missing website from the Page');
+    pm_t_eq(array_column($i['biz_address']['alts'], 'text'), ['Area 3, Lilongwe, Malawi'], 'an address that is only the country is offered from the Page\'s location');
+    pm_t_eq($i['biz_address']['follow'], ['WhatsApp'], 'the address can fill the WhatsApp profile');
+    pm_t_assert($i['biz_phone']['bulk'] === false && $i['biz_tagline']['bulk'] === false, 'a guess about the business is never part of "apply everything"');
+    pm_update('settings', function (array $s) {
+        $s['phone'] = '+265 999 123 456';
+        return $s;
+    }, 'pm_default_settings');
+    pm_t_eq($items()['biz_phone']['alts'], [], 'a detail that is filled in has no suggestions to read through');
+    $f = pm_opt_facts('promanaged');
+    $f['tagline'] = 'Business systems built in Malawi';
+    pm_t_assert(!array_filter(pm_opt_tagline_alts($f, [], ['whatsapp' => ['about' => 'Business systems built in Malawi.']]), fn($a) => rtrim($a['text'], '. ') === 'Business systems built in Malawi'), 'a suggestion never repeats what the business already has');
+    pm_t_eq(pm_opt_offer_phrase('We design and install solar systems for homes and small businesses.'), 'Solar systems for homes and small businesses', 'a simple offer loses its verb');
+    pm_t_eq(pm_opt_offer_phrase('Builds software, sources equipment and provides IT support.'), '', 'a description with several verbs is not cut into one offer');
+    pm_t_eq(pm_opt_oneline('Hello, we fix laptops (all brands) in town. Call 0999 123 456'), '', 'a text with a phone number is no description');
+    pm_t_eq(pm_opt_oneline("Hello, we fix laptops (all brands) in town\nCall us"), 'Hello, we fix laptops in town', 'brackets go, and so does everything after the first line');
+    pm_t_eq(pm_opt_address_alts('promanaged', ['about' => 'We work with hotels in Blantyre and Lilongwe.', 'facts' => [], 'audience' => '', 'address' => 'Malawi'], [])[0]['text'], 'Blantyre, Malawi', 'a town named in the business\'s own words is offered to confirm');
+});
+
+t('One press saves a suggestion, and can fill in the channels built from it', function () use (&$PAGE, &$WA, $items) {
+    $PAGE['about'] = '';
+    $PAGE['phone'] = '';
+    $WA['about'] = 'Business systems built in Malawi';
+    pm_update('settings', function (array $s) {
+        $s['tagline'] = '';
+        $s['phone'] = '';
+        return $s;
+    }, 'pm_default_settings');
+    $_POST = ['key' => 'biz_tagline', 'val' => ['biz_tagline' => 'Business systems for Malawian companies']];
+    $r = pm_social_ext_run('opt_apply', 'promanaged');
+    pm_t_assert($r['kind'] === 'ok' && pm_settings()['tagline'] === 'Business systems for Malawian companies' && $PAGE['about'] === '', 'saving a line saves it and touches no channel: ' . $r['msg']);
+    pm_update('settings', function (array $s) {
+        $s['tagline'] = '';
+        return $s;
+    }, 'pm_default_settings');
+    $_POST = ['key' => 'biz_tagline', 'val' => ['biz_tagline' => 'Business systems for Malawian companies'], 'cascade' => '1'];
+    $r = pm_social_ext_run('opt_apply', 'promanaged');
+    pm_t_assert($r['kind'] === 'ok' && str_contains($PAGE['about'], 'Business systems for Malawian companies') && str_contains($r['msg'], 'Also updated: Facebook Page short intro'), 'save-and-update fills the Facebook intro that was missing: ' . $r['msg']);
+    pm_t_eq($WA['about'], 'Business systems built in Malawi', 'and leaves the WhatsApp line that was already good alone');
+    $_POST = ['key' => 'biz_tagline', 'val' => ['biz_tagline' => 'hm'], 'cascade' => '1'];
+    $r = pm_social_ext_run('opt_apply', 'promanaged');
+    pm_t_assert($r['kind'] === 'err' && pm_settings()['tagline'] === 'Business systems for Malawian companies', 'a refused line changes nothing and updates nothing');
+    $_POST = ['key' => 'biz_phone', 'val' => ['biz_phone' => '+265 999 123 456'], 'cascade' => '1'];
+    $r = pm_social_ext_run('opt_apply', 'promanaged');
+    pm_t_assert($r['kind'] === 'ok' && $PAGE['phone'] === '+265 999 123 456' && str_contains($r['msg'], 'Also updated'), 'a phone number saved this way reaches the Facebook Page: ' . $r['msg']);
+    $PAGE['phone'] = '0888 555 000';
+    $_POST = ['key' => 'biz_phone', 'val' => ['biz_phone' => '+265 999 123 456'], 'cascade' => '1'];
+    $r = pm_social_ext_run('opt_apply', 'promanaged');
+    pm_t_assert(str_contains($r['msg'], 'Left alone') && $PAGE['phone'] === '0888 555 000', 'a Page number that differs is left alone, and the message says so: ' . $r['msg']);
+    $_POST = [];
+});
+
+t('A missing description comes from the longer texts on the profiles', function () use (&$PAGE, $items) {
+    pm_update('settings', function (array $s) {
+        $s['brain']['about'] = 'IT firm';
+        return $s;
+    }, 'pm_default_settings');
+    $PAGE['description'] = 'We build business software and websites, source computer equipment and give IT support to companies across Malawi.';
+    $i = $items()['biz_about'];
+    pm_t_assert($i['state'] === 'missing' && $i['how'] === 'app' && $i['input'] === 'textarea' && $i['alts'][0]['text'] === $PAGE['description'] && $i['alts'][0]['from'] === 'Already on your Facebook Page description', 'the Page description is offered: ' . json_encode($i['alts']));
+    [$ok, $m] = pm_opt_apply('promanaged', 'biz_about', $PAGE['description']);
+    pm_t_assert($ok && pm_brain('promanaged')['about'] === $PAGE['description'] && $items()['biz_about']['state'] === 'ok', 'saving it makes it the description every suggestion is written from: ' . $m);
+    $PAGE['description'] = '';
+});
+
+t('The cards show the suggestions, one press each', function () use ($items) {
+    pm_update('settings', function (array $s) {
+        $s['tagline'] = '';
+        return $s;
+    }, 'pm_default_settings');
+    $i = $items();
+    $h = pm_opt_item_html($i['biz_tagline'], 'promanaged', 'tokX');
+    pm_t_assert(str_contains($h, 'Ready to use') && substr_count($h, 'class="opt-alt"') === count($i['biz_tagline']['alts']) && str_contains($h, 'name="val[biz_tagline]"') && str_contains($h, '>Use this</button>'), 'a row per suggestion with a "Use this" button');
+    pm_t_assert(str_contains($h, 'name="cascade" value="1"') && str_contains($h, 'Use and update Facebook and WhatsApp') && str_contains($h, 'Save the line and update Facebook and WhatsApp') && str_contains($h, 'confirm('), 'and a button that updates the channels after asking');
+    pm_t_assert(str_contains($h, 'Already on your WhatsApp Business profile') && str_contains($h, 'Or edit it, or type your own'), 'each row says where it came from, and the line can still be edited');
+    pm_t_assert(!str_contains(pm_opt_item_html($i['fb_hours'], 'promanaged', 'tokX'), 'opt-alt"') && !str_contains(pm_opt_item_html($i['biz_hours'], 'promanaged', 'tokX'), 'cascade'), 'items with nothing to choose from look as before');
+    $ig = pm_opt_item_html($i['ig_bio'], 'promanaged', 'tokX');
+    pm_t_assert(str_contains($ig, 'Copy and open Instagram') && str_contains($ig, 'data-copy="') && str_contains($ig, 'target="_blank"'), 'a profile that only accepts pasted text gets "Copy and open": one press copies it and opens the place it goes');
+});
+
+t('The one-line description is a profile word too', function () {
+    pm_t_assert(PM_COPY_FIELDS['biz_tagline'][1] === 120 && PM_COPY_GROUPS['business'] === 'Business details' && in_array('biz_tagline', PM_COPY_APPLY, true), 'it is listed with the other profile words, with the same 120 limit as the tagline field');
+    pm_t_assert(pm_copy_plain('promanaged', 'biz_tagline') !== '', 'with a plain version worked out without AI');
+});
+
 pm_t_done();
