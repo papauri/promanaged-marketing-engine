@@ -420,7 +420,7 @@ function pm_job_ads_results(string $brand): string
 /** Typed-in ad results for when Facebook will not give them (spend in Kwacha, chats, qualified, signed). Stored as the owner's figures, never as Facebook's. */
 function pm_do_ads_manual(string $vb): array
 {
-    $to = 'social&view=results';
+    $to = 'social&view=numbers';
     $day = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($_POST['day'] ?? '')) ? (string)$_POST['day'] : date('Y-m-d');
     $n = fn($k) => max(0, (int)preg_replace('/[^\d]/', '', (string)($_POST[$k] ?? '')));
     $spend = $n('spend');
@@ -601,7 +601,7 @@ function pm_social_week_text(array $r): string
         $L[] = ($i + 1) . '. ' . $a;
     }
     $L[] = '';
-    $L[] = 'Full tables: Social > Results.';
+    $L[] = 'Full tables: Insights > Results.';
     return implode("\n", $L);
 }
 
@@ -666,7 +666,7 @@ function pm_today_numbers(string $brand): array
     $now = time();
     $n = count(array_filter(pm_sx_posts($brand), fn($p) => ($p['status'] ?? '') === 'published' && ($p['metrics_src'] ?? '') === 'manual' && empty($p['manual'])
         && pm_sx_pub_ts($p) < $now - 6 * 86400 && pm_sx_pub_ts($p) > $now - 28 * 86400));
-    return $n ? [['text' => "Enter last week's numbers for $n post" . ($n === 1 ? '' : 's') . ' (Facebook did not give reach and saves).', 'href' => '?tab=social&view=results#manual', 'urgency' => (int)date('N') <= 2 ? 1 : 0]] : [];
+    return $n ? [['text' => "Enter last week's numbers for $n post" . ($n === 1 ? '' : 's') . ' (Facebook did not give reach and saves).', 'href' => '?tab=social&view=numbers#manual', 'urgency' => (int)date('N') <= 2 ? 1 : 0]] : [];
 }
 
 /** A tiny inline line chart (no scripts, no libraries). */

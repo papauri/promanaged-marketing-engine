@@ -1,5 +1,5 @@
 <?php
-/** Social > Channels: hand-post tasks, Status pack, Film day, community groups, share kits, profile health and bios, Google pack, catalogue. Nothing here posts by itself. */
+/** Social > Channels: the channels that are posted by hand: tasks, WhatsApp Status pack, Film day, community groups, share kits, the Google Business pack and the WhatsApp catalogue. Nothing here posts by itself. Profile health and bios are Brand > Profiles. */
 pm_brand_set($vb);
 $bname = pm_brand_title($settings, $vb);
 $cfg = pm_channels_cfg($vb);
@@ -149,29 +149,6 @@ $cp = fn(string $text, string $label = 'Copy') => '<button type="button" class="
         <?php if ($cards['link'] !== ''): ?><p class="hint">Link for the badge: <?= pm_h($cards['link']) ?> <?= $cp($cards['link'], 'Copy link') ?></p><?php endif; ?></div><?php endif; ?></div>
     <form method="post" class="inl"><?= $fx('task_done', $hid('id', (string)$kit['post']['id']) . $hid('ch', 'host_kit')) ?><button class="btn small primary">Mark sent</button><button class="btn small" name="how" value="skipped">Skip</button></form></div>
   <?php endforeach; ?>
-</div>
-
-<?php $ps = pm_profile_score($vb); $bios = pm_bio_pack($vb); $pin = pm_pin_pick($vb); ?>
-<div class="card" id="profile">
-  <h2>Profile health</h2>
-  <div class="sxh"><span class="score"><?= (int)$ps['score'] ?>%</span><span class="muted"><?= (int)$ps['pass'] ?> of <?= (int)$ps['total'] ?> checks pass<?= $ps['page_read'] ? '' : ' (the Facebook Page could not be read, so its checks are not counted)' ?></span></div>
-  <?php foreach ($ps['fixes'] as $f): ?><p class="hint">Fix: <b><?= pm_h($f['label']) ?></b>. <?= pm_h($f['fix']) ?><?php if ($f['link'] !== ''): ?> <a href="<?= pm_h($f['link']) ?>" <?= str_starts_with($f['link'], 'http') ? 'target="_blank" rel="noopener noreferrer"' : '' ?>>open</a><?php endif; ?></p><?php endforeach; ?>
-  <form method="post"><?= $fx('ticks_save', $hid('ticks_form', '1')) ?>
-    <p class="hint">Tick what you have done (the app cannot see these):</p>
-    <?php foreach (pm_profile_ticks($vb) as $k => [$label, $grp]): ?>
-    <label class="check"><input type="checkbox" name="tick[<?= $k ?>]" value="1" <?= !empty($cfg['ticks'][$k]) || ($k === 'ig_linked' && pm_social_cfg($vb)['ig_id'] !== '') ? 'checked' : '' ?>> <?= pm_h($label) ?> <span class="muted">· <?= pm_h($grp) ?></span></label>
-    <?php endforeach; ?>
-    <div class="btns"><button class="btn small">Save ticks</button></div>
-  </form>
-  <h3>Bio pack</h3>
-  <table class="sx-table"><?php foreach ($bios as $b): ?>
-    <tr><td style="white-space:nowrap"><b><?= pm_h($b['label']) ?></b><br><span class="sx-chip <?= $b['chars'] > $b['limit'] ? 'bad' : 'ok' ?>"><?= (int)$b['chars'] ?>/<?= (int)$b['limit'] ?></span></td><td><?= pm_h($b['text']) ?></td><td><?= $cp($b['text']) ?></td></tr>
-  <?php endforeach; ?></table>
-  <h3>Pin this post</h3>
-  <?php if ($pin): ?><div class="sxh"><b><?= pm_h($pin['headline']) ?></b> <span class="muted"><?= pm_h($pin['why']) ?></span> <a href="<?= pm_h($pin['url']) ?>" target="_blank" rel="noopener noreferrer">open on Facebook</a>
-    <form method="post" class="inl"><?= $fx('pin_done') ?><button class="btn small">Pinned this month</button></form></div>
-    <p class="hint">On Facebook: the post's "..." menu > Pin post. Re-pin the current best post once a month.</p>
-  <?php else: ?><p class="hint">Nothing to pin yet: needs a published evergreen post with some engagement.</p><?php endif; ?>
 </div>
 
 <?php $gp = pm_gbp_pack($vb, 2); $rd = (array)($cfg['review_draft'] ?? []); ?>

@@ -9,19 +9,19 @@
  * Slots: plan_top plan_kpi plan_card plan_done plan_bottom growth_top growth_bottom inbox_top accounts lead_card wa_top results channels.
  */
 
-/** Sub-navigation of the Social screen: view => label, in order. */
+/** Every page that is a view of the Social screen (Social, Brand and Insights pages), in order: view => label. The registry in lib/ui.php is the one list. */
 function pm_social_tabs(): array
 {
-    return ['' => 'Plan', 'leadposts' => 'Lead posts', 'content' => 'Content', 'channels' => 'Channels', 'optimise' => 'Optimise', 'studio' => 'Studio', 'growth' => 'Growth', 'results' => 'Results', 'page' => 'Page', 'inbox' => 'Inbox',
-        'cleanup' => 'Clean-up', 'ads' => 'Ads', 'audit' => 'Audit', 'accounts' => 'Accounts &amp; branding'];
+    return pm_ui_social_views();
 }
-
 /** The view file for a Social sub-view (absolute path). A tab whose module is not installed falls back to the Plan view. */
 function pm_social_view_file(string $view): string
 {
     $name = match (true) {
-        $view === 'accounts' => 'view_social_accounts.php',
         $view === 'content' => 'view_social_content.php',
+        $view === 'kit' => 'view_social_kit.php',
+        $view === 'voice' => 'view_social_voice.php',
+        $view === 'numbers' => 'view_social_numbers.php',
         $view === 'leadposts' => 'view_social_leadposts.php',
         $view === 'channels' => 'view_social_channels.php',
         $view === 'optimise' => 'view_social_optimise.php',
@@ -87,7 +87,7 @@ function pm_social_banner(): string
         $b = pm_brand();
         if (!empty($down[$b])) {
             $h .= '<div class="flash err sx-banner"><b>Publishing is paused for ' . pm_h(pm_brand_name($b)) . '.</b> '
-                . pm_h((string)($down[$b]['msg'] ?? 'The Facebook access token is no longer valid.')) . ' Approved posts wait safely. Make a new Page token in <a href="?tab=social&amp;view=accounts">Accounts</a>; posting resumes by itself.</div>';
+                . pm_h((string)($down[$b]['msg'] ?? 'The Facebook access token is no longer valid.')) . ' Approved posts wait safely. Make a new Page token in <a href="?tab=settings&amp;section=connections">Accounts</a>; posting resumes by itself.</div>';
         }
     } catch (Throwable) {
     }

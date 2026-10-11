@@ -130,7 +130,7 @@ function pm_recycle_fill(string $brand, int $max = 2): int
 
 function pm_do_recycle(string $vb): array
 {
-    $to = 'social&view=results';
+    $to = 'social&view=content#recycle';
     $recent = count(array_filter(pm_sx_posts($vb), fn($p) => !empty($p['recycled_from']) && strtotime((string)($p['created'] ?? '')) > time() - 7 * 86400));
     if ($recent >= 2) { // the weekly top-up limit: at most two recycled drafts in seven days
         return ['msg' => 'This week already has its two recycled posts. Next week you can bring back two more.', 'kind' => 'err', 'to' => $to];

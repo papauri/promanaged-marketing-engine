@@ -1,7 +1,7 @@
 <?php
 /**
  * The first email to a Travel Malawi lead: a short personal opening written for that place (the only part the AI writes), then a standard part that is the same
- * for every stay and comes from the owner's own words in Settings > Travel Malawi > "First email": what the platform is, what a host gets, the set-up steps with
+ * for every stay and comes from the owner's own words in Sales > Targeting and messages > "First email to a stay": what the platform is, what a host gets, the set-up steps with
  * the link, that it is free for now and why. Nothing in the standard part is invented: it is what the owner typed (the starting text uses only facts the app
  * already holds), and the whole email must pass the same wording rules as any first email (one plain link, no prices, no spam words, at most 190 words).
  */

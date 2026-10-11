@@ -116,20 +116,24 @@ t('The handlers and the screen', function () {
     pm_agents_ready() || ($GLOBALS['PM_AI_STUB'] = fn($sys, $user) => json_encode(['items' => [['key' => 'fb_about', 'plain' => 'We build business systems for companies in Malawi.', 'specific' => 'Business systems and IT support for companies in Lilongwe.', 'short' => 'Business systems built in Malawi.'],
         ['key' => 'fb_description', 'plain' => 'We build business systems and websites for companies in Malawi and answer on WhatsApp when something breaks.', 'specific' => 'Software, websites and IT support for hotels and shops, from our desk in Lilongwe.', 'short' => 'Software and IT support for Malawian companies.']]]));
     $r = pm_social_ext_run('copy_write', 'promanaged');
-    pm_t_assert($r['kind'] === 'ok' && str_contains($r['msg'], '2 of 2 profiles written') && $r['to'] === 'social&view=studio#words', 'ticking a channel writes its fields: ' . $r['msg']);
+    pm_t_assert($r['kind'] === 'ok' && str_contains($r['msg'], '2 of 2 profiles written') && $r['to'] === 'social&view=optimise#words', 'ticking a channel writes its fields: ' . $r['msg']);
     $_POST = ['key' => 'fb_description', 'i' => '1'];
     $r = pm_social_ext_run('copy_use', 'promanaged');
-    pm_t_assert($r['kind'] === 'ok' && str_starts_with($r['to'], 'social&view=studio#w-fb_description'), 'choosing one works from the form');
+    pm_t_assert($r['kind'] === 'ok' && str_starts_with($r['to'], 'social&view=optimise#w-fb_description'), 'choosing one works from the form');
     pm_brand_set('promanaged');
     $vb = 'promanaged';
     $settings = pm_settings();
     $csrf = 'tok3';
+    $_GET = [];
+    ob_start();
+    require dirname(__DIR__) . '/lib/view_social_optimise.php';
+    $h = ob_get_clean();
+    pm_t_assert(str_contains($h, 'id="words"') && str_contains($h, 'Write 3 options for each (AI)') && str_contains($h, 'Specific and confident') && str_contains($h, 'Apply to Facebook') && str_contains($h, 'chosen') && str_contains($h, 'name="do" value="copy_use"'), 'Profiles shows the options, the chosen one and the buttons');
     $_GET = ['d' => 'new'];
     ob_start();
     require dirname(__DIR__) . '/lib/view_social_studio.php';
     $h = ob_get_clean();
-    pm_t_assert(str_contains($h, 'id="words"') && str_contains($h, 'Write 3 options for each (AI)') && str_contains($h, 'Specific and confident') && str_contains($h, 'Apply to Facebook') && str_contains($h, 'chosen') && str_contains($h, 'name="do" value="copy_use"'), 'the Studio shows the options, the chosen one and the buttons');
-    pm_t_assert(str_contains($h, 'pinterest.com/search/pins/?q=neo%20naturalism') && str_contains($h, 'Digital looks') && str_contains($h, 'Made by hand'), 'the inspiration links and the human/digital split are there');
+    pm_t_assert(!str_contains($h, 'id="words"') && str_contains($h, 'pinterest.com/search/pins/?q=neo%20naturalism') && str_contains($h, 'Digital looks') && str_contains($h, 'Made by hand'), 'the Studio keeps the inspiration links and the human/digital split, and the words moved to Profiles');
     $_POST = [];
     pm_social_ext_run('copy_clear', 'promanaged');
     pm_t_assert(pm_copy_store('promanaged') === [] && (pm_opt_store('promanaged')['ai'] ?? []) === [], 'the options can be cleared');

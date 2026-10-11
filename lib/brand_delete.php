@@ -248,7 +248,7 @@ function pm_brand_delete_form(string $id, string $csrf): string
         . '<div class="btns"><button class="btn danger">Delete ' . pm_h($name) . ' for good</button></div></form>';
 }
 
-/** Settings > hidden businesses: bring one back, or delete it for good. Nothing is drawn when none is hidden. */
+/** Operations > Business details > hidden businesses: bring one back, or delete it for good. Nothing is drawn when none is hidden. */
 function pm_view_hidden_businesses(string $csrf): void
 {
     $hid = array_filter(pm_brands_custom(true), fn($r) => !empty($r['archived']));

@@ -35,7 +35,7 @@ function pm_onepager_problems(array $c): array
 {
     $bad = [];
     if ($c['about'] === '') {
-        $bad[] = 'Say what the business does (Settings > What the AI knows).';
+        $bad[] = 'Say what the business does (Brand > Voice).';
     }
     if (!$c['offerings'] && !$c['facts']) {
         $bad[] = 'Add what the business offers, or a few true facts about it.';

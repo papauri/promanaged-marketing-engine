@@ -313,7 +313,7 @@ function pm_opt_check_business(string $brand, array $f, array $st): array
     $it[] = pm_opt_it('business', 'biz_hours', 'Opening hours', !empty($st['hours_confirmed']) ? 'ok' : 'missing', 3, 'Visitors check them first; Facebook, Google and WhatsApp all ask for the same hours.',
         ['current' => !empty($st['hours_confirmed']) ? pm_opt_hours_text($hrs) : '', 'proposal' => pm_opt_hours_text($hrs), 'how' => 'app', 'input' => 'hours', 'button' => 'Save these hours', 'note' => 'This is a starting point, not a fact: set your real hours, then save.']);
     $it[] = pm_opt_it('business', 'biz_about', 'What the business does and for whom', mb_strlen($f['about']) >= 60 ? 'ok' : 'missing', 3, 'The suggestions below are written from it; without it they stay thin.',
-        ['current' => $f['about'], 'how' => 'go', 'link' => '?tab=settings&brand=' . $brand, 'link_label' => 'Open the business settings', 'note' => 'Settings > What the AI knows (or add the website and press "Study the business again").']);
+        ['current' => $f['about'], 'how' => 'go', 'link' => '?tab=social&view=voice&brand=' . $brand, 'link_label' => 'Open Brand > Voice', 'note' => 'Brand > Voice (or add the website and press "Study the business again").']);
     return $it;
 }
 
@@ -323,7 +323,7 @@ function pm_opt_check_facebook(string $brand, array $f, array $st): array
     $base = 'https://www.facebook.com/' . $c['page_id'];
     if (!$c['ready']) {
         return ['connected' => false, 'note' => 'The Facebook Page is not connected.', 'items' => [pm_opt_it('facebook', 'fb_connect', 'Connect the Facebook Page', 'missing', 3, 'Posting, comments and this checklist all start from the connection.',
-            ['how' => 'go', 'link' => '?tab=social&view=accounts', 'link_label' => 'Open Accounts & branding'])]];
+            ['how' => 'go', 'link' => '?tab=settings&section=connections', 'link_label' => 'Open Connections'])]];
     }
     [$ok, $pg] = pm_opt_fb_read($brand);
     if (!$ok) {
@@ -338,7 +338,7 @@ function pm_opt_check_facebook(string $brand, array $f, array $st): array
     $it[] = pm_opt_it('facebook', 'fb_design', 'A designed profile picture and cover', $design ? 'ok' : 'weak', 2, 'A styled cover with your words says "established business" before anyone reads a post.',
         ['how' => 'go', 'link' => '?tab=social&view=studio', 'link_label' => 'Open the Studio', 'note' => $design ? 'Saved design: ' . (PM_SD_STYLES[$design['style']] ?? '') . '.' : 'Eleven styles, your colours and words, drawn by code. "Surprise me" or "New idea from the AI" make new ones.']);
     $it[] = pm_opt_it('facebook', 'fb_picture', 'Profile picture', $pic ? 'ok' : 'missing', 3, 'The logo is how people recognise the Page in every search and comment.',
-        $logo || $design ? ['how' => 'api', 'bulk' => true, 'button' => 'Set it on Facebook', 'note' => $designNote] : ['how' => 'go', 'link' => '?tab=social&view=studio', 'link_label' => 'Open the Studio', 'note' => 'Add a logo in Accounts & branding, or use a monogram from the Studio.']);
+        $logo || $design ? ['how' => 'api', 'bulk' => true, 'button' => 'Set it on Facebook', 'note' => $designNote] : ['how' => 'go', 'link' => '?tab=social&view=studio', 'link_label' => 'Open the Studio', 'note' => 'Add a logo in Operations > Business details, or use a monogram from the Studio.']);
     $it[] = pm_opt_it('facebook', 'fb_cover', 'Cover picture', !empty($pg['cover']['source']) ? 'ok' : 'missing', 2, 'The big picture on top: say what you do in one look.',
         ['how' => 'api', 'bulk' => true, 'button' => 'Set it on Facebook', 'note' => $designNote]);
     $bios = pm_bio_pack($brand);
@@ -424,7 +424,7 @@ function pm_opt_check_instagram(string $brand, array $f, array $st): array
     $c = pm_social_cfg($brand);
     if ($c['ig_id'] === '') {
         return ['connected' => false, 'note' => 'Instagram is not linked.', 'items' => [pm_opt_it('instagram', 'ig_link', 'Link Instagram', 'missing', 2, 'Posts, comments and reach for Instagram all need the link.',
-            ['how' => 'go', 'link' => '?tab=social&view=accounts', 'link_label' => 'See the steps', 'note' => pm_ig_next_step($brand)])]];
+            ['how' => 'go', 'link' => '?tab=settings&section=connections', 'link_label' => 'See the steps', 'note' => pm_ig_next_step($brand)])]];
     }
     [$ok, $ig] = pm_opt_ig_read($brand);
     if (!$ok) {
@@ -436,7 +436,7 @@ function pm_opt_check_instagram(string $brand, array $f, array $st): array
     [$bioP, $bioAi] = pm_opt_pick($brand, 'ig_bio', (string)($bios['instagram']['text'] ?? ''), 150, $st, $f);
     $bio = trim((string)($ig['biography'] ?? ''));
     $it = [];
-    $it[] = pm_opt_it('instagram', 'ig_picture', 'Profile picture', !empty($ig['profile_picture_url']) ? 'ok' : 'missing', 2, 'Recognition in every comment and search.', ['how' => 'manual', 'link' => '?tab=social&view=accounts', 'link_label' => 'Download the picture']);
+    $it[] = pm_opt_it('instagram', 'ig_picture', 'Profile picture', !empty($ig['profile_picture_url']) ? 'ok' : 'missing', 2, 'Recognition in every comment and search.', ['how' => 'manual', 'link' => '?tab=settings&section=connections', 'link_label' => 'Download the picture']);
     $it[] = pm_opt_it('instagram', 'ig_bio', 'Bio', mb_strlen($bio) >= 40 ? 'ok' : ($bio !== '' ? 'weak' : 'missing'), 3, 'Says what you do and how to reach you, in 150 characters.',
         ['current' => $bio, 'proposal' => $bioP, 'ai' => $bioAi, 'how' => 'manual', 'input' => 'text', 'limit' => 150, 'link' => $edit, 'link_label' => 'Open Instagram', 'note' => 'Instagram does not let apps change the bio: copy it, then paste it under Edit profile.']);
     $it[] = pm_opt_it('instagram', 'ig_website', 'Link in the bio', trim((string)($ig['website'] ?? '')) !== '' ? 'ok' : 'missing', 3, 'The only clickable link on the profile.',
@@ -530,7 +530,7 @@ function pm_opt_check_social_bio(string $brand, string $ch, array $f, array $st)
     $it[] = pm_opt_it($ch, $key, $label, pm_opt_ticked($brand, 'opt_' . $key) ? 'ok' : 'missing', 2, 'The first words a visitor reads on the profile.', ['proposal' => $p, 'ai' => $ai, 'how' => 'manual', 'input' => 'text', 'limit' => $limit,
         'tick' => 'opt_' . $key, 'link' => $url, 'link_label' => 'Open ' . PM_OPT_CHANNELS[$ch], 'note' => 'Copy it, paste it into the profile, then tick it.']);
     $it[] = pm_opt_it($ch, $ch . '_link', 'Link to the website', pm_opt_ticked($brand, 'opt_' . $ch . '_link') ? 'ok' : 'missing', 2, 'Where a curious visitor goes next.', ['proposal' => $f['site'], 'how' => 'manual', 'tick' => 'opt_' . $ch . '_link', 'link' => $url, 'link_label' => 'Open ' . PM_OPT_CHANNELS[$ch]]);
-    $it[] = pm_opt_it($ch, $ch . '_pictures', 'Profile and cover pictures', pm_opt_ticked($brand, 'opt_' . $ch . '_pictures') ? 'ok' : 'missing', 1, 'Made at the right size for this platform.', ['how' => 'go', 'link' => '?tab=social&view=accounts', 'link_label' => 'Download the pictures', 'tick' => 'opt_' . $ch . '_pictures']);
+    $it[] = pm_opt_it($ch, $ch . '_pictures', 'Profile and cover pictures', pm_opt_ticked($brand, 'opt_' . $ch . '_pictures') ? 'ok' : 'missing', 1, 'Made at the right size for this platform.', ['how' => 'go', 'link' => '?tab=settings&section=connections', 'link_label' => 'Download the pictures', 'tick' => 'opt_' . $ch . '_pictures']);
     return ['connected' => true, 'note' => 'This platform gives apps no way to edit a profile: copy, paste, then tick.', 'items' => $it];
 }
 

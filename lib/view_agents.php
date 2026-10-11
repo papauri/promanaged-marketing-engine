@@ -56,6 +56,7 @@ $ds = $dir['stats'];
 $ndone = count(array_filter($plan, fn($t) => $t['done']));
 ?>
 <?= pm_ui_head('Leads · ' . pm_h($bname), 'Find businesses, let the agents draft the messages, and send what you approve. Nothing goes out without you.') ?>
+<?= pm_ui_strip('agents') ?>
 <?php if (!pm_agents_ready()): ?>
   <div class="flash err"><b>One thing to set up first.</b> Add <code><?= pm_h(pm_agents_missing_key()) ?>=...</code> to <code>.env</code>, then reload.</div>
 <?php endif; ?>
@@ -345,7 +346,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <?php endforeach; ?>
 
 <!-- 6. More -->
-<details class="card morecard"><summary>More: add a lead, settings, activity</summary>
+<details class="card morecard"><summary>More: add a lead yourself, the archive</summary>
   <h3>Add a lead yourself</h3>
   <form method="post"><?= $post('', 'add') ?>
     <div class="row">
@@ -358,48 +359,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     </div>
     <div class="btns"><button class="btn small primary">Add lead</button></div>
   </form>
-
-  <h3>Agent settings</h3>
-  <form method="post"><?= $post('', 'config') ?>
-    <?php if (pm_brand() !== 'travel'): ?><label>What we sell (one line each, "Name: description")</label>
-    <textarea name="cfg[offerings]" rows="4"><?= pm_h(implode("\n", $acfg['offerings'])) ?></textarea><?php endif; ?>
-    <?php if (pm_brand_is_custom(pm_brand())): ?><label>Existing clients (one per line; they are never cold-pitched)</label>
-    <textarea name="cfg[existing_clients]" rows="3"><?= pm_h(implode("\n", (array)($acfg['existing_clients'] ?? []))) ?></textarea><?php endif; ?>
-    <div class="row">
-      <div><label>Cities to search (comma separated)</label><input type="text" name="cfg[cities]" value="<?= pm_h(implode(', ', $acfg['cities'])) ?>"></div>
-      <div><label>Types of business to look for (comma separated)</label><input type="text" name="cfg[sectors]" value="<?= pm_h(implode(', ', $acfg['sectors'])) ?>"></div>
-    </div>
-    <div class="row">
-      <div><label>New leads per day</label><input type="number" name="cfg[new_per_day]" value="<?= (int)$acfg['new_per_day'] ?>"></div>
-      <div><label>Searches per day</label><input type="number" name="cfg[scouts_per_day]" value="<?= (int)$acfg['scouts_per_day'] ?>"></div>
-      <div><label>WhatsApp messages per day (limit)</label><input type="number" name="cfg[wa_cap]" value="<?= (int)$acfg['wa_cap'] ?>"></div>
-      <div><label>Emails per day (limit)</label><input type="number" name="cfg[send_cap]" value="<?= (int)$acfg['send_cap'] ?>"></div>
-      <div><label>Follow up after (days)</label><input type="number" name="cfg[followup_days]" value="<?= (int)$acfg['followup_days'] ?>"></div>
-      <div><label>Follow-ups at most</label><input type="number" name="cfg[max_followups]" value="<?= (int)$acfg['max_followups'] ?>"></div>
-      <div><label>Agents at once</label><input type="number" name="cfg[parallel]" value="<?= (int)$acfg['parallel'] ?>"></div>
-      <div><label>Email replies</label><select name="cfg[reply_mode]"><option value="draft" <?= $acfg['reply_mode'] === 'draft' ? 'selected' : '' ?>>Draft for my approval</option><option value="auto" <?= $acfg['reply_mode'] === 'auto' ? 'selected' : '' ?>>Auto-send simple, safe replies</option></select></div>
-      <div><label>WhatsApp Business answers<?= $waBiz ? '' : ' (off until WA_BIZ keys are in .env)' ?></label><select name="cfg[wa_reply_mode]"><option value="auto" <?= ($acfg['wa_reply_mode'] ?? 'auto') === 'auto' ? 'selected' : '' ?>>Answer simple questions by themselves</option><option value="draft" <?= ($acfg['wa_reply_mode'] ?? 'auto') === 'draft' ? 'selected' : '' ?>>Draft for my approval</option></select></div>
-      <div><label>Daily AI budget (tokens; 0 = none)</label><input type="number" name="cfg[daily_token_budget]" value="<?= (int)$acfg['daily_token_budget'] ?>"></div>
-      <div><label>Quality</label><select name="cfg[quality]"><option value="economy" <?= $acfg['quality'] === 'economy' ? 'selected' : '' ?>>Economy (cheapest)</option><option value="balanced" <?= $acfg['quality'] === 'balanced' ? 'selected' : '' ?>>Balanced</option></select></div>
-      <div><label>Gemini model</label><select name="cfg[gemini_model]"><option value="economy" <?= $acfg['gemini_model'] === 'economy' ? 'selected' : '' ?>>Economy (recommended)</option><option value="auto" <?= $acfg['gemini_model'] === 'auto' ? 'selected' : '' ?>>Spread across the newest 3</option>
-        <?php foreach (pm_gemini_top_models() as $gm): ?><option value="<?= pm_h($gm) ?>" <?= $acfg['gemini_model'] === $gm ? 'selected' : '' ?>><?= pm_h($gm) ?></option><?php endforeach; ?></select></div>
-    </div>
-    <div class="checks"><?php foreach ($acfg['enabled'] as $k => $on): ?><label class="check"><input type="checkbox" name="cfg[enabled][<?= $k ?>]" value="1" <?= $on ? 'checked' : '' ?>> <?= pm_h(ucfirst($k)) ?></label><?php endforeach; ?></div>
-    <div class="btns"><button class="btn small primary">Save settings</button></div>
-    <?php $us = pm_usage_today(); arsort($us['agents']); ?><p class="hint"><b>AI use today:</b> <?= number_format($us['total']) ?> tokens in <?= (int)$us['calls'] ?> calls<?= pm_budget() ? ' of a ' . number_format(pm_budget()) . ' budget' : '' ?><?= $us['agents'] ? ' (' . pm_h(implode(', ', array_map(fn($k, $v) => str_replace('_', ' ', $k) . ' ' . number_format($v), array_keys(array_slice($us['agents'], 0, 6, true)), array_slice($us['agents'], 0, 6, true)))) . ')' : '' ?>. Newest Gemini models today: <?= pm_h(implode(', ', pm_gemini_top_models())) ?>.</p>
-  </form>
-  <form method="post"><?= $post('', 'refresh_models') ?><button class="btn small">Refresh the Gemini model list</button></form>
-
-  <h3>The agents</h3>
-  <ul class="roster">
-    <li><b>Scout</b> searches the web for businesses that need us.</li>
-    <li><b>Contact Finder</b> finds an owner and a published contact.</li>
-    <li><b>Qualifier</b> scores each lead and picks the package.</li>
-    <li><b>Writer</b> drafts a short email and WhatsApp message.</li>
-    <li><b>Proposal agent</b> tailors a proposal to one business.</li>
-    <li><b>Follow-up</b> nudges quiet leads. <b>Reply agent</b> answers replies. <b>Director</b> sets the day's strategy.</li>
-  </ul>
-  <p class="hint">Searching with <?= pm_provider(true) === 'gemini' ? 'Gemini' : 'Claude' ?>, writing with <?= pm_provider(false) === 'gemini' ? 'Gemini' : 'Claude' ?>. To run every morning without opening the app, schedule <code>schedule_agents.bat</code>.</p>
+  <p class="hint">What the agents look for, their daily limits and how they answer are under <a href="?tab=targeting">Targeting and messages</a>.</p>
 
   <?php $arch = array_filter(function_exists('pm_leads_archive') ? pm_leads_archive() : [], fn($x) => ($x['brand'] ?? 'promanaged') === pm_brand()); if ($arch):
       $aq = trim((string)($_GET['aq'] ?? '')); $ac = trim((string)($_GET['ac'] ?? '')); $at = trim((string)($_GET['at'] ?? ''));
@@ -418,8 +378,4 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
   </form>
   <?php endif; ?>
   <?php endif; ?>
-
-  <h3>Activity</h3>
-  <?php if (!$agentLog): ?><p class="hint">Nothing yet.</p><?php endif; ?>
-  <?php foreach (array_slice($agentLog, 0, 20) as $e): ?><p class="hint log"><?= pm_h(date('j M H:i', strtotime($e['at']))) ?> · <b><?= pm_h($e['agent']) ?></b> · <?= pm_h($e['msg']) ?></p><?php endforeach; ?>
 </details>

@@ -65,6 +65,14 @@ $csrf = $_SESSION['csrf'];
 $settings = pm_settings();
 $tpl = pm_template();
 $tab = $_GET['tab'] ?? 'home';
+$here = $tab . ($tab === 'social' && isset($_GET['view']) ? '&view=' . preg_replace('/[^a-z]/', '', (string)$_GET['view']) : '');
+$moved = pm_ui_moved($here);
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && $moved !== $here) { // an old link to a page that now lives elsewhere
+    $keep = array_diff_key($_GET, ['tab' => 1, 'view' => 1]);
+    header('Location: index.php?tab=' . $moved . ($keep ? '&' . http_build_query($keep) : ''));
+    exit;
+}
+$section = preg_replace('/[^a-z]/', '', (string)($_GET['section'] ?? ''));
 if (isset($_GET['brand'])) {
     $_SESSION['abrand'] = pm_brand_norm($_GET['brand']);
 }
@@ -78,6 +86,7 @@ function pm_redirect(string $tab, string $msg = '', string $kind = 'ok'): never
     if ($msg !== '') {
         $_SESSION['flash'] = [$kind, $msg];
     }
+    $tab = pm_ui_moved($tab); // a page that moved: send them to its new place
     header('Location: index.php?tab=' . (preg_match('/^[a-z]+([&#][A-Za-z0-9_=&%.+\-#]*)?$/', $tab) ? $tab : urlencode($tab))); // $tab may carry filters or a #anchor
     exit;
 }
@@ -529,6 +538,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (($_POST['bt'] ?? '') === 'whatsapp') {
                 pm_redirect('whatsapp', $m, $k);
             }
+            if (($_POST['bt'] ?? '') === 'targeting') {
+                pm_redirect('targeting', $m, $k);
+            }
             $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'unapprove_send', 'dismiss_unmatched'], true);
             if ($id !== '' && !$noLead) {
                 pm_redirect(!empty($_POST['rl']) ? 'agents&lead=' . $id : 'agents' . $keep . '#l' . $id, $m, $k);
@@ -613,7 +625,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($do === 'lookup') {
             $b = pm_brand_valid((string)($_POST['brand'] ?? '')) ? (string)$_POST['brand'] : pm_brand();
             if (!empty($_POST['proposal']) && empty(pm_brand_profile($b)['proposals'])) { // proposals use ProManaged IT's own wording and terms
-                pm_redirect('proposal', pm_brand_name($b) . ' has no proposal template yet. Use the Agents screen to find and message the business instead.', 'err');
+                pm_redirect('proposal', pm_brand_name($b) . ' has no proposal template yet. Use Sales > Leads to find and message the business instead.', 'err');
             }
             pm_brand_set($b);
             $_SESSION['abrand'] = $b;
@@ -878,7 +890,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $back($lead['name'] . ' asked not to be contacted.', 'err');
             }
             if (pm_sent_today($leads) >= $acfg['send_cap']) {
-                $back("You have reached today's limit of {$acfg['send_cap']} emails. Raise it in Agent settings if you want more.", 'err');
+                $back("You have reached today's limit of {$acfg['send_cap']} emails. Raise it under Sales > Targeting and messages if you want more.", 'err');
             }
             if (empty($d['email_body']) || !filter_var($lead['email'] ?? '', FILTER_VALIDATE_EMAIL)) {
                 $back('This lead needs a valid email address and a draft first.', 'err');
@@ -1352,25 +1364,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         pm_redirect($xr['to'], $xr['msg'], $xr['kind']);
     }
 
-    if ($action === 'social_accounts') { // links, cover wording, channels, hero photo, branding kit, Facebook picture updates
+    if ($action === 'social_accounts') { // one part per page: links (Operations > Connections), kit (Brand > Brand kit), channels (Social > Plan)
         $b = $vb;
         $cfg = pm_social_settings($b);
         $do = (string)($_POST['do'] ?? 'save');
-        $back = fn($m, $k = 'ok') => pm_redirect('social&view=accounts', $m, $k);
+        $sec = preg_replace('/[^a-z]/', '', (string)($_POST['_sec'] ?? ''));
+        $part = fn(string $n) => $sec === '' || $sec === $n;
+        $home = ['links' => 'settings&section=connections', 'kit' => 'social&view=kit', 'channels' => 'social'][$sec] ?? 'social&view=kit';
+        $back = fn($m, $k = 'ok') => pm_redirect($home, $m, $k);
         if ($do === 'apply_profile' || $do === 'apply_cover') {
             [$ok, $m] = pm_fb_apply($b, $do === 'apply_cover' ? 'cover' : 'profile');
             $back($m, $ok ? 'ok' : 'err');
         }
-        foreach (array_keys(pm_platforms()) as $pk) {
-            $u = trim((string)($_POST['url'][$pk] ?? ''));
-            $cfg['urls'][$pk] = $u === '' ? '' : (preg_match('#^https?://#i', $u) ? $u : 'https://' . $u);
+        if ($part('links')) {
+            foreach (array_keys(pm_platforms()) as $pk) {
+                $u = trim((string)($_POST['url'][$pk] ?? ''));
+                $cfg['urls'][$pk] = $u === '' ? '' : (preg_match('#^https?://#i', $u) ? $u : 'https://' . $u);
+            }
         }
-        $cfg['cover_head'] = mb_substr(trim((string)($_POST['cover_head'] ?? $cfg['cover_head'])), 0, 80);
-        $cfg['cover_line'] = mb_substr(trim((string)($_POST['cover_line'] ?? $cfg['cover_line'])), 0, 90);
-        foreach (['facebook', 'instagram', 'linkedin'] as $chn) {
-            $cfg['channels'][$chn] = !empty($_POST['channels'][$chn]);
+        if ($part('kit')) {
+            $cfg['cover_head'] = mb_substr(trim((string)($_POST['cover_head'] ?? $cfg['cover_head'])), 0, 80);
+            $cfg['cover_line'] = mb_substr(trim((string)($_POST['cover_line'] ?? $cfg['cover_line'])), 0, 90);
         }
-        if (!empty($_FILES['hero']['tmp_name']) && is_uploaded_file($_FILES['hero']['tmp_name'])) {
+        if ($part('channels')) {
+            foreach (['facebook', 'instagram', 'linkedin'] as $chn) {
+                $cfg['channels'][$chn] = !empty($_POST['channels'][$chn]);
+            }
+        }
+        if ($part('kit') && !empty($_FILES['hero']['tmp_name']) && is_uploaded_file($_FILES['hero']['tmp_name'])) {
             $hi = @getimagesize($_FILES['hero']['tmp_name']);
             if (!$hi || !in_array($hi[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG], true)) {
                 $back('The hero photo must be a JPG or PNG.', 'err');
@@ -1380,13 +1401,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             move_uploaded_file($_FILES['hero']['tmp_name'], PM_ROOT . '/assets/' . $b . '_hero.' . ($hi[2] === IMAGETYPE_PNG ? 'png' : 'jpg'));
         }
-        if (!empty($_POST['remove_hero'])) {
+        if ($part('kit') && !empty($_POST['remove_hero'])) {
             foreach (glob(PM_ROOT . '/assets/' . $b . '_hero.*') as $old) {
                 @unlink($old);
             }
         }
         pm_social_settings_save($b, $cfg);
-        if ($do === 'kit' || !empty($_FILES['hero']['tmp_name']) || !empty($_POST['remove_hero'])) {
+        if ($part('kit') && ($do === 'kit' || !empty($_FILES['hero']['tmp_name']) || !empty($_POST['remove_hero']))) {
             pm_kit_build($b);
             $back('Saved. The profile pictures and covers for every platform were made again.');
         }
@@ -1405,18 +1426,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $secret = trim((string)($_POST['app_secret'] ?? '')) ?: (string)(pm_env()['FB_APP_SECRET'] ?? '');
             $appId = $appId ?: (string)(pm_env()['FB_APP_ID'] ?? '');
             if ($appId === '' || $secret === '' || trim((string)($_POST['user_token'] ?? '')) === '') {
-                pm_redirect('social&view=accounts', 'Fill in the App ID, App Secret and the token from Graph API Explorer.', 'err');
+                pm_redirect('settings&section=connections', 'Fill in the App ID, App Secret and the token from Graph API Explorer.', 'err');
             }
             pm_env_set(['FB_APP_ID' => $appId, 'FB_APP_SECRET' => $secret]);
             [$ok, $pages, $longTok] = pm_fb_connect_pages($appId, $secret, trim((string)$_POST['user_token'])) + [2 => ''];
             if (!$ok) {
-                pm_redirect('social&view=accounts', $pages, 'err');
+                pm_redirect('settings&section=connections', $pages, 'err');
             }
             if ($longTok !== '') {
                 pm_env_set(['FB_USER_TOKEN' => $longTok]); // for ads (about 60 days)
             }
             $_SESSION['fb_pages'] = array_map(fn($p) => ['id' => $p['id'], 'name' => $p['name'], 'token' => $p['access_token']], $pages);
-            pm_redirect('social&view=accounts', count($pages) . ' Page(s) found. Choose which one belongs to ' . (pm_brand_name($vb)) . '.');
+            pm_redirect('settings&section=connections', count($pages) . ' Page(s) found. Choose which one belongs to ' . (pm_brand_name($vb)) . '.');
         }
         if ($do === 'connect_pick') {
             $pick = null;
@@ -1426,7 +1447,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             if (!$pick) {
-                pm_redirect('social&view=accounts', 'Choose a Page.', 'err');
+                pm_redirect('settings&section=connections', 'Choose a Page.', 'err');
             }
             $pre = pm_brand_env_prefix($vb);
             pm_env_set([$pre . 'FB_PAGE_ID' => $pick['id'], $pre . 'FB_PAGE_TOKEN' => $pick['token']]);
@@ -1441,7 +1462,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 return $all;
             }, fn() => []);
             $info = pm_fb_token_info($pick['token']);
-            pm_redirect('social&view=accounts', 'Connected "' . $pick['name'] . '" with a permanent Page token' . ($okI && !empty($dI['instagram_business_account']['id']) ? ' and its linked Instagram account' : '') . '.'
+            pm_redirect('settings&section=connections', 'Connected "' . $pick['name'] . '" with a permanent Page token' . ($okI && !empty($dI['instagram_business_account']['id']) ? ' and its linked Instagram account' : '') . '.'
                 . ($info['missing'] ? ' Still missing: ' . implode(', ', $info['missing']) . ' (generate the token again with those ticked).' : ''), $info['missing'] ? 'err' : 'ok');
         }
         if ($do === 'audit') {
@@ -1501,7 +1522,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         @set_time_limit(240);
         pm_brand_set($vb);
         $do = (string)($_POST['do'] ?? '');
-        $view = in_array($_POST['view'] ?? '', ['growth', 'cleanup', 'ads'], true) ? $_POST['view'] : 'growth';
+        $view = in_array($_POST['view'] ?? '', ['growth', 'cleanup', 'ads', 'inbox', 'page'], true) ? $_POST['view'] : 'growth';
         $to = 'social&view=' . $view;
         try {
             if ($do === 'autopilot') {
@@ -1578,21 +1599,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hk = (string)($_POST['key'] ?? '');
         [$hok, $hmsg] = pm_health_check($hk);
         $hrow = array_values(array_filter(pm_setup_health(), fn($r) => $r['key'] === $hk))[0]['label'] ?? $hk;
-        pm_redirect('settings', $hrow . ': ' . ($hok ? 'ok, ' : 'did not work: ') . $hmsg . '.', $hok ? 'ok' : 'err');
+        pm_redirect('settings&section=health', $hrow . ': ' . ($hok ? 'ok, ' : 'did not work: ') . $hmsg . '.', $hok ? 'ok' : 'err');
     }
 
     if ($action === 'archive_restore') { // C3-G01: put one file back from a weekly archive
         if (empty($_POST['confirm'])) {
-            pm_redirect('settings', 'Tick "I understand" before restoring a file.', 'err');
+            pm_redirect('settings&section=health', 'Tick "I understand" before restoring a file.', 'err');
         }
         [$rok, $rmsg] = pm_archive_restore((string)($_POST['archive'] ?? ''), (string)($_POST['file'] ?? ''));
-        pm_redirect('settings', $rmsg, $rok ? 'ok' : 'err');
+        pm_redirect('settings&section=health', $rmsg, $rok ? 'ok' : 'err');
     }
 
     if ($action === 'social_check') {
         $b = pm_brand_norm($_POST['brand'] ?? '');
         $pg = pm_social_page($b, true);
-        pm_redirect('settings&brand=' . $b, !empty($pg['ok']) ? 'Connected to the Facebook Page "' . $pg['name'] . '" (' . number_format($pg['followers']) . ' followers).' : 'Facebook: ' . ($pg['error'] ?? 'not connected'), !empty($pg['ok']) ? 'ok' : 'err');
+        pm_redirect('settings&section=connections&brand=' . $b, !empty($pg['ok']) ? 'Connected to the Facebook Page "' . $pg['name'] . '" (' . number_format($pg['followers']) . ' followers).' : 'Facebook: ' . ($pg['error'] ?? 'not connected'), !empty($pg['ok']) ? 'ok' : 'err');
     }
 
     if ($action === 'who') {
@@ -1604,7 +1625,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'link_refresh') {
         $b = pm_brand_norm($_POST['brand'] ?? '');
         $m = pm_link_refresh($b);
-        pm_redirect('settings&brand=' . $b, $m['url'] === '' ? 'Add a link first.' : ($m['ok'] ? 'Preview updated from ' . $m['url'] . '.' : 'Could not read ' . $m['url'] . '. Check the address.'), $m['ok'] ? 'ok' : 'err');
+        pm_redirect('settings&section=business&brand=' . $b, $m['url'] === '' ? 'Add a link first.' : ($m['ok'] ? 'Preview updated from ' . $m['url'] . '.' : 'Could not read ' . $m['url'] . '. Check the address.'), $m['ok'] ? 'ok' : 'err');
     }
 
     if ($action === 'smtp_check') { // log in to the mail server without sending anything
@@ -1613,10 +1634,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ss = pm_settings();
         $sm = $ss['smtp'];
         if (trim($sm['host']) === '' || trim($sm['username']) === '') {
-            pm_redirect('settings&brand=' . $b, (pm_brand_name($b)) . ': no mail server is set up yet.', 'err');
+            pm_redirect('settings&section=email&brand=' . $b, (pm_brand_name($b)) . ': no mail server is set up yet.', 'err');
         }
         [$okC, $msgC] = pm_smtp_login_check($sm); // the same check as Setup health, with the reason and what to do when it fails
-        pm_redirect('settings&brand=' . $b, pm_brand_name($b) . ' mail: ' . ($okC ? ucfirst($msgC) . '.' : 'could not log in. ' . $msgC), $okC ? 'ok' : 'err');
+        pm_redirect('settings&section=email&brand=' . $b, pm_brand_name($b) . ' mail: ' . ($okC ? ucfirst($msgC) . '.' : 'could not log in. ' . $msgC), $okC ? 'ok' : 'err');
     }
 
     if ($action === 'lines') {
@@ -1738,7 +1759,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pm_redirect('settings', 'Only a business you added can be studied again.', 'err');
         }
         if (!pm_agents_ready()) {
-            pm_redirect('settings&brand=' . $bid, 'The AI needs a key in .env first (see Settings > Setup health).', 'err');
+            pm_redirect('targeting&brand=' . $bid, 'The AI needs a key in .env first (see Operations > Health and backups).', 'err');
         }
         @set_time_limit(180);
         $r = pm_brand_draft(pm_study_answers_for($bid));
@@ -1753,7 +1774,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $msg = pm_study_apply($bid, pm_study_diff($bid, (array)$st['draft']), (array)($_POST['pick'] ?? []), (array)$st['draft'], (array)($st['pages'] ?? []), !empty($st['ai']));
         unset($_SESSION['bstudy']);
-        pm_redirect('settings&brand=' . $bid, $msg);
+        pm_redirect('targeting&brand=' . $bid, $msg);
     }
     if ($action === 'brand_archive') {
         $bid = (string)($_POST['id'] ?? '');
@@ -1788,217 +1809,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['abrand'] = 'promanaged';
         pm_redirect('settings', $r['message']);
     }
-    if ($action === 'brand_save') {
+    if ($action === 'brand_save') { // a business added in the app: one part per page (lib/settings_save.php)
         $bid = pm_brand_norm((string)($_POST['id'] ?? ''));
         if (!pm_brand_is_custom($bid)) {
             pm_redirect('settings', 'Only a business you added is edited here.', 'err');
         }
-        $in = (array)($_POST['b'] ?? []);
-        $cur = (array)pm_settings()['brands'][$bid];
-        $t = fn($k, $d = '') => trim((string)($in[$k] ?? $d));
-        $blk = $cur;
-        foreach (['tagline', 'address', 'phone', 'email', 'website', 'signatory_name', 'signatory_title'] as $k) {
-            $blk[$k] = $t($k);
-        }
-        $blk['company_name'] = $t('company_name') ?: (string)$cur['company_name'];
-        $blk['accent_color'] = preg_match('/^#[0-9a-fA-F]{6}$/', $t('accent_color')) ? $t('accent_color') : (string)$cur['accent_color'];
-        $blk['ref_prefix'] = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $t('ref_prefix'))) ?: (string)$cur['ref_prefix'];
-        $blk['link_url'] = pm_clean_url($t('link_url'));
-        $blk['link_on'] = !empty($in['link_on']);
-        $blk['social_auto'] = pm_social_can_approve() ? !empty($in['social_auto']) : !empty($cur['social_auto']);
-        $sm = (array)($in['smtp'] ?? []);
-        $blk['smtp'] = (array)$cur['smtp'];
-        foreach (['host', 'username', 'from_email', 'from_name'] as $k) {
-            $blk['smtp'][$k] = trim((string)($sm[$k] ?? ''));
-        }
-        $blk['smtp']['port'] = max(1, min(65535, (int)($sm['port'] ?? 465)));
-        $blk['smtp']['encryption'] = in_array($sm['encryption'] ?? '', ['tls', 'ssl', 'none'], true) ? $sm['encryption'] : 'ssl';
-        $blk['smtp']['bcc_self'] = !empty($sm['bcc_self']);
-        if (($sm['password'] ?? '') !== '') {
-            $blk['smtp']['password'] = (string)$sm['password'];
-        }
-        $im = (array)($in['imap'] ?? []);
-        $blk['imap'] = ['host' => trim((string)($im['host'] ?? '')), 'port' => max(1, min(65535, (int)($im['port'] ?? 993))), 'secure' => in_array($im['secure'] ?? '', ['ssl', 'none'], true) ? $im['secure'] : 'ssl'];
-        $blk['brain'] = [];
-        foreach (['about', 'facts', 'audience', 'voice', 'never'] as $k) {
-            $blk['brain'][$k] = trim(str_replace("\r\n", "\n", (string)($in['brain'][$k] ?? '')));
-        }
-        $byLine = fn($v) => array_values(array_filter(array_map('trim', preg_split('/\R/', (string)$v))));
-        $prof = (array)($cur['profile'] ?? []);
-        $prof['magnet'] = $t('magnet');
-        $prof['cta_keyword'] = strtoupper(preg_replace('/[^A-Za-z]/', '', $t('cta_keyword')));
-        $prof['customers'] = $t('customers');
-        $prof['sell_to'] = in_array($in['sell_to'] ?? '', ['business', 'public', 'both'], true) ? $in['sell_to'] : ($prof['sell_to'] ?? 'business');
-        if (isset($in['tg_segments'])) { // who to target and why: the scouts and the qualifier read it
-            $prof['targeting'] = ['segments' => pm_study_segments_parse((string)$in['tg_segments'], pm_brand_targeting($bid)['segments']), 'skip' => array_slice($byLine($in['tg_skip'] ?? ''), 0, 8), 'angles' => array_slice($byLine($in['tg_angles'] ?? ''), 0, 8)];
-        }
-        $blk['profile'] = $prof;
-        $raw = pm_load('settings', 'pm_default_settings');
-        $raw['brands'][$bid] = $blk;
-        pm_save('settings', $raw);
-        $acfg = pm_load('agents_config', 'pm_agents_default_config');
-        $acfg[$bid] = array_replace((array)($acfg[$bid] ?? []), [
-            'sectors' => pm_brand_list($in['sectors'] ?? '', 10, 60), 'cities' => pm_brand_list($in['cities'] ?? '', 12, 40),
-            'offerings' => array_slice($byLine($in['offerings'] ?? ''), 0, 6), 'existing_clients' => array_slice($byLine($in['existing_clients'] ?? ''), 0, 200)]);
-        pm_save('agents_config', $acfg);
-        pm_update('brands', function (array $all) use ($bid, $in) {
-            $all[$bid]['daily_run'] = !empty($in['daily_run']);
-            $all[$bid]['name'] = $all[$bid]['name'] ?? $bid;
-            return $all;
-        }, fn() => []);
-        foreach (['logo' => 'logo'] as $field => $what) {
-            if (!empty($_FILES[$field]['tmp_name']) && is_uploaded_file($_FILES[$field]['tmp_name'])) {
-                $info = @getimagesize($_FILES[$field]['tmp_name']);
-                if ($info && in_array($info[2], [IMAGETYPE_PNG, IMAGETYPE_JPEG], true)) {
-                    $img = $info[2] === IMAGETYPE_PNG ? imagecreatefrompng($_FILES[$field]['tmp_name']) : imagecreatefromjpeg($_FILES[$field]['tmp_name']);
-                    imagesavealpha($img, true);
-                    imagepng($img, PM_ROOT . '/' . pm_brand_asset($bid, $what));
-                } else {
-                    pm_redirect('settings&brand=' . $bid, 'Saved, but the logo must be a PNG or JPG image.', 'err');
-                }
-            }
-        }
-        if (!empty($_POST['test_email'])) {
-            [$tok, $tmsg] = pm_mail_test($bid, (string)($_POST['test_to'] ?? ''));
-            pm_redirect('settings&brand=' . $bid, 'Saved. ' . $tmsg, $tok ? 'ok' : 'err');
-        }
-        pm_redirect('settings&brand=' . $bid, 'Saved.');
+        require_once __DIR__ . '/lib/settings_save.php';
+        $sr = pm_brand_save_custom($bid);
+        pm_redirect($sr['to'], $sr['msg'], $sr['kind']);
     }
 
-    if ($action === 'settings') {
-        $in = $_POST['s'] ?? [];
-        $new = $settings;
-        foreach (['company_name', 'tagline', 'address', 'phone', 'email', 'website', 'signatory_name', 'signatory_title', 'currency', 'ref_prefix'] as $k) {
-            $new[$k] = trim((string)($in[$k] ?? ''));
-        }
-        $new['accent_color'] = preg_match('/^#[0-9a-fA-F]{6}$/', (string)($in['accent_color'] ?? '')) ? $in['accent_color'] : $settings['accent_color'];
-        $new['next_ref'] = max(1, (int)($in['next_ref'] ?? 1));
-        $new['link_url'] = pm_clean_url((string)($in['link_url'] ?? ''));
-        $new['link_on'] = !empty($in['link_on']);
-        $new['social_auto'] = pm_social_can_approve() ? !empty($in['social_auto']) : !empty($settings['social_auto']); // editors cannot switch Auto-publish
-        $new['team'] = array_values(array_unique(array_filter(array_map('trim', preg_split('/\R/', (string)($in['team'] ?? ''))))));
-        $tin = (array)($in['travel'] ?? []);
-        $tv = (array)($new['travel'] ?? pm_default_settings()['travel']);
-        foreach (['company_name', 'tagline', 'address', 'phone', 'email', 'website', 'signatory_name', 'signatory_title'] as $k) {
-            $tv[$k] = trim((string)($tin[$k] ?? ''));
-        }
-        $tv['from_email'] = '';
-        $tv['ref_prefix'] = trim((string)($tin['ref_prefix'] ?? 'TM')) ?: 'TM';
-        $tv['next_ref'] = max(1, (int)($tin['next_ref'] ?? ($tv['next_ref'] ?? 1)));
-        $tv['online_signing'] = !empty($tin['online_signing']);
-        $tv['esign_tags'] = !empty($tin['esign_tags']);
-        $tsm = (array)($tin['smtp'] ?? []);
-        $tv['smtp'] = (array)($tv['smtp'] ?? pm_default_settings()['travel']['smtp']);
-        $tv['smtp']['bcc_self'] = !empty($tsm['bcc_self']);
-        $tv['smtp']['from_name'] = trim((string)($tsm['from_name'] ?? '')) ?: ($tv['company_name'] ?: 'Travel Malawi');
-        if (!pm_tm_smtp_from_env()) {
-            foreach (['host', 'username', 'from_email'] as $k) {
-                $tv['smtp'][$k] = trim((string)($tsm[$k] ?? ''));
-            }
-            $tv['smtp']['port'] = (int)($tsm['port'] ?? 465);
-            $tv['smtp']['encryption'] = in_array($tsm['encryption'] ?? '', ['tls', 'ssl', 'none'], true) ? $tsm['encryption'] : 'ssl';
-            if (($tsm['password'] ?? '') !== '') {
-                $tv['smtp']['password'] = (string)$tsm['password'];
-            }
-        }
-        if (!empty($_POST['remove_travel_signature']) && is_file(PM_ROOT . '/assets/travel_signature.png')) {
-            unlink(PM_ROOT . '/assets/travel_signature.png');
-        }
-        if (!empty($_FILES['travel_signature']['tmp_name']) && is_uploaded_file($_FILES['travel_signature']['tmp_name'])) {
-            $tsi = @getimagesize($_FILES['travel_signature']['tmp_name']);
-            if ($tsi && in_array($tsi[2], [IMAGETYPE_PNG, IMAGETYPE_JPEG], true)) {
-                $timg = $tsi[2] === IMAGETYPE_PNG ? imagecreatefrompng($_FILES['travel_signature']['tmp_name']) : imagecreatefromjpeg($_FILES['travel_signature']['tmp_name']);
-                imagesavealpha($timg, true);
-                imagepng($timg, PM_ROOT . '/assets/travel_signature.png');
-            }
-        }
-        if (!empty($tin['host_email']) && is_array($tin['host_email'])) { // the standard part of the first email to a stay
-            $he = $tin['host_email'];
-            $heLines = fn($v) => array_slice(array_values(array_filter(array_map(fn($x) => mb_substr(trim($x), 0, 240), preg_split('/\R/', (string)$v) ?: []))), 0, 6);
-            $tv['host_email'] = ['intro' => mb_substr(trim((string)($he['intro'] ?? '')), 0, 400), 'benefits_title' => mb_substr(trim((string)($he['benefits_title'] ?? '')), 0, 60), 'benefits' => $heLines($he['benefits'] ?? ''),
-                'steps_title' => mb_substr(trim((string)($he['steps_title'] ?? '')), 0, 60), 'steps' => $heLines($he['steps'] ?? ''), 'link' => pm_clean_url((string)($he['link'] ?? '')) ?: PM_TM_LINK,
-                'free' => mb_substr(trim((string)($he['free'] ?? '')), 0, 240), 'why' => mb_substr(trim((string)($he['why'] ?? '')), 0, 300), 'closing' => mb_substr(trim((string)($he['closing'] ?? '')), 0, 200)];
-        }
-        $tv['company_name'] = $tv['company_name'] ?: 'Travel Malawi';
-        $tv['accent_color'] = preg_match('/^#[0-9a-fA-F]{6}$/', (string)($tin['accent_color'] ?? '')) ? $tin['accent_color'] : ($tv['accent_color'] ?? '#047857');
-        $tv['charging'] = !empty($tin['charging']);
-        $tv['link_url'] = pm_clean_url((string)($tin['link_url'] ?? ''));
-        $tv['link_on'] = !empty($tin['link_on']);
-        $tv['social_auto'] = pm_social_can_approve() ? !empty($tin['social_auto']) : !empty($settings['travel']['social_auto']);
-        foreach (['about', 'facts', 'audience', 'voice', 'never'] as $bk) {
-            if (isset($in['brain'][$bk])) {
-                $new['brain'][$bk] = trim((string)$in['brain'][$bk]);
-            }
-            if (isset($tin['brain'][$bk])) {
-                $tv['brain'][$bk] = trim((string)$tin['brain'][$bk]);
-            }
-        }
-        $new['travel'] = $tv;
-        if (!empty($_FILES['travel_logo']['tmp_name']) && is_uploaded_file($_FILES['travel_logo']['tmp_name'])) {
-            $li = @getimagesize($_FILES['travel_logo']['tmp_name']);
-            if ($li && in_array($li[2], [IMAGETYPE_PNG, IMAGETYPE_JPEG], true)) {
-                $im = $li[2] === IMAGETYPE_PNG ? imagecreatefrompng($_FILES['travel_logo']['tmp_name']) : imagecreatefromjpeg($_FILES['travel_logo']['tmp_name']);
-                imagesavealpha($im, true);
-                imagepng($im, PM_ROOT . '/assets/travel_logo.png');
-            }
-        }
-        $curs = [];
-        foreach ((array)($in['currencies'] ?? []) as $c) {
-            $code = strtoupper(trim((string)($c['code'] ?? '')));
-            $mpu = (float)($c['mpu'] ?? 0); // base-currency units per 1 of this currency
-            if (preg_match('/^[A-Z]{3}$/', $code) && $mpu > 0) {
-                $curs[] = ['code' => $code, 'name' => trim((string)($c['name'] ?? $code)) ?: $code, 'rate' => 1 / $mpu, 'round' => max(0.01, (float)($c['round'] ?? 1))];
-            }
-        }
-        if (!array_filter($curs, fn($c) => $c['code'] === strtoupper($new['currency']))) {
-            array_unshift($curs, ['code' => strtoupper($new['currency']), 'name' => strtoupper($new['currency']), 'rate' => 1, 'round' => 1]);
-        }
-        $new['currencies'] = $curs;
-        $new['default_quote_currency'] = strtoupper(trim((string)($in['default_quote_currency'] ?? $new['currency'])));
-        $new['rates_date'] = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string)($in['rates_date'] ?? '')) ? $in['rates_date'] : '';
-        $new['esign_tags'] = !empty($in['esign_tags']);
-        $new['online_signing'] = !empty($in['online_signing']);
-        if (!empty($_POST['remove_signature']) && is_file(PM_ROOT . '/assets/signature.png')) {
-            unlink(PM_ROOT . '/assets/signature.png');
-        }
-        if (!empty($_FILES['signature']['tmp_name']) && is_uploaded_file($_FILES['signature']['tmp_name'])) {
-            $si = @getimagesize($_FILES['signature']['tmp_name']);
-            if ($si && in_array($si[2], [IMAGETYPE_PNG, IMAGETYPE_JPEG], true)) {
-                $simg = $si[2] === IMAGETYPE_PNG ? imagecreatefrompng($_FILES['signature']['tmp_name']) : imagecreatefromjpeg($_FILES['signature']['tmp_name']);
-                imagesavealpha($simg, true);
-                imagepng($simg, PM_ROOT . '/assets/signature.png');
-            }
-        }
-        $sm = $in['smtp'] ?? [];
-        $new['smtp']['bcc_self'] = !empty($sm['bcc_self']);
-        if (!pm_smtp_from_env()) { // with .env, the mail server fields are read-only
-            foreach (['host', 'username', 'from_email', 'from_name'] as $k) {
-                $new['smtp'][$k] = trim((string)($sm[$k] ?? ''));
-            }
-            $new['smtp']['port'] = (int)($sm['port'] ?? 587);
-            $new['smtp']['encryption'] = in_array($sm['encryption'] ?? '', ['tls', 'ssl', 'none'], true) ? $sm['encryption'] : 'tls';
-            if (($sm['password'] ?? '') !== '') {
-                $new['smtp']['password'] = (string)$sm['password'];
-            }
-        }
-        if (!empty($_FILES['logo']['tmp_name']) && is_uploaded_file($_FILES['logo']['tmp_name'])) {
-            $info = @getimagesize($_FILES['logo']['tmp_name']);
-            if ($info && in_array($info[2], [IMAGETYPE_PNG, IMAGETYPE_JPEG], true)) {
-                $img = $info[2] === IMAGETYPE_PNG ? imagecreatefrompng($_FILES['logo']['tmp_name']) : imagecreatefromjpeg($_FILES['logo']['tmp_name']);
-                imagesavealpha($img, true);
-                imagepng($img, PM_ROOT . '/assets/logo.png');
-            } else {
-                pm_save('settings', $new);
-                pm_redirect('settings', 'Settings saved, but the logo must be a PNG or JPG image.', 'err');
-            }
-        }
-        pm_save('settings', $new);
-        if (!empty($_POST['test_email'])) { // the mailbox of the business on screen (ProManaged IT or Travel Malawi), saved first, tested with the same function as every real email
-            $tb = pm_brand_valid((string)($_POST['test_brand'] ?? '')) ? (string)$_POST['test_brand'] : 'promanaged';
-            [$ok, $tmsg] = pm_mail_test($tb, (string)($_POST['test_to'] ?? ''));
-            pm_redirect('settings' . ($tb === 'promanaged' ? '' : '&brand=' . $tb), 'Settings saved. ' . $tmsg, $ok ? 'ok' : 'err');
-        }
-        pm_redirect('settings' . ($vb === 'travel' ? '&brand=travel' : ''), 'Settings saved.');
+    if ($action === 'settings') { // one part of the settings per page: lib/settings_save.php
+        require_once __DIR__ . '/lib/settings_save.php';
+        $sr = pm_settings_save($settings, $vb);
+        pm_redirect($sr['to'], $sr['msg'], $sr['kind']);
     }
 
     if ($action === 'reset_template') {
@@ -2059,7 +1883,7 @@ function pm_rows_editor(string $name, array $cols, array $rows, string $addLabel
     return '<table class="grid" data-next="' . count($rows) . '"><thead>' . $head . '</thead><tbody>' . $body . '</tbody></table>'
         . '<template>' . $blank . '</template><button type="button" class="link" onclick="addRow(this)">+ ' . pm_h($addLabel) . '</button>';
 }
-$GLOBALS['PM_DEPT'] = pm_ui_dept_of($tab, (string)($_GET['view'] ?? '')); // which department's screen this is: colours, label and tabs follow it
+$GLOBALS['PM_DEPT'] = pm_ui_dept_of($tab, (string)($_GET['view'] ?? ''), $section); // which department's screen this is: colours, label and tabs follow it
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -2073,12 +1897,11 @@ $GLOBALS['PM_DEPT'] = pm_ui_dept_of($tab, (string)($_GET['view'] ?? '')); // whi
 <body style="<?= pm_h(pm_ui_dept_style($GLOBALS['PM_DEPT'])) ?>" data-dept="<?= pm_h($GLOBALS['PM_DEPT']) ?>">
 <?php
 $team = array_values(array_filter((array)($settings['team'] ?? [])));
-echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'vb' => $vb, 'settings' => $settings, 'csrf' => $csrf, 'team' => $team, 'who' => $GLOBALS['PM_WHO'], 'hbAge' => pm_social_heartbeat_age()]);
+echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'section' => $section, 'vb' => $vb, 'settings' => $settings, 'csrf' => $csrf, 'team' => $team, 'who' => $GLOBALS['PM_WHO'], 'hbAge' => pm_social_heartbeat_age()]);
 ?>
 <main>
 <?php if ($flash): ?><div class="flash <?= pm_h($flash[0]) ?>"><?= pm_h($flash[1]) ?></div><?php endif; ?>
 
-<?php $propTabs = ['proposal' => ['New proposal', '?tab=proposal'], 'history' => ['History', '?tab=history'], 'template' => ['Template and prices', '?tab=template']]; ?>
 <?php if (in_array($tab, ['proposal', 'history', 'template'], true) && empty(pm_brand_profile($vb)['proposals'])): ?>
   <?= pm_ui_head('Proposals', 'Quotations and agreements with online signing.') ?>
   <div class="card empty nofold"><b><?= pm_h(pm_brand_title($settings, $vb)) ?> has no price list or agreement wording yet.</b><br>
@@ -2086,7 +1909,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'vb' 
     <div class="btns" style="justify-content:center"><a class="btn primary" href="?tab=proposal&amp;brand=promanaged">Open ProManaged IT proposals</a><a class="btn" href="?tab=proposal&amp;brand=travel">Open Travel Malawi proposals</a></div></div>
 <?php elseif ($tab === 'proposal'): ?>
   <?= pm_ui_head('Proposals', 'Fill in the client, choose their package, then preview, download or email the PDF. Next reference: <b>' . pm_h(pm_next_ref($settings, false)) . '</b>') ?>
-  <?= pm_ui_tabs($propTabs, 'proposal', 'Proposals') ?>
+  <?= pm_ui_strip('proposal') ?>
   <?php if (pm_app_url() === ''): ?><div class="flash err"><b>Clients cannot open links or be tracked until the app is hosted.</b> APP_URL is empty in .env, so proposal links, the "opened" alert and online signing do not work yet. PDFs and emails still go out.</div><?php endif; ?>
   <details class="card" style="padding:14px 20px"><summary style="margin:0;font-weight:600;color:var(--ink)">Find a business by name and prepare its proposal</summary>
     <form method="post" style="margin-top:10px"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="lookup"><input type="hidden" name="proposal" value="1">
@@ -2310,7 +2133,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'vb' 
 
 <?php elseif ($tab === 'template'): ?>
   <?= pm_ui_head('Proposals', 'The wording, prices and packages every proposal is built from.') ?>
-  <?= pm_ui_tabs($propTabs, 'template', 'Proposals') ?>
+  <?= pm_ui_strip('template') ?>
   <p class="sub">Everything the PDF says. Change prices, wording or terms here; every new PDF uses them straight away.</p>
   <form method="post">
     <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="template">
@@ -2394,6 +2217,8 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'vb' 
 
 <?php elseif ($tab === 'agents'): require __DIR__ . '/lib/view_agents.php'; ?>
 
+<?php elseif ($tab === 'targeting'): require __DIR__ . '/lib/view_sales_targeting.php'; ?>
+
 <?php elseif ($tab === 'whatsapp'): require __DIR__ . '/lib/view_whatsapp.php'; ?>
 
 <?php elseif ($tab === 'social'): $sv = (string)($_GET['view'] ?? ''); require pm_social_view_file($sv); ?>
@@ -2404,7 +2229,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'vb' 
 
 <?php else: ?>
   <?= pm_ui_head('Proposals', 'Every proposal you downloaded or emailed. Open the PDF, or load it back into the form to send an updated version.') ?>
-  <?= pm_ui_tabs($propTabs, 'history', 'Proposals') ?>
+  <?= pm_ui_strip('history') ?>
   <div class="card">
   <?php $history = array_filter($history, fn($h) => pm_brand_of_type((string)($tpl['packages'][(int)($h['proposal']['package'] ?? -1)]['type'] ?? '')) === $vb); ?>
   <?php if (!$history): ?><p class="muted">No <?= pm_h(pm_brand_name($vb)) ?> proposals yet.</p><?php else: ?>

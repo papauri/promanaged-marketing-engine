@@ -139,21 +139,21 @@ function pm_do_copy_write(string $vb): array
         }
     }
     if (!pm_agents_ready() && !isset($GLOBALS['PM_AI_STUB'])) {
-        return ['msg' => 'The AI needs a key in .env first. The plain suggestions on Optimise work without it.', 'kind' => 'err', 'to' => 'social&view=studio#words'];
+        return ['msg' => 'The AI needs a key in .env first. The plain suggestions on Optimise work without it.', 'kind' => 'err', 'to' => 'social&view=optimise#words'];
     }
     try {
         [$n, $m] = pm_copy_write($vb, $keys);
     } catch (Throwable $e) {
-        return ['msg' => 'The AI could not write them: ' . mb_substr($e->getMessage(), 0, 120) . '. Nothing changed.', 'kind' => 'err', 'to' => 'social&view=studio#words'];
+        return ['msg' => 'The AI could not write them: ' . mb_substr($e->getMessage(), 0, 120) . '. Nothing changed.', 'kind' => 'err', 'to' => 'social&view=optimise#words'];
     }
-    return ['msg' => $m, 'kind' => $n > 0 ? 'ok' : 'err', 'to' => 'social&view=studio#words'];
+    return ['msg' => $m, 'kind' => $n > 0 ? 'ok' : 'err', 'to' => 'social&view=optimise#words'];
 }
 
 function pm_do_copy_use(string $vb): array
 {
     $key = preg_replace('/[^a-z_]/', '', (string)($_POST['key'] ?? ''));
     [$ok, $m] = pm_copy_use($vb, $key, (int)($_POST['i'] ?? -1), !empty($_POST['apply']));
-    return ['msg' => $m, 'kind' => $ok ? 'ok' : 'err', 'to' => 'social&view=studio#w-' . $key];
+    return ['msg' => $m, 'kind' => $ok ? 'ok' : 'err', 'to' => 'social&view=optimise#w-' . $key];
 }
 
 function pm_do_copy_clear(string $vb): array
@@ -163,5 +163,5 @@ function pm_do_copy_clear(string $vb): array
         $d['ai'] = [];
         return $d;
     });
-    return ['msg' => 'The written options were cleared. The plain suggestions are back.', 'kind' => 'ok', 'to' => 'social&view=studio#words'];
+    return ['msg' => 'The written options were cleared. The plain suggestions are back.', 'kind' => 'ok', 'to' => 'social&view=optimise#words'];
 }

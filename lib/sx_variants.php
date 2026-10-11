@@ -520,7 +520,7 @@ function pm_var_inner(array $p, string $ch, string $brand): array
             $url = ($cta === 'check' || $cta === 'host') ? pm_ch_enquire($p, $cta, 'google') : '';
             $url = $url !== '' ? $url : pm_ch_site($p, 'google');
             if ($btn !== 'Call' && $url === '') {
-                $warn[] = 'No link for the button: turn the website link on in Settings.';
+                $warn[] = 'No link for the button: turn the website link on under Operations > Business details.';
             }
             return ['text' => $t, 'parts' => ['Button' => $btn] + ($url !== '' ? ['Button link' => $url] : []), 'warn' => $warn, 'open' => 'https://business.google.com/'];
     }

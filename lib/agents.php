@@ -19,7 +19,7 @@ const PM_LEAD_STATUSES = [
 function pm_agents_default_config(): array
 {
     return [
-        // What we sell. One per line: "Name: description". Every agent reads this, so edit it on the Agents tab.
+        // What we sell. One per line: "Name: description". Every agent reads this, so edit it under Sales > Targeting and messages.
         'offerings'       => [
             'Build: custom web apps, internal tools and dashboards, multi-tenant products with user accounts, business websites, and an industry management system (hotels and lodges, restaurants and bars, gyms, conference venues, retail)',
             'Source: finding, buying and delivering laptops, desktops, gaming PCs, monitors and peripherals, including items out of stock locally, with local-friendly payment on international orders',
@@ -451,7 +451,7 @@ function pm_usage_brand_today(string $brand): int
     return $n;
 }
 
-/** The brand's own soft cap (Social > Results > goals); 0 = none. */
+/** The brand's own soft cap (Insights > Results > Goals and limits); 0 = none. */
 function pm_brand_token_cap(string $brand): int
 {
     $f = PM_DATA . '/social_goals.json';
@@ -468,11 +468,11 @@ function pm_budget_check(): void
 {
     $b = pm_budget();
     if ($b > 0 && pm_usage_today()['total'] >= $b) {
-        throw new RuntimeException('Daily AI budget of ' . number_format($b) . ' tokens reached. Raise it in Agent settings, or wait until tomorrow.');
+        throw new RuntimeException('Daily AI budget of ' . number_format($b) . ' tokens reached. Raise it under Sales > Targeting and messages, or wait until tomorrow.');
     }
     $cap = pm_brand_token_cap(pm_brand());
     if ($cap > 0 && pm_usage_brand_today(pm_brand()) >= $cap) {
-        throw new RuntimeException('This business reached its own daily AI limit of ' . number_format($cap) . ' tokens (Social > Results > goals). It continues tomorrow.');
+        throw new RuntimeException('This business reached its own daily AI limit of ' . number_format($cap) . ' tokens (Insights > Results > Goals and limits). It continues tomorrow.');
     }
 }
 

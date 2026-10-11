@@ -357,7 +357,7 @@ t('Studying again shows what is new with a tick box each; the settings page show
     pm_t_assert(str_contains($html, 'What the AI learned about Sunrise Solar') && str_contains($html, 'name="pick[facts][]"') && str_contains($html, 'name="pick[segments][]"') && str_contains($html, 'Add the ticked ones') && str_contains($html, 'value="brand_study_apply"'), 'the review lists what is new with tick boxes');
     $html = render_view('view_business.php', ['id' => $id, 'study' => '1'], []);
     pm_t_assert(!str_contains($html, 'Add the ticked ones'), 'a study that is not in the session cannot be shown');
-    $html = render_view('view_brand_settings.php', [], [], ['vb' => $id]);
+    $html = render_view('view_sales_targeting.php', [], [], ['vb' => $id]);
     pm_t_assert(str_contains($html, 'Who to target, and why') && str_contains($html, 'schools | They lose lessons when the power fails | runs on a diesel generator; has a computer lab') && str_contains($html, 'Study the business again') && str_contains($html, 'name="action" value="brand_restudy"'), 'the settings page shows the advice as editable lines and offers to study again');
     pm_t_assert(str_contains($html, 'from sunrise.example'), 'and says where it was learned from');
     $segs = pm_study_segments_parse("schools | Reason one | sign a; sign b\nclinics | Reason two\n\n new kind | ", pm_brand_targeting($id)['segments']);

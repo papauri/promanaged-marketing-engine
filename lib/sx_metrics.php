@@ -519,7 +519,7 @@ function pm_job_metrics(string $brand): string
 /** Typed-in numbers for channels no API reaches (LinkedIn, TikTok followers, Status views) into today's row. */
 function pm_do_followers_manual(string $vb): array
 {
-    $to = 'social&view=results';
+    $to = 'social&view=numbers';
     $day = date('Y-m-d');
     $vals = [];
     foreach (['li_followers', 'tt_followers', 'wa_status_views'] as $k) {
@@ -542,7 +542,7 @@ function pm_do_followers_manual(string $vb): array
 /** Per-post numbers the owner types in for a channel (Facebook reach/saves, TikTok, Status, Google...). Stored in post['manual'][channel] with who and when. */
 function pm_do_results_save(string $vb): array
 {
-    $to = 'social&view=results';
+    $to = 'social&view=numbers';
     $id = preg_replace('/[^a-f0-9]/', '', (string)($_POST['id'] ?? ''));
     $ch = (string)($_POST['channel'] ?? '');
     if (!in_array($ch, ['facebook', 'instagram', 'linkedin', 'tiktok', 'youtube_short', 'whatsapp_status', 'google', 'x'], true)) {

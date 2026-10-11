@@ -27,49 +27,123 @@ function pm_ui_icon(string $k, int $size = 18): string
 }
 
 /**
- * The departments. key => label (top bar), name (page label), colour, home link, the plain tabs it owns, the Social views it owns, and its pages as groups: group => [href => label].
- * A department whose pages are all views of the Social screen shows them as its tab strip.
+ * The departments. Every page of the app is listed here exactly once, under the department whose job it is. key => label (top bar), name (page label), job (what the department is for),
+ * colour, home link, and its pages as groups: group => [href => label]. A page's href says where it is: ?tab=..., &view=... (the Social screen's pages) or &section=... (Operations).
  */
 function pm_ui_nav(): array
 {
     return [
-        'hq' => ['label' => 'Overview', 'name' => 'Agency overview', 'color' => '#2b2f36', 'href' => '?tab=home', 'tabs' => ['home'], 'views' => [], 'groups' => []],
-        'sales' => ['label' => 'Sales', 'name' => 'Sales department', 'color' => '#2f6b4f', 'href' => '?tab=agents', 'tabs' => ['agents', 'whatsapp', 'proposal', 'history', 'template'], 'views' => [], 'groups' => [
-            'Pipeline' => ['?tab=agents' => 'Leads', '?tab=whatsapp' => 'WhatsApp outreach'],
+        'hq' => ['label' => 'Overview', 'name' => 'Agency overview', 'job' => 'See the whole firm', 'color' => '#2b2f36', 'href' => '?tab=home', 'groups' => []],
+        'sales' => ['label' => 'Sales', 'name' => 'Sales department', 'job' => 'Win customers', 'color' => '#2f6b4f', 'href' => '?tab=agents', 'groups' => [
+            'Pipeline' => ['?tab=agents' => 'Leads', '?tab=whatsapp' => 'WhatsApp', '?tab=targeting' => 'Targeting and messages'],
             'Proposals' => ['?tab=proposal' => 'New proposal', '?tab=history' => 'History', '?tab=template' => 'Template and prices']]],
-        'social' => ['label' => 'Social', 'name' => 'Social department', 'color' => '#b4532a', 'href' => '?tab=social', 'tabs' => [], 'views' => ['', 'leadposts', 'content', 'channels', 'inbox', 'page', 'growth', 'cleanup', 'ads'], 'groups' => [
+        'social' => ['label' => 'Social', 'name' => 'Social department', 'job' => 'Publish and answer the audience', 'color' => '#b4532a', 'href' => '?tab=social', 'groups' => [
             'Publish' => ['?tab=social' => 'Plan', '?tab=social&view=leadposts' => 'Lead posts', '?tab=social&view=content' => 'Content', '?tab=social&view=channels' => 'Channels'],
-            'Community' => ['?tab=social&view=inbox' => 'Inbox', '?tab=social&view=page' => 'Page', '?tab=social&view=growth' => 'Growth', '?tab=social&view=cleanup' => 'Clean-up'],
+            'Community' => ['?tab=social&view=inbox' => 'Inbox', '?tab=social&view=page' => 'Page posts', '?tab=social&view=growth' => 'Playbook'],
             'Paid' => ['?tab=social&view=ads' => 'Ads']]],
-        'brand' => ['label' => 'Brand', 'name' => 'Brand and creative department', 'color' => '#8a6a2f', 'href' => '?tab=social&view=studio', 'tabs' => [], 'views' => ['studio', 'optimise', 'accounts'], 'groups' => [
-            'Creative' => ['?tab=social&view=studio' => 'Studio', '?tab=social&view=optimise' => 'Optimise'],
-            'Presence' => ['?tab=social&view=accounts' => 'Accounts & branding']]],
-        'insights' => ['label' => 'Insights', 'name' => 'Insights department', 'color' => '#46607a', 'href' => '?tab=social&view=results', 'tabs' => [], 'views' => ['results', 'audit'], 'groups' => [
-            'Reports' => ['?tab=social&view=results' => 'Results', '?tab=social&view=audit' => 'Audit']]],
-        'ops' => ['label' => 'Operations', 'name' => 'Operations', 'color' => '#5e5a52', 'href' => '?tab=settings', 'tabs' => ['settings', 'business'], 'views' => [], 'groups' => [
-            'Run the firm' => ['?tab=settings' => 'Business details', '?tab=settings#health' => 'Setup health', '?tab=settings#backups' => 'Backups', '?tab=settings#team' => 'Team', '?tab=business&new=1' => '+ Add a business']]],
+        'brand' => ['label' => 'Brand', 'name' => 'Brand and creative department', 'job' => 'Look and sound right everywhere', 'color' => '#8a6a2f', 'href' => '?tab=social&view=studio', 'groups' => [
+            'Look' => ['?tab=social&view=studio' => 'Studio', '?tab=social&view=kit' => 'Brand kit'],
+            'Words and profiles' => ['?tab=social&view=optimise' => 'Profiles', '?tab=social&view=voice' => 'Voice'],
+            'Upkeep' => ['?tab=social&view=cleanup' => 'Page clean-up']]],
+        'insights' => ['label' => 'Insights', 'name' => 'Insights department', 'job' => 'Measure what works and advise', 'color' => '#46607a', 'href' => '?tab=social&view=results', 'groups' => [
+            'Reports' => ['?tab=social&view=results' => 'Results', '?tab=social&view=audit' => 'Audit', '?tab=social&view=numbers' => 'Enter numbers']]],
+        'ops' => ['label' => 'Operations', 'name' => 'Operations', 'job' => 'Keep the machinery running', 'color' => '#5e5a52', 'href' => '?tab=settings', 'groups' => [
+            'Run the firm' => ['?tab=settings&section=business' => 'Business details', '?tab=settings&section=email' => 'Email', '?tab=settings&section=connections' => 'Connections',
+                '?tab=settings&section=health' => 'Health and backups', '?tab=settings&section=team' => 'Team and currencies'],
+            'Businesses' => ['?tab=business&new=1' => '+ Add a business']]],
     ];
 }
 
-/** Which department a screen belongs to ('' when none). */
-function pm_ui_dept_of(string $tab, string $view = ''): string
+/** The section shown when a Settings link names none. */
+const PM_UI_DEFAULT_SECTION = 'business';
+
+/** Pages that moved: the old place => the new one (links and redirects written before the move still arrive). Both are "tab&view=..." strings without a #anchor. */
+const PM_UI_MOVED = ['social&view=accounts' => 'settings&section=connections'];
+
+/** A redirect target ("social&view=accounts#x") with a moved page's new place. */
+function pm_ui_moved(string $target): string
 {
-    foreach (pm_ui_nav() as $k => $d) {
-        if ($tab === 'social' ? in_array($view, $d['views'], true) : in_array($tab, $d['tabs'], true)) {
-            return $k;
+    foreach (PM_UI_MOVED as $old => $new) {
+        if (str_starts_with($target, $old) && (strlen($target) === strlen($old) || in_array($target[strlen($old)], ['#', '&'], true))) {
+            return $new . substr($target, strlen($old));
         }
     }
-    return $tab === 'social' ? 'social' : '';
+    return $target;
 }
 
-/** The pages of a department that are views of the Social screen: view => [label, href]. Empty for the others. */
-function pm_ui_dept_tabs(string $dept): array
+/** Does this page link ("?tab=social&view=studio") point at the screen shown? A Settings link with no section means the default one. */
+function pm_ui_href_on(string $href, string $tab, string $view = '', string $section = ''): bool
+{
+    if (str_contains($href, '#')) { // a link into a part of a page: the page cannot know which part is open
+        return false;
+    }
+    parse_str((string)parse_url($href, PHP_URL_QUERY), $q);
+    if (($q['tab'] ?? '') !== $tab) {
+        return false;
+    }
+    if ($tab === 'social') {
+        return ($q['view'] ?? '') === $view;
+    }
+    if ($tab === 'settings') {
+        return ($q['section'] ?? PM_UI_DEFAULT_SECTION) === ($section !== '' ? $section : PM_UI_DEFAULT_SECTION);
+    }
+    return true;
+}
+
+/** Which department a screen belongs to ('' when none). */
+function pm_ui_dept_of(string $tab, string $view = '', string $section = ''): string
+{
+    foreach (pm_ui_nav() as $k => $d) {
+        foreach ($d['groups'] as $items) {
+            foreach (array_keys($items) as $href) {
+                if (pm_ui_href_on($href, $tab, $view, $section)) {
+                    return $k;
+                }
+            }
+        }
+    }
+    return ['home' => 'hq', 'social' => 'social', 'settings' => 'ops', 'business' => 'ops', 'agents' => 'sales', 'whatsapp' => 'sales', 'targeting' => 'sales', 'proposal' => 'sales', 'history' => 'sales', 'template' => 'sales'][$tab] ?? '';
+}
+
+/** A department's pages in order, as href => label (the "+ Add" links are buttons, not pages). */
+function pm_ui_dept_pages(string $dept): array
 {
     $out = [];
     foreach ((array)(pm_ui_nav()[$dept]['groups'] ?? []) as $items) {
         foreach ($items as $href => $label) {
-            if (str_starts_with($href, '?tab=social')) {
-                $out[preg_match('/view=([a-z]+)/', $href, $m) ? $m[1] : ''] = [pm_h($label), $href];
+            if (!str_starts_with($label, '+')) {
+                $out[$href] = $label;
+            }
+        }
+    }
+    return $out;
+}
+
+/** The tab strip of the department the screen belongs to: its own pages only, the current one marked. Empty when the department has a single page. */
+function pm_ui_strip(string $tab, string $view = '', string $section = ''): string
+{
+    $dept = pm_ui_dept_of($tab, $view, $section);
+    $items = [];
+    $on = '';
+    foreach (pm_ui_dept_pages($dept) as $href => $label) {
+        $items[$href] = [pm_h($label), $href];
+        if ($on === '' && pm_ui_href_on($href, $tab, $view, $section)) {
+            $on = $href;
+        }
+    }
+    return count($items) > 1 ? pm_ui_tabs($items, $on, pm_ui_nav()[$dept]['label']) : '';
+}
+
+/** The pages that are views of the Social screen, in order: view => label (all departments that live there). */
+function pm_ui_social_views(): array
+{
+    $out = [];
+    foreach (pm_ui_nav() as $d) {
+        foreach ($d['groups'] as $items) {
+            foreach ($items as $href => $label) {
+                if (str_starts_with($href, '?tab=social')) {
+                    $out[preg_match('/view=([a-z]+)/', $href, $m) ? $m[1] : ''] = $label;
+                }
             }
         }
     }
@@ -80,16 +154,6 @@ function pm_ui_dept_tabs(string $dept): array
 function pm_ui_dept_style(string $dept): string
 {
     return isset(pm_ui_nav()[$dept]) ? '--dept:' . pm_ui_nav()[$dept]['color'] : '';
-}
-
-/** Is this menu link the screen being shown? (Links with a #section are never marked: the page cannot know the section.) */
-function pm_ui_href_on(string $href, string $tab, string $view): bool
-{
-    if (str_contains($href, '#')) {
-        return false;
-    }
-    parse_str((string)parse_url($href, PHP_URL_QUERY), $q);
-    return ($q['tab'] ?? '') === $tab && ($tab !== 'social' || ($q['view'] ?? '') === $view);
 }
 
 /** Underline tabs: $items is key => label or key => [label, href]. $on is the active key. */
@@ -108,7 +172,7 @@ function pm_ui_head(string $title, string $sub = '', string $actions = ''): stri
 {
     $k = (string)($GLOBALS['PM_DEPT'] ?? '');
     $d = pm_ui_nav()[$k] ?? null;
-    $eye = $d && $k !== 'hq' ? '<a class="eyebrow" href="' . pm_h($d['href']) . '">' . pm_ui_icon($k, 14) . pm_h($d['name']) . '</a>' : '';
+    $eye = $d && $k !== 'hq' ? '<div class="eyebrows"><a class="eyebrow" href="' . pm_h($d['href']) . '">' . pm_ui_icon($k, 14) . pm_h($d['name']) . '</a><span class="job">' . pm_h($d['job']) . '</span></div>' : '';
     return '<div class="pagehead"><div>' . $eye . '<h1>' . pm_h($title) . '</h1>' . ($sub !== '' ? '<p class="sub">' . $sub . '</p>' : '') . '</div>' . ($actions !== '' ? '<div class="headacts">' . $actions . '</div>' : '') . '</div>';
 }
 
@@ -150,7 +214,8 @@ function pm_ui_topbar(array $c): string
 {
     $tab = (string)$c['tab'];
     $view = (string)($c['view'] ?? '');
-    $cur = pm_ui_dept_of($tab, $view);
+    $section = (string)($c['section'] ?? '');
+    $cur = pm_ui_dept_of($tab, $view, $section);
     $h = '<header class="topbar"><div class="topin">' . pm_ui_biz_menu($c['settings'], (string)$c['vb'], $tab, $view) . '<nav class="mainnav" aria-label="Departments">';
     foreach (pm_ui_nav() as $k => $n) {
         $on = $cur === $k;
@@ -160,7 +225,7 @@ function pm_ui_topbar(array $c): string
             $dd .= '<div class="menuhd">' . pm_h($g) . '</div>';
             foreach ($items as $href => $lab) {
                 $pages++;
-                $dd .= '<a role="menuitem" class="item' . (pm_ui_href_on($href, $tab, $view) ? ' on' : '') . '" href="' . pm_h($href) . '">' . pm_h($lab) . '</a>';
+                $dd .= '<a role="menuitem" class="item' . (pm_ui_href_on($href, $tab, $view, $section) ? ' on' : '') . '" href="' . pm_h($href) . '">' . pm_h($lab) . '</a>';
             }
         }
         $link = '<a class="navitem" href="' . pm_h($n['href']) . '"' . ($on ? ' aria-current="page"' : '') . '>' . pm_ui_icon($k) . '<span>' . pm_h($n['label']) . '</span></a>';

@@ -81,7 +81,7 @@ function php_problems(string $log): array
 }
 
 $pages = ['home', 'agents', 'whatsapp', 'social', 'social&view=studio', 'social&view=optimise', 'social&view=content', 'social&view=channels', 'social&view=growth', 'social&view=results', 'social&view=page', 'social&view=inbox', 'social&view=cleanup',
-    'social&view=ads', 'social&view=audit', 'social&view=accounts', 'social&view=leadposts', 'settings', 'proposal', 'history', 'template', 'business', 'business&new=1'];
+    'social&view=ads', 'social&view=audit', 'social&view=numbers', 'social&view=kit', 'social&view=voice', 'social&view=cleanup', 'social&view=leadposts', 'targeting', 'settings', 'settings&section=email', 'settings&section=connections', 'settings&section=health', 'settings&section=team', 'proposal', 'history', 'template', 'business', 'business&new=1'];
 $sweep = function (string $brand) use ($base, $pages): array {
     $bad = [];
     foreach ($pages as $p) {
@@ -156,7 +156,7 @@ echo "\nThe shared shell\n";
 [, $html] = http("$base?tab=social&view=results&brand=promanaged");
 pm_t_assert(substr_count($html, 'class="topbar"') === 1 && str_contains($html, 'class="tabs"') && str_contains($html, 'class="pagehead"') && !str_contains($html, 'filters subnav'), 'a Social screen has one top bar, one tab bar and one page head');
 pm_t_assert(preg_match('#<a href="\?tab=social&amp;view=results" class="on" aria-current="page">Results</a>#', $html) === 1, 'the tab bar marks the screen you are on');
-pm_t_assert(str_contains($html, 'navdd on" style="--dept:#46607a"') && str_contains($html, 'Accounts &amp; branding') && str_contains($html, 'Insights department') && str_contains($html, 'data-dept="insights"'), 'the main navigation marks the department (Results is Insights) and its page head says so');
+pm_t_assert(str_contains($html, 'navdd on" style="--dept:#46607a"') && str_contains($html, 'Brand kit') && str_contains($html, 'Insights department') && str_contains($html, 'data-dept="insights"'), 'the main navigation marks the department (Results is Insights) and its page head says so');
 [, $html] = http("$base?brand=promanaged");
 pm_t_assert(str_contains($html, 'class="hq-hero"') && str_contains($html, 'data-dept="hq"') && substr_count($html, 'class="dept"') === 5, 'with no tab the app opens on the agency overview, one card per department');
 [, $html] = http("$base?tab=social&view=studio&brand=promanaged");
@@ -166,6 +166,35 @@ pm_t_assert(str_contains($html, 'Template and prices') && str_contains($html, 'c
 [, $html] = http("$base?tab=proposal&brand=travel");
 pm_t_assert(str_contains($html, '--accent:#047857'), 'a business paints the app in its own accent colour');
 
+echo "\nDepartments over HTTP: pages that moved, and forms that save only their own part\n";
+[$code, , $loc] = http("$base?tab=social&view=accounts&brand=promanaged");
+pm_t_assert($code === 302 && str_contains($loc, 'tab=settings') && str_contains($loc, 'section=connections') && str_contains($loc, 'brand=promanaged'), 'the old Accounts address leads to Operations > Connections: ' . $loc);
+[, $html] = http("$base?tab=agents&brand=promanaged");
+$csrfD = csrf_of($html);
+[$code, , $loc] = http($base, ['csrf' => $csrfD, 'action' => 'social_x', 'do' => 'pillars_save', 'pillar_name' => ['Tip', 'Proof'], 'pillar_weight' => ['60', '40']]);
+pm_t_assert($code === 302 && str_contains($loc, 'view=content'), 'saving the pillars returns to Social > Content: ' . $loc);
+[$code, , $loc] = http($base, ['csrf' => $csrfD, 'action' => 'social_accounts', '_sec' => 'links', 'url' => ['facebook' => 'facebook.com/example']]);
+$cfgD = pm_social_settings('promanaged');
+pm_t_assert($code === 302 && str_contains($loc, 'section=connections') && ($cfgD['urls']['facebook'] ?? '') === 'https://facebook.com/example', 'saving the links returns to Connections: ' . $loc);
+[$code, , $loc] = http($base, ['csrf' => $csrfD, 'action' => 'social_accounts', '_sec' => 'channels', 'channels' => ['facebook' => '1']]);
+$cfgD = pm_social_settings('promanaged');
+pm_t_assert(str_ends_with($loc, 'tab=social') && !empty($cfgD['channels']['facebook']) && empty($cfgD['channels']['instagram']) && ($cfgD['urls']['facebook'] ?? '') === 'https://facebook.com/example', 'the channels form changes the channels and leaves the links as they were');
+[$code, , $loc] = http($base, ['csrf' => $csrfD, 'action' => 'social_accounts', '_sec' => 'kit', 'cover_head' => 'A new headline', 'cover_line' => 'And a line']);
+$cfgD = pm_social_settings('promanaged');
+pm_t_assert(str_contains($loc, 'view=kit') && $cfgD['cover_head'] === 'A new headline' && !empty($cfgD['channels']['facebook']), 'the kit form changes the wording and leaves the channels');
+[$code, , $loc] = http($base, ['csrf' => $csrfD, 'action' => 'settings', '_sec' => 'team', 's' => ['currency' => 'MWK', 'team' => "Ann\nBen", 'currencies' => [['code' => 'USD', 'name' => 'US dollar', 'mpu' => '1700', 'round' => '1']]]]);
+pm_t_assert($code === 302 && str_contains($loc, 'section=team') && pm_settings()['team'] === ['Ann', 'Ben'], 'Team and currencies saves and returns to itself: ' . $loc);
+[$code, , $loc] = http($base, ['csrf' => $csrfD, 'action' => 'settings', '_sec' => 'voice', 'back' => 'social&view=voice', 's' => ['brain' => ['about' => 'We do computers', 'facts' => 'One fact']]]);
+pm_t_assert(str_contains($loc, 'view=voice') && pm_settings()['brain']['about'] === 'We do computers' && pm_settings()['team'] === ['Ann', 'Ben'], 'Voice returns to Brand > Voice and leaves the team alone');
+[$code, , $loc] = http($base, ['csrf' => $csrfD, 'action' => 'agents', 'do' => 'config', 'bt' => 'targeting', 'cfg' => ['cities' => 'Zomba, Salima', 'sectors' => 'schools', 'new_per_day' => '6', 'enabled' => ['scout' => '1']]]);
+pm_t_assert($code === 302 && str_ends_with($loc, 'tab=targeting') && pm_agents_config('promanaged')['cities'] === ['Zomba', 'Salima'], 'the agent settings save and return to Sales > Targeting and messages: ' . $loc);
+[$code, , $loc] = http($base, ['csrf' => $csrfD, 'action' => 'smtp_check', 'brand' => 'promanaged']);
+pm_t_assert($code === 302 && str_contains($loc, 'section=email'), 'the mail login check returns to Operations > Email');
+[$code, $body] = http("$base?tab=settings&section=nonsense&brand=promanaged");
+pm_t_assert($code === 200 && str_contains($body, 'Business details') && str_contains($body, 'class="tabs"'), 'a section that does not exist shows Business details');
+[, $body] = http("$base?tab=social&view=inbox&brand=promanaged");
+pm_t_assert(str_contains($body, 'data-dept="social"') && str_contains($body, 'Inbox'), 'the Inbox is a Social page');
+pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
 echo "\nAdding a business over HTTP\n";
 [, $html] = http("$base?tab=business&new=1");
 $csrf = csrf_of($html);
@@ -215,7 +244,7 @@ pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
 echo "\nChanging and hiding it\n";
 [, $html] = http("$base?tab=settings&brand=greengrocers");
 $csrf = csrf_of($html);
-pm_t_assert(str_contains($html, 'name="action" value="brand_save"') && str_contains($html, 'What the AI knows') && str_contains($html, 'Hide this business'), 'its settings page has its own form');
+pm_t_assert(str_contains($html, 'name="action" value="brand_save"') && str_contains($html, 'name="_sec" value="details"') && str_contains($html, 'Hide this business') && !str_contains($html, 'name="b[brain][about]"'), 'its Business details page has its own form (and only its own part)');
 [$code, , $loc] = http($base, ['csrf' => $csrf, 'action' => 'brand_save', 'id' => 'greengrocers', 'b' => ['company_name' => 'Green Grocers Mzuzu', 'email' => 'info@greengrocers.example', 'phone' => '0888 111 222', 'accent_color' => '#0f766e', 'ref_prefix' => 'gg',
     'smtp' => ['host' => 'mail.greengrocers.example', 'port' => '465', 'encryption' => 'ssl', 'username' => 'info@greengrocers.example', 'password' => 's3cret', 'from_email' => 'info@greengrocers.example', 'from_name' => 'Green Grocers'],
     'brain' => ['about' => 'We sell fresh produce.', 'facts' => 'We deliver twice a week', 'audience' => 'Restaurants', 'voice' => 'Warm.', 'never' => 'Never promise dates.'], 'sectors' => 'restaurants, lodges, hotels', 'cities' => 'Mzuzu',
@@ -225,16 +254,20 @@ pm_t_assert($code === 302 && str_contains($loc, 'brand=greengrocers'), 'saving w
 $s = pm_load('settings', 'pm_default_settings')['brands']['greengrocers'];
 pm_t_eq([$s['smtp']['host'], $s['smtp']['password'], $s['ref_prefix'], $s['accent_color'], $s['profile']['cta_keyword'], $s['profile']['sell_to']], ['mail.greengrocers.example', 's3cret', 'GG', '#0f766e', 'TASTER', 'business'], 'the details, the mailbox and the profile are stored');
 $ac = pm_load('agents_config', fn() => [])['greengrocers'];
-pm_t_eq([$ac['sectors'], $ac['existing_clients']], [['restaurants', 'lodges', 'hotels'], ['Old Client Ltd']], 'its targets and clients are stored in its own agent settings');
-[, $html] = http("$base?tab=settings&brand=greengrocers");
-pm_t_assert(str_contains($html, 'mail.greengrocers.example') && !str_contains($html, 's3cret'), 'the mail server shows, the password never does');
+pm_t_assert(!isset($ac['sectors']) || $ac['sectors'] !== ['restaurants', 'lodges', 'hotels'], 'a business save no longer writes the targets: the agent settings are their one owner');
+[$code] = http($base, ['csrf' => $csrf, 'action' => 'agents', 'do' => 'config', 'bt' => 'targeting', 'cfg' => ['sectors' => 'restaurants, lodges, hotels', 'cities' => 'Mzuzu', 'offerings' => 'Veg box: weekly', 'existing_clients' => 'Old Client Ltd', 'enabled' => ['scout' => '1', 'writer' => '1']]]);
+$ac = pm_load('agents_config', fn() => [])['greengrocers'];
+pm_t_assert($code === 302 && $ac['sectors'] === ['restaurants', 'lodges', 'hotels'] && $ac['existing_clients'] === ['Old Client Ltd'] && $ac['offerings'] === ['Veg box: weekly'], 'its targets and clients are stored in its own agent settings, saved from Sales > Targeting and messages');
+[, $html] = http("$base?tab=settings&section=email&brand=greengrocers");
+pm_t_assert(str_contains($html, 'mail.greengrocers.example') && !str_contains($html, 's3cret'), 'the mail server shows on Operations > Email, the password never does');
 $tg = pm_brand_targeting('greengrocers');
 pm_t_eq([array_column($tg['segments'], 'name'), $tg['segments'][0]['signals'], $tg['skip'], $tg['angles']], [['restaurants', 'lodges'], ['a menu that changes daily', 'a kitchen garden they cannot keep up'], ['supermarket chains', 'international suppliers'], ['Fresh from the farm, delivered']],
-    'who to target, why and who to skip are saved from the settings page');
+    'who to target, why and who to skip are saved from the business form');
+[, $html] = http("$base?tab=targeting&brand=greengrocers");
 pm_t_assert(str_contains($html, 'Who to target, and why') && str_contains($html, 'restaurants | They need fresh produce twice a week | a menu that changes daily; a kitchen garden they cannot keep up') && str_contains($html, 'Study the business again'), 'and shown there again as editable lines');
 [$code, , $loc] = http($base, ['csrf' => $csrf, 'action' => 'brand_restudy', 'id' => 'greengrocers']);
-[, $html2] = http("$base?tab=settings&brand=greengrocers");
-pm_t_assert($code === 302 && str_contains($loc, 'settings') && str_contains($html2, 'The AI needs a key'), 'studying again without an AI key says so plainly');
+[, $html2] = http("$base?tab=targeting&brand=greengrocers");
+pm_t_assert($code === 302 && str_contains($loc, 'targeting') && str_contains($html2, 'The AI needs a key'), 'studying again without an AI key says so plainly');
 [$code, , $loc] = http($base, ['csrf' => $csrf, 'action' => 'brand_study_apply', 'id' => 'greengrocers']);
 pm_t_assert($code === 302 && str_contains($loc, 'settings'), 'applying a study that does not exist is refused');
 [, $html] = http("$base?tab=agents&brand=promanaged");
@@ -402,10 +435,10 @@ $raw = pm_load('settings', 'pm_default_settings');
 $raw['smtp'] = ['host' => 'mail.pm.example', 'port' => 465, 'encryption' => 'ssl', 'username' => 'info@pm.example', 'password' => 'pw', 'from_email' => 'info@pm.example', 'from_name' => 'ProManaged IT', 'bcc_self' => false];
 $raw['travel']['smtp']['host'] = '';
 pm_save('settings', $raw);
-[, $html] = http("$base?tab=settings&brand=travel");
+[, $html] = http("$base?tab=settings&section=email&brand=travel");
 $csrf3 = csrf_of($html);
 pm_t_assert(str_contains($html, 'name="test_to"') && str_contains($html, 'Send the test to (blank: the mailbox itself)') && str_contains($html, 'Travel Malawi has no mail login of its own'), 'the test button has a box for another recipient, and Travel Malawi says plainly that it is borrowing ProManaged IT\'s mailbox');
-[, $html] = http("$base?tab=settings&brand=promanaged");
+[, $html] = http("$base?tab=settings&section=email&brand=promanaged");
 pm_t_assert(str_contains($html, 'name="test_to"'), 'ProManaged IT\'s page has the box too');
 $form = ['csrf' => $csrf3, 'action' => 'settings', 's' => ['company_name' => 'ProManaged IT', 'currency' => 'MWK', 'ref_prefix' => 'PM'], 'test_brand' => 'travel', 'test_email' => '1'];
 $form['s']['travel'] = ['company_name' => 'Travel Malawi', 'smtp' => ['host' => '', 'port' => '465', 'encryption' => 'ssl']];
@@ -417,17 +450,17 @@ pm_t_assert($code === 302 && str_contains($loc, 'brand=travel') && str_contains(
 pm_t_assert($code === 302 && (str_contains($html, 'Travel Malawi mail: could not log in') || str_contains($html, 'Travel Malawi: no mail server is set up yet')), 'checking the mail login always answers, in words');
 pm_t_eq(php_problems($log), [], 'PHP logged no warning for any of it');
 
-echo "\nThe Travel Malawi first email: Settings and the Leads screen\n";
-[, $html] = http("$base?tab=settings&brand=travel");
+echo "\nThe Travel Malawi first email: Targeting and messages, and the Leads screen\n";
+[, $html] = http("$base?tab=targeting&brand=travel");
 $csrf4 = csrf_of($html);
 pm_t_assert(str_contains($html, 'First email to a stay') && str_contains($html, 'name="s[travel][host_email][steps]"') && str_contains($html, '1. Go to https://ulendomalawi.com') && str_contains($html, 'It passes the wording rules') && str_contains($html, 'Shall I send you the host starter guide?'),
-    'Settings shows the standard wording, a sample email with its word count, and says it passes the rules');
+    'Targeting and messages shows the standard wording, a sample email with its word count, and says it passes the rules');
 $heForm = ['csrf' => $csrf4, 'action' => 'settings', 's' => ['company_name' => 'ProManaged IT', 'currency' => 'MWK', 'ref_prefix' => 'PM', 'travel' => ['company_name' => 'Travel Malawi', 'host_email' => ['intro' => 'We list stays.', 'benefits_title' => 'Why:', 'benefits' => "One\nTwo", 'steps_title' => 'Steps:',
     'steps' => "Open {link}.\nWait.", 'link' => 'https://ulendomalawi.com', 'free' => 'No fee.', 'why' => 'Because we are new.', 'closing' => 'Interested?']]]];
 http($base, $heForm);
 $he = (array)(pm_load('settings', fn() => [])['travel']['host_email'] ?? []);
 pm_t_assert($he['why'] === 'Because we are new.' && $he['steps'] === ['Open {link}.', 'Wait.'] && $he['benefits'] === ['One', 'Two'] && $he['link'] === 'https://ulendomalawi.com' && $he['closing'] === 'Interested?', 'the wording saves, one line per item');
-[, $html] = http("$base?tab=settings&brand=travel");
+[, $html] = http("$base?tab=targeting&brand=travel");
 pm_t_assert(str_contains($html, 'Because we are new.') && str_contains($html, '1. Open https://ulendomalawi.com.'), 'and the sample email shows it');
 http($base, ['csrf' => $csrf4, 'action' => 'settings', 's' => $heForm['s'] + [], 'nothing' => '1'] + ['s' => ['company_name' => 'ProManaged IT', 'currency' => 'MWK', 'ref_prefix' => 'PM', 'travel' => ['company_name' => 'Travel Malawi']]]);
 pm_t_eq((array)(pm_load('settings', fn() => [])['travel']['host_email'] ?? []) === $he, true, 'a save that does not mention the wording leaves it as it was');

@@ -1,8 +1,8 @@
 <?php
-/** Social > Page, Inbox and Audit: run the Facebook Page from here. */
+/** Social > Inbox (everyone waiting for an answer, and what to hide or delete) and Page posts (the Page's own posts with their comments), and Insights > Audit (the AI health check). */
 pm_brand_set($vb);
 $view = (string)($_GET['view'] ?? 'page');
-if ($view === 'page') {
+if (in_array($view, ['page', 'inbox'], true)) {
     pm_fb_judge_if_stale($vb);
 }
 $bname = pm_brand_title($settings, $vb);
@@ -15,13 +15,13 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
 <?= pm_social_nav($view) ?>
 
 <?php if (!$sc['ready']): ?>
-  <div class="card empty">The <?= pm_h($bname) ?> Facebook Page is not connected yet. Use <a href="?tab=social&view=accounts">Accounts &amp; branding</a> > Facebook > Connect.</div>
+  <div class="card empty">The <?= pm_h($bname) ?> Facebook Page is not connected yet. Use <a href="?tab=settings&section=connections">Operations &gt; Connections</a> > Facebook > Connect.</div>
 <?php elseif (empty($ti['ok']) || $ti['type'] !== 'PAGE' || $ti['missing']): ?>
   <div class="flash err"><b>The Facebook connection is limited.</b>
     <?= empty($ti['ok']) ? pm_h($ti['error'] ?? 'The token is not valid.') : '' ?>
     <?= !empty($ti['ok']) && $ti['type'] !== 'PAGE' ? 'The saved token is a personal (user) token, not a Page token, and expires ' . ($ti['expires'] ? 'on ' . date('j M H:i', $ti['expires']) : 'soon') . '.' : '' ?>
     <?= !empty($ti['missing']) ? 'Missing permissions: ' . pm_h(implode(', ', $ti['missing'])) . '.' : '' ?>
-    Fix it in one step: <a href="?tab=social&view=accounts">Accounts &amp; branding</a> > Facebook > Connect.</div>
+    Fix it in one step: <a href="?tab=settings&section=connections">Operations &gt; Connections</a> > Facebook > Connect.</div>
 <?php endif; ?>
 
 <?php if ($sc['ready'] && $view === 'page'):
@@ -32,7 +32,7 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
   <div class="withpage"><div class="wpmain">
   <?php foreach (array_filter($judged, fn($k) => $k['kind'] === 'visitor_post' && $k['state'] === '') as $vp): ?>
     <div class="card fbc"><p><b><?= pm_h($vp['from']) ?></b> posted on our Page <span class="pill <?= in_array($vp['verdict'], ['scam', 'abusive', 'off_topic'], true) ? 'warn' : '' ?>">AI: <?= pm_h(str_replace('_', '-', $vp['verdict'])) ?></span></p><p><?= pm_h($vp['text']) ?></p>
-      <form method="post" class="inl"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="fbg"><input type="hidden" name="do" value="item"><input type="hidden" name="view" value="growth"><input type="hidden" name="id" value="<?= pm_h($vp['id']) ?>">
+      <form method="post" class="inl"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="fbg"><input type="hidden" name="do" value="item"><input type="hidden" name="view" value="page"><input type="hidden" name="id" value="<?= pm_h($vp['id']) ?>">
         <?php if ($vp['action'] !== 'ignore'): ?><button class="btn small primary" name="how" value="<?= pm_h($vp['action']) ?>">AI suggests: <?= pm_h($vb2[$vp['action']] ?? $vp['action']) ?></button><?php endif; ?>
         <button class="btn small" name="how" value="hide">Hide</button><button class="btn small" name="how" value="delete" data-confirm="Delete this post from the Page?">Delete</button><button class="btn small" name="how" value="skip">Leave it</button></form></div>
   <?php endforeach; ?>
@@ -58,7 +58,7 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
         <?php $jv = $judged[$cm['id']] ?? null; ?>
         <p><b><?= pm_h($cm['from']) ?></b> <span class="muted"><?= pm_h(date('j M H:i', strtotime($cm['at']))) ?><?= $cm['hidden'] ? ' · hidden' : '' ?><?= $cm['answered'] ? ' · answered' : '' ?></span>
           <?php if ($jv): ?><span class="pill <?= in_array($jv['verdict'], ['scam', 'abusive', 'off_topic'], true) ? 'warn' : ($jv['verdict'] === 'buyer' ? 'hot' : '') ?>" title="<?= pm_h($jv['reason']) ?>">AI: <?= pm_h(str_replace('_', '-', $jv['verdict'])) ?></span><?php endif; ?><br><?= pm_h($cm['message']) ?></p>
-        <?php if ($jv && $jv['state'] === '' && $jv['action'] !== 'ignore'): ?><form method="post" class="inl"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="fbg"><input type="hidden" name="do" value="item"><input type="hidden" name="view" value="growth"><input type="hidden" name="id" value="<?= pm_h($cm['id']) ?>">
+        <?php if ($jv && $jv['state'] === '' && $jv['action'] !== 'ignore'): ?><form method="post" class="inl"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="fbg"><input type="hidden" name="do" value="item"><input type="hidden" name="view" value="page"><input type="hidden" name="id" value="<?= pm_h($cm['id']) ?>">
           <button class="btn small primary" name="how" value="<?= pm_h($jv['action']) ?>" <?= $jv['action'] === 'delete' ? 'data-confirm="Delete this comment?"' : '' ?>>AI suggests: <?= pm_h($vb2[$jv['action']] ?? $jv['action']) ?></button>
           <button class="btn small" name="how" value="skip">Leave it</button></form><?php endif; ?>
         <?php foreach ($cm['replies'] as $r): ?><p class="rep"><b><?= pm_h($r['from']) ?></b> <?= pm_h($r['message']) ?></p><?php endforeach; ?>
@@ -79,7 +79,65 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
   </div><?= pm_fb_page_embed($vb) ?></div>
 
 <?php elseif ($sc['ready'] && $view === 'inbox'):
-    $ib = pm_fb_inbox($vb); ?>
+    $ib = pm_fb_inbox($vb);
+    $recent = pm_social_recent($vb);
+    $today = pm_social_today($vb);
+    $lvl = pm_autopilot_level($vb);
+    $ap = pm_load('autopilot', fn() => [])[$vb]['at'] ?? 0;
+    $vlabel = ['buyer' => 'buyer', 'question' => 'question', 'complaint' => 'complaint', 'fan' => 'fan', 'off_topic' => 'off-topic', 'abusive' => 'abusive', 'scam' => 'scam'];
+    $aBtn = ['delete' => 'Delete', 'hide' => 'Hide', 'reply' => 'Post reply', 'like' => 'Like'];
+    $fg = fn($do, $extra = '') => '<input type="hidden" name="csrf" value="' . $csrf . '"><input type="hidden" name="action" value="fbg"><input type="hidden" name="do" value="' . $do . '"><input type="hidden" name="view" value="inbox">' . $extra;
+    $styleItems = pm_aa_items_for($vb, ['reply_style']);
+    $nThreads = count(array_filter($ib['threads'], fn($t) => $t['waiting']));
+    $nComments = count($recent['open_comments']);
+    $nMod = array_sum(array_map(fn($g) => count($g['items']), $today['suggestions'])); ?>
+  <?= pm_social_panels('inbox_top', $vb) ?>
+  <div class="card inboxhead">
+    <div class="findrow" style="justify-content:space-between">
+      <span><b><?= $nThreads + $nComments + $nMod ?></b> waiting: <?= $nThreads ?> message<?= $nThreads === 1 ? '' : 's' ?>, <?= $nComments ?> comment<?= $nComments === 1 ? '' : 's' ?> to answer, <?= $nMod ?> to tidy.
+        <span class="muted">Autopilot is <b><?= pm_h($lvl) ?></b> (<a href="#rules">change</a>).</span></span>
+      <form method="post"><?= $fg('judge') ?><button class="btn small" title="Reads the newest comments and posts on the Page and sorts them">Check the Page now</button></form>
+    </div>
+  </div>
+
+  <?php if ($today['suggestions']): ?>
+  <div class="card today" id="tidy">
+    <h2>To tidy on the Page</h2>
+    <p class="hint" style="margin-top:0">Comments and posts the AI sorted: scams to delete, junk to hide, fans to like, buyers and questions to answer. Nothing happens until you press a button (or Autopilot does the safe ones).</p>
+    <?php foreach ($today['suggestions'] as $act => $g): ?>
+    <details class="sugg <?= $act ?>">
+      <summary><b><?= pm_h($g['label']) ?></b> <span class="pill <?= $act === 'delete' ? 'warn' : ($act === 'reply' ? 'hot' : '') ?>"><?= count($g['items']) ?></span> <span class="muted"><?= pm_h($g['why']) ?></span>
+        <form method="post" class="inl"><?= $fg('group', '<input type="hidden" name="act" value="' . $act . '">') ?><?php $ask = $act === 'delete' ? 'Delete all ' . count($g['items']) . ' from the Page? Deleted comments cannot be brought back.' : ($act === 'reply' ? 'Post all ' . count($g['items']) . ' replies as they are? Open the list to read or change them first.' : ''); ?><button class="btn small primary" <?= $ask !== '' ? 'onclick="return confirm(' . pm_h(json_encode($ask)) . ')"' : '' ?>><?= $aBtn[$act] ?> all</button></form></summary>
+      <?php foreach ($g['items'] as $k): ?>
+      <form method="post" class="sitem"><?= $fg('item', '<input type="hidden" name="id" value="' . pm_h($k['id']) . '">') ?>
+        <p><b><?= pm_h($k['from']) ?></b> <span class="pill"><?= pm_h($vlabel[$k['verdict']] ?? $k['verdict']) ?></span> <span class="muted"><?= pm_h(date('j M H:i', strtotime($k['at']))) ?> · <?= $k['kind'] === 'visitor_post' ? 'post on our Page' : 'comment' ?> · <?= pm_h($k['reason']) ?></span>
+          <?php if ($k['link']): ?><a class="muted" href="<?= pm_h($k['link']) ?>" target="_blank" rel="noopener noreferrer">view</a><?php endif; ?></p>
+        <p class="said"><?= pm_h(mb_substr($k['text'], 0, 300)) ?></p>
+        <?php if ($act === 'reply'): ?><textarea name="text" rows="2"><?= pm_h($k['reply']) ?></textarea><?php endif; ?>
+        <div class="btns"><button class="btn small primary" name="how" value="<?= $act ?>"><?= $aBtn[$act] ?></button>
+          <?php if ($act !== 'hide' && $act !== 'delete' && $k['verdict'] !== 'fan'): ?><button class="btn small" name="how" value="hide">Hide</button><?php endif; ?>
+          <?php if ($act === 'hide'): ?><button class="btn small" name="how" value="delete" onclick="return confirm('Delete this from the Page?')">Delete instead</button><?php endif; ?>
+          <button class="btn small" name="how" value="skip">Leave it</button></div>
+      </form>
+      <?php endforeach; ?>
+    </details>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+
+  <?php if ($recent['open_comments']): ?>
+  <div class="card" id="comments"><h2>Comments to answer</h2>
+    <?php foreach (array_slice($recent['open_comments'], 0, 12) as $cm): ?>
+    <form method="post" class="cmt"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social"><input type="hidden" name="back" value="social&amp;view=inbox">
+      <?= $hid('cid', $cm['id']) . $hid('post', $cm['post']) . $hid('from', $cm['from']) . $hid('message', $cm['message']) ?>
+      <p><b><?= pm_h($cm['from']) ?></b> <span class="muted">on "<?= pm_h(mb_substr($cm['post'], 0, 60)) ?>…"</span><br><?= pm_h($cm['message']) ?></p>
+      <textarea name="reply" rows="2" placeholder="Your reply"><?= pm_h($_SESSION['sreply'][$cm['id']] ?? '') ?></textarea>
+      <div class="btns"><button class="btn small" name="do" value="draft_reply">Draft with AI</button><button class="btn small primary" name="do" value="reply" data-confirm="Post this reply on Facebook?">Post reply</button></div>
+    </form>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+
   <?php if ($ib['error']): ?><div class="flash err"><?= pm_h($ib['error']) ?><?= str_contains($ib['error'], 'pages_messaging') || str_contains($ib['error'], 'permission') ? ' The token needs pages_messaging.' : '' ?></div><?php endif; ?>
   <?php if (!$ib['threads'] && !$ib['error']): ?><div class="card empty">No Messenger conversations yet.</div><?php endif; ?>
   <?php foreach ($ib['threads'] as $t): ?>
@@ -94,6 +152,21 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
   </div>
   <?php endforeach; ?>
 
+  <details class="card" id="rules">
+    <summary><b>Community rules</b> <span class="muted">· autopilot and how replies sound</span></summary>
+    <form method="post" class="findrow"><?= $fg('autopilot') ?>
+      <select name="level" aria-label="Autopilot">
+        <option value="off" <?= $lvl === 'off' ? 'selected' : '' ?>>Off: I do everything myself</option>
+        <option value="safe" <?= $lvl === 'safe' ? 'selected' : '' ?>>Safe: delete clear scams, hide junk, like fans, catch buyers, daily playbook; replies wait for one click</option>
+        <option value="bold" <?= $lvl === 'bold' ? 'selected' : '' ?>>Bold: Safe + posts replies to questions and buyers by itself (complaints stay yours)</option>
+      </select>
+      <button class="btn small">Save</button>
+      <button class="btn small" name="do" value="autopilot_now">Run it now</button>
+    </form>
+    <p class="hint">Runs every hour with the scheduled task<?= $ap ? ', last at ' . date('j M H:i', (int)$ap) : '' ?>. The AI only looks at comments and posts it has not seen before, so a quiet hour costs nothing. It never deletes our own posts, never sends private messages and never spends money.</p>
+    <?php foreach ($styleItems as $si): ?><?= pm_opt_item_html($si, $vb, $csrf, 'social&view=inbox') ?><?php endforeach; ?>
+    <?php if (!$styleItems): ?><p class="hint">The audit suggests a reply style once it has judged how our replies sound. Run it under <a href="?tab=social&amp;view=audit">Insights &gt; Audit</a>.</p><?php endif; ?>
+  </details>
 <?php elseif ($sc['ready'] && $view === 'audit'):
     $au = pm_load('page_audit', fn() => [])[$vb] ?? null;
     $au = is_array($au) ? $au : null;
@@ -135,14 +208,16 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
   <?php endif; ?>
 
   <div class="card" id="settings">
-    <h2>Change the channel settings</h2>
-    <p class="hint" style="margin-top:0">Worked out from the Page's own numbers<?= $au ? ' and the audit' : '' ?>, with no AI. Each shows what it is now and what is suggested; edit the value if you like, then apply it.<?= $bulkN ? '' : ' Nothing is waiting to be changed in one go.' ?></p>
-    <?php if ($bulkN): ?><form method="post" class="inl"><?= $aa('aa_all') ?><button class="btn small primary">Apply the <?= $bulkN ?> safe suggestion<?= $bulkN === 1 ? '' : 's' ?></button></form><?php endif; ?>
-    <?php foreach ($setItems as $i): ?><?= $item($i) ?><?php endforeach; ?>
-    <?php if (!$setItems): ?><p class="hint">The Page could not be read, so there is nothing to suggest yet.</p><?php endif; ?>
-    <p class="hint">Profile details (intro, hours, phone, cover) are on <a href="?tab=social&amp;view=optimise">Optimise</a>, and the cover and picture designs on the <a href="?tab=social&amp;view=studio">Studio</a>.</p>
+    <h2>Where each setting lives</h2>
+    <p class="hint" style="margin-top:0">The audit judges; the department that owns a setting changes it, so nothing is edited in two places. A finding below that can be fixed on the spot has its own button.</p>
+    <ul class="whereto">
+      <li><b>Profile details, pictures and the profile words:</b> <a href="?tab=social&amp;view=optimise">Brand &gt; Profiles</a> and <a href="?tab=social&amp;view=studio">Brand &gt; Studio</a></li>
+      <li><b>Auto-publish, where posts go, and when:</b> <a href="?tab=social#rules">Social &gt; Plan &gt; Publishing rules</a></li>
+      <li><b>What we post about and the mix:</b> <a href="?tab=social&amp;view=content">Social &gt; Content</a></li>
+      <li><b>How replies sound, autopilot:</b> <a href="?tab=social&amp;view=inbox#rules">Social &gt; Inbox &gt; Community rules</a></li>
+      <li><b>Posting goals and limits:</b> <a href="?tab=social&amp;view=results">Insights &gt; Results &gt; Goals and limits</a></li>
+    </ul>
   </div>
-
   <?php if ($au && !empty($au['fixes'])): ?>
   <div class="card" id="fixes">
     <h2>Fix these first</h2>
@@ -190,8 +265,8 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
 
   <?php if ($au && (!empty($au['replies']['verdict']) || !empty($au['timing']))): ?>
   <div class="card">
-    <?php if (!empty($au['replies']['verdict'])): ?><h3 style="margin-top:0">Our replies</h3><p><?= pm_h($au['replies']['verdict']) ?></p><?php if (!empty($au['replies']['better_example'])): ?><p class="hint">Better: “<?= pm_h($au['replies']['better_example']) ?>” <button type="button" class="btn small" data-copy="<?= pm_h($au['replies']['better_example']) ?>">Copy</button> · set the style under "Change the channel settings" above.</p><?php endif; ?><?php endif; ?>
-    <?php if (!empty($au['timing'])): ?><h3>When and what to post</h3><p><?= pm_h($au['timing']) ?></p><p class="hint">The times can be changed under "Change the channel settings" above.</p><?php endif; ?>
+    <?php if (!empty($au['replies']['verdict'])): ?><h3 style="margin-top:0">Our replies</h3><p><?= pm_h($au['replies']['verdict']) ?></p><?php if (!empty($au['replies']['better_example'])): ?><p class="hint">Better: “<?= pm_h($au['replies']['better_example']) ?>” <button type="button" class="btn small" data-copy="<?= pm_h($au['replies']['better_example']) ?>">Copy</button> · set the style under <a href="?tab=social&amp;view=inbox#rules">Social &gt; Inbox &gt; Community rules</a>.</p><?php endif; ?><?php endif; ?>
+    <?php if (!empty($au['timing'])): ?><h3>When and what to post</h3><p><?= pm_h($au['timing']) ?></p><p class="hint">The times can be changed under <a href="?tab=social#rules">Social &gt; Plan &gt; Publishing rules</a>.</p><?php endif; ?>
   </div>
   <?php endif; ?>
 

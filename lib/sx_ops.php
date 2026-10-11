@@ -30,13 +30,13 @@ function pm_setup_health(): array
         $mailOk = trim((string)($sm['host'] ?? '')) !== '' && trim((string)($sm['username'] ?? '')) !== '';
         $row("smtp_$b", "Email sending · $n", 'required', $mailOk, $mailOk ? 'Sends as ' . (trim((string)($sm['from_email'] ?? '')) ?: (string)$sm['username']) . ' through ' . $sm['host'] . '.'
             . (function_exists('pm_mail_source') && pm_mail_source($b) === 'shared' ? " This business has no mail login of its own, so it uses ProManaged IT's: add {$p}SMTP_HOST, {$p}SMTP_USER and {$p}SMTP_PASS to .env." : '') : 'No mail login: emails cannot go out.',
-            "{$p}SMTP_HOST, {$p}SMTP_USER, {$p}SMTP_PASS in .env (or Settings > Email sending)");
+            "{$p}SMTP_HOST, {$p}SMTP_USER, {$p}SMTP_PASS in .env (or Operations > Email)");
         $im = function_exists('pm_imap_settings') ? pm_imap_settings($b) : ['host' => '', 'user' => '', 'pass' => ''];
         $imOk = $im['host'] !== '' && $im['user'] !== '' && $im['pass'] !== '';
         $row("imap_$b", "Reading replies · $n", 'required', $imOk, $imOk ? 'Reads the inbox at ' . $im['host'] . '.' : 'Replies are not read, so nobody is answered automatically.',
             "{$p}IMAP_HOST, {$p}IMAP_USER, {$p}IMAP_PASS in .env (or the same as the mail login)");
         $fb = pm_social_cfg($b);
-        $row("fb_$b", "Facebook Page · $n", 'required', $fb['ready'], $fb['ready'] ? 'Connected.' : 'Posts cannot be published and comments cannot be read.', 'Social > Accounts & branding > Connect Facebook in 3 steps');
+        $row("fb_$b", "Facebook Page · $n", 'required', $fb['ready'], $fb['ready'] ? 'Connected.' : 'Posts cannot be published and comments cannot be read.', 'Operations > Connections > Connect Facebook in 3 steps');
         $row("ig_$b", "Instagram · $n", 'optional', $fb['ig_id'] !== '', $fb['ig_id'] !== '' ? 'Linked.' : 'Instagram posts stay hand-posted.', "Link the account to the Page, then reconnect Facebook ({$p}IG_USER_ID)");
         $li = pm_linkedin_cfg($b);
         $row("li_$b", "LinkedIn · $n", 'optional', $li['ready'], $li['ready'] ? 'Connected.' : 'LinkedIn posts stay hand-posted.', "{$p}LI_ORG_ID and {$p}LI_TOKEN in .env (needs LinkedIn approval)");

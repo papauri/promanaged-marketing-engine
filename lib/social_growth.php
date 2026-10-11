@@ -22,16 +22,18 @@ function pm_social_nav(string $on): string
 {
     $dept = pm_ui_dept_of('social', $on);
     $GLOBALS['PM_DEPT'] = $GLOBALS['PM_DEPT'] ?? $dept;
-    $items = pm_ui_dept_tabs($dept); // the pages of this department only
-    $sub = ['' => 'Plan posts, approve them and watch what goes out.', 'leadposts' => 'Bold posts with a button and a keyword that bring in client details. Free and unlimited.', 'content' => 'What posts can be about: ideas, hashtags, key dates and places.', 'channels' => 'Where else to post, and today\'s hand-post tasks.', 'optimise' => 'Fix what is missing on every channel, one press at a time.', 'studio' => 'Design the profile pictures and covers: styles, colours and words, made by code.',
-        'growth' => 'Turn comments and messages into customers.', 'results' => 'What worked, what it cost, and what to do next.', 'page' => 'How the Facebook Page looks to visitors.',
-        'inbox' => 'Messages and comments waiting for an answer.', 'cleanup' => 'Tidy old posts and comments on the Page.', 'ads' => 'Small targeted ads, always created paused.',
-        'audit' => 'A health check of the Page, with every finding ready to act on.', 'accounts' => 'Connect Facebook and the other channels, and make the pictures.'];
+    $sub = ['' => 'Plan posts, approve them and watch what goes out.', 'leadposts' => 'Bold posts with a button and a keyword that bring in client details. Free and unlimited.',
+        'content' => 'What we post about: the mix, proof, ideas and photos, and which old posts to bring back.', 'channels' => 'Where else to post, and today\'s hand-post tasks.',
+        'inbox' => 'Everyone waiting for an answer: messages and comments, and what to hide or delete.', 'page' => 'The Page\'s own posts with their comments: read, edit and reply.',
+        'growth' => 'Who to engage today, with the words to use.', 'ads' => 'Small targeted ads, always created paused.',
+        'studio' => 'Design the covers and profile pictures: styles, colours and wording, made by code.', 'kit' => 'Cover wording, a hero photo and every platform\'s pictures at the right size.',
+        'optimise' => 'Fix what is missing on every profile, one press at a time, and write the profile words.', 'voice' => 'Everything the AI knows and may say about this business.',
+        'cleanup' => 'Tidy old posts on the Page: keep, rewrite or delete.', 'results' => 'What worked, what it cost, and what to do next.',
+        'audit' => 'A health check of the Page, with every finding ready to act on.', 'numbers' => 'Type in the numbers the apps do not give us.'];
     $name = function_exists('pm_brand_title') ? pm_brand_title(pm_settings(), pm_brand()) : pm_brand_name(pm_brand());
-    $label = strip_tags(html_entity_decode((string)($items[$on][0] ?? 'Plan'), ENT_QUOTES));
-    return pm_ui_head($label . ' · ' . $name, pm_h($sub[$on] ?? $sub[''])) . (function_exists('pm_social_banner') ? pm_social_banner() : '') . (count($items) > 1 ? pm_ui_tabs($items, $on, pm_ui_nav()[$dept]['label'] ?? 'Social') : '');
+    $label = pm_social_tabs()[$on] ?? 'Plan';
+    return pm_ui_head($label . ' · ' . $name, pm_h($sub[$on] ?? $sub[''])) . (function_exists('pm_social_banner') ? pm_social_banner() : '') . pm_ui_strip('social', $on);
 }
-
 /** The live Facebook Page as visitors see it, beside the cleaning tools. Facebook's own Page plugin: costs no API calls. */
 function pm_fb_page_embed(string $brand, int $height = 1400): string
 {
@@ -603,7 +605,7 @@ function pm_ads_daily_cap(string $brand): int
     return $c > 0 ? $c : PM_ADS_CAP_DEFAULT_MWK;
 }
 
-/** Units of a currency per 1 Kwacha, from Settings > Other currencies (1 for MWK, 0 when unknown). */
+/** Units of a currency per 1 Kwacha, from Operations > Team and currencies (1 for MWK, 0 when unknown). */
 function pm_ads_rate(string $cur): float
 {
     if (strtoupper($cur) === 'MWK' || $cur === '') {

@@ -1469,7 +1469,7 @@ function pm_studio_ai(string $brand, array $base): array
 function pm_studio_use(string $brand, string $id): array
 {
     if (!pm_studio_can_draw()) {
-        return [false, 'This server cannot draw pictures (GD with FreeType and the fonts are needed: see Accounts & branding).'];
+        return [false, 'This server cannot draw pictures (GD with FreeType and the fonts are needed: see Operations > Connections).'];
     }
     $spec = pm_studio_get($brand, $id);
     pm_studio_update($brand, function (array $d) use ($spec) {

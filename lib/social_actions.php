@@ -3,7 +3,7 @@
  * Social screen actions (index.php: if ($action==='social'||$action==='social_x') { require .../social_actions.php; pm_social_action($vb,$action); }).
  * Every change to posts goes through pm_social_update / pm_social_patch (locked read-modify-write): no load-all/save-all.
  * Needs pm_redirect() from index.php.
- * Roles (Settings > Marketing team, "Name | editor" or "Name | approver"): only approvers approve, publish and delete; editors press "Request approval".
+ * Roles (Operations > Team and currencies, "Name | editor" or "Name | approver"): only approvers approve, publish and delete; editors press "Request approval".
  */
 
 /** "upload_max_filesize 2M, post_max_size 8M": what this server allows (shown when an upload is refused). */
@@ -74,8 +74,10 @@ function pm_social_action(string $vb, string $action): never
     pm_brand_set($vb);
     $do = (string)($_POST['do'] ?? '');
 
-    if ($action === 'social_x') { // pillars and proof bank, saved from Social > Accounts
-        $back = fn($m, $k = 'ok') => pm_redirect('social&view=accounts', $m, $k);
+    $ret = preg_match('/^[a-z]+(&[a-z]+=[a-z0-9]+)*(#[a-z0-9_-]+)?$/', (string)($_POST['back'] ?? '')) ? (string)$_POST['back'] : ''; // the page the form was on
+
+    if ($action === 'social_x') { // pillars and proof bank (Social > Content), the Instagram picture address test (Operations > Connections)
+        $back = fn($m, $k = 'ok') => pm_redirect($ret !== '' ? $ret : ($do === 'ig_url_test' ? 'settings&section=connections' : 'social&view=content'), $m, $k);
         if ($do === 'pillars_save') {
             $rows = [];
             foreach ((array)($_POST['pillar_name'] ?? []) as $i => $n) {
@@ -181,27 +183,27 @@ function pm_social_action(string $vb, string $action): never
     if (in_array($do, ['draft_reply', 'reply'], true)) {
         $cid = (string)($_POST['cid'] ?? '');
         if (!preg_match('/^\d+(_\d+)?$/', $cid)) {
-            pm_redirect('social', 'That comment id is not valid.', 'err');
+            pm_redirect($ret ?: 'social', 'That comment id is not valid.', 'err');
         }
         if ($do === 'draft_reply') {
             try {
                 $_SESSION['sreply'][$cid] = pm_agent_social_reply(['post' => (string)$_POST['post'], 'from' => (string)$_POST['from'], 'message' => (string)$_POST['message']]);
             } catch (Throwable $e) {
-                pm_redirect('social', 'Could not draft a reply: ' . $e->getMessage(), 'err');
+                pm_redirect($ret ?: 'social', 'Could not draft a reply: ' . $e->getMessage(), 'err');
             }
-            pm_redirect('social', 'Reply drafted. Read it, then post it.');
+            pm_redirect($ret ?: 'social', 'Reply drafted. Read it, then post it.');
         }
         $txt = trim((string)($_POST['reply'] ?? ''));
         $c = pm_social_cfg($vb);
         if ($txt === '' || !$c['ready']) {
-            pm_redirect('social', $txt === '' ? 'Write a reply first.' : 'The Facebook Page is not connected.', 'err');
+            pm_redirect($ret ?: 'social', $txt === '' ? 'Write a reply first.' : 'The Facebook Page is not connected.', 'err');
         }
         if (function_exists('pm_reply_lint') && ($bad = (array)pm_reply_lint($txt, $vb))) {
-            pm_redirect('social', 'Reply not posted: ' . implode(' ', array_map('strval', $bad)), 'err');
+            pm_redirect($ret ?: 'social', 'Reply not posted: ' . implode(' ', array_map('strval', $bad)), 'err');
         }
         [$ok, $d] = pm_graph('POST', $cid . '/comments', ['message' => $txt], $c['token']);
         unset($_SESSION['sreply'][$cid]);
-        pm_redirect('social', $ok ? 'Reply posted.' : 'Facebook refused the reply: ' . $d, $ok ? 'ok' : 'err');
+        pm_redirect($ret ?: 'social', $ok ? 'Reply posted.' : 'Facebook refused the reply: ' . $d, $ok ? 'ok' : 'err');
     }
 
     $cur = null;

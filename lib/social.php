@@ -319,7 +319,7 @@ function pm_social_auto(string $brand): bool
 function pm_social_who(): string { return trim(explode('|', (string)($GLOBALS['PM_WHO'] ?? ''))[0]); }
 
 /**
- * 'approver' (default) or 'editor'. Settings > Marketing team lines: "Name | editor" or "Name | approver".
+ * 'approver' (default) or 'editor'. Operations > Team and currencies lines: "Name | editor" or "Name | approver".
  * $who may be the whole line or just the name. Nobody chosen = the owner = approver.
  */
 function pm_social_role(?string $who = null): string
@@ -483,7 +483,7 @@ function pm_social_readiness(string $brand): array
 {
     $c = pm_social_cfg($brand);
     $set = $brand === 'promanaged' ? '?tab=settings' : '?tab=settings&brand=' . $brand;
-    $acc = '?tab=social&view=accounts';
+    $acc = '?tab=settings&section=connections';
     $link = pm_link_cfg($brand);
     $gd = pm_social_gd_info();
     $rows = [];
@@ -1749,7 +1749,7 @@ function pm_social_publish(array &$p): array
     $igOn = !empty($ch['instagram']) && $c['ig_id'] !== '' && $c['token'] !== '';
     if (!$fbOn && !$li && !$igOn) {
         $p['status'] = 'failed';
-        $p['error'] = 'No social account is connected for ' . (pm_brand_name($p['brand'])) . ' yet (Social > Accounts & branding).';
+        $p['error'] = 'No social account is connected for ' . (pm_brand_name($p['brand'])) . ' yet (Operations > Connections).';
         return [false, $p['error']];
     }
     $media = pm_social_has_media($p) ? pm_social_media($p) : '';

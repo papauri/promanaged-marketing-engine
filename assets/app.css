@@ -665,3 +665,36 @@ body { --dept:var(--accent); }
 .hq-hero .sub { max-width:62ch; }
 .avs .av + .av { margin-left:-5px; }
 .hq-depts .dept:nth-child(odd):last-child { grid-column:auto; }
+
+/* =====================================================================================================================
+   v5 · each department does one job: the shared pieces of its pages (label and job, forms, save bar, lists)
+   ===================================================================================================================== */
+.eyebrows { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+.eyebrows .eyebrow { margin-bottom:0; }
+.eyebrows .job { padding-left:10px; border-left:1px solid var(--line); font-size:12.5px; color:var(--muted); }
+.row > div { min-width:0; }
+.card textarea { resize:vertical; min-height:64px; }
+input::placeholder, textarea::placeholder { color:#98a2b3; }
+.card label:first-child, .card h2 + label, .card .hint + label { margin-top:4px; }
+.card .row + label, .card .row + .row { margin-top:12px; }
+.formbar { position:sticky; bottom:0; z-index:6; margin:16px -20px 0; padding:12px 20px; background:color-mix(in srgb, var(--bg) 94%, #fff); border-top:1px solid var(--line); }
+.formbar .btn.primary { background:var(--dept); border-color:var(--dept); }
+.chipbar { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; }
+.chipbar .sx-chip { text-decoration:none; }
+.idearow { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
+.idearow > span { flex:1; min-width:0; }
+.idearow.off > span { color:var(--muted); }
+.idearow form { margin:0; }
+.proofrow { margin-bottom:14px; padding-bottom:14px; border-bottom:1px dashed var(--line); }
+.proofrow input, .proofrow select, .proofrow textarea { margin-bottom:6px; }
+.crew { display:flex; flex-wrap:wrap; gap:6px 18px; margin:6px 0 12px; }
+.card .roster li { padding:7px 0; border-bottom:1px solid var(--line); }
+.card .roster li:last-child { border-bottom:0; }
+.whereto { margin:8px 0 0; padding-left:18px; display:grid; gap:6px; }
+.inboxhead { padding:12px 16px; }
+details.card > summary b { font-weight:600; }
+@media (max-width:860px) {
+  .formbar { margin:16px -12px 0; padding:10px 12px; }
+  .eyebrows .job { border-left:0; padding-left:0; }
+}
+.row.pillrow { grid-template-columns:minmax(0, 1fr) 120px; margin-bottom:8px; }

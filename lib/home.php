@@ -18,13 +18,13 @@ function pm_home_staff(string $brand, array $d): array
     $needAi = $ai ? '' : 'needs an AI key';
     return [
         'sales' => [
-            $row('Scout', 'Finds businesses that need what we sell', $ai && !empty($en['scout']), $ai ? 'switched off in Agent settings' : $needAi),
-            $row('Contact Finder', 'Finds the owner, email and WhatsApp number', $ai && !empty($en['contact']), $ai ? 'switched off in Agent settings' : $needAi),
-            $row('Qualifier', 'Scores who deserves a message', $ai && !empty($en['qualifier']), $ai ? 'switched off in Agent settings' : $needAi),
-            $row('Researcher', 'Reads their website and pages', $ai && !empty($en['research']), $ai ? 'switched off in Agent settings' : $needAi),
-            $row('Writer', 'Drafts the first email and WhatsApp', $ai && !empty($en['writer']), $ai ? 'switched off in Agent settings' : $needAi),
-            $row('Follow-up', 'Drafts the nudge when they go quiet', $ai && !empty($en['followup']), $ai ? 'switched off in Agent settings' : $needAi),
-            $row('Proposal writer', 'Tailors the quotation', $ai && $proposals && !empty($en['proposals']), $proposals ? ($ai ? 'switched off in Agent settings' : $needAi) : 'proposals are for ProManaged IT and Travel Malawi'),
+            $row('Scout', 'Finds businesses that need what we sell', $ai && !empty($en['scout']), $ai ? 'switched off under Targeting and messages' : $needAi),
+            $row('Contact Finder', 'Finds the owner, email and WhatsApp number', $ai && !empty($en['contact']), $ai ? 'switched off under Targeting and messages' : $needAi),
+            $row('Qualifier', 'Scores who deserves a message', $ai && !empty($en['qualifier']), $ai ? 'switched off under Targeting and messages' : $needAi),
+            $row('Researcher', 'Reads their website and pages', $ai && !empty($en['research']), $ai ? 'switched off under Targeting and messages' : $needAi),
+            $row('Writer', 'Drafts the first email and WhatsApp', $ai && !empty($en['writer']), $ai ? 'switched off under Targeting and messages' : $needAi),
+            $row('Follow-up', 'Drafts the nudge when they go quiet', $ai && !empty($en['followup']), $ai ? 'switched off under Targeting and messages' : $needAi),
+            $row('Proposal writer', 'Tailors the quotation', $ai && $proposals && !empty($en['proposals']), $proposals ? ($ai ? 'switched off under Targeting and messages' : $needAi) : 'proposals are for ProManaged IT and Travel Malawi'),
         ],
         'social' => [
             $row('Planner', 'Writes the week\'s posts for your approval', $fb || (int)($d['social']['planned'] ?? 0) > 0, 'connect the Facebook Page'),
@@ -34,15 +34,15 @@ function pm_home_staff(string $brand, array $d): array
         'brand' => [
             $row('Art director', 'Designs the covers and profile pictures', function_exists('pm_studio_can_draw') && pm_studio_can_draw(), 'this server cannot draw pictures'),
             $row('Copywriter', 'Writes the profile words', $ai, $needAi),
-            $row('Auditor', 'Judges the Page and what to change', $ai && $fb, $ai ? 'connect the Facebook Page' : $needAi),
         ],
         'insights' => [
             $row('Director', 'Reads the numbers and sets today\'s strategy', $ai, $needAi),
+            $row('Auditor', 'Judges the Page and what to change', $ai && $fb, $ai ? 'connect the Facebook Page' : $needAi),
         ],
         'ops' => [
-            $row('Scheduler', 'Sends, posts and refreshes on time', ($d['ops']['scheduler_age'] ?? null) !== null && (int)$d['ops']['scheduler_age'] < 7200, 'it has not run recently: install the scheduled task'),
-            $row('Mail room', 'Sends your approved emails', !empty($d['ops']['mail']), 'add the mail login in Settings'),
-            $row('Inbox reader', 'Reads replies and classifies them', !empty($d['ops']['imap']), 'add the mailbox login in Settings'),
+            $row('Scheduler', 'Sends, posts and refreshes on time', ($d['ops']['scheduler_age'] ?? null) !== null && (int)$d['ops']['scheduler_age'] < 7200, 'it has not run recently: install the scheduled task (Operations > Health and backups)'),
+            $row('Mail room', 'Sends your approved emails', !empty($d['ops']['mail']), 'add the mail login under Operations > Email'),
+            $row('Inbox reader', 'Reads replies and classifies them', !empty($d['ops']['imap']), 'add the mailbox login under Operations > Email'),
         ],
     ];
 }
@@ -153,16 +153,16 @@ function pm_home_depts(string $brand, array $d): array
             'next' => array_values(array_filter([[$s['replies'] ? 'Answer the replies' : 'Open the leads', '?tab=agents', true], $s['followups_to_draft'] > 0 ? ['Draft ' . $s['followups_to_draft'] . ' follow-up' . ($s['followups_to_draft'] === 1 ? '' : 's'), '?tab=agents#strategy', false] : null, ['WhatsApp outreach', '?tab=whatsapp', false]]))],
         'social' => ['mission' => 'Plans and publishes the posts, answers the community, and tells you who to engage today.', 'state' => $soSt, 'text' => $soTxt,
             'stats' => ['Posts lined up' => $so['planned'], 'Waiting approval' => $so['waiting'], 'Published (4 weeks)' => $so['published28'], 'Playbook tasks open' => $so['playbook_open'], 'Followers' => $so['followers'] ?: '-'],
-            'next' => $so['ready'] ? array_values(array_filter([[$so['waiting'] ? 'Approve the posts' : 'Plan the posts', '?tab=social', true], ['Today\'s playbook', '?tab=social&view=growth', false], ['Inbox', '?tab=social&view=inbox', false]])) : [['Connect Facebook', '?tab=social&view=accounts', true]]],
+            'next' => $so['ready'] ? array_values(array_filter([[$so['waiting'] ? 'Approve the posts' : 'Plan the posts', '?tab=social', true], ['Today\'s playbook', '?tab=social&view=growth', false], ['Inbox', '?tab=social&view=inbox', false]])) : [['Connect Facebook', '?tab=settings&section=connections', true]]],
         'brand' => ['mission' => 'Designs the covers and pictures, writes the profile words and keeps every channel in good order.', 'state' => $bSt, 'text' => $bTxt,
             'stats' => ['Page health' => $br['score'] === null ? '-' : $br['score'] . '%', 'Fixes ready' => $br['fixable'], 'Design in use' => $br['design'] !== '' ? $br['design'] : 'Classic', 'Profile words written' => $br['copy']],
-            'next' => [[$br['score'] === null || $br['fixable'] ? 'Fix what is missing' : 'See the channels', '?tab=social&view=optimise', true], ['Open the Studio', '?tab=social&view=studio', false], ['Run the audit', '?tab=social&view=audit', false]]],
+            'next' => [[$br['score'] === null || $br['fixable'] ? 'Fix what is missing' : 'See the channels', '?tab=social&view=optimise', true], ['Open the Studio', '?tab=social&view=studio', false], ['Brand voice', '?tab=social&view=voice', false]]],
         'insights' => ['mission' => 'Shows what worked, what it cost, and what the strategy should be next.', 'state' => $iSt, 'text' => $iTxt,
             'stats' => ['Leads' => $in['leads'], 'Proposals out' => $in['proposals'], 'Won' => $in['won'], 'Social enquiries (4 weeks)' => $in['enquiries28'], 'Weekly post goal' => $in['goal_posts'] ?: '-'],
-            'next' => [['Open the results', '?tab=social&view=results', true], ['Strategy brief', '?tab=home#brief', false]]],
+            'next' => [['Open the results', '?tab=social&view=results', true], ['Run the audit', '?tab=social&view=audit', false], ['Strategy brief', '?tab=home#brief', false]]],
         'ops' => ['mission' => 'Keeps the machinery running: the scheduler, the mail room, the connections and the team.', 'state' => $oSt, 'text' => $oTxt,
             'stats' => ['AI' => $op['ai'] ? 'On' : 'No key', 'Mail' => $op['mail'] ? 'Ready' : 'Not set', 'Replies read' => $op['imap'] ? 'Yes' : 'No', 'Essentials' => $op['essentials_ok'] . '/' . $op['essentials'], 'Businesses' => $op['businesses']],
-            'next' => [['Setup health', '?tab=settings#health', true], ['Business settings', '?tab=settings', false], ['Add a business', '?tab=business&new=1', false]]],
+            'next' => [['Setup health', '?tab=settings&section=health', true], ['Business details', '?tab=settings&section=business', false], ['Add a business', '?tab=business&new=1', false]]],
     ];
     foreach ($cards as $k => &$c) {
         $c['staff'] = $staff[$k];

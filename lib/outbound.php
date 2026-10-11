@@ -313,7 +313,7 @@ function pm_email_auth_check(string $domain, bool $fresh = false): array
     $domain = strtolower(trim($domain));
     $out = ['domain' => $domain, 'spf' => ['status' => 'missing', 'detail' => ''], 'dmarc' => ['status' => 'missing', 'detail' => ''], 'dkim' => ['status' => 'missing', 'detail' => ''], 'advice' => [], 'checked' => false];
     if ($domain === '' || !str_contains($domain, '.')) {
-        $out['advice'][] = 'Set a From address on your own domain (Settings > Email sending).';
+        $out['advice'][] = 'Set a From address on your own domain (Operations > Email).';
         return $out;
     }
     if (in_array($domain, PM_FREE_MAIL, true)) {

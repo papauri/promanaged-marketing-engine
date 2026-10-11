@@ -403,9 +403,20 @@ function pm_aa_apply_all(string $brand): array
 
 /* ---------------- form handlers (POST action=social_ext&do=...) ---------------- */
 
+/** Where an audit setting goes back to: the page the form was on (Plan, Content, Inbox), else the Audit. */
 function pm_aa_to(string $anchor = ''): string
 {
-    return 'social&view=audit' . ($anchor !== '' ? '#' . $anchor : '');
+    $back = (string)($_POST['back'] ?? '');
+    $page = preg_match('/^social(&view=[a-z]+)?$/', $back) ? $back : 'social&view=audit';
+    return $page . ($anchor !== '' ? '#' . $anchor : '');
+}
+
+/** The setting suggestions that belong on one department's page (no network: from the stored audit's data). $keys are the item keys. */
+function pm_aa_items_for(string $brand, array $keys): array
+{
+    $au = pm_load('page_audit', fn() => [])[$brand] ?? null;
+    $au = is_array($au) ? $au : null;
+    return array_values(array_filter(pm_aa_settings_items($brand, $au, (array)($au['data'] ?? [])), fn($i) => in_array($i['key'], $keys, true)));
 }
 
 function pm_do_aa_apply(string $vb): array

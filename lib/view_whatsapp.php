@@ -19,6 +19,7 @@ $wrote = array_values(array_filter(pm_leads(), fn($x) => ($x['brand'] ?? 'proman
 usort($wrote, fn($a, $b) => strcmp((string)($a['awaiting_reply_since'] ?? $a['last_reply'] ?? ''), (string)($b['awaiting_reply_since'] ?? $b['last_reply'] ?? '')));
 ?>
 <?= pm_ui_head('WhatsApp · ' . pm_h($bname), 'Tap <b>Send on WhatsApp</b>: WhatsApp opens with the message ready, you press send there, and the lead moves on. ' . (int)$sent . ' sent today · ' . (int)$left . ' left of ' . (int)$cap . '.') ?>
+<?= pm_ui_strip('whatsapp') ?>
 <?php if ($wrote): ?>
 <h2 class="repttl">They replied <span class="pill warn"><?= count($wrote) ?></span></h2>
 <?php foreach (array_slice($wrote, 0, 15) as $l):
@@ -110,3 +111,4 @@ usort($wrote, fn($a, $b) => strcmp((string)($a['awaiting_reply_since'] ?? $a['la
   });
 })();
 </script>
+<?= pm_social_panels('wa_top', $vb) ?>

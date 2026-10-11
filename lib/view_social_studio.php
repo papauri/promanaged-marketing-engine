@@ -1,5 +1,5 @@
 <?php
-/** Social > Studio: design the profile picture and cover (and every size every platform wants) from styles, colours and words. Drawn by code; "Surprise me" and "New idea from AI" make new designs. */
+/** Brand > Studio: design the profile picture and cover (and every size every platform wants) from styles, colours and words. Drawn by code; "Surprise me" and "New idea from AI" make new designs. */
 pm_brand_set($vb);
 $bname = pm_brand_title($settings, $vb);
 $canDraw = pm_studio_can_draw();
@@ -41,7 +41,7 @@ $how = ['ai' => 'AI idea', 'shuffle' => 'Surprise', 'you' => 'Edited', 'start' =
 </style>
 <div class="stu">
 <?php if (!$canDraw): ?>
-  <div class="flash err"><b>This server cannot draw pictures.</b> The Studio needs the GD extension with FreeType and the fonts in assets/fonts (see Accounts &amp; branding > Pictures).</div>
+  <div class="flash err"><b>This server cannot draw pictures.</b> The Studio needs the GD extension with FreeType and the fonts in assets/fonts (see Operations &gt; Connections &gt; Pictures).</div>
 <?php endif; ?>
 
 <div class="card">
@@ -54,7 +54,7 @@ $how = ['ai' => 'AI idea', 'shuffle' => 'Surprise', 'you' => 'Edited', 'start' =
     <form method="post" class="inl"><?= $fx('studio_ai') ?><button class="btn" <?= $canDraw && pm_agents_ready() ? '' : 'disabled' ?> title="<?= pm_agents_ready() ? 'One small AI call chooses the style, colours and words; code draws it.' : 'Add an AI key to .env first.' ?>">New idea from the AI</button></form>
     <form method="post" class="inl"><?= $fx('studio', $hid('op', 'seed')) ?><button class="btn" title="Same style and colours, a different arrangement" <?= $canDraw ? '' : 'disabled' ?>>Reshuffle the shapes</button></form>
     <form method="post" class="inl"><?= $fx('studio_use') ?><button class="btn primary" <?= $canDraw && !$sameAsSaved ? '' : 'disabled' ?>>Use this design everywhere</button></form>
-    <form method="post" class="inl" onsubmit="return confirm('Change the Facebook Page profile picture and cover to this design now?')"><?= $fx('studio_fb', $hid('what', 'both')) ?><button class="btn" <?= $canDraw && $fb['ready'] ? '' : 'disabled title="Connect the Facebook Page first (Accounts & branding)"' ?>>Use it and set it on Facebook</button></form>
+    <form method="post" class="inl" onsubmit="return confirm('Change the Facebook Page profile picture and cover to this design now?')"><?= $fx('studio_fb', $hid('what', 'both')) ?><button class="btn" <?= $canDraw && $fb['ready'] ? '' : 'disabled title="Connect the Facebook Page first (Operations > Connections)"' ?>>Use it and set it on Facebook</button></form>
     <?php if ($saved): ?><form method="post" class="inl" onsubmit="return confirm('Go back to the classic cover everywhere?')"><?= $fx('studio_reset') ?><button class="btn small">Back to the classic cover</button></form><?php endif; ?>
   </div>
 </div>
@@ -87,7 +87,7 @@ $how = ['ai' => 'AI idea', 'shuffle' => 'Surprise', 'you' => 'Edited', 'start' =
   <div class="gal"><?php foreach (PM_SD_STYLES as $k => $l): if (in_array($k, PM_SD_DIGITAL, true) || ($k === 'photo' && !$hasHero)) { continue; } ?>
     <form method="post"><?= $fx('studio', $hid('op', 'style') . $hid('style', $k)) ?><button class="<?= $spec['style'] === $k ? 'on' : '' ?>"><img src="<?= pm_h($img('cover', 340, 178, '&t=facebook&style=' . $k)) ?>" alt="" loading="lazy"><span><?= pm_h($l) ?></span></button></form>
   <?php endforeach; ?></div>
-  <?php if (!$hasHero): ?><p class="hint">"Your photo" appears once you add a hero photo under Accounts &amp; branding.</p><?php endif; ?>
+  <?php if (!$hasHero): ?><p class="hint">"Your photo" appears once you add a hero photo under <a href="?tab=social&amp;view=kit">Brand &gt; Brand kit</a>.</p><?php endif; ?>
   <details class="more"><summary class="hint" style="cursor:pointer">Digital looks (glows, circuits, facets): for a technology business, used on purpose</summary>
     <div class="gal"><?php foreach (PM_SD_DIGITAL as $k): $l = PM_SD_STYLES[$k]; ?>
       <form method="post"><?= $fx('studio', $hid('op', 'style') . $hid('style', $k)) ?><button class="<?= $spec['style'] === $k ? 'on' : '' ?>"><img src="<?= pm_h($img('cover', 340, 178, '&t=facebook&style=' . $k)) ?>" alt="" loading="lazy"><span><?= pm_h($l) ?></span></button></form>
@@ -120,33 +120,6 @@ $how = ['ai' => 'AI idea', 'shuffle' => 'Surprise', 'you' => 'Edited', 'start' =
   </form>
 </div>
 
-<?php $copyStore = pm_copy_store($vb); $plainOf = fn(string $k) => pm_copy_plain($vb, $k); ?>
-<div class="card" id="words">
-  <h2>Profile words</h2>
-  <p class="hint" style="margin-top:0">The intro, description and bio for each channel, written like a person who does this for a living: three options each (plain and warm, specific and confident, short and memorable), in one AI call for the profiles you tick. They use only your facts, fit each platform's limit and are checked for the wording people now recognise as machine-written. Choose one and it becomes the suggestion on Optimise and the Audit; Facebook and WhatsApp can apply it straight away.</p>
-  <form method="post"><?= $fx('copy_write') ?>
-    <div class="btns" style="margin-top:0"><?php foreach (PM_COPY_GROUPS as $gk => $gl): ?><label class="check"><input type="checkbox" name="groups[]" value="<?= $gk ?>" <?= in_array($gk, ['facebook', 'instagram', 'whatsapp', 'google'], true) ? 'checked' : '' ?>> <?= pm_h($gl) ?></label><?php endforeach; ?></div>
-    <div class="btns"><button class="btn primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?>>Write 3 options for each (AI)</button><?php if ($copyStore): ?><button class="btn small" name="do" value="copy_clear">Clear the options</button><?php endif; ?></div>
-  </form>
-  <?php foreach (PM_COPY_FIELDS as $k => [$label, $limit, $what, $grp]): $cur = $copyStore[$k] ?? null; $plain = $plainOf($k); $chosen = trim((string)(pm_opt_store($vb)['ai'][$k] ?? '')); ?>
-  <div class="sx-card" id="w-<?= pm_h($k) ?>" style="margin:10px 0">
-    <div class="sxh" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b><?= pm_h($label) ?></b><span class="sx-chip"><?= pm_h(PM_COPY_GROUPS[$grp]) ?> · up to <?= (int)$limit ?></span><span class="muted"><?= pm_h($what) ?></span></div>
-    <?php if ($plain !== ''): ?><p class="hint" style="margin:6px 0 0">Plain version: <?= pm_h($plain) ?> <button type="button" class="btn small" data-copy="<?= pm_h($plain) ?>">Copy</button></p><?php endif; ?>
-    <?php foreach ((array)($cur['options'] ?? []) as $i => $o): ?>
-    <div style="margin-top:8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;<?= $chosen === $o['text'] ? 'border-color:var(--accent);' : '' ?>">
-      <span class="sx-chip"><?= pm_h(PM_COPY_VOICES[$o['voice']] ?? $o['voice']) ?> · <?= mb_strlen($o['text']) ?>/<?= (int)$limit ?></span><?= $chosen === $o['text'] ? ' <span class="sx-chip ok">chosen</span>' : '' ?>
-      <p style="margin:6px 0"><?= pm_h($o['text']) ?></p>
-      <div class="btns" style="margin-top:4px">
-        <form method="post" class="inl"><?= $fx('copy_use', $hid('key', $k) . $hid('i', (string)$i)) ?><button class="btn small">Use this one</button></form>
-        <?php if (in_array($k, PM_COPY_APPLY, true)): ?><form method="post" class="inl" onsubmit="return confirm('Put this on the <?= $grp === 'facebook' ? 'Facebook Page' : 'WhatsApp Business profile' ?> now?')"><?= $fx('copy_use', $hid('key', $k) . $hid('i', (string)$i) . $hid('apply', '1')) ?><button class="btn small primary">Apply to <?= $grp === 'facebook' ? 'Facebook' : 'WhatsApp' ?></button></form><?php endif; ?>
-        <button type="button" class="btn small" data-copy="<?= pm_h($o['text']) ?>">Copy</button>
-      </div>
-    </div>
-    <?php endforeach; ?>
-  </div>
-  <?php endforeach; ?>
-</div>
-
 <?php $insKw = rawurlencode(trim(preg_replace('/\s+/', ' ', mb_substr((string)($settings['company_name'] ?? ''), 0, 30)))); ?>
 <div class="card">
   <h2>Look for inspiration</h2>
@@ -162,7 +135,7 @@ $how = ['ai' => 'AI idea', 'shuffle' => 'Surprise', 'you' => 'Edited', 'start' =
 </div>
 <div class="card">
   <h2>Every size, ready to use</h2>
-  <p class="hint" style="margin-top:0">Each one is drawn at the exact size the platform asks for. "Use this design everywhere" also puts them in the branding kit under Accounts &amp; branding.</p>
+  <p class="hint" style="margin-top:0">Each one is drawn at the exact size the platform asks for. "Use this design everywhere" also puts them in the <a href="?tab=social&amp;view=kit">Brand kit</a>. The words for each profile are written under <a href="?tab=social&amp;view=optimise#words">Profiles</a>.</p>
   <div class="all"><?php foreach (pm_studio_targets() as $k => [$label, $kind, $w, $h]): $pw = $w > $h ? 420 : 200; $ph = (int)round($pw * $h / $w); ?>
     <figure style="margin:0"><img src="<?= pm_h($img('cover', $pw, $ph, '&t=' . $k)) ?>" alt="<?= pm_h($label) ?>" loading="lazy" <?= $w < $h ? 'style="max-width:200px"' : '' ?>>
       <figcaption class="hint"><b><?= pm_h($label) ?></b> · <?= $w ?>×<?= $h ?> · <a href="<?= pm_h($img('cover', $w, $h, '&t=' . $k . '&dl=1')) ?>">Download</a></figcaption></figure>

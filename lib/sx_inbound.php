@@ -105,7 +105,7 @@ function pm_inbound_alert_build(string $brand, array $ids): array
             . (($k['link'] ?? '') !== '' ? "\n  Post: " . $k['link'] : '')
             . ($tpl !== '' ? "\n  Suggested reply: " . $tpl : '')
             . ($left > 0 ? "\n  Can also be answered privately for $left more days (one private reply per comment)" : '')
-            . "\n  Open: " . ($app !== '' ? $app . '/index.php?tab=social&view=growth' : 'Social > Growth');
+            . "\n  Open: " . ($app !== '' ? $app . '/index.php?tab=social&view=growth' : 'Social > Playbook');
         $sent[] = $id;
     }
     $n = count($sent);
@@ -355,7 +355,7 @@ function pm_panel_inbox_top_speed(string $vb, array $ctx = []): string
     }
     $ig = function_exists('pm_ig_state') ? pm_ig_state($vb) : 'off';
     if ($ig === 'needs_scope') {
-        $h .= '<p class="hint warnt">Instagram comments and messages need more permissions (instagram_basic, instagram_manage_comments, instagram_manage_messages). Reconnect in Accounts &amp; branding with those ticked.</p>';
+        $h .= '<p class="hint warnt">Instagram comments and messages need more permissions (instagram_basic, instagram_manage_comments, instagram_manage_messages). Reconnect in Operations > Connections &amp; branding with those ticked.</p>';
     }
     $h .= '<p class="hint">Facebook allows a normal reply within 24 hours of their last message. After that, and up to 7 days, you can press <b>Send as human follow-up</b> once you have a real answer. A comment can get one private reply within 7 days.</p></div>';
     return $h;
@@ -366,7 +366,7 @@ function pm_panel_growth_bottom_pagebtn(string $vb, array $ctx = []): string
 {
     $done = !empty(pm_inb_get()['notes'][$vb]['page_btn_ref']);
     $wa = pm_inb_wa_digits($vb);
-    return '<div class="card"><h2>Page WhatsApp button</h2><p class="hint">' . ($wa === '' ? 'Set the business phone in Settings first. ' : '')
+    return '<div class="card"><h2>Page WhatsApp button</h2><p class="hint">' . ($wa === '' ? 'Set the business phone under Operations > Business details first. ' : '')
         . 'In Facebook: Page &gt; Add action button &gt; Send WhatsApp message. Use the number ' . pm_h($wa !== '' ? '+' . $wa : '') . ' and, if Facebook lets you set a ready-made message, use <code>Hi, I found you on your Page (ref PAGE)</code> so enquiries from the button show where they came from. Facebook does not let this app set the button.</p>'
         . pm_inb_form('inb_tick', '<input type="hidden" name="key" value="page_btn_ref"><button class="btn small">' . ($done ? 'Done: undo' : 'I did this') . '</button>')
         . '</div>';

@@ -29,38 +29,44 @@ t('Every screen belongs to one department', function () {
     $reg = pm_ui_nav();
     pm_t_eq(array_keys($reg), ['hq', 'sales', 'social', 'brand', 'insights', 'ops'], 'six departments, the overview first');
     foreach ($reg as $k => $d) {
-        pm_t_assert(preg_match('/^#[0-9a-f]{6}$/', $d['color']) === 1 && isset(PM_UI_ICONS[$k]) && $d['name'] !== '' && $d['href'] !== '', "$k has a colour, an icon, a name and a home link");
+        pm_t_assert(preg_match('/^#[0-9a-f]{6}$/', $d['color']) === 1 && isset(PM_UI_ICONS[$k]) && $d['name'] !== '' && $d['job'] !== '' && $d['href'] !== '', "$k has a colour, an icon, a name, a job and a home link");
     }
     pm_t_assert(count(array_unique(array_column($reg, 'color'))) === 6, 'each department has its own colour');
-    foreach (['home' => 'hq', 'agents' => 'sales', 'whatsapp' => 'sales', 'proposal' => 'sales', 'history' => 'sales', 'template' => 'sales', 'settings' => 'ops', 'business' => 'ops'] as $tab => $want) {
+    foreach (['home' => 'hq', 'agents' => 'sales', 'whatsapp' => 'sales', 'targeting' => 'sales', 'proposal' => 'sales', 'history' => 'sales', 'template' => 'sales', 'settings' => 'ops', 'business' => 'ops'] as $tab => $want) {
         pm_t_eq(pm_ui_dept_of($tab), $want, "tab $tab is in $want");
     }
-    foreach (['' => 'social', 'leadposts' => 'social', 'content' => 'social', 'channels' => 'social', 'inbox' => 'social', 'page' => 'social', 'growth' => 'social', 'cleanup' => 'social', 'ads' => 'social',
-        'studio' => 'brand', 'optimise' => 'brand', 'accounts' => 'brand', 'results' => 'insights', 'audit' => 'insights'] as $view => $want) {
+    foreach (['' => 'social', 'leadposts' => 'social', 'content' => 'social', 'channels' => 'social', 'inbox' => 'social', 'page' => 'social', 'growth' => 'social', 'ads' => 'social',
+        'studio' => 'brand', 'kit' => 'brand', 'optimise' => 'brand', 'voice' => 'brand', 'cleanup' => 'brand', 'results' => 'insights', 'audit' => 'insights', 'numbers' => 'insights'] as $view => $want) {
         pm_t_eq(pm_ui_dept_of('social', $view), $want, "Social view '$view' is in $want");
     }
-    pm_t_eq(pm_ui_dept_of('social', 'something-new'), 'social', 'a view nobody has placed stays with Social');
-    $all = [];
-    foreach (['social', 'brand', 'insights'] as $d) {
-        $all = array_merge($all, array_map('strval', array_keys(pm_ui_dept_tabs($d))));
+    foreach (['business', 'email', 'connections', 'health', 'team', ''] as $sec) {
+        pm_t_eq(pm_ui_dept_of('settings', '', $sec), 'ops', "Operations section '$sec' is Operations");
     }
-    $old = array_map('strval', array_keys(pm_social_tabs()));
-    sort($all);
-    sort($old);
-    pm_t_eq($all, $old, 'the old full tab list and the departments cover the same Social views');
-    $views = [];
-    foreach (['social', 'brand', 'insights'] as $d) {
-        foreach (array_keys(pm_ui_dept_tabs($d)) as $v) {
-            $views[$v] = ($views[$v] ?? 0) + 1;
+    pm_t_eq(pm_ui_dept_of('social', 'something-new'), 'social', 'a view nobody has placed stays with Social');
+    // every page is listed once, under one department
+    $seen = [];
+    foreach ($reg as $k => $d) {
+        foreach ($d['groups'] as $items) {
+            foreach (array_keys($items) as $href) {
+                $seen[$href] = ($seen[$href] ?? 0) + 1;
+            }
         }
     }
-    pm_t_assert(max($views) === 1, 'no Social view is in two departments');
-    pm_t_eq(pm_ui_dept_tabs('sales'), [], 'a department of its own screens has no Social tab strip');
+    pm_t_assert(max($seen) === 1, 'no page is listed twice');
+    $views = array_keys(pm_social_tabs());
+    pm_t_eq(array_map('strval', $views), ['', 'leadposts', 'content', 'channels', 'inbox', 'page', 'growth', 'ads', 'studio', 'kit', 'optimise', 'voice', 'cleanup', 'results', 'audit', 'numbers'], 'the Social views come from the registry, in order');
+    pm_t_eq(array_keys(pm_ui_dept_pages('sales')), ['?tab=agents', '?tab=whatsapp', '?tab=targeting', '?tab=proposal', '?tab=history', '?tab=template'], 'Sales has Leads, WhatsApp, Targeting and the three Proposals pages');
+    pm_t_assert(!array_key_exists('?tab=business&new=1', pm_ui_dept_pages('ops')) && count(pm_ui_dept_pages('ops')) === 5, 'the "+ Add a business" link is a button, not a page');
+    foreach (pm_social_tabs() as $v => $label) {
+        pm_t_assert(is_file(pm_social_view_file((string)$v)) && ($v === '' || !str_ends_with(pm_social_view_file((string)$v), 'view_social.php')), "the page '$v' has a view file of its own");
+    }
+    pm_t_eq(pm_ui_moved('social&view=accounts#x'), 'settings&section=connections#x', 'the old Accounts address leads to Connections, with its anchor');
+    pm_t_eq([pm_ui_moved('social&view=accountsfoo'), pm_ui_moved('social&view=studio')], ['social&view=accountsfoo', 'social&view=studio'], 'and nothing else is touched');
 });
 
 t('The top bar and page head follow the department', function () {
     $settings = pm_settings();
-    $bar = fn(string $tab, string $view = '') => pm_ui_topbar(['tab' => $tab, 'view' => $view, 'vb' => 'promanaged', 'settings' => $settings, 'csrf' => 'c', 'team' => [], 'who' => '', 'hbAge' => null]);
+    $bar = fn(string $tab, string $view = '', string $section = '') => pm_ui_topbar(['tab' => $tab, 'view' => $view, 'section' => $section, 'vb' => 'promanaged', 'settings' => $settings, 'csrf' => 'c', 'team' => [], 'who' => '', 'hbAge' => null]);
     $h = $bar('home');
     pm_t_assert(substr_count($h, 'class="navitem"') === 6 && str_contains($h, '>Overview</span>') && str_contains($h, '>Operations</span>') && str_contains($h, 'aria-label="Departments"'), 'one entry per department');
     pm_t_assert(str_contains($h, '<div class="dd navdd on" style="--dept:#2b2f36">'), 'the Overview is marked on the home screen, in its colour');
@@ -68,13 +74,17 @@ t('The top bar and page head follow the department', function () {
     pm_t_assert(str_contains($h, '<div class="dd navdd on" style="--dept:#8a6a2f">') && substr_count($h, 'navdd on') === 1, 'Studio lights up Brand, and only Brand');
     pm_t_assert(preg_match('#class="item on" href="\?tab=social&amp;view=studio"#', $h) === 1, 'and its drop-down marks the page');
     $h = $bar('social', 'results');
-    pm_t_assert(str_contains($h, '--dept:#46607a">') && preg_match('#navdd on" style="--dept:\#46607a#', $h) === 1, 'Results lights up Insights');
+    pm_t_assert(preg_match('#navdd on" style="--dept:\#46607a#', $h) === 1, 'Results lights up Insights');
     $h = $bar('whatsapp');
-    pm_t_assert(preg_match('#navdd on" style="--dept:\#2f6b4f#', $h) === 1 && str_contains($h, '>WhatsApp outreach<'), 'WhatsApp is a Sales page');
+    pm_t_assert(preg_match('#navdd on" style="--dept:\#2f6b4f#', $h) === 1 && str_contains($h, '>WhatsApp<'), 'WhatsApp is a Sales page');
+    $h = $bar('settings', '', 'email');
+    pm_t_assert(preg_match('#navdd on" style="--dept:\#5e5a52#', $h) === 1 && preg_match('#class="item on" href="\?tab=settings&amp;section=email"#', $h) === 1, 'the Email section is an Operations page and marks itself');
+    $h = $bar('settings');
+    pm_t_assert(preg_match('#class="item on" href="\?tab=settings&amp;section=business"#', $h) === 1, 'Settings with no section is Business details');
     pm_t_assert(!str_contains($bar('home'), 'aria-label="Overview pages"') && str_contains($bar('home'), 'aria-label="Sales pages"'), 'a department with one page has no drop-down');
     $GLOBALS['PM_DEPT'] = 'brand';
     $head = pm_ui_head('Studio · X', 'Words');
-    pm_t_assert(str_contains($head, 'class="eyebrow"') && str_contains($head, 'Brand and creative department') && str_contains($head, '<svg'), 'a page head names its department with the icon');
+    pm_t_assert(str_contains($head, 'class="eyebrow"') && str_contains($head, 'Brand and creative department') && str_contains($head, 'Look and sound right everywhere') && str_contains($head, '<svg'), 'a page head names its department, its job and its icon');
     $GLOBALS['PM_DEPT'] = 'hq';
     pm_t_assert(!str_contains(pm_ui_head('Hi'), 'eyebrow'), 'the overview needs no department label');
     $GLOBALS['PM_DEPT'] = '';
@@ -83,20 +93,24 @@ t('The top bar and page head follow the department', function () {
     pm_t_assert(pm_ui_href_on('?tab=social&view=studio', 'social', 'studio') && !pm_ui_href_on('?tab=social&view=studio', 'social', 'results') && pm_ui_href_on('?tab=social', 'social', '') && !pm_ui_href_on('?tab=settings#health', 'settings', ''), 'a link is "on" only for its own screen, and never a #section link');
 });
 
-t('The Social tab strip shows one department\'s pages', function () {
-    $GLOBALS['PM_DEPT'] = null;
+t('Each department\'s tab strip shows only its own pages', function () {
     unset($GLOBALS['PM_DEPT']);
     $h = pm_social_nav('studio');
-    pm_t_assert(str_contains($h, 'Brand and creative department') && str_contains($h, '>Studio</a>') && str_contains($h, '>Optimise</a>') && str_contains($h, 'Accounts &amp; branding') && !str_contains($h, '>Lead posts</a>') && !str_contains($h, '>Results</a>'),
-        'the Studio shows the Brand pages and not the Social ones');
+    pm_t_assert(str_contains($h, 'Brand and creative department') && str_contains($h, '>Studio</a>') && str_contains($h, '>Profiles</a>') && str_contains($h, '>Voice</a>') && str_contains($h, '>Brand kit</a>') && str_contains($h, '>Page clean-up</a>')
+        && !str_contains($h, '>Lead posts</a>') && !str_contains($h, '>Results</a>'), 'the Studio shows the Brand pages and not the Social ones');
     pm_t_assert(preg_match('#<a href="\?tab=social&amp;view=studio" class="on" aria-current="page">Studio</a>#', $h) === 1 && str_contains($h, '<h1>Studio · '), 'it marks Studio and titles the page with it');
     unset($GLOBALS['PM_DEPT']);
     $h = pm_social_nav('');
-    pm_t_assert(str_contains($h, '>Plan</a>') && str_contains($h, '>Lead posts</a>') && str_contains($h, '>Inbox</a>') && !str_contains($h, '>Studio</a>') && str_contains($h, '<h1>Plan · '), 'the Social plan shows the Social pages');
+    pm_t_assert(str_contains($h, '>Plan</a>') && str_contains($h, '>Lead posts</a>') && str_contains($h, '>Content</a>') && str_contains($h, '>Inbox</a>') && str_contains($h, '>Playbook</a>') && !str_contains($h, '>Studio</a>') && str_contains($h, '<h1>Plan · '), 'the Social plan shows the Social pages');
     unset($GLOBALS['PM_DEPT']);
     $h = pm_social_nav('audit');
-    pm_t_assert(str_contains($h, '>Results</a>') && str_contains($h, '>Audit</a>') && str_contains($h, 'Insights department'), 'the Audit sits with Results under Insights');
+    pm_t_assert(str_contains($h, '>Results</a>') && str_contains($h, '>Audit</a>') && str_contains($h, '>Enter numbers</a>') && str_contains($h, 'Insights department'), 'the Audit sits with Results and Enter numbers under Insights');
     unset($GLOBALS['PM_DEPT']);
+    $h = pm_ui_strip('settings', '', 'connections');
+    pm_t_assert(str_contains($h, '>Business details</a>') && str_contains($h, '>Connections</a>') && !str_contains($h, '+ Add') && preg_match('#<a href="\?tab=settings&amp;section=connections" class="on"#', $h) === 1, 'Operations has its own strip, with the section marked');
+    $h = pm_ui_strip('targeting');
+    pm_t_assert(str_contains($h, '>Targeting and messages</a>') && str_contains($h, '>New proposal</a>') && preg_match('#<a href="\?tab=targeting" class="on"#', $h) === 1, 'so has Sales');
+    pm_t_eq(pm_ui_strip('home'), '', 'the overview has no strip');
 });
 
 t('The overview numbers come from stored data', function () {

@@ -462,7 +462,7 @@ t('The screen', function () use (&$PAGE) {
     pm_t_assert(str_contains($h, 'name="do" value="opt_apply"') && str_contains($h, 'name="key" value="fb_hours"') && str_contains($h, 'name="hr[mon][on]"') && str_contains($h, 'type="time"'), 'the hours form is on the page');
     pm_t_assert(str_contains($h, 'value="tok123"') && str_contains($h, 'data-copy="') && str_contains($h, 'I did it') && str_contains($h, 'Channels you use'), 'forms carry the token, text can be copied, manual items can be ticked');
     pm_t_assert(!str_contains($h, 'Warning') && !str_contains($h, 'Fatal'), 'no PHP warning');
-    pm_t_assert(in_array('Optimise', pm_social_tabs(), true) && str_ends_with(pm_social_view_file('optimise'), 'view_social_optimise.php'), 'it is in the Social menu');
+    pm_t_assert(in_array('Profiles', pm_social_tabs(), true) && str_ends_with(pm_social_view_file('optimise'), 'view_social_optimise.php'), 'it is in the Social menu');
 });
 
 t('Deleting a business removes its Optimise data', function () {

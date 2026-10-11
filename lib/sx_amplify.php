@@ -130,7 +130,7 @@ function pm_x_numbers(array $p): ?array
 /** Owner types X numbers for one published post: likes, reposts, replies, views, link clicks. Stored in post['manual']['x'] with who and when, like every other channel. */
 function pm_do_x_results_save(string $vb): array
 {
-    $to = 'social&view=results#xnumbers';
+    $to = 'social&view=numbers#xnumbers';
     $id = preg_replace('/[^a-f0-9]/', '', (string)($_POST['id'] ?? ''));
     $row = [];
     foreach (['likes' => 'reactions', 'replies' => 'comments', 'reposts' => 'shares', 'clicks' => 'clicks', 'views' => 'views'] as $in => $k) {

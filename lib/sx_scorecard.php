@@ -297,7 +297,7 @@ function pm_social_perf_weights(string $brand): array
 /** Owner clicked "Apply suggested mix": the new weights go through the normal pillar save, nothing else changes. */
 function pm_do_apply_weights(string $vb): array
 {
-    $to = 'social&view=results';
+    $to = 'social&view=content#mix';
     $mix = pm_sx_mix($vb);
     if (!$mix) {
         return ['msg' => 'Not enough results yet to suggest a mix.', 'kind' => 'err', 'to' => $to];

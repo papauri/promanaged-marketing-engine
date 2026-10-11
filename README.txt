@@ -241,14 +241,26 @@ FOLLOW-UPS WITH AI, AND TODAY'S STRATEGY (lib/followups.php, lib/director.php)
   are drafted, drafts to read, approved and waiting) and is written again by itself after each agent run, after you press "Draft N follow-ups", and when that
   work moves (at most every 90 minutes), so it no longer repeats yesterday's advice. "Refresh strategy" still rewrites it at once.
 
-THE FIRM AS DEPARTMENTS (lib/ui.php, lib/home.php, lib/view_home.php)
-  The app opens on the Agency overview (?tab=home). Every screen belongs to one department: Overview, Sales (Leads, WhatsApp, Proposals), Social (Plan, Lead posts, Content, Channels, Inbox,
-  Page, Growth, Clean-up, Ads), Brand (Studio, Optimise, Accounts & branding), Insights (Results, Audit) and Operations (Business details, Setup health, Backups, Team, Add a business).
-  One registry, pm_ui_nav(), drives the top bar (an icon and a drop-down per department, the current one lit in its colour), the department label above each page title, the colour of the
-  screen (--dept on <body>) and the tab strip, which now shows only the pages of the department you are in. Add a page by adding it to the registry: nothing else needs editing.
+THE FIRM AS DEPARTMENTS: EVERY DEPARTMENT HAS ONE JOB, EVERY SETTING ONE OWNER (lib/ui.php, lib/home.php, lib/view_home.php)
+  The app opens on the Agency overview (?tab=home). Every page belongs to one department, and a setting is edited in exactly one place; everywhere else it is a link or a read-only status.
+    Sales (win customers)             Leads, WhatsApp (and "Log an enquiry"), Targeting and messages, New proposal, History, Template and prices
+    Social (publish, answer people)   Plan (and its Publishing rules: auto-publish, where posts go, when), Lead posts, Content, Channels (hand-posting), Inbox, Page posts, Playbook, Ads
+    Brand (look and sound right)      Studio, Brand kit, Profiles (the fixes per channel and the profile words), Voice (what the AI knows), Page clean-up
+    Insights (measure and advise)     Results, Audit, Enter numbers
+    Operations (keep it running)      Business details, Email, Connections, Health and backups, Team and currencies; "+ Add a business"
+  Where things went: Sales > Targeting and messages is the one place for what we sell, who to look for, the daily limits, replies, which agents are on, the first-email wording (Travel Malawi) and,
+  for a business you added, who buys and its one-page offer; its roster and diary are there too. Social > Content holds the pillars, the suggested mix, the idea bank, the proof bank, hashtags and
+  "bring back what worked". Social > Inbox holds messages, comments, what to hide or delete, autopilot and how replies sound. Brand > Profiles holds every profile fix and the profile words
+  (they were in the Studio). Brand > Voice holds what the AI knows (it was in Settings). Insights > Enter numbers holds the numbers you type in (they were under Results). Operations > Connections
+  holds the Facebook connection, every platform's link and setup steps, the picture engine and the enquiry form (the old "Accounts & branding": its address still works and leads there).
+  The Audit judges and points at the owner of each setting; a finding that can be fixed on the spot has its own button, which calls the same handler the owner's page does.
+  One registry, pm_ui_nav(), lists every page once and drives the top bar (an icon and a drop-down per department, the current one lit in its colour), the department and job above each page title,
+  the colour of the screen (--dept on <body>) and the tab strip, which shows only the pages of the department you are in. A page that moved is mapped in PM_UI_MOVED. Add a page by adding it to the
+  registry. tests/test_departments.php fails when a setting has two editors again (it lists each editor and the one screen that may hold it).
+  Saving: each Operations page and each Brand/Sales form sends a hidden _sec and saves only its own part (lib/settings_save.php: business, email, team, voice, messages, social; for a business you
+  added: details, email, voice, targeting, social), so a form on one page can never blank a field that lives on another. A form that names no part saves everything, as before.
   The overview shows a greeting, the Director's brief, six numbers, what needs you now, one card per department (state, numbers, team on duty with the reason for anyone off, next steps),
   every business at a glance and the team's diary. It reads stored data only (no AI, no network), so it opens at once. tests/test_home.php.
-
 THE HUMAN VOICE (lib/human.php) AND HAND-MADE LOOKS (lib/sx_studio.php) THROUGHOUT THE MARKETING DEPARTMENT
   Everything a customer reads that an AI helped write goes through two things. (1) PM_HUMAN_RULES, a few lines added to the writers' instructions (first email, follow-up, win-back,
   Travel Malawi, compose, replies, the proposal email, posts, the playbook, profile words): plain everyday words, one specific detail instead of a general claim, and a list of stock

@@ -48,7 +48,7 @@ function pm_profile_score(string $brand): array
     $add('fb_location', 'Location or service area', $has($pg['location'] ?? null), 'Page > About > Location: add the town or service area.', $pageUrl . '/about', 'Facebook');
     $add('fb_whatsapp', 'WhatsApp number on the Page', $has(($pg['whatsapp_number'] ?? '') ?: ($pg['phone'] ?? '')), 'Page > About > Contact: add your WhatsApp number.', $pageUrl . '/about', 'Facebook');
     $add('fb_website', 'Website link on the Page', $has($pg['website'] ?? null), 'Page > About > Websites: add the website or links page.', $pageUrl . '/about', 'Facebook');
-    $add('fb_cover', 'Cover picture', $has($pg['cover'] ?? null), 'Make the cover in Accounts & branding, then upload it.', '?tab=social&view=accounts', 'Facebook');
+    $add('fb_cover', 'Cover picture', $has($pg['cover'] ?? null), 'Make the cover in Brand > Brand kit, then upload it.', '?tab=social&view=kit', 'Facebook');
     foreach (pm_profile_ticks($brand) as $k => [$label, $group, $fix, $link]) {
         $ticked = !empty($cfg['ticks'][$k]);
         if ($k === 'ig_linked' && $c['ig_id'] !== '') {
@@ -228,9 +228,9 @@ function pm_ig_next_step(string $brand): string
     $c = pm_social_cfg($brand);
     $on = function_exists('pm_social_settings') ? !empty(pm_social_settings($brand)['channels']['instagram']) : true;
     return match (true) {
-        $c['ig_id'] === '' => 'Instagram is not linked yet. Switch the account to Business, link it to the Facebook Page, then add IG_USER_ID to .env (steps in Accounts & branding). Until then Instagram posts are hand-posted from the tasks below.',
+        $c['ig_id'] === '' => 'Instagram is not linked yet. Switch the account to Business, link it to the Facebook Page, then add IG_USER_ID to .env (steps in Operations > Connections). Until then Instagram posts are hand-posted from the tasks below.',
         pm_app_url() === '' => 'Instagram is linked, but its posts stay hand-posted until the app is online: Instagram fetches each picture or video from APP_URL/media.php, so set APP_URL in .env to the public address.',
-        !$on => 'Instagram is linked but switched off: tick Instagram under "Post automatically to" in Accounts & branding.',
+        !$on => 'Instagram is linked but switched off: tick Instagram under "Post automatically to" in Social > Plan > Publishing rules.',
         default => 'Instagram posts automatically (pictures, carousels, stories). Reels go out only while media.php can serve the video from your public address; otherwise they appear as a hand-post task.',
     };
 }

@@ -403,7 +403,7 @@ function pm_brand_create(array $a, array $draft): array
     return [$id, []];
 }
 
-/** Hides a business from the menus and stops its scheduled work. Nothing is deleted: bring it back with pm_brand_unarchive() (Settings > Hidden businesses), or delete it with pm_brand_delete(). */
+/** Hides a business from the menus and stops its scheduled work. Nothing is deleted: bring it back with pm_brand_unarchive() (Operations > Business details > Hidden businesses), or delete it with pm_brand_delete(). */
 function pm_brand_archive(string $id): bool
 {
     if (!pm_brand_is_custom($id)) {

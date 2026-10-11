@@ -1,5 +1,5 @@
 <?php
-/** Social screen (Plan): readiness, numbers, AI post planner, approval queue grouped by day, published posts, comments to answer. Modules add panels via pm_social_panels(). */
+/** Social > Plan: the numbers, the AI post planner, the approval queue grouped by day, what was published, and the publishing rules. Comments and messages are Social > Inbox; the Page's own posts are Social > Page posts. Modules add panels via pm_social_panels(). */
 pm_brand_set($vb);
 $sc = pm_social_cfg($vb);
 $page = $sc['ready'] ? pm_social_page($vb) : ['ok' => false];
@@ -34,18 +34,16 @@ $isVideo = fn($f) => (bool)preg_match('/\.(mp4|mov|m4v)$/i', (string)$f);
 <?php $nav = pm_social_nav(''); echo $nav; if (!str_contains($nav, 'sx-banner')) { echo pm_social_banner(); } ?>
 <?= pm_social_panels('plan_top', $vb) ?>
 
-<details class="card sx-ready" <?= $notReady ? 'open' : '' ?>>
-  <summary><b>Ready to post well?</b> <span class="sx-chip <?= $notReady ? 'warn' : 'ok' ?>"><?= count($ready) - count($notReady) ?> of <?= count($ready) ?> ready</span></summary>
-  <ul class="sx-checks">
-    <?php foreach ($ready as $r): ?><li><span class="sx-chip <?= $r['ok'] ? 'ok' : 'warn' ?>"><?= $r['ok'] ? 'OK' : 'To do' ?></span> <?= pm_h($r['label']) ?><?php if (!$r['ok']): ?> <a href="<?= pm_h($r['fix']) ?>">Fix</a><?php endif; ?></li><?php endforeach; ?>
-  </ul>
-</details>
+<?php if ($notReady): ?>
+<div class="flash err" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span><b><?= count($notReady) ?> thing<?= count($notReady) === 1 ? '' : 's' ?> to set up before posting works well:</b> <?= pm_h(implode('; ', array_map(fn($r) => $r['label'], array_slice($notReady, 0, 3)))) ?><?= count($notReady) > 3 ? '…' : '' ?>.</span>
+  <a class="btn small" href="?tab=settings&amp;section=health">Open Setup health</a></div>
+<?php endif; ?>
 
 <?php if (!$sc['ready']): ?>
   <div class="card setup">
     <b>Connect the <?= pm_h($bname) ?> Facebook Page</b>
     <p class="hint">You can already plan and prepare posts below. To publish them, read numbers and answer comments, the app needs to be connected to the Page. It takes about 5 minutes and you do it once.</p>
-    <div class="btns"><a class="btn primary" href="?tab=social&amp;view=accounts">Connect Facebook in 3 steps</a></div>
+    <div class="btns"><a class="btn primary" href="?tab=settings&amp;section=connections">Connect Facebook in 3 steps</a></div>
   </div>
 <?php elseif (empty($page['ok'])): ?>
   <div class="flash err">Facebook did not accept the connection: <?= pm_h((string)($page['error'] ?? '')) ?></div>
@@ -55,7 +53,7 @@ $isVideo = fn($f) => (bool)preg_match('/\.(mp4|mov|m4v)$/i', (string)$f);
   <div><b><?= !empty($page['ok']) ? number_format((int)$page['followers']) : '—' ?></b><span><?= !empty($page['ok']) ? 'followers · ' . pm_h($page['name']) : 'Page not connected' ?></span></div>
   <div><b><?= $weekPosts ?></b><span>posts published this week</span></div>
   <div><b><?= count($queue) ?></b><span>planned · <?= count(array_filter($queue, fn($p) => $p['status'] === 'approved')) ?> approved</span></div>
-  <div><b><?= count($recent['open_comments']) ?></b><span>comments to answer</span></div>
+  <div><b><?= count($recent['open_comments']) ?></b><span><a href="?tab=social&amp;view=inbox">comments to answer</a></span></div>
   <?= pm_social_panels('plan_kpi', $vb) ?>
 </div>
 
@@ -189,23 +187,8 @@ $isVideo = fn($f) => (bool)preg_match('/\.(mp4|mov|m4v)$/i', (string)$f);
 <?php endif; ?>
 
 <?php if ($recent['open_comments']): ?>
-<div class="card"><h2>Comments to answer</h2>
-  <?php foreach (array_slice($recent['open_comments'], 0, 12) as $cm): ?>
-  <form method="post" class="cmt"><?= $sp('reply', $hid('cid', $cm['id']) . $hid('post', $cm['post']) . $hid('from', $cm['from']) . $hid('message', $cm['message'])) ?>
-    <p><b><?= pm_h($cm['from']) ?></b> <span class="muted">on "<?= pm_h(mb_substr($cm['post'], 0, 60)) ?>…"</span><br><?= pm_h($cm['message']) ?></p>
-    <textarea name="reply" rows="2" placeholder="Your reply"><?= pm_h($_SESSION['sreply'][$cm['id']] ?? '') ?></textarea>
-    <div class="btns"><button class="btn small" name="do" value="draft_reply">Draft with AI</button><button class="btn small primary" name="do" value="reply" data-confirm="Post this reply on Facebook?">Post reply</button></div>
-  </form>
-  <?php endforeach; ?>
-</div>
-<?php endif; ?>
-
-<?php if ($recent['posts']): ?>
-<div class="card"><h2>On the Page now</h2>
-  <?php foreach ($recent['posts'] as $rp): ?>
-    <p class="rp"><span><?= pm_h(date('j M', strtotime($rp['at']))) ?></span> <?= pm_h(mb_substr($rp['message'] ?: '(picture or video)', 0, 90)) ?> <span class="muted">· <?= $rp['reactions'] ?> reactions · <?= $rp['comments'] ?> comments · <?= $rp['shares'] ?> shares</span><?php if ($rp['url']): ?> <a href="<?= pm_h($rp['url']) ?>" target="_blank" rel="noopener noreferrer">open</a><?php endif; ?></p>
-  <?php endforeach; ?>
-</div>
+<div class="card"><b><?= count($recent['open_comments']) ?> comment<?= count($recent['open_comments']) === 1 ? '' : 's' ?> waiting for an answer.</b> <a class="btn small primary" href="?tab=social&amp;view=inbox">Answer them in the Inbox</a>
+  <a class="btn small" href="?tab=social&amp;view=page">See the Page's posts</a></div>
 <?php endif; ?>
 <?php if ($done): ?>
 <div class="card"><h2>Published from here</h2>
@@ -215,4 +198,24 @@ $isVideo = fn($f) => (bool)preg_match('/\.(mp4|mov|m4v)$/i', (string)$f);
   <?php endforeach; ?>
 </div>
 <?php endif; ?>
+<?php
+$cfgS = pm_social_settings($vb);
+$liS = pm_linkedin_cfg($vb);
+$ruleItems = pm_aa_items_for($vb, ['post_times', 'post_times_clear', 'ch_instagram_on', 'ch_linkedin_off']);
+?>
+<details class="card" id="rules" <?= $ruleItems && array_filter($ruleItems, fn($i) => $i['state'] !== 'ok') ? 'open' : '' ?>>
+  <summary><b>Publishing rules</b> <span class="muted">· auto-publish, where posts go by themselves, and when</span></summary>
+  <form method="post" class="findrow"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="autopublish">
+    <label class="check" style="margin:0"><input type="checkbox" name="on" value="1" <?= $auto ? 'checked' : '' ?> <?= $canApprove ? '' : 'disabled' ?>> Auto-publish: posts the AI plans go out at their time without my approval</label>
+    <button class="btn small" <?= $canApprove ? '' : 'disabled title="Only an approver can change this"' ?>>Save</button></form>
+  <form method="post"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_accounts"><input type="hidden" name="_sec" value="channels">
+    <label>Post automatically to</label>
+    <label class="check"><input type="checkbox" name="channels[facebook]" value="1" <?= !empty($cfgS['channels']['facebook']) ? 'checked' : '' ?>> Facebook <?= $sc['ready'] ? '' : '<span class="muted">(not connected)</span>' ?></label>
+    <label class="check"><input type="checkbox" name="channels[instagram]" value="1" <?= !empty($cfgS['channels']['instagram']) ? 'checked' : '' ?>> Instagram <?= $sc['ig_id'] !== '' ? '' : '<span class="muted">(not linked)</span>' ?></label>
+    <label class="check"><input type="checkbox" name="channels[linkedin]" value="1" <?= !empty($cfgS['channels']['linkedin']) ? 'checked' : '' ?>> LinkedIn <?= $liS['ready'] ? '' : '<span class="muted">(not connected)</span>' ?></label>
+    <p class="hint">TikTok, YouTube, X, Google and WhatsApp Status are posted by hand from <a href="?tab=social&amp;view=channels">Channels</a>; connections are set up under <a href="?tab=settings&amp;section=connections">Operations &gt; Connections</a>.</p>
+    <div class="btns"><button class="btn small">Save the channels</button></div>
+  </form>
+  <?php foreach ($ruleItems as $ri): ?><?= pm_opt_item_html($ri, $vb, $csrf, 'social') ?><?php endforeach; ?>
+</details>
 <?= pm_social_panels('plan_bottom', $vb) ?>

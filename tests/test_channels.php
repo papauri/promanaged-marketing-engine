@@ -473,7 +473,7 @@ $csrf = 'tok';
 ob_start();
 include dirname(__DIR__) . '/lib/view_social_channels.php';
 $page = (string)ob_get_clean();
-pm_t_assert(str_contains($page, 'hand-post tasks') && str_contains($page, 'WhatsApp Status pack') && str_contains($page, 'Film day') && str_contains($page, 'Community groups') && str_contains($page, 'Profile health') && str_contains($page, 'Google Business pack') && str_contains($page, 'catalogue'), 'channels view renders every section');
+pm_t_assert(str_contains($page, 'hand-post tasks') && str_contains($page, 'WhatsApp Status pack') && str_contains($page, 'Film day') && str_contains($page, 'Community groups') && !str_contains($page, 'Profile health') && !str_contains($page, 'Bio pack') && str_contains($page, 'Google Business pack') && str_contains($page, 'catalogue'), 'channels view renders every section');
 $today = pm_today_manual('promanaged');
 pm_t_assert(is_array($today) && (!$today || isset($today[0]['text'], $today[0]['href'], $today[0]['urgency'])), 'today items have the contract shape');
 

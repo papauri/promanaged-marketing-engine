@@ -152,7 +152,7 @@ function pm_do_log_enquiry(string $vb): array
     return ['msg' => $r['msg'], 'kind' => $r['ok'] ? 'ok' : 'err', 'to' => $back === 'whatsapp' ? 'whatsapp' : 'social&view=' . $back];
 }
 
-/** The "Log an enquiry" card (Results, WhatsApp and Growth). */
+/** The "Log an enquiry" card: on the WhatsApp page, where the sales team works the conversations. */
 function pm_log_enquiry_card(string $vb, string $back = 'results'): string
 {
     $opt = fn(array $a) => implode('', array_map(fn($k, $v) => '<option value="' . pm_h($k) . '">' . pm_h(is_array($v) ? $v[0] : $v) . '</option>', array_keys($a), $a));
@@ -166,7 +166,6 @@ function pm_log_enquiry_card(string $vb, string $back = 'results'): string
         . '</div>';
 }
 
-function pm_panel_results_logenquiry(string $vb, array $ctx = []): string { return pm_log_enquiry_card($vb, 'results'); }
 function pm_panel_wa_top_logenquiry(string $vb, array $ctx = []): string { return pm_log_enquiry_card($vb, 'whatsapp'); }
 
 /** Lead card: "Came from post ...", "Referred by ...", and a manual "From post" choice. Only for leads that wrote to us. */

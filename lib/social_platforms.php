@@ -206,7 +206,7 @@ function pm_hero_path(string $brand): string
 function pm_kit_profile(string $brand, int $size): string
 {
     if (function_exists('pm_studio_saved') && ($sd = pm_studio_saved($brand)) && ($sf = pm_studio_file($brand, $sd, 'profile', $size, $size, '', null, pm_kit_dir($brand) . "/profile-{$size}.png")) !== '') {
-        return $sf; // drawn from the design chosen in Social > Studio
+        return $sf; // drawn from the design chosen in Brand > Studio
     }
     $im = imagecreatetruecolor($size, $size);
     $logo = PM_ROOT . '/' . pm_brand_asset($brand, 'logo');
@@ -234,7 +234,7 @@ function pm_kit_cover(string $brand, int $W, int $H, array $safe = null): string
     if (function_exists('pm_studio_saved') && ($sd = pm_studio_saved($brand))) {
         $tg = pm_studio_target_for($W, $H);
         if (($sf = pm_studio_file($brand, $sd, 'cover', $W, $H, (string)($tg['align'] ?? ''), $tg['safe'] ?? $safe, pm_kit_dir($brand) . "/cover-{$W}x{$H}.png")) !== '') {
-            return $sf; // drawn from the design chosen in Social > Studio
+            return $sf; // drawn from the design chosen in Brand > Studio
         }
     }
     pm_brand_set($brand);

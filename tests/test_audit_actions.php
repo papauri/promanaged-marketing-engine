@@ -300,9 +300,9 @@ t('The screen', function () {
     ob_start();
     require dirname(__DIR__) . '/lib/view_social_page.php';
     $h = ob_get_clean();
-    pm_t_assert(str_contains($h, 'Change the channel settings') && str_contains($h, 'Fix these first') && str_contains($h, 'Post by post') && str_contains($h, 'Ideas for next week'), 'every part of the audit is there');
+    pm_t_assert(str_contains($h, 'Where each setting lives') && str_contains($h, 'Fix these first') && str_contains($h, 'Post by post') && str_contains($h, 'Ideas for next week'), 'every part of the audit is there');
     pm_t_assert(str_contains($h, 'name="do" value="aa_apply"') && str_contains($h, 'name="back" value="audit"') && str_contains($h, 'value="tok55"') && str_contains($h, 'name="action" value="social_ext"'), 'the forms post to the right place and come back to the audit');
-    pm_t_assert(str_contains($h, 'Add to content ideas') && str_contains($h, 'Rewrite with AI') && str_contains($h, 'Show me how (AI)') && str_contains($h, 'When new posts go out') && str_contains($h, 'Weekly posting goal'), 'ideas, rewrites, how-to and the settings have their buttons');
+    pm_t_assert(str_contains($h, 'Add to content ideas') && str_contains($h, 'Rewrite with AI') && str_contains($h, 'Show me how (AI)') && !str_contains($h, 'Change the channel settings'), 'ideas, rewrites and how-to have their buttons, and the settings are not repeated here');
     pm_t_assert(str_contains($h, 'Facebook intro') && str_contains($h, 'Opening hours') && str_contains($h, 'Posting rhythm'), 'each fix says what kind it is');
     pm_t_assert(!str_contains($h, 'Warning') && !str_contains($h, 'Fatal') && !str_contains($h, 'Notice:'), 'no PHP warning');
 });
