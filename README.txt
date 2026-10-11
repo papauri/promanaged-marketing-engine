@@ -241,6 +241,14 @@ FOLLOW-UPS WITH AI, AND TODAY'S STRATEGY (lib/followups.php, lib/director.php)
   are drafted, drafts to read, approved and waiting) and is written again by itself after each agent run, after you press "Draft N follow-ups", and when that
   work moves (at most every 90 minutes), so it no longer repeats yesterday's advice. "Refresh strategy" still rewrites it at once.
 
+THE FIRM AS DEPARTMENTS (lib/ui.php, lib/home.php, lib/view_home.php)
+  The app opens on the Agency overview (?tab=home). Every screen belongs to one department: Overview, Sales (Leads, WhatsApp, Proposals), Social (Plan, Lead posts, Content, Channels, Inbox,
+  Page, Growth, Clean-up, Ads), Brand (Studio, Optimise, Accounts & branding), Insights (Results, Audit) and Operations (Business details, Setup health, Backups, Team, Add a business).
+  One registry, pm_ui_nav(), drives the top bar (an icon and a drop-down per department, the current one lit in its colour), the department label above each page title, the colour of the
+  screen (--dept on <body>) and the tab strip, which now shows only the pages of the department you are in. Add a page by adding it to the registry: nothing else needs editing.
+  The overview shows a greeting, the Director's brief, six numbers, what needs you now, one card per department (state, numbers, team on duty with the reason for anyone off, next steps),
+  every business at a glance and the team's diary. It reads stored data only (no AI, no network), so it opens at once. tests/test_home.php.
+
 THE HUMAN VOICE (lib/human.php) AND HAND-MADE LOOKS (lib/sx_studio.php) THROUGHOUT THE MARKETING DEPARTMENT
   Everything a customer reads that an AI helped write goes through two things. (1) PM_HUMAN_RULES, a few lines added to the writers' instructions (first email, follow-up, win-back,
   Travel Malawi, compose, replies, the proposal email, posts, the playbook, profile words): plain everyday words, one specific detail instead of a general claim, and a list of stock

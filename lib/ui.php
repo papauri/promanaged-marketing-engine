@@ -1,41 +1,95 @@
 <?php
 /**
- * The shared look of every screen: one top bar (business switcher, main navigation with drop-downs, status), one tab style for pages that have
- * sub-pages, one page header. Pages call these instead of printing their own navigation, so they cannot drift apart.
- *   pm_ui_topbar($ctx)      the sticky bar at the top
- *   pm_ui_tabs($items, $on)  the underline tabs under a page header (Social, Proposals)
- *   pm_ui_head($title, ...)  the page title, one line of help and the page's main actions
+ * The shared look of every screen. The firm is organised as departments, and every screen belongs to one:
+ *   Overview (the agency desk), Sales, Social, Brand, Insights, Operations.
+ * One registry (pm_ui_nav) says which pages each department owns; the top bar, the department label in the page header, the tab strip inside a department and the colour of the screen all come
+ * from it, so they cannot drift apart.
+ *   pm_ui_topbar($ctx)        the sticky bar at the top: business switcher, one entry per department, status
+ *   pm_ui_dept_of($tab,$view) which department a screen belongs to
+ *   pm_ui_dept_tabs($dept)    the pages of a department that live inside the Social screen, as tab-strip items
+ *   pm_ui_tabs($items, $on)   the underline tabs under a page header (a department's pages, Proposals)
+ *   pm_ui_head($title, ...)   the department label, the page title, one line of help and the page's main actions
  */
 
-/** The main navigation: key => label, link, the tabs it covers, and its drop-down (groups of links, or a flat list). */
+/** Small line icons (24x24, stroke), one per department. */
+const PM_UI_ICONS = [
+    'hq' => '<rect x="3" y="3" width="7" height="9" rx="1.6"/><rect x="14" y="3" width="7" height="5" rx="1.6"/><rect x="14" y="12" width="7" height="9" rx="1.6"/><rect x="3" y="16" width="7" height="5" rx="1.6"/>',
+    'sales' => '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+    'social' => '<path d="M4 5.5h16v11H10l-4.5 3.5v-3.5H4z"/><path d="M8 10h8M8 13h5"/>',
+    'brand' => '<path d="M12 3a9 9 0 100 18c1.5 0 2.1-1.1 1.6-2.2-.6-1.3.2-2.6 1.7-2.6H18a3 3 0 003-3c0-5-4-10.2-9-10.2z"/><circle cx="7.6" cy="11.2" r="1"/><circle cx="10.6" cy="7.2" r="1"/><circle cx="15.2" cy="7.6" r="1"/>',
+    'insights' => '<path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/>',
+    'ops' => '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+];
+
+function pm_ui_icon(string $k, int $size = 18): string
+{
+    return '<svg class="ico" viewBox="0 0 24 24" width="' . $size . '" height="' . $size . '" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . (PM_UI_ICONS[$k] ?? PM_UI_ICONS['hq']) . '</svg>';
+}
+
+/**
+ * The departments. key => label (top bar), name (page label), colour, home link, the plain tabs it owns, the Social views it owns, and its pages as groups: group => [href => label].
+ * A department whose pages are all views of the Social screen shows them as its tab strip.
+ */
 function pm_ui_nav(): array
 {
     return [
-        'agents' => ['label' => 'Leads', 'href' => '?tab=agents', 'tabs' => ['agents']],
-        'whatsapp' => ['label' => 'WhatsApp', 'href' => '?tab=whatsapp', 'tabs' => ['whatsapp']],
-        'social' => ['label' => 'Social', 'href' => '?tab=social', 'tabs' => ['social'], 'groups' => [
-            'Publish' => ['' => 'Plan', 'leadposts' => 'Lead posts', 'content' => 'Content', 'channels' => 'Channels'],
-            'Grow' => ['optimise' => 'Optimise', 'growth' => 'Growth', 'inbox' => 'Inbox', 'page' => 'Page', 'cleanup' => 'Clean-up', 'ads' => 'Ads'],
-            'Measure' => ['results' => 'Results', 'audit' => 'Audit'],
-            'Set up' => ['studio' => 'Studio (covers and pictures)', 'accounts' => 'Accounts & branding'],
-        ]],
-        'proposals' => ['label' => 'Proposals', 'href' => '?tab=proposal', 'tabs' => ['proposal', 'history', 'template'], 'items' => [
-            '?tab=proposal' => 'New proposal', '?tab=history' => 'History', '?tab=template' => 'Template and prices']],
-        'settings' => ['label' => 'Settings', 'href' => '?tab=settings', 'tabs' => ['settings', 'business'], 'items' => [
-            '?tab=settings' => 'Business details', '?tab=settings#health' => 'Setup health', '?tab=settings#backups' => 'Backups', '?tab=settings#team' => 'Team',
-            '?tab=business&new=1' => '+ Add a business']],
+        'hq' => ['label' => 'Overview', 'name' => 'Agency overview', 'color' => '#2b2f36', 'href' => '?tab=home', 'tabs' => ['home'], 'views' => [], 'groups' => []],
+        'sales' => ['label' => 'Sales', 'name' => 'Sales department', 'color' => '#2f6b4f', 'href' => '?tab=agents', 'tabs' => ['agents', 'whatsapp', 'proposal', 'history', 'template'], 'views' => [], 'groups' => [
+            'Pipeline' => ['?tab=agents' => 'Leads', '?tab=whatsapp' => 'WhatsApp outreach'],
+            'Proposals' => ['?tab=proposal' => 'New proposal', '?tab=history' => 'History', '?tab=template' => 'Template and prices']]],
+        'social' => ['label' => 'Social', 'name' => 'Social department', 'color' => '#b4532a', 'href' => '?tab=social', 'tabs' => [], 'views' => ['', 'leadposts', 'content', 'channels', 'inbox', 'page', 'growth', 'cleanup', 'ads'], 'groups' => [
+            'Publish' => ['?tab=social' => 'Plan', '?tab=social&view=leadposts' => 'Lead posts', '?tab=social&view=content' => 'Content', '?tab=social&view=channels' => 'Channels'],
+            'Community' => ['?tab=social&view=inbox' => 'Inbox', '?tab=social&view=page' => 'Page', '?tab=social&view=growth' => 'Growth', '?tab=social&view=cleanup' => 'Clean-up'],
+            'Paid' => ['?tab=social&view=ads' => 'Ads']]],
+        'brand' => ['label' => 'Brand', 'name' => 'Brand and creative department', 'color' => '#8a6a2f', 'href' => '?tab=social&view=studio', 'tabs' => [], 'views' => ['studio', 'optimise', 'accounts'], 'groups' => [
+            'Creative' => ['?tab=social&view=studio' => 'Studio', '?tab=social&view=optimise' => 'Optimise'],
+            'Presence' => ['?tab=social&view=accounts' => 'Accounts & branding']]],
+        'insights' => ['label' => 'Insights', 'name' => 'Insights department', 'color' => '#46607a', 'href' => '?tab=social&view=results', 'tabs' => [], 'views' => ['results', 'audit'], 'groups' => [
+            'Reports' => ['?tab=social&view=results' => 'Results', '?tab=social&view=audit' => 'Audit']]],
+        'ops' => ['label' => 'Operations', 'name' => 'Operations', 'color' => '#5e5a52', 'href' => '?tab=settings', 'tabs' => ['settings', 'business'], 'views' => [], 'groups' => [
+            'Run the firm' => ['?tab=settings' => 'Business details', '?tab=settings#health' => 'Setup health', '?tab=settings#backups' => 'Backups', '?tab=settings#team' => 'Team', '?tab=business&new=1' => '+ Add a business']]],
     ];
 }
 
-/** Which main section a tab belongs to ('' when none). */
-function pm_ui_section_of(string $tab): string
+/** Which department a screen belongs to ('' when none). */
+function pm_ui_dept_of(string $tab, string $view = ''): string
 {
-    foreach (pm_ui_nav() as $k => $n) {
-        if (in_array($tab, $n['tabs'], true)) {
+    foreach (pm_ui_nav() as $k => $d) {
+        if ($tab === 'social' ? in_array($view, $d['views'], true) : in_array($tab, $d['tabs'], true)) {
             return $k;
         }
     }
-    return '';
+    return $tab === 'social' ? 'social' : '';
+}
+
+/** The pages of a department that are views of the Social screen: view => [label, href]. Empty for the others. */
+function pm_ui_dept_tabs(string $dept): array
+{
+    $out = [];
+    foreach ((array)(pm_ui_nav()[$dept]['groups'] ?? []) as $items) {
+        foreach ($items as $href => $label) {
+            if (str_starts_with($href, '?tab=social')) {
+                $out[preg_match('/view=([a-z]+)/', $href, $m) ? $m[1] : ''] = [pm_h($label), $href];
+            }
+        }
+    }
+    return $out;
+}
+
+/** The inline style that gives a screen its department colour. */
+function pm_ui_dept_style(string $dept): string
+{
+    return isset(pm_ui_nav()[$dept]) ? '--dept:' . pm_ui_nav()[$dept]['color'] : '';
+}
+
+/** Is this menu link the screen being shown? (Links with a #section are never marked: the page cannot know the section.) */
+function pm_ui_href_on(string $href, string $tab, string $view): bool
+{
+    if (str_contains($href, '#')) {
+        return false;
+    }
+    parse_str((string)parse_url($href, PHP_URL_QUERY), $q);
+    return ($q['tab'] ?? '') === $tab && ($tab !== 'social' || ($q['view'] ?? '') === $view);
 }
 
 /** Underline tabs: $items is key => label or key => [label, href]. $on is the active key. */
@@ -49,10 +103,13 @@ function pm_ui_tabs(array $items, string $on, string $label = 'Sections'): strin
     return $h . '</nav>';
 }
 
-/** The page header: a title, one plain line under it, and the page's main actions on the right ($actions is trusted HTML). */
+/** The page header: the department it belongs to, a title, one plain line under it, and the page's main actions on the right ($actions is trusted HTML). */
 function pm_ui_head(string $title, string $sub = '', string $actions = ''): string
 {
-    return '<div class="pagehead"><div><h1>' . pm_h($title) . '</h1>' . ($sub !== '' ? '<p class="sub">' . $sub . '</p>' : '') . '</div>' . ($actions !== '' ? '<div class="headacts">' . $actions . '</div>' : '') . '</div>';
+    $k = (string)($GLOBALS['PM_DEPT'] ?? '');
+    $d = pm_ui_nav()[$k] ?? null;
+    $eye = $d && $k !== 'hq' ? '<a class="eyebrow" href="' . pm_h($d['href']) . '">' . pm_ui_icon($k, 14) . pm_h($d['name']) . '</a>' : '';
+    return '<div class="pagehead"><div>' . $eye . '<h1>' . pm_h($title) . '</h1>' . ($sub !== '' ? '<p class="sub">' . $sub . '</p>' : '') . '</div>' . ($actions !== '' ? '<div class="headacts">' . $actions . '</div>' : '') . '</div>';
 }
 
 /** A small colour dot for a business (its own accent colour). */
@@ -72,7 +129,7 @@ function pm_ui_accent(array $settings, string $b): string
 /** The business menu: who the screens are for, and the way to add another. */
 function pm_ui_biz_menu(array $settings, string $vb, string $tab, string $view): string
 {
-    $keep = $tab === 'business' ? 'agents' : $tab;
+    $keep = $tab === 'business' ? 'home' : $tab;
     $logo = pm_brand_asset($vb, 'logo');
     $hasLogo = is_file(PM_ROOT . '/' . $logo);
     $h = '<div class="dd biz"><button type="button" class="ddbtn bizbtn" aria-haspopup="true" aria-expanded="false">'
@@ -93,26 +150,25 @@ function pm_ui_topbar(array $c): string
 {
     $tab = (string)$c['tab'];
     $view = (string)($c['view'] ?? '');
-    $sec = pm_ui_section_of($tab);
-    $h = '<header class="topbar"><div class="topin">' . pm_ui_biz_menu($c['settings'], (string)$c['vb'], $tab, $view) . '<nav class="mainnav" aria-label="Main">';
+    $cur = pm_ui_dept_of($tab, $view);
+    $h = '<header class="topbar"><div class="topin">' . pm_ui_biz_menu($c['settings'], (string)$c['vb'], $tab, $view) . '<nav class="mainnav" aria-label="Departments">';
     foreach (pm_ui_nav() as $k => $n) {
-        $on = $sec === $k;
+        $on = $cur === $k;
         $dd = '';
-        foreach ((array)($n['groups'] ?? []) as $g => $items) {
+        $pages = 0;
+        foreach ($n['groups'] as $g => $items) {
             $dd .= '<div class="menuhd">' . pm_h($g) . '</div>';
-            foreach ($items as $v => $lab) {
-                $dd .= '<a role="menuitem" class="item" href="?tab=social' . ($v !== '' ? '&amp;view=' . pm_h($v) : '') . '">' . pm_h($lab) . '</a>';
+            foreach ($items as $href => $lab) {
+                $pages++;
+                $dd .= '<a role="menuitem" class="item' . (pm_ui_href_on($href, $tab, $view) ? ' on' : '') . '" href="' . pm_h($href) . '">' . pm_h($lab) . '</a>';
             }
         }
-        foreach ((array)($n['items'] ?? []) as $href => $lab) {
-            $dd .= '<a role="menuitem" class="item" href="' . pm_h($href) . '">' . pm_h($lab) . '</a>';
+        $link = '<a class="navitem" href="' . pm_h($n['href']) . '"' . ($on ? ' aria-current="page"' : '') . '>' . pm_ui_icon($k) . '<span>' . pm_h($n['label']) . '</span></a>';
+        $h .= '<div class="dd navdd' . ($on ? ' on' : '') . '" style="' . pm_h(pm_ui_dept_style($k)) . '">' . $link;
+        if ($pages > 1) {
+            $h .= '<button type="button" class="ddbtn caretbtn" aria-haspopup="true" aria-expanded="false" aria-label="' . pm_h($n['label']) . ' pages"><span class="caret"></span></button><div class="menu" role="menu">' . $dd . '</div>';
         }
-        if ($dd === '') {
-            $h .= '<a class="navitem' . ($on ? ' on' : '') . '" href="' . pm_h($n['href']) . '"' . ($on ? ' aria-current="page"' : '') . '>' . pm_h($n['label']) . '</a>';
-        } else {
-            $h .= '<div class="dd navdd' . ($on ? ' on' : '') . '"><a class="navitem" href="' . pm_h($n['href']) . '"' . ($on ? ' aria-current="page"' : '') . '>' . pm_h($n['label']) . '</a>'
-                . '<button type="button" class="ddbtn caretbtn" aria-haspopup="true" aria-expanded="false" aria-label="' . pm_h($n['label']) . ' pages"><span class="caret"></span></button><div class="menu" role="menu">' . $dd . '</div></div>';
-        }
+        $h .= '</div>';
     }
     $h .= '</nav><div class="topright">';
     $age = $c['hbAge'];

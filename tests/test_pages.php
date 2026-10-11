@@ -80,7 +80,7 @@ function php_problems(string $log): array
     return array_values(array_unique($out));
 }
 
-$pages = ['agents', 'whatsapp', 'social', 'social&view=content', 'social&view=channels', 'social&view=growth', 'social&view=results', 'social&view=page', 'social&view=inbox', 'social&view=cleanup',
+$pages = ['home', 'agents', 'whatsapp', 'social', 'social&view=studio', 'social&view=optimise', 'social&view=content', 'social&view=channels', 'social&view=growth', 'social&view=results', 'social&view=page', 'social&view=inbox', 'social&view=cleanup',
     'social&view=ads', 'social&view=audit', 'social&view=accounts', 'social&view=leadposts', 'settings', 'proposal', 'history', 'template', 'business', 'business&new=1'];
 $sweep = function (string $brand) use ($base, $pages): array {
     $bad = [];
@@ -156,7 +156,11 @@ echo "\nThe shared shell\n";
 [, $html] = http("$base?tab=social&view=results&brand=promanaged");
 pm_t_assert(substr_count($html, 'class="topbar"') === 1 && str_contains($html, 'class="tabs"') && str_contains($html, 'class="pagehead"') && !str_contains($html, 'filters subnav'), 'a Social screen has one top bar, one tab bar and one page head');
 pm_t_assert(preg_match('#<a href="\?tab=social&amp;view=results" class="on" aria-current="page">Results</a>#', $html) === 1, 'the tab bar marks the screen you are on');
-pm_t_assert(str_contains($html, '<div class="dd navdd on">') && str_contains($html, 'Accounts &amp; branding'), 'the main navigation marks Social and its drop-down lists every Social page');
+pm_t_assert(str_contains($html, 'navdd on" style="--dept:#46607a"') && str_contains($html, 'Accounts &amp; branding') && str_contains($html, 'Insights department') && str_contains($html, 'data-dept="insights"'), 'the main navigation marks the department (Results is Insights) and its page head says so');
+[, $html] = http("$base?brand=promanaged");
+pm_t_assert(str_contains($html, 'class="hq-hero"') && str_contains($html, 'data-dept="hq"') && substr_count($html, 'class="dept"') === 5, 'with no tab the app opens on the agency overview, one card per department');
+[, $html] = http("$base?tab=social&view=studio&brand=promanaged");
+pm_t_assert(str_contains($html, 'data-dept="brand"') && str_contains($html, 'Brand and creative department') && !str_contains($html, '>Lead posts</a></nav>'), 'the Studio is a Brand screen with the Brand tabs');
 [, $html] = http("$base?tab=history&brand=promanaged");
 pm_t_assert(str_contains($html, 'Template and prices') && str_contains($html, 'class="tabs"'), 'Proposals screens share the same tab bar');
 [, $html] = http("$base?tab=proposal&brand=travel");

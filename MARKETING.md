@@ -121,6 +121,12 @@ accepted by being made; they are logged in the Done log below, not in the regist
 
 ## 6 · Done log
 
+### Owner request in chat, 2026-10-11 — "UI/UX like a legit marketing firm, every function a department; proper polish; fewer tokens per goal"
+
+- **Departments** (`pm_ui_nav` registry in `lib/ui.php`): Overview, Sales, Social, Brand, Insights, Operations. Top bar with icons and drop-downs, department label above each title, `--dept` colour on `<body>`, tab strip limited to the department's own pages (`pm_ui_dept_tabs`, `pm_social_nav`). The business keeps its accent (top stripe); the department has its own colour.
+- **Agency overview** (`lib/home.php`, `lib/view_home.php`, default `?tab=home`): greeting, Director's brief, six numbers, needs-you-now, a card per department with its team roster (on duty / why off), businesses at a glance, the team's diary. Stored data only: no AI call, no network. `tests/test_home.php` (111).
+- Known, unrelated: `tests/test_measure.php` has 4 data-dependent failures (follower numbers) because the real Page is now connected; they fail the same on the previous commit.
+
 ### Owner request in chat, 2026-10-11 — "playbook not updating; top-of-range profile words; human, not AI-obvious pictures and writing everywhere"
 
 - **Playbook** (`pm_playbook_ensure`, `pm_playbook_carry`, `pm_job_playbook`): refreshed on opening Growth, each morning by the scheduler, after an agent run; carry-over without AI; fingerprint includes how long leads have been quiet. `tests/test_playbook.php` (24).

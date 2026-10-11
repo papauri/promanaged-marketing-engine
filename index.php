@@ -64,7 +64,7 @@ $csrf = $_SESSION['csrf'];
 
 $settings = pm_settings();
 $tpl = pm_template();
-$tab = $_GET['tab'] ?? 'agents';
+$tab = $_GET['tab'] ?? 'home';
 if (isset($_GET['brand'])) {
     $_SESSION['abrand'] = pm_brand_norm($_GET['brand']);
 }
@@ -1598,7 +1598,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'who') {
         $w = (string)($_POST['who'] ?? '');
         $_SESSION['who'] = in_array($w, (array)($settings['team'] ?? []), true) ? $w : '';
-        pm_redirect(in_array($_POST['back'] ?? '', ['agents', 'whatsapp', 'proposal', 'history', 'template', 'settings'], true) ? $_POST['back'] : 'agents');
+        pm_redirect(in_array($_POST['back'] ?? '', ['home', 'agents', 'whatsapp', 'proposal', 'history', 'template', 'settings'], true) ? $_POST['back'] : 'home');
     }
 
     if ($action === 'link_refresh') {
@@ -2059,6 +2059,7 @@ function pm_rows_editor(string $name, array $cols, array $rows, string $addLabel
     return '<table class="grid" data-next="' . count($rows) . '"><thead>' . $head . '</thead><tbody>' . $body . '</tbody></table>'
         . '<template>' . $blank . '</template><button type="button" class="link" onclick="addRow(this)">+ ' . pm_h($addLabel) . '</button>';
 }
+$GLOBALS['PM_DEPT'] = pm_ui_dept_of($tab, (string)($_GET['view'] ?? '')); // which department's screen this is: colours, label and tabs follow it
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -2069,7 +2070,7 @@ function pm_rows_editor(string $name, array $cols, array $rows, string $addLabel
 <link rel="stylesheet" href="assets/app.css?v=<?= @filemtime(PM_ROOT . '/assets/app.css') ?>">
 <?php if ($vb !== 'promanaged' && is_file(PM_ROOT . '/' . pm_brand_asset($vb, 'favicon'))): ?><link rel="icon" href="<?= pm_h(pm_brand_asset($vb, 'favicon')) ?>"><?php endif; ?>
 </head>
-<body>
+<body style="<?= pm_h(pm_ui_dept_style($GLOBALS['PM_DEPT'])) ?>" data-dept="<?= pm_h($GLOBALS['PM_DEPT']) ?>">
 <?php
 $team = array_values(array_filter((array)($settings['team'] ?? [])));
 echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'vb' => $vb, 'settings' => $settings, 'csrf' => $csrf, 'team' => $team, 'who' => $GLOBALS['PM_WHO'], 'hbAge' => pm_social_heartbeat_age()]);
@@ -2388,6 +2389,8 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'vb' 
     <form method="post" style="padding:0 22px 18px" onsubmit="return confirm('Put this line wording back to the original?')"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="reset_line"><input type="hidden" name="line" value="<?= $ln ?>"><button class="btn small">Reset to original</button></form>
   </details>
   <?php endforeach; ?>
+
+<?php elseif ($tab === 'home'): require __DIR__ . '/lib/view_home.php'; ?>
 
 <?php elseif ($tab === 'agents'): require __DIR__ . '/lib/view_agents.php'; ?>
 

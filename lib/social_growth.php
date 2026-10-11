@@ -20,18 +20,16 @@ function pm_brand_site(string $brand): string
 
 function pm_social_nav(string $on): string
 {
-    $tabs = function_exists('pm_social_tabs') ? pm_social_tabs()
-        : ['' => 'Plan', 'leadposts' => 'Lead posts', 'growth' => 'Growth', 'page' => 'Page', 'inbox' => 'Inbox', 'cleanup' => 'Clean-up', 'ads' => 'Ads', 'audit' => 'Audit', 'accounts' => 'Accounts &amp; branding'];
+    $dept = pm_ui_dept_of('social', $on);
+    $GLOBALS['PM_DEPT'] = $GLOBALS['PM_DEPT'] ?? $dept;
+    $items = pm_ui_dept_tabs($dept); // the pages of this department only
     $sub = ['' => 'Plan posts, approve them and watch what goes out.', 'leadposts' => 'Bold posts with a button and a keyword that bring in client details. Free and unlimited.', 'content' => 'What posts can be about: ideas, hashtags, key dates and places.', 'channels' => 'Where else to post, and today\'s hand-post tasks.', 'optimise' => 'Fix what is missing on every channel, one press at a time.', 'studio' => 'Design the profile pictures and covers: styles, colours and words, made by code.',
         'growth' => 'Turn comments and messages into customers.', 'results' => 'What worked, what it cost, and what to do next.', 'page' => 'How the Facebook Page looks to visitors.',
         'inbox' => 'Messages and comments waiting for an answer.', 'cleanup' => 'Tidy old posts and comments on the Page.', 'ads' => 'Small targeted ads, always created paused.',
         'audit' => 'A health check of the Page, with every finding ready to act on.', 'accounts' => 'Connect Facebook and the other channels, and make the pictures.'];
-    $items = [];
-    foreach ($tabs as $k => $l) {
-        $items[$k] = [$l, '?tab=social' . ($k !== '' ? '&view=' . $k : '')];
-    }
     $name = function_exists('pm_brand_title') ? pm_brand_title(pm_settings(), pm_brand()) : pm_brand_name(pm_brand());
-    return pm_ui_head('Social · ' . $name, pm_h($sub[$on] ?? $sub[''])) . (function_exists('pm_social_banner') ? pm_social_banner() : '') . pm_ui_tabs($items, $on, 'Social');
+    $label = strip_tags(html_entity_decode((string)($items[$on][0] ?? 'Plan'), ENT_QUOTES));
+    return pm_ui_head($label . ' · ' . $name, pm_h($sub[$on] ?? $sub[''])) . (function_exists('pm_social_banner') ? pm_social_banner() : '') . (count($items) > 1 ? pm_ui_tabs($items, $on, pm_ui_nav()[$dept]['label'] ?? 'Social') : '');
 }
 
 /** The live Facebook Page as visitors see it, beside the cleaning tools. Facebook's own Page plugin: costs no API calls. */
