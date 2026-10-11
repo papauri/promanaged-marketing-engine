@@ -1,6 +1,6 @@
 # UI system (one page)
 
-Every screen of the firm uses one stylesheet, `assets/app.css`, in seven ordered sections: **1 tokens, 2 base, 3 shell, 4 components, 5 patterns, 6 pages, 7 responsive and print**. Each selector is defined once. Add to the section it belongs to; do not append override layers. `tests/test_ui_system.php` guards all of this (budgets at 0 or 1) and `tests/test_departments.php` guards the markup contracts.
+Every screen of the firm uses one stylesheet, `assets/app.css`, in seven ordered sections: **1 tokens, 2 base, 3 shell, 4 components, 5 patterns, 6 pages, 7 responsive and print**. Each selector is defined once. Add to the section it belongs to; do not append override layers. The guard test that enforced this (budgets at 0 or 1) was removed with the test suite; keep to the rules by hand.
 
 ## Tokens (the single `:root` block)
 
@@ -54,9 +54,9 @@ Top bar 48px with the 3px `--accent` stripe; page head (department eyebrow, `h1`
 
 ## Adding a new screen
 
-1. Register the page once in `pm_ui_nav()` (`lib/ui.php`); the top bar, tabs, department label and colour follow from it. `tests/test_departments.php` fails if a setting gets a second editor.
+1. Register the page once in `pm_ui_nav()` (`lib/ui.php`); the top bar, tabs, department label and colour follow from it. A setting must have one editor only.
 2. Start the view with `pm_ui_head($title, $sub, $actions)`; pick the template (A to F) and reuse its pattern.
 3. Compose with the components above. No `<style>` block, no `style=` except the data-driven exceptions, no new font size, radius, colour or spacing value; if something is missing, add one rule to the right section of `app.css`.
 4. One filled `.btn.primary` per card; row actions use `.btn.small.primary`; destructive ones `.btn.danger` with `data-confirm`.
 5. Never rename the hooks `ui.js` and `app.js` rely on (`.dd .ddbtn .menu .open`, `[data-copy]`, `[data-confirm]`, `[data-busy]`, `.aigen`, `form.msg`, ...) or the `id=` anchors other pages link to.
-6. Run `php tests/test_ui_system.php` and load the page at 1280px and 390px wide.
+6. Load the page at 1280px and 390px wide and check nothing overflows.

@@ -1,5 +1,5 @@
 <?php
-/** Loads the extension registry and every lib/sx_*.php module (sorted). Required by index.php, social_run.php, cron.php and tests/boot.php. */
+/** Loads the extension registry and every lib/sx_*.php module (sorted). Required by index.php, social_run.php and cron.php. */
 require_once __DIR__ . '/social_growth.php';
 require_once __DIR__ . '/social_nav.php';
 require_once __DIR__ . '/social_jobs.php';
