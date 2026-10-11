@@ -15,6 +15,10 @@ if ($path === '/sign.php') {
     require __DIR__ . '/sign.php';
     return true;
 }
+if ($path === '/doc.php') { // a PDF from a business's share kit, for the link in its emails and WhatsApp messages
+    require __DIR__ . '/doc.php';
+    return true;
+}
 if ($path === '/enquire.php') { // public enquiry form and free website check (no login)
     require __DIR__ . '/enquire.php';
     return true;

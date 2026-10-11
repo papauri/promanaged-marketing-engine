@@ -443,8 +443,11 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
         $mailer = 'pm_mail';
     }
     $fromAddr = ($settings['smtp']['from_email'] ?? '') ?: ($settings['email'] ?? '');
-    $res = $mailer($settings, ['to' => $email, 'subject' => $d['email_subject'], 'body' => $d['email_body'] . pm_outreach_footer($settings),
-        'headers' => ['List-Unsubscribe' => '<mailto:' . $fromAddr . '?subject=STOP>', 'Auto-Submitted' => 'no'], 'link' => function_exists('pm_link_card') ? pm_link_card() : null]);
+    $kit = $which === 'drafts' && function_exists('pm_share_email_block'); // a first email also carries the share kit: the PDF and the direct links (follow-ups do not repeat it)
+    $kitBlock = $kit ? pm_share_email_block((string)$d['email_body']) : '';
+    $res = $mailer($settings, ['to' => $email, 'subject' => $d['email_subject'], 'body' => $d['email_body'] . $kitBlock . pm_outreach_footer($settings),
+        'headers' => ['List-Unsubscribe' => '<mailto:' . $fromAddr . '?subject=STOP>', 'Auto-Submitted' => 'no'], 'link' => function_exists('pm_link_card') ? pm_link_card() : null,
+        'attachments' => $kit ? pm_share_attachments() : []]);
     [$ok, $why, $mid] = array_pad((array)$res, 3, '');
     if (!$ok) {
         return $no('Could not send: ' . (function_exists('pm_mail_fail') ? pm_mail_fail($settings, (string)$why) : $why), 'smtp');
@@ -455,7 +458,7 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     }
     $now = date('Y-m-d H:i');
     $L['sent'][] = $now;
-    $L['thread'][] = ['dir' => 'out', 'at' => $now, 'text' => $d['email_body']] + ($mid ? ['mid' => $mid] : []);
+    $L['thread'][] = ['dir' => 'out', 'at' => $now, 'text' => $d['email_body'] . $kitBlock] + ($mid ? ['mid' => $mid] : []);
     if ($mid) {
         $L['msg_ids'] = array_slice(array_merge((array)($L['msg_ids'] ?? []), [(string)$mid]), -20);
     }

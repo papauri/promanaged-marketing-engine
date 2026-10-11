@@ -1167,8 +1167,8 @@ function pm_wa_link(array $lead, string $text): string
     return $n === '' ? '' : 'https://wa.me/' . $n . '?text=' . rawurlencode($text);
 }
 
-/** WhatsApp text as sent: greeting by name, then sign-off with who we are and an easy opt-out. */
-function pm_wa_text(array $lead, string $text): string
+/** WhatsApp text as sent: greeting by name, then sign-off with who we are and an easy opt-out. $kit adds the business's direct links (the share kit): for a first message only. */
+function pm_wa_text(array $lead, string $text, bool $kit = false): string
 {
     $s = pm_settings();
     $nm = trim(preg_replace('/^(dr|mr|mrs|ms|miss|prof|eng|hon|rev|pastor)\.?\s+/i', '', trim((string)($lead['contact'] ?? ''))));
@@ -1183,6 +1183,9 @@ function pm_wa_text(array $lead, string $text): string
     $who = trim(($GLOBALS['PM_WHO'] ?? '') !== '' ? $GLOBALS['PM_WHO'] . ', ' . $s['company_name'] : ($s['signatory_name'] ? $s['signatory_name'] . ', ' . $s['company_name'] : $s['company_name']));
     if (($lk = pm_link_wa_line()) !== '' && !str_contains($text, $lk)) {
         $text .= "\n\n" . $lk;
+    }
+    if ($kit && function_exists('pm_share_wa_block')) {
+        $text .= pm_share_wa_block($text);
     }
     if (!str_contains($text, $s['company_name'])) {
         $text .= "\n\n— $who";
@@ -1279,7 +1282,7 @@ function pm_wa_queue(array $leads): array
         if (pm_outreach_lint('WhatsApp message', (string)$draft, $kind === 'first')) {
             continue; // fails the honesty/spam checks: edit the draft on the lead first
         }
-        $text = pm_wa_text($l, (string)$draft);
+        $text = pm_wa_text($l, (string)$draft, $kind === 'first');
         $out[] = ['lead' => $l, 'url' => 'https://wa.me/' . $num, 'text' => $text, 'kind' => $kind, 'display' => '+' . $num, 'score' => (int)($l['score'] ?? 0)];
     }
     usort($out, fn($a, $b) => [$a['kind'] === 'followup' ? 0 : 1, -$a['score']] <=> [$b['kind'] === 'followup' ? 0 : 1, -$b['score']]);
@@ -1295,7 +1298,7 @@ function pm_wa_quick_replies(): array
         : (pm_brand_is_custom(pm_brand())
             ? trim((string)(pm_brain()['about'] ?? '')) . ' I can send a short note on how we could help your business.'
             : 'We build software and websites, source computers and equipment, and provide IT support for Malawian businesses. I can send a one-page plan for your business.');
-    return [
+    $replies = [
         'What is this?' => "Thanks for asking. $what",
         'How much?' => 'Fair question. It depends on what you need, so I would rather give you an exact figure than a guess. Can I send you a short plan for your business? ' . (pm_brand() === 'travel' ? 'Listing is free for now.' : ''),
         'Can we talk?' => 'Yes please. Would a short call today or tomorrow suit you? Tell me a time and I will call you.',
@@ -1304,6 +1307,7 @@ function pm_wa_quick_replies(): array
         'Not interested' => "Understood, thank you for replying. I won't message again. All the best with the business.",
         'Who are you?' => "I'm part of the team at $b, based in Malawi. I messaged because I thought we could help your business. Happy to share more or leave you be.",
     ];
+    return $replies + (function_exists('pm_share_quick_replies') ? pm_share_quick_replies(pm_brand()) : []); // plus one per document or page in the share kit
 }
 
 /** tel: link for a Malawi number (a leading 0 becomes +265). */

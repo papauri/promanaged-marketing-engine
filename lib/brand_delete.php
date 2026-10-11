@@ -7,7 +7,7 @@
  */
 
 /** Files that hold one block per business, keyed by the business id (others of that shape are recognised by having a block for ProManaged IT or Travel Malawi). */
-const PM_BRAND_MAP_FILES = ['ads_plan', 'agents_config', 'autopilot', 'director', 'engage_playbook', 'fb_judged', 'page_audit', 'page_cleanup', 'send_caps', 'social_page', 'partners', 'social_channels', 'offer_ideas', 'followup_job', 'page_opt', 'cover_studio', 'brand_team', 'desks'];
+const PM_BRAND_MAP_FILES = ['ads_plan', 'agents_config', 'autopilot', 'director', 'engage_playbook', 'fb_judged', 'page_audit', 'page_cleanup', 'send_caps', 'social_page', 'partners', 'social_channels', 'offer_ideas', 'followup_job', 'page_opt', 'cover_studio', 'brand_team', 'desks', 'share_kit'];
 
 /** Files left alone by the sweep: the registry and settings are edited by hand below, usage counters and the shared template are not a business's. */
 const PM_BRAND_PURGE_SKIP_FILES = ['brands', 'settings', 'ai_usage_daily', 'history', 'template', 'suggest_cache', 'health_checks'];
@@ -147,9 +147,10 @@ function pm_brand_purge(string $id, bool $apply): array
             $res['files'][] = $f;
         }
     }
-    $kit = PM_DATA . '/brandkit/' . $id;
-    if (is_dir($kit)) {
-        $res['files'][] = $kit;
+    foreach ([PM_DATA . '/brandkit/' . $id, PM_DATA . '/share/' . $id] as $kit) { // its pictures and its share-kit PDFs
+        if (is_dir($kit)) {
+            $res['files'][] = $kit;
+        }
     }
     $res['counts']['other'] += count($res['files']);
     if ($apply) {

@@ -121,6 +121,16 @@
     if (src) { b.setAttribute('data-copy', src.value); }
   }, true);
 
+  document.addEventListener('click', function (e) {          // "+ link" buttons: add data-ins (a name and its link) on a new line at the end of the WhatsApp box in the same form or card
+    var b = e.target.closest('[data-ins]');
+    if (!b) return;
+    var box = b.closest('form, .card') && b.closest('form, .card').querySelector('textarea[name=whatsapp]');
+    if (!box) return;
+    var add = b.getAttribute('data-ins');
+    if (box.value.indexOf(add) === -1) { box.value = (box.value.replace(/\s+$/, '') + '\n' + add).replace(/^\n/, ''); }
+    box.focus();
+  });
+
   document.addEventListener('click', function (e) {          // "Reply on WhatsApp": log the answer, then WhatsApp opens with it ready
     var a = e.target.closest('[data-wa-log]');
     if (!a) return;

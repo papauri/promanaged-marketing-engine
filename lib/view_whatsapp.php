@@ -39,6 +39,7 @@ usort($wrote, fn($a, $b) => strcmp((string)($a['awaiting_reply_since'] ?? $a['la
     <form method="post"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="send_reply_wa"><?= $hid('id', $l['id']) . $hid('rl', '1') . $hid('bt', 'whatsapp') ?>
     <label class="hint">Your answer on WhatsApp <?= $waDraft === '' ? '(none drafted yet: paste their message below, or write it)' : '(drafted: edit it, then send)' ?></label>
     <textarea name="whatsapp" rows="3" aria-label="Answer"><?= pm_h($waDraft) ?></textarea>
+    <?= pm_share_reply_controls($vb, [], 'wa') ?>
     <div class="btns">
       <?php if ($waBiz && pm_wa_biz_window_open($l)): ?><button class="btn primary" onclick="return confirm('Send this answer on WhatsApp now?')">Send on WhatsApp Business</button><?php endif; ?>
       <?php if ($waUrl !== ''): ?><a class="btn<?= $waBiz && pm_wa_biz_window_open($l) ? '' : ' primary' ?>" data-wa-log data-id="<?= pm_h($l['id']) ?>" data-csrf="<?= pm_h($csrf) ?>" data-url="<?= pm_h($waUrl) ?>" href="<?= pm_h($waUrl) ?>" target="_blank" rel="noopener noreferrer">Open WhatsApp</a>

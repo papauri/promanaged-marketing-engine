@@ -1,5 +1,6 @@
 <?php
 /** Operations > Business details: who each business is, how to reach it, its logo and how it signs. Included by view_settings.php. */
+require_once __DIR__ . '/view_share.php';
 pm_view_biz_grid($settings, $vb, $csrf);
 pm_view_hidden_businesses($csrf);
 
@@ -50,6 +51,7 @@ if ($isCustom): // a business added in the app: one form, saved by brand_save (t
   </div>
   <div class="btns formbar"><button class="btn primary">Save <?= pm_h($bname) ?></button></div>
 </form>
+<?php pm_view_share($b, $csrf); ?>
 <p class="hint">What the AI knows is under <a href="?tab=social&amp;view=voice">Brand &gt; Voice</a>, who the agents look for under <a href="?tab=targeting">Sales &gt; Targeting and messages</a>, and the mail login under <a href="?tab=settings&amp;section=email">Email</a>.</p>
 
 <details class="card mt-3"><summary>Hide this business</summary>
@@ -127,5 +129,6 @@ if ($isCustom): // a business added in the app: one form, saved by brand_save (t
   <?php $card('promanaged'); $card('travel'); ?>
   <div class="btns formbar"><button class="btn primary">Save <?= pm_h($bname) ?></button></div>
 </form>
+<?php pm_view_share($vb, $csrf); ?>
 <p class="hint">What the AI knows is under <a href="?tab=social&amp;view=voice">Brand &gt; Voice</a>, the first-email wording under <a href="?tab=targeting">Sales &gt; Targeting and messages</a>, and the mail login under <a href="?tab=settings&amp;section=email">Email</a>.</p>
 <?php endif; ?>

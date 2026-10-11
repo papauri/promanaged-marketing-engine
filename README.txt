@@ -11,6 +11,12 @@ MARKETING PLAN
   nothing in it is built until the owner accepts it. When the register is empty
   the file is wiped and the cycle starts over.
 
+SHARE KIT (PDFs and website links in emails and WhatsApp)
+  Operations > Business details > "Documents to share" and "Links from the website", per business. Upload a PDF once (for example Travel Malawi's host starter pack): first
+  emails attach it and carry its link, WhatsApp messages carry the link (served by doc.php from data/share/). "Read the website" finds the sign-up, starter pack and
+  how-it-works pages of the business's own site (also sites drawn in the browser) and switches the best ones on. Code: lib/sharekit.php, lib/view_share.php.
+  On a server the PDFs live in data/share/, so copy data/ there or paste a link to a copy on your website.
+
 UI DESIGN SYSTEM
   UI.md is the one-page design system: the tokens, the four button levels, the chip, card, field and table rules, the page templates, the utility classes and how to add a screen.
   plans/archive/ui-redesign-plan.md is the finished redesign plan.

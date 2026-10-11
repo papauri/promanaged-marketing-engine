@@ -273,9 +273,10 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
           <?php if ($rpMail): ?>
           <input type="text" name="subject" value="<?= pm_h($rp['subject'] ?? '') ?>" aria-label="Subject">
           <textarea name="body" rows="5" aria-label="Reply by email"><?= pm_h($rp['body'] ?? '') ?></textarea>
+          <?= pm_share_reply_controls((string)($l['brand'] ?? pm_brand()), (array)($rp['attach'] ?? [])) ?>
           <?php else: ?><span class="hint">No email address for this lead: answer on WhatsApp<?= $rpWa === '' ? ' (no mobile number either; add one in the box on the right)' : '' ?>.</span><?php endif; ?>
           <?php if ($rpWa !== '' || !$rpMail): ?><label class="hint">WhatsApp answer <?= $rpWaText === '' && trim((string)($rp['body'] ?? '')) === '' ? '(write it, or press Draft my answer under More → Paste their reply)' : '' ?></label>
-          <textarea name="whatsapp" rows="2" aria-label="Reply on WhatsApp"><?= pm_h($rpWaText) ?></textarea><?php endif; ?>
+          <textarea name="whatsapp" rows="2" aria-label="Reply on WhatsApp"><?= pm_h($rpWaText) ?></textarea><?= pm_share_reply_controls((string)($l['brand'] ?? pm_brand()), [], 'wa') ?><?php endif; ?>
           <div class="btns"><button class="btn small">Save</button>
             <?php if ($rpMail && trim((string)($rp['body'] ?? '')) !== ''): ?><button class="btn small primary" formaction="?tab=agents" name="do" value="send_reply" onclick="return confirm('Send this reply now?')">Send reply</button><?php endif; ?>
             <?php if ($waBiz && trim($rpWaText) !== '' && pm_wa_biz_window_open($l)): ?><button class="btn small primary" formaction="?tab=agents" name="do" value="send_reply_wa" onclick="return confirm('Send this answer on WhatsApp now?')">Send on WhatsApp Business</button><?php endif; ?>
@@ -291,8 +292,10 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
           <label>Email</label>
           <input type="text" name="email_subject" value="<?= pm_h($dr['email_subject'] ?? '') ?>" placeholder="Subject">
           <textarea name="email_body" rows="6" placeholder="Message (your sign-off and an opt-out line are added when sent)"><?= pm_h($dr['email_body'] ?? '') ?></textarea>
+          <?= $which === 'first' ? pm_share_added_hint('email', (string)($l['brand'] ?? pm_brand())) : '' ?>
           <label>WhatsApp</label>
           <textarea name="whatsapp" rows="2"><?= pm_h($dr['whatsapp'] ?? '') ?></textarea>
+          <?= $which === 'first' ? pm_share_added_hint('whatsapp', (string)($l['brand'] ?? pm_brand())) : '' ?>
           <div class="btns"><button class="btn small">Save edits</button></div>
         </form>
         <?php else: ?><p class="hint">No message yet.</p><?php endif; ?>
@@ -301,7 +304,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 
     <div class="actions">
       <?php if ($canMail): ?><form method="post" onsubmit="return confirm('Send this email to <?= pm_h(addslashes($l['email'])) ?> now?')"><?= $post($id, 'send', $hid('which', $which)) ?><button class="btn primary"><?= $which === 'followup' ? 'Send follow-up' : 'Send email' ?></button></form><?php endif; ?>
-      <?php if ($wa): ?><a class="btn" href="<?= pm_h(pm_wa_link($l, pm_wa_text($l, $dr['whatsapp']))) ?>" target="_blank" rel="noopener noreferrer">WhatsApp</a><?php endif; ?>
+      <?php if ($wa): ?><a class="btn" href="<?= pm_h(pm_wa_link($l, pm_wa_text($l, $dr['whatsapp'], $which === 'first'))) ?>" target="_blank" rel="noopener noreferrer">WhatsApp</a><?php endif; ?>
       <?php if ($tel = pm_tel_link($l)): ?><a class="btn" href="<?= pm_h($tel) ?>">Call</a><?php endif; ?>
       <?php if (($l['status'] ?? '') === 'contacted' && empty($l['followup_draft']) && !pm_lead_email_dead($l) && pm_agents_ready()): ?><form method="post"><?= $post($id, 'followup_ai') ?><button class="btn" title="The Follow-up agent writes a follow-up for you to read; nothing is sent">Draft follow-up with AI</button></form><?php endif; ?>
       <form method="post"><?= $post($id, 'research') ?><button class="btn" title="Website, Facebook, Instagram, reviews and recent news"><?= empty($l['research']) ? 'Research' : 'Research again' ?></button></form>

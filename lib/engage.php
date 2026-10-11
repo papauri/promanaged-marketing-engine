@@ -115,7 +115,7 @@ function pm_agent_reply(array $lead, string $incoming, string $ch = 'email'): ar
         . "Set needs_human true if they are angry, complaining, negotiating price or terms, raise legal or security questions, ask for something outside the facts above, or you are unsure. "
         . "For stop, not_interested, not_now, out_of_office and bounce, reply_body must be empty. "
         . "resume_on: only for not_now, the date (YYYY-MM-DD) they asked to be contacted again, else " . date('Y-m-d', strtotime('+30 days')) . " (today is " . date('Y-m-d') . "). "
-        . "whatsapp: the same answer as a WhatsApp message, at most 40 words, no subject, no links; empty when reply_body is empty. " . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
+        . "whatsapp: the same answer as a WhatsApp message, at most 40 words, no subject, no links; empty when reply_body is empty." . (function_exists('pm_share_reply_hint') ? pm_share_reply_hint((string)($lead['brand'] ?? '')) : '') . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $user = "Business: {$lead['name']} ({$lead['city']}), contact: " . ($lead['contact'] ?? '') . ", package we suggested: $pk, their likely need: " . ($lead['pain'] ?? '') . ".\n"
         . "Conversation so far:\n" . implode("\n", $thread) . "\n\nTheir new message" . ($ch === 'wa' ? ' (on WhatsApp)' : '') . ":\n" . mb_substr($incoming, 0, 4000)
         . "\n\nReturn JSON: {\"intent\",\"summary\":\"one sentence\",\"needs_human\":bool,\"reply_subject\",\"reply_body\",\"whatsapp\",\"resume_on\",\"next_step\":\"what the owner should do next\"}";
@@ -616,7 +616,7 @@ function pm_match_lead(array $leads, string $email, array $m = []): ?string
 }
 
 /**
- * Apply the Reply agent's decision to a lead. $send is a callback(array $lead, string $subject, string $body): array [ok, error, msgid?]
+ * Apply the Reply agent's decision to a lead. $send is a callback(array $lead, string $subject, string $body, array $attachments): array [ok, error, msgid?]
  * used only in auto mode. $ch is where they wrote ('email'|'wa'). Returns a one-line description of what happened.
  * States: STOP always wins (optout). An optout lead stays optout and gets no draft unless it explicitly asks to resume. won/proposal/lost keep
  * their status (a decline after a proposal moves it to lost) and are marked awaiting a reply. not_now/out-of-office only snooze.
@@ -696,10 +696,15 @@ function pm_apply_reply(array &$lead, string $text, array $r, string $mode, ?cal
     $subject = trim((string)($r['reply_subject'] ?? '')) ?: 'Re: ' . ($lead['drafts']['email_subject'] ?? 'your reply');
     $lead['reply_draft'] = ['subject' => $subject, 'body' => trim((string)($r['reply_body'] ?? '')), 'whatsapp' => pm_wa_reply_clean((string)($r['whatsapp'] ?? '')),
         'needs_human' => !empty($r['needs_human']), 'next_step' => (string)($r['next_step'] ?? ''), 'ch' => $ch];
+    $kitBrand = (string)($lead['brand'] ?? pm_brand());
+    if (function_exists('pm_share_wanted_docs') && ($want = pm_share_wanted_docs($kitBrand, $text)) && ($lead['reply_draft']['body'] !== '' || $lead['reply_draft']['whatsapp'] !== '')) { // they asked for the pack: it is attached, and its link goes in the WhatsApp answer
+        [$lead['reply_draft']['body'], $lead['reply_draft']['whatsapp']] = pm_share_reply_text($kitBrand, $want, (string)$lead['reply_draft']['body'], (string)$lead['reply_draft']['whatsapp']);
+        $lead['reply_draft']['attach'] = $want;
+    }
     // Auto mode answers only plain questions and interest by email. A call or meeting time is never committed without the owner.
     if ($mode === 'auto' && $send && $ch === 'email' && !$keep && empty($r['needs_human']) && in_array($intent, ['interested', 'question'], true) && $lead['reply_draft']['body'] !== ''
         && !pm_outreach_lint($subject, $lead['reply_draft']['body'], false) && filter_var($lead['email'] ?? '', FILTER_VALIDATE_EMAIL)) {
-        $res = $send($lead, $subject, $lead['reply_draft']['body']);
+        $res = $send($lead, $subject, $lead['reply_draft']['body'], function_exists('pm_share_attachments') ? pm_share_attachments($kitBrand, (array)($lead['reply_draft']['attach'] ?? [])) : []);
         if (!empty($res[0])) {
             $body = $lead['reply_draft']['body'];
             pm_reply_sent($lead, $body, 'email', (string)($res[2] ?? ''));

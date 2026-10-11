@@ -6,7 +6,7 @@ use PHPMailer\PHPMailer\Exception as MailException;
 
 /**
  * Send an email with PDF attachments.
- * $m = [to, cc?, subject, body (plain text), attachments? (paths), button? [label, url], bcc_self? (bool)]
+ * $m = [to, cc?, subject, body (plain text), attachments? (paths, or [path, name]), button? [label, url], bcc_self? (bool)]
  * Returns [true, '', messageId] on success or [false, 'reason', ''] (callers may destructure just [ok, why]).
  */
 function pm_mail(array $s, array $m): array
@@ -100,9 +100,11 @@ function pm_mail(array $s, array $m): array
             . htmlspecialchars(implode('  ·  ', array_filter([$s['company_name'], $s['phone'] ?? '', $s['email'] ?? '', $s['website'] ?? ''])), ENT_QUOTES) . '</td></tr>'
             . '</table></td></tr></table></body></html>';
         $mail->AltBody = (string)$m['body'] . (!empty($m['link']['url']) ? "\n\n" . $m['link']['url'] : '') . (!empty($m['button'][1]) ? "\n\n" . $m['button'][0] . ': ' . $m['button'][1] : '');
-        foreach ((array)($m['attachments'] ?? []) as $path) {
+        foreach ((array)($m['attachments'] ?? []) as $path) { // a path, or [path, the name the reader sees]
+            $name = is_array($path) ? (string)($path[1] ?? '') : '';
+            $path = is_array($path) ? (string)($path[0] ?? '') : (string)$path;
             if (is_file($path)) {
-                $mail->addAttachment($path, basename($path), PHPMailer::ENCODING_BASE64, 'application/pdf');
+                $mail->addAttachment($path, $name !== '' ? $name : basename($path), PHPMailer::ENCODING_BASE64, 'application/pdf');
             }
         }
 

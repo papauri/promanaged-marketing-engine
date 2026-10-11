@@ -25,6 +25,25 @@ function pm_tm_email_defaults(): array
     ];
 }
 
+/** The starting text's two lines about the starter guide as something we could send; once a pack is ready in the share kit they say it is already on its way. */
+const PM_TM_LEGACY = ['benefit' => 'There is a host starter guide to help you get set up.', 'closing' => 'Shall I send you the host starter guide?'];
+
+/** What those lines say when a host starter pack is ready (attached to the email, or opened from a link): ['benefit', 'closing', 'old'] (the benefit lines it replaces), or [] when there is none. */
+function pm_tm_pack_lines(): array
+{
+    $st = function_exists('pm_share_pack_state') ? pm_share_pack_state('travel') : 'none';
+    $b = fn(string $how) => 'There is a host starter pack to help you get set up, and ' . $how;
+    return $st === 'none' ? [] : ['benefit' => $b($st === 'attached' ? 'it is attached to this email.' : 'the link is below.'), 'closing' => 'Reply here, or on WhatsApp, and I will help you get listed.',
+        'old' => [PM_TM_LEGACY['benefit'], $b('it is attached to this email.'), $b('the link is below.')]];
+}
+
+/** The same lines with the "shall I send you" wording (or an earlier ready-pack wording) swapped for the one that is true now; any line the owner wrote themselves is left alone. */
+function pm_tm_pack_swap(string $text): string
+{
+    $p = pm_tm_pack_lines();
+    return $p ? str_replace(array_merge($p['old'], [PM_TM_LEGACY['closing']]), array_merge(array_fill(0, count($p['old']), $p['benefit']), [$p['closing']]), $text) : $text;
+}
+
 /** The standard part as saved in Settings; a field that was never saved uses the starting text, a field saved empty stays empty. */
 function pm_tm_email_cfg(): array
 {
@@ -73,6 +92,8 @@ function pm_tm_clean_opening(string $s): string
 function pm_tm_email_compose(array $lead, string $opening = ''): string
 {
     $c = pm_tm_email_cfg();
+    $c['benefits'] = array_map('pm_tm_pack_swap', $c['benefits']);
+    $c['closing'] = pm_tm_pack_swap((string)$c['closing']);
     $first = pm_tm_first_name($lead);
     $open = trim($opening) !== '' ? trim($opening) : pm_tm_default_opening($lead);
     $list = fn(array $rows, bool $numbered) => implode("\n", array_map(fn($i, $x) => ($numbered ? ($i + 1) . '. ' : '- ') . str_replace('{link}', (string)$c['link'], $x), array_keys($rows), $rows));
@@ -206,4 +227,30 @@ function pm_tm_rewrite_drafts(): array
         }, fn() => []);
     }
     return ['rewritten' => $done, 'failed' => $failed];
+}
+
+/** When a host starter pack becomes ready, unsent first emails that still ask "shall I send you the guide?" say it is attached or linked instead. Approved and sent emails are not touched. Returns how many changed. */
+function pm_tm_pack_refresh_drafts(): int
+{
+    if (!pm_tm_pack_lines()) {
+        return 0;
+    }
+    $n = 0;
+    pm_update('leads', function (array $cur) use (&$n) {
+        foreach ($cur as $id => $l) {
+            $d = (array)($l['drafts'] ?? []);
+            $body = (string)($d['email_body'] ?? '');
+            if (($l['brand'] ?? 'promanaged') !== 'travel' || $body === '' || !empty($l['sent']) || !empty($l['approved_at']) || !in_array($l['status'] ?? '', ['new', 'qualified', 'drafted'], true)) {
+                continue;
+            }
+            $new = pm_tm_pack_swap($body);
+            if ($new !== $body) {
+                $cur[$id]['drafts']['email_body'] = $new;
+                pm_lead_note($cur[$id], 'Email updated: the host starter pack is ready');
+                $n++;
+            }
+        }
+        return $cur;
+    }, fn() => []);
+    return $n;
 }

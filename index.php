@@ -935,8 +935,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $back('Not sent. ' . implode(' ', $problems) . ' Edit the draft and try again.', 'err');
             }
             $fromAddr = $settings['smtp']['from_email'] ?: $settings['email'];
-            [$ok, $why, $msgId] = pm_mail($settings, ['to' => $lead['email'], 'subject' => $d['email_subject'], 'body' => $d['email_body'] . pm_outreach_footer($settings),
-                'headers' => ['List-Unsubscribe' => '<mailto:' . $fromAddr . '?subject=STOP>', 'Auto-Submitted' => 'no'], 'link' => pm_link_card()]);
+            $kitBlock = $which === 'drafts' ? pm_share_email_block((string)$d['email_body']) : ''; // a first email also carries the share kit: the PDF and the direct links
+            [$ok, $why, $msgId] = pm_mail($settings, ['to' => $lead['email'], 'subject' => $d['email_subject'], 'body' => $d['email_body'] . $kitBlock . pm_outreach_footer($settings),
+                'headers' => ['List-Unsubscribe' => '<mailto:' . $fromAddr . '?subject=STOP>', 'Auto-Submitted' => 'no'], 'link' => pm_link_card(),
+                'attachments' => $which === 'drafts' ? pm_share_attachments() : []]);
             if (!$ok) {
                 $back('Could not send: ' . pm_mail_fail($settings, (string)$why), 'err');
             }
@@ -944,7 +946,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $leads[$id]['owner'] = $GLOBALS['PM_WHO']; // whoever sends it owns the follow-up
             }
             $leads[$id]['sent'][] = date('Y-m-d H:i');
-            $leads[$id]['thread'][] = ['dir' => 'out', 'at' => date('Y-m-d H:i'), 'text' => $d['email_body']];
+            $leads[$id]['thread'][] = ['dir' => 'out', 'at' => date('Y-m-d H:i'), 'text' => $d['email_body'] . $kitBlock];
             $leads[$id]['last_contacted'] = $leads[$id]['last_out'] = date('Y-m-d H:i');
             pm_lead_add_msgid($leads[$id], (string)$msgId);
             $leads[$id]['status'] = 'contacted';
@@ -971,7 +973,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($do === 'save_reply') {
             $leads[$id]['reply_draft'] = array_merge((array)($lead['reply_draft'] ?? []), ['subject' => trim((string)($_POST['subject'] ?? ($lead['reply_draft']['subject'] ?? ''))), 'body' => trim((string)($_POST['body'] ?? ($lead['reply_draft']['body'] ?? ''))),
-                'whatsapp' => trim((string)($_POST['whatsapp'] ?? ($lead['reply_draft']['whatsapp'] ?? '')))]);
+                'whatsapp' => trim((string)($_POST['whatsapp'] ?? ($lead['reply_draft']['whatsapp'] ?? ''))),
+                'attach' => array_values(array_filter(array_map('strval', (array)($_POST['attach'] ?? [])), fn($x) => preg_match('/^[a-f0-9]{20}$/', $x) === 1))]); // the PDFs ticked under the email
             pm_leads_save($leads);
             $back('Reply saved.');
         }
@@ -985,13 +988,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($problems = pm_outreach_lint((string)$rd['subject'], (string)$rd['body'], false)) {
                 $back('Not sent. ' . implode(' ', $problems), 'err');
             }
-            [$ok, $why, $msgId] = pm_send_reply($lead, (string)$rd['subject'], (string)$rd['body']);
+            $atts = pm_share_attachments((string)($lead['brand'] ?? pm_brand()), array_values(array_filter(array_map('strval', (array)($_POST['attach'] ?? [])), fn($x) => preg_match('/^[a-f0-9]{20}$/', $x) === 1))); // PDFs ticked under the email
+            [$ok, $why, $msgId] = pm_send_reply($lead, (string)$rd['subject'], (string)$rd['body'], $atts);
             if (!$ok) {
                 $back('Could not send: ' . pm_mail_fail($settings, (string)$why), 'err');
             }
             pm_reply_sent($leads[$id], (string)$rd['body'], 'email', (string)$msgId); // replied -> contacted, followups 0, last_out, no longer awaiting
             $leads[$id]['last_contacted'] = date('Y-m-d H:i');
-            pm_lead_note($leads[$id], 'Reply sent to ' . $lead['email']);
+            pm_lead_note($leads[$id], 'Reply sent to ' . $lead['email'] . ($atts ? ' with ' . implode(', ', array_map(fn($a) => $a[2], $atts)) . ' attached' : ''));
             pm_leads_save($leads);
             $back('Reply sent to ' . $lead['name'] . '.');
         }
@@ -1301,7 +1305,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $m = pm_agent_compose($lw, $channel, $pick('tone', array_keys(PM_COMPOSE_TONES), 'human'), $pick('length', array_keys(PM_COMPOSE_LENGTHS), 'short'),
                 $pick('angle', array_keys(PM_COMPOSE_ANGLES), 'need'), $pick('lang', ['english', 'chichewa'], 'english'));
             if ($channel === 'whatsapp' && !empty($_POST['signed'])) {
-                $m['body'] = pm_wa_text($lw, $m['body']); // queue cards show the message exactly as it will be sent
+                $m['body'] = pm_wa_text($lw, $m['body'], empty($lw['wa_sent'])); // queue cards show the message exactly as it will be sent (a first message carries the share-kit links)
             }
             echo json_encode(['ok' => true, 'subject' => $m['subject'], 'body' => $m['body'], 'words' => str_word_count($m['body'])]);
         } catch (Throwable $e) {
@@ -1646,6 +1650,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $b = pm_brand_norm($_POST['brand'] ?? '');
         $m = pm_link_refresh($b);
         pm_redirect('settings&section=business&brand=' . $b, $m['url'] === '' ? 'Add a link first.' : ($m['ok'] ? 'Preview updated from ' . $m['url'] . '.' : 'Could not read ' . $m['url'] . '. Check the address.'), $m['ok'] ? 'ok' : 'err');
+    }
+
+    if ($action === 'share') { // the share kit: PDFs and website links added to a business's emails and WhatsApp messages (lib/sharekit.php)
+        $b = pm_brand_norm($_POST['brand'] ?? '');
+        pm_brand_set($b);
+        [$kitMsg, $kitKind] = pm_share_handle(preg_replace('/[^a-z_]/', '', (string)($_POST['do'] ?? '')), $b);
+        pm_redirect('settings&section=business&brand=' . $b . '#share', $kitMsg, $kitKind);
     }
 
     if ($action === 'smtp_check') { // log in to the mail server without sending anything

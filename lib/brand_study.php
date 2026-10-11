@@ -42,7 +42,7 @@ function pm_study_host(string $url): string
  * One page, fetched safely: only public addresses (every redirect hop is checked again and the address is pinned), a size limit, a short time limit.
  * Returns ['ok', 'url' (final), 'html', 'why']. $GLOBALS['PM_PAGE_STUB'] (tests) is fn(url): html|null and replaces the network.
  */
-function pm_study_fetch(string $url): array
+function pm_study_fetch(string $url, int $max = 1500000): array
 {
     $no = fn(string $why) => ['ok' => false, 'url' => $url, 'html' => '', 'why' => $why];
     if (isset($GLOBALS['PM_PAGE_STUB']) && is_callable($GLOBALS['PM_PAGE_STUB'])) {
@@ -60,13 +60,13 @@ function pm_study_fetch(string $url): array
             return $no($h !== '' && !filter_var($h, FILTER_VALIDATE_IP) && !@gethostbynamel($h) ? 'that address could not be found' : 'that address is not allowed');
         }
         $port = parse_url($u, PHP_URL_PORT) ?: (stripos($u, 'https') === 0 ? 443 : 80);
-        $try = function (bool $strict) use ($u, $pub, $port, &$loc) {
+        $try = function (bool $strict) use ($u, $pub, $port, $max, &$loc) {
             $loc = '';
             $ch = curl_init($u);
             $opt = [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_CONNECTTIMEOUT => 8, CURLOPT_FOLLOWLOCATION => false, CURLOPT_ENCODING => '',
                 CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36',
                 CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS, CURLOPT_NOPROGRESS => false,
-                CURLOPT_PROGRESSFUNCTION => fn($c, $dt, $dn) => $dn > 1500000 ? 1 : 0, // a stranger's page: stop at 1.5 MB
+                CURLOPT_PROGRESSFUNCTION => fn($c, $dt, $dn) => $dn > $max ? 1 : 0, // a stranger's page: stop at 1.5 MB (more only for a site's script, which the Share kit reads)
                 CURLOPT_HEADERFUNCTION => function ($c, $line) use (&$loc) {
                     if (stripos($line, 'location:') === 0) {
                         $loc = trim(substr($line, 9));
