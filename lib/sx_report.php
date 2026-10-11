@@ -694,7 +694,7 @@ function pm_panel_plan_kpi_growth(string $vb, array $ctx = []): string
     $h = '';
     if ($f['now'] !== null) {
         $d = $f['d7'];
-        $h .= '<div><b>' . number_format($f['now']) . ($d !== null ? ' <small style="font-weight:500;color:' . ($d >= 0 ? 'var(--ok,#1a7f37)' : 'var(--danger,#b42318)') . '">' . ($d >= 0 ? '+' : '') . $d . ' in 7 days</small>' : '') . '</b>'
+        $h .= '<div><b>' . number_format($f['now']) . ($d !== null ? ' <small class="delta ' . ($d >= 0 ? 't-ok' : 't-bad') . '">' . ($d >= 0 ? '+' : '') . $d . ' in 7 days</small>' : '') . '</b>'
             . '<span>Facebook followers ' . pm_sx_spark(array_values($f['series'])) . ($d === null ? ' · 7-day change appears after a week of readings' : '') . '</span></div>';
     }
     if (function_exists('pm_response_stats')) {
@@ -735,8 +735,8 @@ function pm_sx_goal_strip(string $vb): string
     foreach ($bars as [$l, $v, $t, $note]) {
         $pct = (int)min(100, round($v / max(1, $t) * 100));
         $h .= '<div class="mt-2" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="t-sm" style="min-width:150px">' . pm_h($l) . '</span>'
-            . '<span style="flex:1 1 120px;height:8px;border-radius:99px;background:var(--line,#e5e7eb);overflow:hidden"><i style="display:block;height:100%;width:' . $pct . '%;background:' . ($pct >= 100 ? 'var(--ok,#1a7f37)' : 'var(--accent,#2563eb)') . '"></i></span>'
-            . '<span style="font-size:12px;color:var(--muted,#667085);min-width:170px">' . number_format($v) . ' of ' . number_format($t) . ' · ' . pm_h($note) . '</span></div>';
+            . '<span class="goalbar"><i class="' . ($pct >= 100 ? 'full' : '') . '" style="width:' . $pct . '%"></i></span>'
+            . '<span class="goalnote">' . number_format($v) . ' of ' . number_format($t) . ' · ' . pm_h($note) . '</span></div>';
     }
     return $h . '</div>';
 }

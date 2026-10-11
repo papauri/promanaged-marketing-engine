@@ -40,7 +40,7 @@ const UI_BUDGET_FONT = 0;         // font-size values outside the scale, minus e
 const UI_BUDGET_RADIUS = 0;       // border-radius values outside the tokens (plan target: 0)
 const UI_BUDGET_ROOTS = 1;        // :root blocks in app.css (plan target: 1)
 const UI_BUDGET_STYLE_BLOCKS = 0; // <style> blocks in lib/view_*.php + lib/sx_*.php (plan target: 0)
-const UI_BUDGET_INLINE = 12;      // style= attributes with banned properties (plan target: at most 40, all data-driven)
+const UI_BUDGET_INLINE = 8;       // style= attributes with banned properties (plan target: at most 40, all data-driven)
 const UI_BUDGET_PRIMARY = 1;      // most non-small .btn.primary in one container (plan target: 1)
 const UI_MIN_CONTRAST = 4.5;      // WCAG AA for the text pairs below (already met today)
 
@@ -475,9 +475,9 @@ t('Every text pair meets WCAG AA', function () {
         return $v;
     };
     $hex = fn($v) => preg_match('/^#[0-9a-fA-F]{3,8}$/', $resolve((string)$v)) ? $resolve((string)$v) : '';
-    $surface = $hex($tok['--surface'] ?? '') ?: $hex($tok['--card'] ?? '') ?: '#ffffff';
-    $badFg = $hex($tok['--bad'] ?? '') ?: $hex($tok['--danger'] ?? '');
-    $badBg = $hex($tok['--badbg'] ?? '');
+    $surface = $hex($tok['--surface'] ?? '') ?: '#ffffff';
+    $badFg = $hex($tok['--bad'] ?? '');
+    $badBg = $hex($tok['--bad-bg'] ?? '');
     if ($badBg === '') { // today: the tinted background that carries the danger text (the .sx-chip.bad look)
         if (preg_match_all('/\{([^{}]*var\(--(?:danger|bad)\)[^{}]*)\}/s', $css, $m)) {
             foreach ($m[1] as $body) {
@@ -491,8 +491,8 @@ t('Every text pair meets WCAG AA', function () {
     $pairs = [
         ['ink on bg', $hex($tok['--ink'] ?? ''), $hex($tok['--bg'] ?? '')],
         ['muted on surface', $hex($tok['--muted'] ?? ''), $surface],
-        ['ok on ok-bg', $hex($tok['--ok'] ?? ''), $hex($tok['--okbg'] ?? '')],
-        ['warn on warn-bg', $hex($tok['--warn'] ?? ''), $hex($tok['--warnbg'] ?? '')],
+        ['ok on ok-bg', $hex($tok['--ok'] ?? ''), $hex($tok['--ok-bg'] ?? '')],
+        ['warn on warn-bg', $hex($tok['--warn'] ?? ''), $hex($tok['--warn-bg'] ?? '')],
         ['bad on bad-bg', $badFg, $badBg],
     ];
     foreach (pm_ui_nav() as $dept => $d) {

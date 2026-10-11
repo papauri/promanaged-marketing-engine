@@ -14,10 +14,10 @@
       <tr><td><input type="text" name="s[currencies][<?= $i ?>][code]" value="<?= pm_h($c['code']) ?>" maxlength="3"></td><td><input type="text" name="s[currencies][<?= $i ?>][name]" value="<?= pm_h($c['name']) ?>"></td>
         <td><input type="number" step="any" name="s[currencies][<?= $i ?>][mpu]" value="<?= pm_h((string)round(1 / max(0.0000001, (float)$c['rate']), 4)) ?>" <?= $c['code'] === $settings['currency'] ? 'readonly' : '' ?>></td>
         <td><input type="number" step="any" name="s[currencies][<?= $i ?>][round]" value="<?= pm_h((string)$c['round']) ?>"></td>
-        <td><button type="button" class="icon" onclick="this.closest('tr').remove()" title="Remove">&times;</button></td></tr>
+        <td><button type="button" class="icon" onclick="this.closest('tr').remove()" title="Remove" aria-label="Remove this row">&times;</button></td></tr>
     <?php endforeach; ?>
     </tbody></table>
-    <template><tr><td><input type="text" name="s[currencies][__i__][code]" maxlength="3"></td><td><input type="text" name="s[currencies][__i__][name]"></td><td><input type="number" step="any" name="s[currencies][__i__][mpu]"></td><td><input type="number" step="any" name="s[currencies][__i__][round]" value="1"></td><td><button type="button" class="icon" onclick="this.closest('tr').remove()" title="Remove">&times;</button></td></tr></template>
+    <template><tr><td><input type="text" name="s[currencies][__i__][code]" maxlength="3"></td><td><input type="text" name="s[currencies][__i__][name]"></td><td><input type="number" step="any" name="s[currencies][__i__][mpu]"></td><td><input type="number" step="any" name="s[currencies][__i__][round]" value="1"></td><td><button type="button" class="icon" onclick="this.closest('tr').remove()" title="Remove" aria-label="Remove this row">&times;</button></td></tr></template>
     <button type="button" class="link" onclick="addRow(this)">+ Add currency</button>
     <div class="row mt-2">
       <div><label>Base currency</label><input type="text" name="s[currency]" value="<?= pm_h($settings['currency']) ?>"></div>

@@ -51,7 +51,7 @@ if (!$isLocal) {
             . 'form{background:#fff;border:1px solid #e3e5e8;border-radius:12px;padding:32px;width:min(360px,90vw)}img{height:40px;margin-bottom:18px}'
             . 'input{width:100%;padding:11px;border:1px solid #e3e5e8;border-radius:8px;font:inherit;margin:6px 0 14px;box-sizing:border-box}'
             . 'button{width:100%;padding:12px;border:0;border-radius:8px;background:#17375E;color:#fff;font:inherit;font-weight:600;cursor:pointer}.e{color:#a33;font-size:13px}</style></head><body>'
-            . '<form method="post"><img src="assets/logo.png" alt=""><div><b>Proposals</b></div><label style="font-size:12px;color:#6b7078">Password</label>'
+            . '<form method="post"><img src="assets/logo.png" alt=""><div><b>Proposals</b></div><label>Password</label>'
             . '<input type="password" name="login_password" autofocus required>' . ($bad ? '<p class="e">That password is not right.</p>' : '') . '<button>Sign in</button></form></body></html>';
         exit;
     }
@@ -1893,13 +1893,13 @@ function pm_rows_editor(string $name, array $cols, array $rows, string $addLabel
         foreach ($cols as $key => $col) {
             $body .= $cell($key, $col, $r[$key] ?? '', $i);
         }
-        $body .= '<td><button type="button" class="icon" onclick="this.closest(\'tr\').remove()" title="Remove">&times;</button></td></tr>';
+        $body .= '<td><button type="button" class="icon" onclick="this.closest(\'tr\').remove()" title="Remove" aria-label="Remove this row">&times;</button></td></tr>';
     }
     $blank = '<tr>';
     foreach ($cols as $key => $col) {
         $blank .= $cell($key, $col, '', '__i__');
     }
-    $blank .= '<td><button type="button" class="icon" onclick="this.closest(\'tr\').remove()" title="Remove">&times;</button></td></tr>';
+    $blank .= '<td><button type="button" class="icon" onclick="this.closest(\'tr\').remove()" title="Remove" aria-label="Remove this row">&times;</button></td></tr>';
     return '<table class="grid" data-next="' . count($rows) . '"><thead>' . $head . '</thead><tbody>' . $body . '</tbody></table>'
         . '<template>' . $blank . '</template><button type="button" class="link" onclick="addRow(this)">+ ' . pm_h($addLabel) . '</button>';
 }

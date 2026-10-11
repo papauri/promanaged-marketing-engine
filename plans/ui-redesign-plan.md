@@ -241,3 +241,20 @@ Checklist per file:
 
 ## Open Questions
 None blocking. Defaults chosen: department colour is the only accent on a screen; 14px body with 36px controls; tonal buttons for small primaries; no dark mode.
+
+## Progress (updated 2026-10-12)
+
+| Phase | State | Commit / note |
+|---|---|---|
+| 0 guard test | done (Cline) | `tests/test_ui_system.php`, budgets now: fonts 0, radii 0, :root 1, style blocks 0, inline styles 8 (7 left, all data-driven or login page), primaries per section 1 |
+| 1 tokens | done (Cline) | |
+| 2 collapse layers | done | 0 duplicated selectors, one `:root`; verified by comparing computed styles old vs new on 25 screens |
+| 3 shell | done | top bar 48, head 60 (42 short), tabs 36, first card on Leads 184px (was 247/253) |
+| 4 components | done | buttons 36/28 with filled/tonal/outline/ghost/danger; one chip, card, field, table rule; shadows from tokens |
+| 5 screens | done through CSS and class work | inline styles 259 -> 7, seven `<style>` blocks moved into app.css, utility classes, one filled primary per section. Not done: regrouping fields into max-6-field cards and designed empty states per view (optional polish) |
+| 6 dead CSS | done | 8 unused classes removed, legacy token aliases removed |
+| 7 responsive and a11y | done | 44px controls and 16px fields on touch or under 860px, tables scroll, no horizontal overflow on any of the 24 screens at 390px, aria-labels on remove buttons, reduced motion |
+| 8 close-out | open | write `UI.md`, README pointer, move this plan to `plans/archive/` |
+
+`assets/app.css` is 780 lines: larger than the 650 target because the per-view CSS and utilities now live there instead of in 7 `<style>` blocks and 259 inline styles.
+Known failing, not UI: `tests/test_measure.php` (2 data-dependent checks).
