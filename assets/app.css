@@ -763,3 +763,6 @@ fieldset + .row, fieldset + label, .row + fieldset { margin-top:12px; }
 .btprof { position:absolute; left:10px; bottom:-26px; width:20%; aspect-ratio:1; border-radius:50%; border:3px solid #fff; background:#fff; box-shadow:0 2px 8px rgba(0, 0, 0, .18); }
 .btmeta { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .btwords { margin:0; line-height:1.4; }
+/* the brand team previews: the picture sits on the cover's corner as it does on Facebook */
+.btpics { margin-bottom:34px; }
+.btprof { left:2.6%; bottom:0; width:20.5%; transform:translateY(62%); border-width:3px; }
