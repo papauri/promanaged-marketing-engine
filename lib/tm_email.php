@@ -88,14 +88,18 @@ function pm_tm_clean_opening(string $s): string
     return count((array)preg_split('/\s+/u', $s, -1, PREG_SPLIT_NO_EMPTY)) > 40 ? '' : $s;
 }
 
-/** The whole first email body (no sign-off: the app adds that): greeting, opening, then the standard part. */
-function pm_tm_email_compose(array $lead, string $opening = ''): string
+/** The whole first email body (no sign-off: the app adds that): greeting, opening, then the standard part. $template leaves {placeholders} for the lead's words. */
+function pm_tm_email_compose(array $lead, string $opening = '', bool $template = false): string
 {
     $c = pm_tm_email_cfg();
     $c['benefits'] = array_map('pm_tm_pack_swap', $c['benefits']);
     $c['closing'] = pm_tm_pack_swap((string)$c['closing']);
     $first = pm_tm_first_name($lead);
     $open = trim($opening) !== '' ? trim($opening) : pm_tm_default_opening($lead);
+    if ($template) { // the same email with {placeholders} where the lead's own words go: the starting text of the default message (lib/msgdefaults.php)
+        $first = '{first_name}';
+        $open = '{intro}, and I came across {name} while looking at places to stay in {city}.';
+    }
     $list = fn(array $rows, bool $numbered) => implode("\n", array_map(fn($i, $x) => ($numbered ? ($i + 1) . '. ' : '- ') . str_replace('{link}', (string)$c['link'], $x), array_keys($rows), $rows));
     $parts = [$first !== '' ? "Hello $first," : 'Hello,', $open, trim((string)$c['intro'])];
     if ($c['benefits']) {

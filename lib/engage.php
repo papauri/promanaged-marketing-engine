@@ -925,12 +925,7 @@ function pm_send_reply(array $lead, string $subject, string $body, array $attach
     if (!empty($lead['last_in_id'])) { // threads under their message
         $hdr['In-Reply-To'] = $hdr['References'] = (string)$lead['last_in_id'];
     }
-    return pm_mail($s, ['to' => $lead['email'], 'subject' => $subject, 'body' => $body . "
-
-Kind regards,
-" . implode("
-", $sig) . "
-
-(Reply STOP at any time and we will stop contacting you.)",
+    $mine = function_exists('pm_dm_signature') ? pm_dm_signature() : null; // the signature the owner wrote, else the usual one
+    return pm_mail($s, ['to' => $lead['email'], 'subject' => $subject, 'body' => $body . "\n\n" . ($mine ?? "Kind regards,\n" . implode("\n", $sig)) . "\n\n(Reply STOP at any time and we will stop contacting you.)",
         'headers' => $hdr, 'attachments' => $attachments]);
 }

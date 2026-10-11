@@ -964,6 +964,9 @@ function pm_sender_name(): string
 /** WRITER: first email and WhatsApp in our voice. */
 function pm_agent_write(array $leads): array
 {
+    if (function_exists('pm_dm_use_default') && pm_dm_use_default()) { // this business drafts from its default message: no AI, the same wording for every lead (Sales > Targeting and messages)
+        return pm_dm_rows($leads);
+    }
     if (pm_brand() === 'travel') { // a personal opening + the standard Travel Malawi text (lib/tm_email.php)
         return pm_tm_write($leads);
     }
@@ -1037,10 +1040,13 @@ function pm_agent_lookup(string $name, string $city = ''): ?array
 
 function pm_outreach_footer(array $s): string
 {
-    $sig = array_filter([$s['signatory_name'] ?? '', ($s['signatory_name'] ?? '') !== '' ? ($s['signatory_title'] ?? '') : '', $s['company_name'], $s['address'] ?? '', $s['phone'] ?? '', $s['website'] ?? '']);
-    return "\n\nKind regards,\n" . implode("\n", $sig)
-        . "\n\nYou are receiving this one-off message because your business publishes this address for enquiries. "
+    $stop = "\n\nYou are receiving this one-off message because your business publishes this address for enquiries. "
         . "If you would rather not hear from us, reply STOP and we will not contact you again.";
+    if (function_exists('pm_dm_signature') && ($mine = pm_dm_signature()) !== null) { // the signature the owner wrote (Sales > Targeting and messages)
+        return "\n\n" . $mine . $stop;
+    }
+    $sig = array_filter([$s['signatory_name'] ?? '', ($s['signatory_name'] ?? '') !== '' ? ($s['signatory_title'] ?? '') : '', $s['company_name'], $s['address'] ?? '', $s['phone'] ?? '', $s['website'] ?? '']);
+    return "\n\nKind regards,\n" . implode("\n", $sig) . $stop;
 }
 
 /** Domains where many unrelated people share an address; the per-company domain limit does not apply to them. */
@@ -1187,7 +1193,9 @@ function pm_wa_text(array $lead, string $text, bool $kit = false): string
     if ($kit && function_exists('pm_share_wa_block')) {
         $text .= pm_share_wa_block($text);
     }
-    if (!str_contains($text, $s['company_name'])) {
+    if (function_exists('pm_dm_wa_signature') && ($mine = pm_dm_wa_signature()) !== null) { // the sign-off the owner wrote for WhatsApp (Sales > Targeting and messages)
+        $text .= $mine !== '' && !str_contains($text, $mine) ? "\n\n" . $mine : '';
+    } elseif (!str_contains($text, $s['company_name'])) {
         $text .= "\n\n— $who";
     }
     return $text . "\n(Reply STOP and we won't message again.)";

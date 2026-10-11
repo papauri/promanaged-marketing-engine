@@ -1165,6 +1165,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             [$fok, $fmsg] = pm_followup_draft_one($id);
             $back($fmsg, $fok ? 'ok' : 'err');
         }
+        if ($do === 'use_default') { // the business's default message instead of an AI draft
+            [$udOk, $udMsg] = pm_dm_apply($leads[$id]);
+            $udOk && pm_leads_save($leads);
+            $back($udMsg, $udOk ? 'ok' : 'err');
+        }
         if ($do === 'draft_outreach') {
             try {
                 $w = pm_agent_write([$lead])[0] ?? null;
@@ -1650,6 +1655,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $b = pm_brand_norm($_POST['brand'] ?? '');
         $m = pm_link_refresh($b);
         pm_redirect('settings&section=business&brand=' . $b, $m['url'] === '' ? 'Add a link first.' : ($m['ok'] ? 'Preview updated from ' . $m['url'] . '.' : 'Could not read ' . $m['url'] . '. Check the address.'), $m['ok'] ? 'ok' : 'err');
+    }
+
+    if ($action === 'msgdefault') { // the default first email and WhatsApp message, and the signature (lib/msgdefaults.php)
+        $b = pm_brand_norm($_POST['brand'] ?? '');
+        [$dmMsg, $dmKind] = pm_dm_save($b);
+        pm_redirect('targeting#defaultmsg', $dmMsg, $dmKind);
     }
 
     if ($action === 'share') { // the share kit: PDFs and website links added to a business's emails and WhatsApp messages (lib/sharekit.php)

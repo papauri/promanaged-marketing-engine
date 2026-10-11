@@ -16,6 +16,7 @@
 require_once __DIR__ . '/brand_study.php'; // reading a business's website and learning who to target
 require_once __DIR__ . '/onepager.php'; // the one-page offer that replaces a proposal for an added business
 require_once __DIR__ . '/sharekit.php'; // the PDFs and website links a business shares in its emails and WhatsApp messages
+require_once __DIR__ . '/msgdefaults.php'; // the default first email and WhatsApp message of a business, and its signature
 require_once __DIR__ . '/suggest.php'; // suggestions while typing in the "find a business" boxes
 require_once __DIR__ . '/brand_delete.php'; // bringing a hidden business back, or deleting an added one for good
 

@@ -17,6 +17,11 @@ SHARE KIT (PDFs and website links in emails and WhatsApp)
   how-it-works pages of the business's own site (also sites drawn in the browser) and switches the best ones on. Code: lib/sharekit.php, lib/view_share.php.
   On a server the PDFs live in data/share/, so copy data/ there or paste a link to a copy on your website.
 
+DEFAULT FIRST MESSAGE (apart from the AI)
+  Sales > Targeting and messages > "Default first message", per business: an email, a WhatsApp message and the signatures, written once with {placeholders} ({first_name}, {name}, {city},
+  {intro}, {sender}, {company}, {phone}, {website}...). A lead's card has "Use default message"; or set the business to draft every new lead from it with no AI. The share-kit links and PDF
+  and the signature are added when it is sent. Code: lib/msgdefaults.php, lib/view_msgdefaults.php; data/message_defaults.json.
+
 UI DESIGN SYSTEM
   UI.md is the one-page design system: the tokens, the four button levels, the chip, card, field and table rules, the page templates, the utility classes and how to add a screen.
   plans/archive/ui-redesign-plan.md is the finished redesign plan.

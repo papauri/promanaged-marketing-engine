@@ -1,7 +1,7 @@
 <?php
 /**
  * Sales > Targeting and messages: how the sales team is told to work. What we sell and who to look for, the daily limits, how replies are handled, which agents are on, the standard wording of
- * the first email (Travel Malawi), and for a business added in the app who buys from it and its free first step. The team's roster and diary are here too. The leads themselves are Sales > Leads.
+ * the first email (Travel Malawi), the default first message and signatures of every business, and for a business added in the app who buys from it and its free first step. The team's roster and diary are here too. The leads themselves are Sales > Leads.
  * Needs $vb, $settings, $csrf.
  */
 pm_brand_set($vb);
@@ -152,6 +152,8 @@ echo pm_ui_head('Targeting and messages · ' . $bname, 'Who the team looks for, 
   <div class="btns formbar"><button class="btn primary">Save the wording</button></div>
 </form>
 <?php endif; ?>
+
+<?php require_once __DIR__ . '/view_msgdefaults.php'; pm_view_msgdefaults($vb, $csrf); ?>
 
 <h3>The team's diary</h3>
 <div class="card">

@@ -309,6 +309,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <?php if (($l['status'] ?? '') === 'contacted' && empty($l['followup_draft']) && !pm_lead_email_dead($l) && pm_agents_ready()): ?><form method="post"><?= $post($id, 'followup_ai') ?><button class="btn" title="The Follow-up agent writes a follow-up for you to read; nothing is sent">Draft follow-up with AI</button></form><?php endif; ?>
       <form method="post"><?= $post($id, 'research') ?><button class="btn" title="Website, Facebook, Instagram, reviews and recent news"><?= empty($l['research']) ? 'Research' : 'Research again' ?></button></form>
       <?php if (empty($dr['email_body'])): ?><form method="post"><?= $post($id, 'draft_outreach') ?><button class="btn">Draft outreach</button></form><?php endif; ?>
+      <?php if ($which === 'first' && in_array($l['status'], ['new', 'qualified', 'drafted'], true)): ?><form method="post"<?= !empty($dr['email_body']) ? ' data-confirm="Replace the draft with the default message?"' : '' ?>><?= $post($id, 'use_default') ?><button class="btn" title="The default email and WhatsApp message of this business, no AI (Sales > Targeting and messages)">Use default message</button></form><?php endif; ?>
       <?php if (pm_brand_is_custom((string)($l['brand'] ?? ''))): $op = pm_onepager_status((string)$l['brand']); [$osub, $obody] = pm_onepager_default_mail($l); ?>
       <details class="more drop"><summary class="btn">One-page offer</summary>
         <div class="menu" style="min-width:280px">
