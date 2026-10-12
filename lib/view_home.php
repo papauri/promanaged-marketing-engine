@@ -74,10 +74,10 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
   </section>
 </div>
 
-<?php if (count(pm_brand_ids()) > 1): ?>
+<?php if (count(pm_user_brands()) > 1): ?>
 <h3>Your businesses</h3>
 <div class="hq-biz">
-<?php foreach (pm_brand_ids() as $bid): $g = pm_home_glance($bid); ?>
+<?php foreach (pm_user_brands() as $bid): $g = pm_home_glance($bid); ?>
   <a class="hq-bizrow<?= $bid === $vb ? ' on' : '' ?>" href="?tab=home&amp;brand=<?= pm_h($bid) ?>" style="--bz:<?= pm_h(pm_ui_accent($settings, $bid)) ?>">
     <i class="dot" style="background:<?= pm_h(pm_ui_accent($settings, $bid)) ?>"></i><b><?= pm_h(pm_brand_title($settings, $bid)) ?></b>
     <span><?= (int)$g['leads'] ?> leads</span><span class="<?= $g['replies'] ? 'warn' : '' ?>"><?= (int)$g['replies'] ?> replies waiting</span><span class="<?= $g['posts_waiting'] ? 'warn' : '' ?>"><?= (int)$g['posts_waiting'] ?> posts to approve</span><span><?= $g['fb'] ? 'Facebook connected' : 'Facebook not connected' ?></span>

@@ -2,9 +2,10 @@
 /**
  * ProManaged IT — Proposals
  * Fill in a client, generate the proposal/contract PDF, email it, and let the client sign online.
- * Locally: start.bat. On a website: needs APP_PASSWORD (login) and APP_URL (signing links) in .env.
+ * Locally: start.bat. Sign-in accounts (USER_* lines) and APP_URL (signing links) live in .env; see lib/auth.php.
  */
 declare(strict_types=1);
+session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax']); // the sign-in cookie is never readable by scripts or sent from other sites
 session_start();
 require __DIR__ . '/lib/store.php';
 require __DIR__ . '/lib/pdf.php';
@@ -15,47 +16,9 @@ require_once __DIR__ . '/lib/wa_biz.php'; // WhatsApp Business: approved answers
 require __DIR__ . '/lib/social_growth.php';
 require __DIR__ . '/lib/social_modules.php'; // Social extension registry + every lib/sx_*.php module
 
-// ---------- Access ----------
-$isLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true);
-$appPassword = (string)(pm_env()['APP_PASSWORD'] ?? '');
-if (!$isLocal) {
-    if ($appPassword === '') {
-        http_response_code(403);
-        exit('This app is only open on the computer it runs on. Set APP_PASSWORD in .env to use it from other devices.');
-    }
-    if (isset($_GET['logout'])) {
-        $_SESSION = [];
-        session_regenerate_id(true);
-        header('Location: index.php');
-        exit;
-    }
-    if (empty($_SESSION['pm_auth'])) {
-        if (isset($_GET['names']) || isset($_GET['suggest'])) { // the type-ahead asks in the background: say "signed out" in a way it can show, not with a login page
-            http_response_code(401);
-            header('Content-Type: application/json; charset=utf-8');
-            exit('{"error":"signin","rows":[]}');
-        }
-        $bad = false;
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login_password'])) {
-            usleep(400000); // slow down guessing
-            if (hash_equals($appPassword, (string)$_POST['login_password'])) {
-                session_regenerate_id(true);
-                $_SESSION['pm_auth'] = true;
-                header('Location: index.php');
-                exit;
-            }
-            $bad = true;
-        }
-        echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Sign in</title>'
-            . '<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f7f8;font:15px -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#16181d}'
-            . 'form{background:#fff;border:1px solid #e3e5e8;border-radius:12px;padding:32px;width:min(360px,90vw)}img{height:40px;margin-bottom:18px}'
-            . 'input{width:100%;padding:11px;border:1px solid #e3e5e8;border-radius:8px;font:inherit;margin:6px 0 14px;box-sizing:border-box}'
-            . 'button{width:100%;padding:12px;border:0;border-radius:8px;background:#17375E;color:#fff;font:inherit;font-weight:600;cursor:pointer}.e{color:#a33;font-size:13px}</style></head><body>'
-            . '<form method="post"><img src="assets/logo.png" alt=""><div><b>Proposals</b></div><label>Password</label>'
-            . '<input type="password" name="login_password" autofocus required>' . ($bad ? '<p class="e">That password is not right.</p>' : '') . '<button>Sign in</button></form></body></html>';
-        exit;
-    }
-}
+// ---------- Access: sign-in accounts in .env, an admin manages them (lib/auth.php) ----------
+require __DIR__ . '/lib/auth.php';
+pm_auth_gate(); // nothing below runs for someone signed out
 
 if (empty($_SESSION['csrf'])) {
     $_SESSION['csrf'] = bin2hex(random_bytes(16));
@@ -76,8 +39,8 @@ $section = preg_replace('/[^a-z]/', '', (string)($_GET['section'] ?? ''));
 if (isset($_GET['brand'])) {
     $_SESSION['abrand'] = pm_brand_norm($_GET['brand']);
 }
-$vb = pm_brand_norm($_SESSION['abrand'] ?? 'promanaged'); // which brand's screens to show
-$GLOBALS['PM_WHO'] = (string)($_SESSION['who'] ?? ''); // which team member is working (for notes and ownership)
+$vb = pm_auth_brand_gate(pm_brand_norm($_SESSION['abrand'] ?? 'promanaged')); // which brand's screens to show: only a business the signed-in person may open
+$GLOBALS['PM_WHO'] = pm_user() ? pm_user()['name'] : (string)($_SESSION['who'] ?? ''); // which team member is working (for notes and ownership): the signed-in person
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
@@ -282,6 +245,7 @@ if (is_string($sgText)) {
     header('Cache-Control: no-store');
     @set_time_limit(90);
     $sgRows = ($_GET['mode'] ?? '') === 'web' ? pm_suggest_web($sgText, $sgBrand) : pm_suggest_local($sgText, $sgBrand);
+    $sgRows = array_values(array_filter($sgRows, fn($r) => pm_user_can_brand(pm_brand_norm($r['brand'] ?? $sgBrand)))); // only businesses this person may open
     echo json_encode(['rows' => $sgRows], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
@@ -302,6 +266,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
 // ---------- Weekly data archive download (C3-G01): only a file from the archive list, never a path ----------
 if (isset($_GET['archive']) && is_string($_GET['archive'])) {
+    if (!pm_user_is_admin()) {
+        pm_auth_deny('Only an admin can download the data archive (it holds every business).');
+    }
     $af = pm_archive_path($_GET['archive']);
     if ($af === '') {
         http_response_code(404);
@@ -400,6 +367,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         pm_redirect($tab, 'Your session expired. Please try again.', 'err');
     }
     $action = $_POST['action'] ?? '';
+    if (in_array($action, ['access', 'brand_create', 'brand_archive', 'brand_unhide', 'brand_delete', 'archive_restore'], true) && !pm_user_is_admin()) {
+        pm_redirect('home', 'Only an admin can do that.', 'err'); // accounts, adding or removing a business, restoring data
+    }
+    if ($action === 'access') { // Team access: add, turn on or off, delete, set a password, choose businesses (lib/auth.php)
+        [$acMsg, $acOk] = pm_auth_action($_POST);
+        pm_redirect('settings&section=team#access', $acMsg, $acOk ? 'ok' : 'err');
+    }
 
     if ($action === 'proposal') {
         $p = pm_proposal_from_post($_POST, $settings);
@@ -2050,7 +2024,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
   <details class="card"><summary class="sum">Find a business by name and prepare its proposal</summary>
     <form class="mt-2" method="post"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="lookup"><input type="hidden" name="proposal" value="1">
       <div class="row">
-        <div><label>For</label><select name="brand"><?php foreach (array_filter(pm_brand_ids(), fn($x) => !empty(pm_brand_profile($x)['proposals'])) as $bid): ?><option value="<?= pm_h($bid) ?>"<?= $bid === $vb ? ' selected' : '' ?>><?= pm_h(pm_brand_title($settings, $bid)) ?></option><?php endforeach; ?></select></div>
+        <div><label>For</label><select name="brand"><?php foreach (array_filter(pm_user_brands(), fn($x) => !empty(pm_brand_profile($x)['proposals'])) as $bid): ?><option value="<?= pm_h($bid) ?>"<?= $bid === $vb ? ' selected' : '' ?>><?= pm_h(pm_brand_title($settings, $bid)) ?></option><?php endforeach; ?></select></div>
         <div><label>Business name *</label><input type="text" name="biz" required data-suggest data-web="1" autocomplete="off"></div>
         <div><label>City (helps)</label><input type="text" name="city"></div>
       </div>

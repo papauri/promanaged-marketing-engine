@@ -56,14 +56,16 @@ PUT IT ONLINE (for online signing)
      and output/ private.
   2. In .env on the server, set:
         APP_URL=https://promanaged-it.com/proposals
-        APP_PASSWORD=a-long-password-only-you-know
-  3. Open https://promanaged-it.com/proposals and sign in with that password.
+     and copy the USER_... lines (the sign-in accounts) from your own .env.
+  3. Open https://promanaged-it.com/proposals and sign in with your username and password.
+     Accounts are managed in the app by an admin: Operations > Team and currencies > Team access
+     (add, turn off or on, delete, set a password, choose the businesses each person can open).
      Clients only ever see sign.php with their own private link.
   4. Check that https://promanaged-it.com/proposals/.env shows "Forbidden" (and /data/settings.json too: a host that ignores .htaccess,
      such as nginx, needs the same folders blocked in its own config).
 
   GITIGNORED, SO NOT IN GIT: upload these by hand the first time (the rest of the folder comes from git)
-     .env      create it on the server: copy yours, then set APP_URL, APP_PASSWORD and CRON_KEY. Never upload .env.bak or .env.*
+     .env      create it on the server: copy yours, then set APP_URL and CRON_KEY (the USER_ lines are the sign-in accounts). Never upload .env.bak or .env.*
      data/     your leads, settings, prices, posts, proposals and businesses (about 4 MB); keep the folder writable by PHP. Skip *.lock, *.stamp,
                backup/, graph_cache/ and thumbs/ (they are rebuilt)
      output/   past proposal PDFs including signed copies, only if you want them; PHP must be able to write here
@@ -82,7 +84,7 @@ PUT IT ONLINE (for online signing)
   The WhatsApp webhook is https://promanaged-it.com/proposals/wa.php. Settings > Setup health shows "Scheduler" turning green once cron runs.
 
 FILES
-  .env                 mail server, APP_URL, APP_PASSWORD (never shared, gitignored)
+  .env                 mail server, APP_URL, sign-in accounts USER_* (never shared, gitignored)
   data/settings.json   company details, currencies, rates
   data/template.json   prices (USD) and all wording
   data/history.json    everything you sent and its status

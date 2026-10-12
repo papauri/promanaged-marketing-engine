@@ -821,3 +821,37 @@ input[type=file]::file-selector-button:hover { background:var(--surface-2) }
   .pagehead .headacts .btn { flex:1 1 auto }
 }
 @media (prefers-reduced-motion:reduce) { * { transition:none !important; animation:none !important } }
+
+/* ===== access: the account menu in the top bar and Team access ===== */
+.av { display:inline-grid; place-items:center; width:30px; height:30px; flex:none; border-radius:50%; background:var(--av, #46607a); color:#fff; font-size:12px; font-weight:700; letter-spacing:.02em; box-shadow:0 0 0 2px rgba(255,255,255,.18) }
+.av.lg { width:40px; height:40px; font-size:14px; box-shadow:none }
+.avbtn { display:inline-flex; align-items:center; gap:8px; padding:3px 12px 3px 3px; border-radius:var(--r-pill); border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.06); color:#fff; font-weight:600; font-size:13px; transition:background .15s }
+.avbtn:hover, .dd.open > .avbtn { background:rgba(255,255,255,.13) }
+.avname { max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.dd.acct { position:relative }
+.dd.acct .menu { left:auto; right:0; min-width:250px }
+.acct-hd { display:flex; align-items:center; gap:10px; padding:10px 8px 6px }
+.acct-hd b { display:block; font-size:15px; color:var(--ink) }
+.acct-hd small { color:var(--muted); font-size:12px }
+.acct-biz { padding:0 8px 8px; font-size:13px; color:var(--ink) }
+.acc-list { display:grid; gap:var(--s-3); margin:var(--s-3) 0 }
+.acc-row { display:grid; grid-template-columns:minmax(220px, 1fr) minmax(0, 1.3fr) minmax(0, 1.1fr) 170px; gap:var(--s-4); align-items:start; padding:var(--s-4); border:1px solid var(--line); border-radius:14px; background:#fff }
+.acc-row.off { background:var(--bg); }
+.acc-row.off .acc-who > div { opacity:.6 }
+.acc-who { display:flex; align-items:center; gap:10px; flex-wrap:wrap }
+.acc-who b { display:block } .acc-who small { color:var(--muted); font-size:12px }
+.acc-part label { font-size:12px; font-weight:600; color:var(--muted); display:block; margin-bottom:4px }
+.acc-biz { display:flex; flex-wrap:wrap; gap:4px 14px; margin-bottom:6px }
+label.tick { display:inline-flex; align-items:center; gap:6px; font-size:14px; font-weight:500; color:var(--ink); margin:0 }
+label.tick input { width:auto; margin:0 }
+.acc-inline { display:flex; gap:6px; align-items:center }
+.acc-inline input { flex:1; min-width:0 }
+.acc-acts { margin:0; flex-wrap:nowrap; justify-content:flex-end }
+.acc-add summary { cursor:pointer; font-weight:600; color:var(--dept); padding:6px 0 }
+.acc-add form { margin-top:var(--s-3) }
+@media (max-width:860px) {
+.acc-row { grid-template-columns:1fr; }
+.avname { display:none }
+.avbtn { padding:3px }
+.avbtn .caret { display:none }
+}

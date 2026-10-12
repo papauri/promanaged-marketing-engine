@@ -19,7 +19,7 @@ function pm_setup_health(): array
         $rows[] = ['key' => $key, 'label' => $label, 'need' => $need, 'ok' => $ok, 'detail' => $detail, 'add' => $ok ? '' : $add];
     };
     $names = [];
-    foreach (pm_brand_ids() as $bid) {
+    foreach (function_exists('pm_user_brands') ? pm_user_brands() : pm_brand_ids() as $bid) { // the businesses this person may open
         $names[$bid] = pm_brand_name($bid);
     }
     $row('ai', 'AI agents', 'required', pm_agents_ready(), pm_agents_ready() ? 'An AI key is set.' : 'No AI key yet, so the agents and the planner cannot write.', pm_agents_missing_key() . '=... in .env');

@@ -200,12 +200,12 @@ function pm_ui_biz_menu(array $settings, string $vb, string $tab, string $view):
         . ($hasLogo ? '<img class="' . ($vb === 'travel' ? 'sq' : '') . '" src="' . pm_h($logo) . '?v=' . (int)@filemtime(PM_ROOT . '/' . $logo) . '" alt="">' : pm_ui_dot(pm_ui_accent($settings, $vb)))
         . '<span class="bizname">' . pm_h(pm_brand_name($vb)) . '</span><span class="caret"></span></button>'
         . '<div class="menu" role="menu"><div class="menuhd">Working on</div>';
-    foreach (pm_brand_ids() as $bid) {
+    foreach (pm_user_brands() as $bid) { // only the businesses this person may open
         $href = '?tab=' . $keep . ($view !== '' && $tab === 'social' ? '&view=' . $view : '') . '&brand=' . $bid;
         $h .= '<a role="menuitem" href="' . pm_h($href) . '" class="item' . ($bid === $vb ? ' on' : '') . '">' . pm_ui_dot(pm_ui_accent($settings, $bid)) . '<span>'
             . pm_h(pm_brand_name($bid)) . '</span>' . ($bid === $vb ? '<b class="tick">✓</b>' : '') . '</a>';
     }
-    return $h . '<hr><a role="menuitem" class="item" href="?tab=business&amp;new=1"><span class="plus">+</span><span>Add a business</span></a>'
+    return $h . '<hr>' . (pm_user_is_admin() ? '<a role="menuitem" class="item" href="?tab=business&amp;new=1"><span class="plus">+</span><span>Add a business</span></a>' : '')
         . '<a role="menuitem" class="item" href="?tab=settings"><span class="plus">⚙</span><span>Business settings</span></a></div></div>';
 }
 
@@ -224,6 +224,9 @@ function pm_ui_topbar(array $c): string
         foreach ($n['groups'] as $g => $items) {
             $dd .= '<div class="menuhd">' . pm_h($g) . '</div>';
             foreach ($items as $href => $lab) {
+                if (str_contains($href, 'business&new') && !pm_user_is_admin()) {
+                    continue; // adding a business is the admin's
+                }
                 $pages++;
                 $dd .= '<a role="menuitem" class="item' . (pm_ui_href_on($href, $tab, $view, $section) ? ' on' : '') . '" href="' . pm_h($href) . '">' . pm_h($lab) . '</a>';
             }
@@ -242,6 +245,9 @@ function pm_ui_topbar(array $c): string
     $cls = $age === null || $age >= 2700 ? ($age !== null && $age >= 7200 ? 'bad' : 'warn') : 'ok';
     $h .= '<a class="status ' . $cls . '" href="?tab=settings&amp;section=health" title="' . pm_h($txt . '. Posts and emails go out when the scheduler runs (every 15 to 30 minutes), or when the app is open.') . '" aria-label="' . pm_h($txt) . '"><i class="dot"></i></a>'; // a dot only: the words are in the tooltip and on the Overview, so the bar never runs out of room
     $team = (array)$c['team'];
+    if (pm_user()) {
+        return $h . pm_auth_avatar() . '</div></div></header>'; // signed in: the account menu says who is working
+    }
     if ($team) {
         $h .= '<form method="post" class="who" data-quiet><input type="hidden" name="csrf" value="' . pm_h((string)$c['csrf']) . '"><input type="hidden" name="action" value="who"><input type="hidden" name="back" value="' . pm_h($tab) . '">'
             . '<select name="who" onchange="this.form.submit()" aria-label="Who is working"><option value="">Working as…</option>';
@@ -258,7 +264,7 @@ function pm_view_biz_grid(array $settings, string $vb, string $csrf): void
 {
     $leads = pm_load('leads', fn() => []);
     echo '<div class="bizgrid">';
-    foreach (pm_brand_ids() as $bid) {
+    foreach (pm_user_brands() as $bid) {
         $logo = pm_brand_asset($bid, 'logo');
         $n = count(array_filter($leads, fn($l) => ($l['brand'] ?? 'promanaged') === $bid));
         $title = pm_brand_name($bid);
@@ -275,5 +281,5 @@ function pm_view_biz_grid(array $settings, string $vb, string $csrf): void
             . '<div class="btns mt-0"><a class="btn small' . ($bid === $vb ? '' : ' primary') . '" href="?tab=agents&amp;brand=' . pm_h($bid) . '">' . ($bid === $vb ? 'Open leads' : 'Switch to it') . '</a>'
             . '<a class="btn small" href="?tab=settings&amp;brand=' . pm_h($bid) . '">Settings</a></div></div>';
     }
-    echo '<a class="bizcard add" href="?tab=business&amp;new=1"><span style="font-size:26px;line-height:1">+</span><b>Add a business</b><small>A few questions, then it is ready</small></a></div>';
+    echo (pm_user_is_admin() ? '<a class="bizcard add" href="?tab=business&amp;new=1"><span style="font-size:26px;line-height:1">+</span><b>Add a business</b><small>A few questions, then it is ready</small></a>' : '') . '</div>';
 }
