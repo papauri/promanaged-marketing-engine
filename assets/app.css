@@ -95,7 +95,7 @@ h3 + .btgrid { margin-top:4px; }
 .menu .item .plus { width:10px; text-align:center; color:var(--muted); }
 .menu hr { border:0; border-top:1px solid var(--line); margin:4px 4px; }
 .topright { display:flex; align-items:center; gap:8px; margin-left:auto; }
-.status { display:inline-flex; align-items:center; gap:8px; font-size:12px; color:rgba(255,255,255,.72); text-decoration:none; padding:6px 12px; border:1px solid rgba(255,255,255,.12); border-radius:var(--r-pill); background:rgba(255,255,255,.05); white-space:nowrap; }
+.status { display:inline-grid; place-items:center; width:32px; height:32px; flex:none; text-decoration:none; border:1px solid rgba(255,255,255,.12); border-radius:50%; background:rgba(255,255,255,.05); }
 .status .dot { width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,.4); }
 .status.ok .dot { background:#22c55e; box-shadow:0 0 0 3px rgba(34,197,94,.22); }
 .status.warn .dot { background:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.22); }
@@ -201,6 +201,26 @@ table.grid tbody tr:hover, .sx-table tbody tr:hover, .hist tbody tr:hover { back
 .filters a.on { background:var(--ink); color:#fff; border-color:var(--ink) }
 .filters a.on small { color:#c9ccd1; }
 .card.empty { color:var(--muted); text-align:center; padding:28px }
+/* the Approach block on a lead card: readiness, what is missing, the plan */
+.approach { margin:var(--s-3) 0 var(--s-2); padding:var(--s-3) var(--s-4); background:var(--surface-2); border:1px solid var(--line); border-radius:14px }
+.ap-head { display:flex; align-items:center; gap:var(--s-3); flex-wrap:wrap; margin-bottom:var(--s-2) }
+.ap-meter { width:120px; height:6px; border-radius:var(--r-pill); background:var(--line); overflow:hidden }
+.ap-meter i { display:block; height:100%; background:var(--dept); border-radius:var(--r-pill) }
+.ap-cols { display:grid; grid-template-columns:minmax(0, 1.25fr) minmax(0, 1fr); gap:var(--s-5) }
+.ap-checks { list-style:none; margin:0; padding:0; display:grid; gap:6px }
+.ap-checks li { display:flex; gap:10px; align-items:flex-start }
+.ap-checks li > i { flex:none; display:grid; place-items:center; width:20px; height:20px; margin-top:1px; border-radius:50%; font-style:normal; font-size:12px; font-weight:700; background:var(--ok-bg); color:var(--ok) }
+.ap-checks li.miss > i { background:var(--warn-bg); color:var(--warn) }
+.ap-checks b { display:block; font-size:var(--fs-2); font-weight:600 }
+.ap-checks li.ok b { color:var(--ink-2); font-weight:500 }
+.ap-checks small { display:block; color:var(--muted); font-size:var(--fs-1); line-height:1.4 }
+.ap-checks form.inline { margin-top:4px }
+.ap-checks form.inline input { height:var(--ctl-sm); max-width:220px }
+.ap-steps { margin:0 0 var(--s-2); padding:0; list-style:none; counter-reset:ap; display:grid; gap:var(--s-2) }
+.ap-steps li { counter-increment:ap; position:relative; padding-left:30px }
+.ap-steps li::before { content:counter(ap); position:absolute; left:0; top:1px; width:20px; height:20px; border-radius:50%; background:var(--dept); color:#fff; font-size:11px; font-weight:700; display:grid; place-items:center }
+.ap-steps b { display:block; font-size:var(--fs-2) }
+.ap-steps small { display:block; color:var(--muted); font-size:var(--fs-1) }
 .resetbar { margin-top:var(--s-6) }
 .resetbar form { margin:0 }
 .typesel { margin-left:auto; }
@@ -741,7 +761,6 @@ main { max-width:none; padding:0; }
 .mainnav { order:3; width:100%; margin:0; overflow-x:auto; scrollbar-width:none; flex:none; }
 .mainnav::-webkit-scrollbar { display:none; }
 .navitem { height:38px; }
-.status span { display:none; }
 .topright { margin-left:auto; }
 main { padding:12px 12px 80px; }
 .pagehead h1 { font-size:26px; }
@@ -751,9 +770,6 @@ main { padding:12px 12px 80px; }
 @media print {
 .topbar { display:none !important; }
 }
-@media (max-width:1440px) {
-.status span { display:none; }
-}
 @media (max-width:1320px) {
 .navitem { padding:0 10px; }
 .mainnav { margin-left:4px; gap:2px; }
@@ -762,6 +778,7 @@ main { padding:12px 12px 80px; }
 .hq-top { grid-template-columns:1fr; }
 .hq-hero h1 { font-size:30px; }
 .hq-feed li { grid-template-columns:1fr; gap:0; }
+.ap-cols { grid-template-columns:1fr; }
 .navitem .ico { display:none; }
 .eyebrows .job { border-left:0; padding-left:0; }
 .row { grid-template-columns:1fr; }

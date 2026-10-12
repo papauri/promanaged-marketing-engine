@@ -19,8 +19,9 @@ $focusId = isset($leadsAll[(string)($_GET['lead'] ?? '')]) ? (string)$_GET['lead
 $who = (string)($GLOBALS['PM_WHO'] ?? '');
 $team = array_values(array_filter((array)($settings['team'] ?? [])));
 $waiting = fn($l) => $l['status'] !== 'optout' && ($l['status'] === 'replied' || !empty($l['awaiting_reply_since']));
+$gaps = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted', 'contacted'], true) && pm_approach($l)['ready'] < 70; // too little known for a good approach
 $inStatus = fn($l, $f) => $f === 'all' ? true : ($f === 'mine' ? (($l['owner'] ?? '') === $who && (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l))) : ($f === 'awaiting' ? $waiting($l)
-    : ($f === 'active' ? (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l)) : $l['status'] === $f)));
+    : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l)) : $l['status'] === $f))));
 $inSearch = fn($l) => $fq === '' || mb_stripos($l['name'] . ' ' . $l['city'] . ' ' . ($l['contact'] ?? '') . ' ' . ($l['type'] ?? ''), $fq) !== false;
 // business-type dropdown: similar types grouped (hotel, lodge, resort... -> Hotels & lodges), counted inside the chosen status
 $types = [];
@@ -34,6 +35,7 @@ $counts = array_fill_keys(array_keys(PM_LEAD_STATUSES), 0);
 foreach ($base as $l) { $counts[$l['status']] = ($counts[$l['status']] ?? 0) + 1; }
 $counts['active'] = count(array_filter($base, fn($l) => $inStatus($l, 'active')));
 $counts['awaiting'] = count(array_filter($base, fn($l) => $waiting($l)));
+$counts['gaps'] = count(array_filter($base, $gaps));
 $counts['all'] = count($base);
 $counts['mine'] = $who === '' ? 0 : count(array_filter($base, fn($l) => $inStatus($l, 'mine')));
 $shown = array_filter($base, fn($l) => $inStatus($l, $filter));
@@ -154,7 +156,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <div class="focusbar"><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?><?= $ftype !== '' ? '&type=' . urlencode($ftype) : '' ?><?= $fq !== '' ? '&q=' . urlencode($fq) : '' ?>#l<?= pm_h($focusId) ?>">← All leads</a> <span class="muted">Focused on <b><?= pm_h($leadsAll[$focusId]['name']) ?></b></span></div>
 <?php else: ?>
 <div class="filters">
-  <?php foreach (($who !== '' ? ['mine' => 'Mine'] : []) + ['active' => 'Active', 'awaiting' => 'Needs reply', 'drafted' => 'Draft ready', 'contacted' => 'Contacted', 'replied' => 'Replied', 'proposal' => 'Proposal sent', 'won' => 'Won', 'all' => 'All'] as $k => $l): ?>
+  <?php foreach (($who !== '' ? ['mine' => 'Mine'] : []) + ['active' => 'Active', 'awaiting' => 'Needs reply', 'gaps' => 'Missing details', 'drafted' => 'Draft ready', 'contacted' => 'Contacted', 'replied' => 'Replied', 'proposal' => 'Proposal sent', 'won' => 'Won', 'all' => 'All'] as $k => $l): ?>
     <a href="?tab=agents&status=<?= $k ?><?= $ftype !== '' ? '&type=' . urlencode($ftype) : '' ?><?= $fq !== '' ? '&q=' . urlencode($fq) : '' ?>" class="<?= $filter === $k ? 'on' : '' ?>"><?= $l ?> <small><?= (int)($counts[$k] ?? 0) ?></small></a>
   <?php endforeach; ?>
   <form method="get" class="typesel" data-noload="1"><input type="hidden" name="tab" value="agents"><input type="hidden" name="status" value="<?= pm_h($filter) ?>">
@@ -190,9 +192,8 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <?php foreach (pm_lead_open_drafts($l) as $od): ?><span class="pill warn"><?= ['winback' => 'win-back ready', 'postsign' => 'thank-you asks ready', 'reverify' => 'contact re-checked'][$od] ?></span><?php endforeach; ?>
       <?php if (!empty($l['snooze_until']) && $l['snooze_until'] >= date('Y-m-d')): ?><span class="pill" title="No follow-ups until then">paused to <?= pm_h(date('j M', strtotime($l['snooze_until']))) ?></span><?php endif; ?>
       <?php if (!empty($l['email_bad'])): ?><span class="pill warn" title="<?= pm_h((string)$l['email_bad']) ?> bounced: find another contact">email bounced</span><?php endif; ?>
-      <?php $gapOpen = in_array($l['status'] ?? '', ['new', 'qualified', 'drafted', 'contacted'], true); $gapMail = (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL); $gapWa = pm_wa_best($l)[0] !== ''; ?>
-      <?php if ($gapOpen && !$gapMail): ?><span class="pill" title="No email address yet: add one or find one on the card">no email</span><?php endif; ?>
-      <?php if ($gapOpen && !$gapWa): ?><span class="pill" title="No WhatsApp-capable number yet: add one or find one on the card">no WhatsApp</span><?php endif; ?>
+      <?php $apx = pm_approach($l); $gapOpen = in_array($l['status'] ?? '', ['new', 'qualified', 'drafted', 'contacted'], true); ?>
+      <?php if ($gapOpen): ?><span class="pill <?= $apx['ready'] >= 80 ? 'ok' : ($apx['ready'] < 50 ? 'warn' : '') ?>" title="<?= pm_h($apx['missing'] ? 'Missing: ' . implode(', ', $apx['missing']) : 'Everything a good approach needs is there') ?>"><?= $apx['ready'] ?>% ready</span><?php endif; ?>
       <?php if (!empty($l['view_count'])): ?><span class="pill hot" title="They opened the proposal page">opened proposal</span><?php endif; ?>
       <?php if (!empty($l['approved_at'])): ?><span class="pill hot"><?= pm_h(function_exists('pm_approved_eta') ? (pm_approved_eta($l) ?: 'approved') : 'approved') ?></span><?php endif; ?>
       <?php if ($approvable($l)): ?><label class="pick" onclick="event.stopPropagation()"><input type="checkbox" form="approveform" name="ids[]" value="<?= pm_h($id) ?>"> Approve for sending</label><?php endif; ?>
@@ -204,10 +205,10 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     </span>
   </summary>
   <div class="body">
+    <?= !in_array($l['status'], ['won', 'lost', 'optout'], true) ? pm_approach_html($l, $post, $hid) : '' ?>
     <div class="cols">
       <div>
-        <p class="person"><?php if (!empty($l['contact'])): ?><b><?= pm_h($l['contact']) ?></b><?= !empty($l['contact_title']) ? ' · ' . pm_h($l['contact_title']) : '' ?><?php elseif (!empty($l['contact_hint'])): ?><span class="muted">Possible: <?= pm_h($l['contact_hint']) ?>. Not used yet: confirm it, or type the name in "Contact name".</span><?php else: ?><span class="muted">No owner or manager name found yet. Add one below and the greeting uses it.</span><?php endif; ?></p>
-        <?php if (empty($l['contact']) && ($hp = pm_contact_hint_parts($l)) && empty($hp['not_owner'])): ?><form method="post" class="inline"><?= $post($id, 'use_hint') ?><button class="btn small" title="Use this name in the greeting">Use <?= pm_h($hp['name']) ?> as the contact</button></form><?php endif; ?>
+        <?php if (!empty($l['contact'])): ?><p class="person"><b><?= pm_h($l['contact']) ?></b><?= !empty($l['contact_title']) ? ' · ' . pm_h($l['contact_title']) : '' ?></p><?php endif; ?>
         <?php if (!empty($l['pitch_response'])): $pr = $l['pitch_response']; ?><p class="hint warnt">On the proposal page they chose "<?= $pr['act'] === 'yes' ? 'Yes, send me the agreement' : 'I have a question' ?>"<?= $pr['msg'] !== '' ? ': ' . pm_h($pr['msg']) : '' ?>.</p><?php endif; ?>
         <?php if (!empty($l['view_count'])): ?><p class="hint">Opened the proposal <?= (int)$l['view_count'] ?> time<?= (int)$l['view_count'] === 1 ? '' : 's' ?>, last on <?= pm_h(date('j M, H:i', strtotime((string)($l['last_viewed_at'] ?? $l['viewed_at'])))) ?>.</p><?php endif; ?>
         <?php if (!empty($l['reason']) || !empty($l['pain'])): ?><p class="why"><?= pm_h($l['reason'] ?? '') ?><?php if (!empty($l['pain'])): ?> <b>Lead with:</b> <?= pm_h($l['pain']) ?><?php endif; ?></p><?php endif; ?>
@@ -215,14 +216,6 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
         <p class="hint"><?= pm_h(implode(' · ', array_filter([$l['website'] ?? '', $l['phone'] ?? '', $l['email'] ?? '']))) ?: 'No contact details found yet' ?>
           <?php foreach (['facebook' => 'Facebook', 'instagram' => 'Instagram'] as $sk => $sl): if (!empty($l[$sk]) && preg_match('#^https?://#', $l[$sk])): ?> · <a href="<?= pm_h($l[$sk]) ?>" target="_blank" rel="noopener noreferrer"><?= $sl ?></a><?php endif; endforeach; ?></p>
         <?php if (trim((string)($l['phone'] ?? '') . (string)($l['whatsapp'] ?? '')) !== ''): ?><p class="hint wa-optin"><?= pm_h(pm_wa_optin_line($l)) ?></p><?php endif; ?>
-        <?php if ($gapOpen && (!$gapMail || !$gapWa || empty($l['contact']))): ?>
-        <div class="gapfix">
-          <p class="hint warnt mb-1"><?= !$gapMail && !$gapWa ? 'No email address and no WhatsApp number yet.' : (!$gapMail ? 'No email address yet, so the email cannot go out.' : (!$gapWa ? 'No WhatsApp number yet.' : 'No owner or manager name yet.')) ?> Add what you know, or let the AI look.</p>
-          <?php if (!$gapMail): ?><form method="post" class="inline"><?= $post($id, 'save_contact') ?><input type="email" name="email" placeholder="Their email address" aria-label="Email address" autocomplete="off"><button class="btn small">Save email</button></form><?php endif; ?>
-          <?php if (!$gapWa): ?><form method="post" class="inline"><?= $post($id, 'save_contact') ?><input type="text" name="whatsapp" placeholder="WhatsApp number, e.g. 0999 123 456" aria-label="WhatsApp number" inputmode="tel" autocomplete="off"><button class="btn small">Save WhatsApp</button></form><?php endif; ?>
-          <?php if (pm_agents_ready()): ?><form method="post" class="inline"><?= $post($id, 'find_contact') ?><button class="btn small primary" title="Reads their website and searches the web for the owner's name, an email address and a WhatsApp number; it fills only what is missing and sends nothing">Find missing details with AI</button></form><?php endif; ?>
-        </div>
-        <?php endif; ?>
         <?php if (!empty($l['research'])): $rz = $l['research']; ?>
         <div class="research"><b>What we found</b> <span class="muted">· <?= pm_h($rz['at']) ?></span>
           <?php if (isset($rz['sure']) && !$rz['sure']): ?><p class="hint warnt">The researcher could not confirm it found this exact business online, so only facts our system checked itself are shown.</p><?php elseif (!empty($rz['identity'])): ?><p class="hint">Matched by: <?= pm_h($rz['identity']) ?></p><?php endif; ?>

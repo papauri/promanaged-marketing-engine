@@ -240,7 +240,7 @@ function pm_ui_topbar(array $c): string
     $min = $age === null ? 0 : intdiv((int)$age, 60);
     $txt = $age === null ? 'Scheduler has not run yet' : 'Scheduler ran ' . ($min >= 120 ? intdiv($min, 60) . ' h' : $min . ' min') . ' ago';
     $cls = $age === null || $age >= 2700 ? ($age !== null && $age >= 7200 ? 'bad' : 'warn') : 'ok';
-    $h .= '<a class="status ' . $cls . '" href="?tab=settings#health" title="Posts and emails go out when the scheduler runs (every 15 to 30 minutes), or when the app is open."><i class="dot"></i><span>' . pm_h($txt) . '</span></a>';
+    $h .= '<a class="status ' . $cls . '" href="?tab=settings&amp;section=health" title="' . pm_h($txt . '. Posts and emails go out when the scheduler runs (every 15 to 30 minutes), or when the app is open.') . '" aria-label="' . pm_h($txt) . '"><i class="dot"></i></a>'; // a dot only: the words are in the tooltip and on the Overview, so the bar never runs out of room
     $team = (array)$c['team'];
     if ($team) {
         $h .= '<form method="post" class="who" data-quiet><input type="hidden" name="csrf" value="' . pm_h((string)$c['csrf']) . '"><input type="hidden" name="action" value="who"><input type="hidden" name="back" value="' . pm_h($tab) . '">'
