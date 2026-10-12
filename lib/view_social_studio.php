@@ -86,9 +86,9 @@ $how = ['ai' => 'AI idea', 'shuffle' => 'Surprise', 'you' => 'Edited', 'start' =
   <p class="hint mt-0">Quiet writing, kept inside the part of each picture that is always shown. Leave a box empty and that line is left out.</p>
   <form method="post"><?= $fx('studio', $hid('op', 'edit')) ?>
     <div class="cols">
-      <div><label>Small line above (the name)</label><input type="text" name="eyebrow" value="<?= pm_h($spec['eyebrow']) ?>" maxlength="40"></div>
-      <div><label>Headline</label><textarea name="headline" rows="2" maxlength="70"><?= pm_h($spec['headline']) ?></textarea></div>
-      <div><label>Supporting line</label><textarea name="subline" rows="2" maxlength="110"><?= pm_h($spec['subline']) ?></textarea></div>
+      <div><label>Small line above (the name)</label><input type="text" name="eyebrow" data-sg="eyebrow" value="<?= pm_h($spec['eyebrow']) ?>" maxlength="40"></div>
+      <div><label>Headline</label><textarea name="headline" data-sg="headline" rows="2" maxlength="70"><?= pm_h($spec['headline']) ?></textarea></div>
+      <div><label>Supporting line</label><textarea name="subline" data-sg="subline" rows="2" maxlength="110"><?= pm_h($spec['subline']) ?></textarea></div>
       <div><label>Contact strip (one item per line, up to three)</label><textarea name="whisper" rows="3"><?= pm_h(implode("\n", (array)$spec['whisper'])) ?></textarea></div>
       <div><label>Monogram (up to 3 letters, for the profile picture)</label><input type="text" name="monogram" value="<?= pm_h($spec['monogram']) ?>" maxlength="3"></div>
       <div><label>Texture</label><select name="texture"><?php foreach (PM_SD_TEXTURES as $k => $l): ?><option value="<?= $k ?>" <?= $spec['texture'] === $k ? 'selected' : '' ?>><?= pm_h($l) ?></option><?php endforeach; ?></select>
@@ -97,7 +97,7 @@ $how = ['ai' => 'AI idea', 'shuffle' => 'Surprise', 'you' => 'Edited', 'start' =
     <details class="more"><summary class="hint" style="cursor:pointer">Exact colours</summary>
       <div class="colors"><?php foreach (['bg1' => 'Background', 'bg2' => 'Second tone', 'accent' => 'Highlight', 'ink' => 'Writing'] as $k => $l): ?><label><input type="color" name="c_<?= $k ?>" value="<?= pm_h($spec[$k]) ?>"> <?= $l ?></label><?php endforeach; ?></div>
       <p class="hint">If the writing colour cannot be read on the background, it is changed for you.</p></details>
-    <div class="btns"><button class="btn primary">Update the pictures</button></div>
+    <div class="btns"><button class="btn primary">Update the pictures</button><?= pm_suggest_button('studio') ?></div>
   </form>
 </div>
 

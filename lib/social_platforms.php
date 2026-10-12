@@ -144,7 +144,7 @@ function pm_social_settings(string $brand): array
     }
     $def = $brand === 'travel'
         ? ['cover_head' => "Book Malawi's independent stays, direct.", 'cover_line' => 'Free for hosts · no commission · guests pay you directly', 'channels' => ['facebook' => true, 'instagram' => true, 'linkedin' => false]]
-        : ['cover_head' => 'Business systems, built and supported in Malawi.', 'cover_line' => 'Software · websites · computer equipment · IT support', 'channels' => ['facebook' => true, 'instagram' => true, 'linkedin' => true]];
+        : ['cover_head' => pm_markets('promanaged')['worldwide'] ? 'Business systems, built in Malawi, supported anywhere.' : 'Business systems, built and supported in ' . pm_markets('promanaged')['home'] . '.', 'cover_line' => 'Software · websites · computer equipment · IT support', 'channels' => ['facebook' => true, 'instagram' => true, 'linkedin' => true]];
     return array_replace_recursive($def, $c);
 }
 

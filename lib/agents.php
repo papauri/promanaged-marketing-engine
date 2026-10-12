@@ -397,7 +397,7 @@ function pm_claude(string $system, string $user, bool $web = false, int $maxToke
  *   - a request for something new on purpose ("New wording", "Write with AI", plan posts, draft a reply, "Make it again"): the callers in PM_AI_FRESH;
  *   - the same question asked again within 2 minutes: that is "try again", so it goes to the AI and the new answer replaces the old one.
  */
-const PM_AI_FRESH = ['pm_regen_words', 'pm_agent_compose', 'pm_agent_social_plan', 'pm_agent_social_reply', 'pm_agent_engage_playbook', 'pm_pp_words'];
+const PM_AI_FRESH = ['pm_suggest_words', 'pm_regen_words', 'pm_agent_compose', 'pm_agent_social_plan', 'pm_agent_social_reply', 'pm_agent_engage_playbook', 'pm_pp_words'];
 
 /** The memory key for a question, or '' when this question must go to the AI. */
 function pm_ai_cache_key(string $system, string $user, bool $web, int $maxTokens, string $tier): string

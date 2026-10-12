@@ -436,7 +436,7 @@ function pm_opt_address_alts(string $brand, array $f, array $live): array
         }
     }
     asort($found);
-    $market = trim((string)(pm_brand_profile($brand)['market'] ?? '')) ?: 'Malawi';
+    $market = function_exists('pm_markets') ? pm_markets($brand)['home'] : (trim((string)(pm_brand_profile($brand)['market'] ?? '')) ?: 'Malawi');
     foreach (array_slice(array_keys($found), 0, 2) as $town) {
         pm_opt_alt($alts, $town . ', ' . $market, 'A town named in your description: confirm it, add the street', $f['address']);
     }

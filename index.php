@@ -1322,6 +1322,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         pm_redirect('template', 'Template saved. New PDFs use it straight away.');
     }
 
+    if ($action === 'suggest_words') { // "Suggest the words with AI" (fetch): brand words from the facts, one small AI call, returns JSON, saves nothing
+        header('Content-Type: application/json');
+        @set_time_limit(60);
+        pm_brand_set($vb);
+        $swKind = (string)($_POST['kind'] ?? '');
+        if (!isset(PM_SUGGEST_KINDS[$swKind]) || !pm_agents_ready()) {
+            echo json_encode(['ok' => false, 'error' => pm_agents_ready() ? 'Unknown words.' : 'The AI needs a key first (Operations > Connections).']);
+            exit;
+        }
+        try {
+            echo json_encode(['ok' => true, 'fields' => pm_suggest_words($swKind, (array)($_POST['f'] ?? []), (string)($_POST['note'] ?? ''))], JSON_UNESCAPED_UNICODE);
+        } catch (Throwable $e) {
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
     if ($action === 'reword_text') { // "New wording" on any text box (fetch): one small AI call, returns JSON, saves nothing (lib/sx_regen.php)
         header('Content-Type: application/json');
         @set_time_limit(60);

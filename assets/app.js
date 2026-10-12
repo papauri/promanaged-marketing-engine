@@ -130,6 +130,27 @@
     if (ta && ta.value.trim() !== a.getAttribute('data-wa-saved').trim()) { e.preventDefault(); toast('Press Save edits first, then test the new words.'); }
   }, true);
 
+  document.addEventListener('click', function (e) {          // "Suggest the words with AI": fills the boxes marked data-sg in the same form; a second press puts the old words back
+    var b = e.target.closest('[data-aiwords]');
+    if (!b) return;
+    e.preventDefault();
+    var form = b.closest('form'), boxes = form ? form.querySelectorAll('[data-sg]') : [];
+    if (!boxes.length) return;
+    b.dataset.label = b.dataset.label || b.textContent;
+    if (b.dataset.undo === '1') { var old = JSON.parse(b.dataset.prev || '{}'); boxes.forEach(function (x) { if (old[x.dataset.sg] !== undefined) x.value = old[x.dataset.sg]; }); b.dataset.undo = ''; b.textContent = b.dataset.label; return; }
+    var note = prompt('Anything to stress? Leave it empty to let the AI choose.', '');
+    if (note === null) return;
+    var c = form.querySelector('input[name=csrf]') || document.querySelector('input[name=csrf]'), fd = new FormData(), prev = {};
+    fd.append('csrf', c ? c.value : ''); fd.append('action', 'suggest_words'); fd.append('kind', b.getAttribute('data-aiwords')); fd.append('note', note.trim());
+    boxes.forEach(function (x) { prev[x.dataset.sg] = x.value; fd.append('f[' + x.dataset.sg + ']', x.value); });
+    b.disabled = true; b.textContent = 'Writing…';
+    fetch('index.php', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) { toast(j.error || 'Could not write them.'); b.textContent = b.dataset.label; return; }
+      boxes.forEach(function (x) { if (typeof j.fields[x.dataset.sg] === 'string') { x.value = j.fields[x.dataset.sg]; x.dispatchEvent(new Event('input', { bubbles: true })); } });
+      b.dataset.prev = JSON.stringify(prev); b.dataset.undo = '1'; b.textContent = 'Undo the suggestion'; toast('Suggested. Read them, then save.');
+    }).catch(function () { toast('Network problem. Try again.'); b.textContent = b.dataset.label; }).then(function () { b.disabled = false; });
+  });
+
   document.addEventListener('click', function (e) {          // WhatsApp and email links that take the words from the box next to them (as edited)
     var a = e.target.closest('[data-wa-open],[data-mail-open]');
     if (!a) return;

@@ -98,6 +98,55 @@ function pm_regen_sourced(string $text, string $src): string
     return trim(implode(' ', $keep));
 }
 
+/* ---------------- brand words: Studio, cover, who we are ---------------- */
+
+/** The brand words that can be suggested, by place: field => [max characters, what it is]. */
+const PM_SUGGEST_KINDS = [
+    'studio' => ['eyebrow' => [40, 'a small label above the headline, usually the business name in a few words'], 'headline' => [70, 'what we do and for whom, said as a benefit, at most 8 words'],
+        'subline' => [110, 'one supporting line: what we offer and where we work']],
+    'cover' => ['cover_head' => [70, 'the cover headline: what we do and for whom, at most 8 words'], 'cover_line' => [100, 'our main services or offers, separated by " · "']],
+    'voice' => ['about' => [420, 'two or three sentences: who we are, what we do and where we work, written as "we"'], 'audience' => [200, 'one sentence: who we are trying to reach, and where they are']],
+];
+
+/**
+ * Brand words written from what the business already says about itself (its facts and where it sells): one small AI call, nothing saved.
+ * $current is what is in the boxes now (a starting point), $note an optional wish. Returns field => text; a field that came back empty or invented a number keeps its text.
+ */
+function pm_suggest_words(string $kind, array $current, string $note = ''): array
+{
+    $spec = PM_SUGGEST_KINDS[$kind] ?? null;
+    if (!$spec) {
+        return [];
+    }
+    $s = pm_settings();
+    $current = array_map(fn($v) => mb_substr(trim((string)$v), 0, 500), array_intersect_key($current, $spec));
+    $system = pm_agents_company_brief('tiny') . "\nWrite these brand words for {$s['company_name']}: " . implode('; ', array_map(fn($k, $v) => "$k ($v[1], at most $v[0] characters)", array_keys($spec), $spec)) . '. '
+        . 'Use only the facts given. Where we work comes from the "Where we work" line: if the current words or the audience name fewer places than it does, widen them to match; never claim more than it says. Plain, confident, specific; no hype, no prices, no numbers that are not in the facts, no hashtags or emoji. '
+        . 'Reply JSON only, with those keys.';
+    $user = json_encode(['now' => $current, 'owner_note' => mb_substr(trim($note), 0, 200)], JSON_UNESCAPED_UNICODE);
+    $out = pm_agent_json(pm_claude($system, $user, false, $kind === 'voice' ? 500 : 300, 'cheap'));
+    if (is_array($out['fields'] ?? null)) {
+        $out = $out['fields'];
+    }
+    if (!is_array($out)) {
+        throw new RuntimeException('The AI did not return the words. Try again.');
+    }
+    $src = (string)(pm_brain()['facts'] ?? '') . ' ' . implode(' ', $current) . ' ' . $note;
+    $res = [];
+    foreach ($spec as $k => [$max]) {
+        $v = trim(strip_tags(is_scalar($out[$k] ?? null) ? (string)$out[$k] : ''), " \t\n\"'“”");
+        $v = $v !== '' ? pm_no_usd(pm_regen_sourced($v, $src)) : '';
+        $res[$k] = $v !== '' ? mb_substr($v, 0, $max) : (string)($current[$k] ?? '');
+    }
+    return $res;
+}
+
+/** The button that fills the boxes marked data-sg="<field>" in its form with suggested words (one small AI call, undo with a second press). */
+function pm_suggest_button(string $kind, string $label = 'Suggest the words with AI'): string
+{
+    return pm_agents_ready() ? '<button type="button" class="btn" data-aiwords="' . pm_h($kind) . '" title="One small AI call writes these from your facts and where you sell. Nothing is saved until you save.">' . pm_h($label) . '</button>' : '';
+}
+
 /* ---------------- posts ---------------- */
 
 /** The words of a post that can be written again, as fields for the engine. */

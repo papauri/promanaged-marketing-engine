@@ -19,18 +19,18 @@ $nFacts = count(array_filter(array_map('trim', $words)));
   <div class="card">
     <h2>Who we are</h2>
     <p class="hint mt-0">Everything the agents, the planner and the reply writer know about <?= pm_h($bname) ?>, and all they may claim. Change these and every email, post, reply and proposal follows. They use nothing beyond these lines and never invent numbers, prices or customers.</p>
-    <label>Who we are and what we do</label><textarea name="<?= $n('about') ?>" rows="3"><?= pm_h((string)$brn['about']) ?></textarea>
+    <label>Who we are and what we do</label><textarea name="<?= $n('about') ?>" data-sg="about" rows="3"><?= pm_h((string)$brn['about']) ?></textarea>
     <label>True facts the AI may use (one per line; nothing else is ever claimed) <span class="muted">· <?= $nFacts ?> now</span></label><textarea name="<?= $n('facts') ?>" rows="7"><?= pm_h((string)$brn['facts']) ?></textarea>
   </div>
   <div class="card">
     <h2>Who we speak to, and how</h2>
     <div class="row">
-      <div><label>Who we are trying to reach</label><textarea name="<?= $n('audience') ?>" rows="2"><?= pm_h((string)$brn['audience']) ?></textarea></div>
+      <div><label>Who we are trying to reach</label><textarea name="<?= $n('audience') ?>" data-sg="audience" rows="2"><?= pm_h((string)$brn['audience']) ?></textarea></div>
       <div><label>Tone of voice</label><textarea name="<?= $n('voice') ?>" rows="2" placeholder="e.g. warm, plain, a little dry"><?= pm_h((string)$brn['voice']) ?></textarea></div>
       <div><label>Never say</label><textarea name="<?= $n('never') ?>" rows="2" placeholder="words or claims to keep out"><?= pm_h((string)$brn['never']) ?></textarea></div>
     </div>
   </div>
-  <div class="btns formbar"><button class="btn primary">Save the voice</button></div>
+  <div class="btns formbar"><button class="btn primary">Save the voice</button><?= pm_suggest_button('voice', 'Suggest "who we are" with AI') ?></div>
 </form>
 
 <details class="card">

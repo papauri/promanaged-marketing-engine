@@ -152,8 +152,8 @@ $kind = ['place' => 'The place', 'work' => 'The work', 'people' => 'The people']
     <p class="hint mt-0">Want something far better than a plain colour with words? <a href="?tab=social&amp;view=studio"><b>Open the Studio</b></a>: styles, your colours and words, and a new design with one press (or from the AI). What you choose there is used for every picture below.<?= $inUse ? ' <b>A Studio design is in use now</b>, so the pictures below come from it.' : '' ?></p>
     <div class="split">
       <div>
-        <label>Cover headline</label><input type="text" name="cover_head" value="<?= pm_h($cfg['cover_head']) ?>">
-        <label>Cover line</label><input type="text" name="cover_line" value="<?= pm_h($cfg['cover_line']) ?>">
+        <label>Cover headline</label><input type="text" name="cover_head" data-sg="cover_head" value="<?= pm_h($cfg['cover_head']) ?>">
+        <label>Cover line</label><input type="text" name="cover_line" data-sg="cover_line" value="<?= pm_h($cfg['cover_line']) ?>"><?= pm_suggest_button('cover', 'Suggest the cover words with AI') ?>
       </div>
       <div>
         <label>Hero photo for covers (JPG or PNG, a real photo of your work or a stay)</label>
