@@ -409,7 +409,7 @@ function pm_share_added_hint(string $channel, string $brand = ''): string
     if (trim($text) === '') {
         return '';
     }
-    return '<details class="aibox"><summary>Added when sent</summary><pre class="t-sm">' . pm_h(trim($text)) . '</pre><p class="hint">From the share kit of this business (Operations &gt; Business details). Change it there.</p></details>';
+    return '<details class="aibox"><summary>Links and documents added when sent</summary><pre class="t-sm">' . pm_h(trim($text)) . '</pre><p class="hint">From the share kit of this business (Operations &gt; Business details). Change it there.</p></details>';
 }
 
 /* ---------------- reading the website ---------------- */

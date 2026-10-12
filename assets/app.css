@@ -414,7 +414,18 @@ p.hint:has(> .btn), p.hint:has(> button.btn) { display:flex; align-items:center;
 .lead .who small { color:var(--muted); font-size:12px; }
 .lead .tags { display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end }
 .lead .body { padding:4px 16px 16px; border-top:1px solid var(--line); }
-.lead .cols { display:grid; grid-template-columns:1fr 1.15fr; gap:24px; margin-top:12px; }
+.lead .cols { display:grid; grid-template-columns:1fr 1.15fr; gap:var(--s-5); margin-top:var(--s-3); }
+.lc-col { display:flex; flex-direction:column; gap:var(--s-3); min-width:0 }
+.lc { padding:var(--s-3) var(--s-4); background:var(--surface); border:1px solid var(--line); border-radius:14px }
+.lc-h { margin:0 0 var(--s-2); font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted) }
+.lc-h .muted { text-transform:none; letter-spacing:0; font-weight:500 }
+.lc .research { margin:0; padding:0; background:none; border:0 }
+.lc .thread { margin:0; padding:0; border:0 }
+.msgpanel { padding:var(--s-3) var(--s-4); background:var(--surface); border:1px solid var(--line); border-radius:14px; box-shadow:var(--sh-card) }
+.mp-to > summary { font-size:var(--fs-2); color:var(--ink-2); margin:0 0 var(--s-2) }
+.sigprev { margin:0 0 var(--s-2); padding:var(--s-2) var(--s-3); border-left:3px solid var(--line-strong); background:var(--surface-2); border-radius:0 var(--r-ctl) var(--r-ctl) 0 }
+.sigprev span { display:block; font-size:var(--fs-1); color:var(--muted); margin-bottom:2px }
+.sigprev pre { margin:0; padding:0; background:none; white-space:pre-wrap; font:var(--fs-2)/1.5 var(--font); color:var(--ink-2) }
 .lead .why { margin:0 0 4px; font-size:13px; }
 .lead .ev, .lead .note { margin:2px 0; }
 .lead .thread { margin-top:8px; border-top:1px solid var(--line); padding-top:8px; }

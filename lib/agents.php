@@ -2131,7 +2131,7 @@ function pm_agents_launch(string $mode = ''): bool
 /* ---------------- AI message composer: pick tone, length and angle, get a message for one business ---------------- */
 
 const PM_COMPOSE_TONES = [
-    'professional' => 'Professional', 'human' => 'Friendly and human', 'marketing' => 'Marketing (punchy)',
+    'found' => 'What we found + our fix', 'professional' => 'Professional', 'human' => 'Friendly and human', 'marketing' => 'Marketing (punchy)',
     'warm' => 'Warm and personal', 'direct' => 'Direct and brief',
 ];
 const PM_COMPOSE_LENGTHS = ['short' => 'Short', 'standard' => 'Standard', 'detailed' => 'Longer, detailed'];
@@ -2147,13 +2147,26 @@ function pm_agent_compose(array $lead, string $channel, string $tone, string $le
     $s = pm_settings();
     $wa = $channel === 'whatsapp';
     $words = ['short' => $wa ? 40 : 75, 'standard' => $wa ? 65 : 110, 'detailed' => $wa ? 110 : 170][$length] ?? 75;
+    if ($tone === 'found') { // a fixed short shape: the length picker does not apply
+        $words = $wa ? 45 : 80;
+    }
     $toneTxt = [
         'professional' => 'Professional and courteous, polished but not stiff.',
         'human' => 'Friendly and human: write like a thoughtful person typing to someone they respect, contractions allowed, no corporate phrases.',
         'marketing' => 'Marketing-sharp: lead with the outcome the owner wants, vivid and specific, confident but never hyped.',
         'warm' => 'Warm and personal: show real interest in their place and what they have built.',
         'direct' => 'Direct and brief: one idea, no filler, easy to answer.',
+        'found' => 'Precise and persuasive, in four short beats, each one sentence: '
+            . '(1) Specificity: open with one real, specific observation about THEIR business taken from research, evidence or online_gaps, so they see we looked (never generic, never invented). '
+            . '(2) Loss aversion: name what that gap is quietly costing them (missed bookings, customers who go elsewhere, hours lost), in their terms, with no invented numbers. '
+            . '(3) The fix as an outcome: one sentence on how we solve exactly that, said as what changes for them, not as features; mention that businesses like theirs use it only if a fact given says so. '
+            . '(4) Micro-commitment: end with one easy yes-or-no question that costs them nothing to answer (a short look, a 10-minute call, a one-page plan). '
+            . 'Curiosity over completeness: leave them wanting the details. No prices, no hype words, no flattery, no "I hope this finds you well". '
+            . 'Hard limit: the greeting plus the four beats and nothing else; who we are is a few words inside the first beat, never a line of its own; each beat at most 20 words.',
     ][$tone] ?? '';
+    if ($tone === 'found') { // the shape above is the angle
+        $angle = $angle === 'followup' ? 'followup' : 'found';
+    }
     $angleTxt = [
         'need' => "Build the message around the one specific need this business's own evidence shows.",
         'benefit' => 'Build the message around the single biggest gain we offer them, in plain words.',
@@ -2161,6 +2174,7 @@ function pm_agent_compose(array $lead, string $channel, string $tone, string $le
         'offer' => 'Make the offer of a one-page plan for their business, or a 10-minute call, the heart of the message.',
         'proof' => 'Say why trust us, using only facts you were given (no names, numbers or customers you were not told).',
         'followup' => 'This is a follow-up to an earlier message: add one new angle, do not repeat the first message, no guilt.',
+        'found' => 'Build every beat on what we found about them: the research discoveries and hooks first, then the evidence and online gaps, then lead_with and how_it_stops.',
     ][$angle] ?? '';
     $langTxt = $lang === 'chichewa' ? 'Open with a short, correct Chichewa greeting (for example "Moni") then continue in clear English.' : 'English.';
     $sender = pm_sender_name();
@@ -2183,11 +2197,11 @@ function pm_agent_compose(array $lead, string $channel, string $tone, string $le
 }
 
 /** The picker shown above a message box. $target tells the script which fields to fill. */
-function pm_compose_controls(string $leadId, string $csrf, bool $both = true): string
+function pm_compose_controls(string $leadId, string $csrf, bool $both = true, string $tone = 'found'): string
 {
     $opt = fn(array $a, string $sel) => implode('', array_map(fn($k, $v) => '<option value="' . $k . '"' . ($k === $sel ? ' selected' : '') . '>' . pm_h($v) . '</option>', array_keys($a), $a));
     return '<div class="composer" data-id="' . pm_h($leadId) . '" data-csrf="' . pm_h($csrf) . '"><b>Write with AI</b>'
-        . '<div class="cgrid"><select data-k="tone" aria-label="Tone">' . $opt(PM_COMPOSE_TONES, 'human') . '</select>'
+        . '<div class="cgrid"><select data-k="tone" aria-label="Format and tone">' . $opt(PM_COMPOSE_TONES, isset(PM_COMPOSE_TONES[$tone]) ? $tone : 'found') . '</select>'
         . '<select data-k="length" aria-label="Length">' . $opt(PM_COMPOSE_LENGTHS, 'short') . '</select>'
         . '<select data-k="angle" aria-label="Angle">' . $opt(PM_COMPOSE_ANGLES, 'need') . '</select>'
         . '<select data-k="lang" aria-label="Language"><option value="english">English</option><option value="chichewa">Chichewa greeting</option></select></div>'
