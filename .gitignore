@@ -11,3 +11,6 @@ assets/*signature*
 *.lock
 *.stamp
 backup/
+
+# upload packages made for the server (they hold .env and data)
+deploy/

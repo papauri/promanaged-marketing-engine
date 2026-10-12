@@ -5,9 +5,9 @@
  * Locally: start.bat. Sign-in accounts (USER_* lines) and APP_URL (signing links) live in .env; see lib/auth.php.
  */
 declare(strict_types=1);
-session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax']); // the sign-in cookie is never readable by scripts or sent from other sites
-session_start();
 require __DIR__ . '/lib/store.php';
+session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'secure' => pm_https()]); // the sign-in cookie is never readable by scripts, sent from other sites, or sent without HTTPS on a site that has it
+session_start();
 require __DIR__ . '/lib/pdf.php';
 require __DIR__ . '/lib/mail.php';
 require __DIR__ . '/lib/agents.php';
@@ -577,13 +577,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!pm_agents_ready()) {
                 $back('Add ' . pm_agents_missing_key() . ' to .env first (see the notice on this page).', 'err');
             }
-            $back(pm_agents_launch() ? 'The agents are out searching. This page shows progress; it takes a few minutes.' : 'The agents are already running.');
+            $back(pm_agents_launch() ? 'The agents are out searching. This page shows progress; it takes a few minutes.' : (pm_can_spawn() ? 'The agents are already running.' : 'This server does not let the app start background work, so the agents run from the scheduled task (README: SCHEDULING ON A SERVER).'), pm_can_spawn() ? 'ok' : 'err');
         }
         if ($do === 'find_names') {
             if (!pm_agents_ready()) {
                 $back('Add ' . pm_agents_missing_key() . ' to .env first.', 'err');
             }
-            $back(pm_agents_launch('names') ? 'Looking for owner and manager names. This page shows progress.' : 'The agents are already running.');
+            $back(pm_agents_launch('names') ? 'Looking for owner and manager names. This page shows progress.' : (pm_can_spawn() ? 'The agents are already running.' : 'This server does not let the app start background work, so the agents run from the scheduled task (README: SCHEDULING ON A SERVER).'), pm_can_spawn() ? 'ok' : 'err');
         }
         if ($do === 'lead_forget' && $id !== '') { // MARKETING.md MG-G03: privacy
             $r = function_exists('pm_lead_forget') ? pm_lead_forget($id) : ['ok' => false, 'msg' => 'Not available.'];

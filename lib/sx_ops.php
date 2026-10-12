@@ -54,6 +54,19 @@ function pm_setup_health(): array
     $row('scheduler', 'Scheduler', 'required', $age !== null && $age < 7200, $age === null ? 'It has never run: scheduled posts and sending only happen while the app is open.' : ($age < 7200 ? 'Last ran ' . max(1, intdiv($age, 60)) . ' minutes ago.' : 'Last ran ' . intdiv($age, 3600) . ' hours ago: check the scheduled task.'),
         'Run schedule_agents.bat once (Windows), or add the cPanel cron line (README: SOCIAL)');
     $row('cron_key', 'Web scheduler key', 'optional', $cron, $cron ? 'CRON_KEY is set: cron.php can be called by the host.' : 'Only needed on a website host (cPanel cron).', 'CRON_KEY=a-long-random-text in .env');
+    // the server itself: what a host must give the app
+    $okPhp = PHP_VERSION_ID >= 80100;
+    $row('php', 'PHP version', 'required', $okPhp, 'PHP ' . PHP_VERSION . ($okPhp ? '.' : ': the app needs 8.1 or newer.'), 'Ask the host for PHP 8.1 or newer (cPanel > Select PHP Version)');
+    $ext = ['curl' => 'curl', 'mbstring' => 'mbstring', 'openssl' => 'openssl', 'gd' => 'gd', 'iconv' => 'iconv', 'fileinfo' => 'fileinfo'];
+    $miss = array_keys(array_filter($ext, fn($e) => !extension_loaded($e)));
+    $ft = function_exists('imagettftext');
+    $row('php_ext', 'PHP extensions', 'required', !$miss && $ft, !$miss && $ft ? 'curl, mbstring, openssl, gd with FreeType, iconv and fileinfo are on.' : 'Missing: ' . implode(', ', array_merge($miss, $ft ? [] : ['FreeType in gd (post pictures)'])) . '.', 'Turn them on in cPanel > Select PHP Version > Extensions');
+    $notW = array_values(array_filter(['data', 'output', 'assets'], fn($d) => !is_dir(PM_ROOT . "/$d") || !is_writable(PM_ROOT . "/$d")));
+    $row('writable', 'Folders PHP can write', 'required', !$notW, !$notW ? 'data, output and assets can be written.' : 'PHP cannot write: ' . implode(', ', $notW) . '.', 'Make them writable by PHP (cPanel File Manager > Permissions 755, owned by your account)');
+    $row('vendor', 'Libraries (vendor)', 'required', is_file(PM_ROOT . '/vendor/autoload.php'), is_file(PM_ROOT . '/vendor/autoload.php') ? 'PDF and mail libraries are installed.' : 'vendor/ is missing: PDFs and emails cannot be made.', 'Run "composer install --no-dev" on the server, or upload the vendor folder');
+    $spawn = pm_can_spawn();
+    $row('spawn', 'Background work', 'optional', $spawn, $spawn ? 'The agents can run in the background and in parallel.' : 'This host blocks exec or proc_open: the agents run one at a time from the scheduled task.', 'Ask the host to allow exec and proc_open, or keep the cron lines in README: SCHEDULING ON A SERVER');
+    $row('https', 'HTTPS', 'optional', pm_app_url() === '' || str_starts_with(pm_app_url(), 'https://'), pm_app_url() === '' ? 'Not online yet.' : (str_starts_with(pm_app_url(), 'https://') ? 'The public address uses HTTPS.' : 'APP_URL is not https: sign-in and signing links travel unprotected.'), 'Turn on SSL for the domain (cPanel > SSL/TLS Status) and use https:// in APP_URL');
     $url = pm_app_url() !== '';
     $row('app_url', 'Public address', 'required', $url, $url ? pm_app_url() : 'Instagram cannot fetch pictures and clients cannot open links until the app is online.', 'APP_URL=https://your-site in .env');
     foreach ($rows as $i => $r) { // C3-G02: rows with a check behind them get a Test button and show the last result

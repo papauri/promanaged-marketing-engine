@@ -2138,6 +2138,9 @@ function pm_agents_launch(string $mode = ''): bool
     if (($state['state'] ?? '') === 'running') {
         return false;
     }
+    if (!pm_can_spawn()) { // a host that blocks exec(): the scheduled task (cron) runs the agents instead
+        return false;
+    }
     $script = __DIR__ . '/run_agents.php';
     $php = pm_php_binary();
     if (PHP_OS_FAMILY === 'Windows') {

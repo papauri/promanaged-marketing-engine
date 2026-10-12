@@ -51,6 +51,11 @@ SIGNING — three ways
   3. In any PDF reader: the Acceptance page has fillable fields.
 
 PUT IT ONLINE (for online signing)
+  QUICKEST: deploy/promanaged-upload-YYYYMMDD.zip is the whole app ready to upload (code, vendor, your data and .env with the
+  sign-in accounts, APP_URL and CRON_KEY; no backups, caches or lock files). It holds secrets: never share it or put it in git.
+  cPanel > File Manager > public_html (or a sub-folder) > Upload the zip > Extract, then do steps 2-4 and the cron lines below.
+  After signing in, Operations > Health and backups checks the server: PHP version, extensions, writable folders, vendor,
+  background work and HTTPS.
   1. Upload the whole folder to your hosting, e.g. public_html/proposals
      (PHP 8.1 or newer). The .htaccess files keep .env, data/, lib/, vendor/
      and output/ private.

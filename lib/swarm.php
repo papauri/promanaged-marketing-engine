@@ -4,10 +4,49 @@
  * and by the social playbook's Researcher swarm (lib/social_growth.php). Jobs are ['agent' => scout|contact|qualify|write|followup|research|..., ...].
  */
 
+/** One agent job, as a worker process runs it: ['ok', 'data', 'error']. Used by lib/agent_worker.php and by the swarm when processes cannot be started. */
+function pm_agent_job(array $job): array
+{
+    $was = pm_brand();
+    pm_brand_set((string)($job['brand'] ?? 'promanaged'));
+    try {
+        $data = match ($job['agent'] ?? '') {
+            'scout'    => pm_agent_scout($job['sector'], $job['city'], (int)$job['want'], $job['known'] ?? []),
+            'contact'  => pm_agent_contact($job['lead']),
+            'qualify'  => pm_agent_qualify($job['leads']),
+            'write'    => pm_agent_write($job['leads']),
+            'followup' => pm_agent_followup($job['leads']),
+            'research' => pm_agent_research($job['lead']),
+            'polish'   => pm_agent_polish($job['p'], $job['line'], $job['package'], $job['lead']),
+            'watch'    => pm_agent_watch($job['brand'], $job['known'] ?? []),
+            'reverify' => pm_agent_reverify($job['leads']),
+            'winback'  => pm_agent_winback($job['leads']),
+            'postsign' => pm_agent_postsign($job['leads']),
+            default    => throw new RuntimeException('unknown agent "' . (is_string($job['agent'] ?? null) ? $job['agent'] : '?') . '"'),
+        };
+        return ['ok' => true, 'data' => $data, 'error' => ''];
+    } catch (Throwable $e) {
+        return ['ok' => false, 'data' => null, 'error' => $e->getMessage()];
+    } finally {
+        pm_brand_set($was);
+    }
+}
+
 /** Run jobs with at most $parallel worker processes alive. Returns results in job order. A worker that runs past the time limit is killed ('timeout'). */
 function pm_swarm(array $jobs, int $parallel, string $tmp, ?callable $beat = null): array
 {
     $results = [];
+    if (!pm_can_spawn()) { // the host blocks starting processes: same jobs, one at a time, here
+        @set_time_limit(0);
+        foreach ($jobs as $i => $job) {
+            $results[$i] = pm_agent_job($job + ['brand' => pm_brand()]);
+            if ($beat) {
+                $beat();
+            }
+        }
+        ksort($results);
+        return $results;
+    }
     $GLOBALS['PM_SWARM'] = [];
     $running = &$GLOBALS['PM_SWARM'];
     $queue = array_keys($jobs);

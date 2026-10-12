@@ -13,9 +13,14 @@ DirectoryIndex index.php
     </FilesMatch>
 </IfModule>
 
+# Without mod_rewrite, mod_alias still refuses the private folders (output/ holds signed PDFs)
+<IfModule !mod_rewrite.c>
+    RedirectMatch 403 (^|/)(data|lib|vendor|output|plans)(/|$)
+</IfModule>
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteRule ^(data|lib|vendor|output)(/|$) - [F,L]
+    RewriteRule ^(data|lib|vendor|output|plans)(/|$) - [F,L]
     RewriteRule ^(router|composer|ensure_server|_)[^/]*$ - [F,L]
 </IfModule>
 

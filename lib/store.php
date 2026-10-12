@@ -615,6 +615,27 @@ function pm_fees_note(array $tpl, array $cur): string
 
 define('PM_REC', PM_DATA . '/proposals');
 
+/** May PHP call $fn on this server? (Hosts list blocked ones in disable_functions; a blocked function does not exist in PHP 8.) Tests set $GLOBALS['PM_NO_SPAWN']. */
+function pm_can_call(string $fn): bool
+{
+    if (!empty($GLOBALS['PM_NO_SPAWN']) && in_array($fn, ['exec', 'popen', 'proc_open'], true)) {
+        return false;
+    }
+    return function_exists($fn) && !in_array($fn, array_map('trim', explode(',', (string)ini_get('disable_functions'))), true);
+}
+
+/** Can the app start work in the background (the agents' run, the swarm's parallel workers)? */
+function pm_can_spawn(): bool
+{
+    return PHP_OS_FAMILY === 'Windows' ? pm_can_call('popen') && pm_can_call('proc_open') : pm_can_call('exec') && pm_can_call('proc_open');
+}
+
+/** Is this request on HTTPS (also behind a proxy or load balancer that says so)? */
+function pm_https(): bool
+{
+    return (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off') || strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https' || (string)($_SERVER['SERVER_PORT'] ?? '') === '443';
+}
+
 function pm_app_url(): string
 {
     return rtrim((string)(pm_env()['APP_URL'] ?? ''), '/');

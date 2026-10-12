@@ -7,6 +7,7 @@ if (PHP_SAPI !== 'cli') {
 }
 require dirname(__DIR__) . '/vendor/autoload.php';
 require __DIR__ . '/engage.php';
+require_once __DIR__ . '/swarm.php';
 
 $jobFile = $argv[1] ?? '';
 $done = false;
@@ -25,26 +26,7 @@ if (!is_array($job)) {
     }
     exit(2);
 }
-$result = ['ok' => false, 'data' => null, 'error' => ''];
 pm_brand_set((string)($job['brand'] ?? 'promanaged'));
-try {
-    $data = match ($job['agent'] ?? '') {
-        'scout'    => pm_agent_scout($job['sector'], $job['city'], (int)$job['want'], $job['known'] ?? []),
-        'contact'  => pm_agent_contact($job['lead']),
-        'qualify'  => pm_agent_qualify($job['leads']),
-        'write'    => pm_agent_write($job['leads']),
-        'followup' => pm_agent_followup($job['leads']),
-        'research' => pm_agent_research($job['lead']),
-        'polish'   => pm_agent_polish($job['p'], $job['line'], $job['package'], $job['lead']),
-        'watch'    => pm_agent_watch($job['brand'], $job['known'] ?? []),
-        'reverify' => pm_agent_reverify($job['leads']),
-        'winback'  => pm_agent_winback($job['leads']),
-        'postsign' => pm_agent_postsign($job['leads']),
-        default    => throw new RuntimeException('unknown agent "' . (is_string($job['agent'] ?? null) ? $job['agent'] : '?') . '"'),
-    };
-    $result = ['ok' => true, 'data' => $data, 'error' => ''];
-} catch (Throwable $e) {
-    $result['error'] = $e->getMessage();
-}
+$result = pm_agent_job($job); // the same job runner the swarm uses when it cannot start processes (lib/swarm.php)
 $done = true;
 file_put_contents($jobFile . '.out.json', json_encode($result, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
