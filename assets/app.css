@@ -423,6 +423,9 @@ p.hint:has(> .btn), p.hint:has(> button.btn) { display:flex; align-items:center;
 .lc .thread { margin:0; padding:0; border:0 }
 .msgpanel { padding:var(--s-3) var(--s-4); background:var(--surface); border:1px solid var(--line); border-radius:14px; box-shadow:var(--sh-card) }
 .mp-to > summary { font-size:var(--fs-2); color:var(--ink-2); margin:0 0 var(--s-2) }
+.testbar { display:flex; flex-wrap:wrap; align-items:center; gap:var(--s-2); margin-top:var(--s-3); padding-top:var(--s-3); border-top:1px dashed var(--line) }
+.testbar b { font-size:var(--fs-2); margin-right:auto }
+.testbar input[type=email] { flex:1 1 200px; width:auto; height:var(--ctl-sm); max-width:260px }
 .sigprev { margin:0 0 var(--s-2); padding:var(--s-2) var(--s-3); border-left:3px solid var(--line-strong); background:var(--surface-2); border-radius:0 var(--r-ctl) var(--r-ctl) 0 }
 .sigprev span { display:block; font-size:var(--fs-1); color:var(--muted); margin-bottom:2px }
 .sigprev pre { margin:0; padding:0; background:none; white-space:pre-wrap; font:var(--fs-2)/1.5 var(--font); color:var(--ink-2) }

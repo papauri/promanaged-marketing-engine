@@ -395,6 +395,58 @@ function pm_send_first(array &$leads, string $id, string $which, ?callable $mail
     }
 }
 
+/**
+ * The email exactly as it goes out, without the address: subject, body with the share kit (a first email only) and the signature, the headers, the link card and the
+ * attachments. The real send and the test send both use it, so a test shows what the lead will get.
+ */
+function pm_outreach_message(array $lead, string $which, array $settings): array
+{
+    $d = (array)($lead[$which] ?? []);
+    $fromAddr = ($settings['smtp']['from_email'] ?? '') ?: ($settings['email'] ?? '');
+    $kit = $which === 'drafts' && function_exists('pm_share_email_block'); // a first email also carries the share kit: the PDF and the direct links (follow-ups do not repeat it)
+    $kitBlock = $kit ? pm_share_email_block((string)($d['email_body'] ?? '')) : '';
+    return ['subject' => pm_no_usd(pm_subject_tidy((string)($d['email_subject'] ?? ''), $lead), $lead), 'body' => pm_no_usd((string)($d['email_body'] ?? ''), $lead) . $kitBlock . pm_outreach_footer($settings),
+        'headers' => ['List-Unsubscribe' => '<mailto:' . $fromAddr . '?subject=STOP>', 'Auto-Submitted' => 'no'], 'link' => function_exists('pm_link_card') ? pm_link_card() : null,
+        'attachments' => $kit ? pm_share_attachments() : []];
+}
+
+/**
+ * Sends the lead's email to $to as a test: the same subject (marked [Test]), body, signature, links and attachments. Nothing is recorded on the lead and nothing counts
+ * against the daily limit. Returns [ok, message]; the message also says what would stop the real send (the wording rules).
+ */
+function pm_send_test(array $lead, string $which, string $to, ?callable $mailer = null): array
+{
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL)) {
+        return [false, 'Type the address the test should go to.'];
+    }
+    $prev = pm_brand();
+    pm_brand_set((string)($lead['brand'] ?? 'promanaged'));
+    try {
+        $settings = pm_settings();
+        $d = (array)($lead[$which] ?? []);
+        if (trim((string)($d['email_body'] ?? '')) === '') {
+            return [false, 'There is no email written yet to test.'];
+        }
+        if ($mailer === null) {
+            if (!function_exists('pm_mail') && is_file(__DIR__ . '/mail.php')) {
+                require_once __DIR__ . '/mail.php';
+            }
+            $mailer = 'pm_mail';
+        }
+        $m = pm_outreach_message($lead, $which, $settings);
+        $m['subject'] = '[Test] ' . $m['subject'];
+        unset($m['headers']['List-Unsubscribe']);
+        [$ok, $why] = array_pad((array)$mailer($settings, ['to' => $to] + $m), 2, '');
+        if (!$ok) {
+            return [false, 'The test did not go: ' . (function_exists('pm_mail_fail') ? pm_mail_fail($settings, (string)$why) : (string)$why)];
+        }
+        $problems = pm_outreach_lint((string)($d['email_subject'] ?? ''), (string)$d['email_body'], $which === 'drafts');
+        return [true, 'Test sent to ' . $to . ': open it to see exactly what ' . ($lead['name'] ?? 'the lead') . ' will get.' . ($problems ? ' Before the real send, fix: ' . implode(' ', $problems) : '')];
+    } finally {
+        pm_brand_set($prev);
+    }
+}
+
 function pm_send_first_run(array &$leads, string $id, string $which, ?callable $mailer): array
 {
     $lead = $leads[$id];
@@ -454,12 +506,8 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
         }
         $mailer = 'pm_mail';
     }
-    $fromAddr = ($settings['smtp']['from_email'] ?? '') ?: ($settings['email'] ?? '');
-    $kit = $which === 'drafts' && function_exists('pm_share_email_block'); // a first email also carries the share kit: the PDF and the direct links (follow-ups do not repeat it)
-    $kitBlock = $kit ? pm_share_email_block((string)$d['email_body']) : '';
-    $res = $mailer($settings, ['to' => $email, 'subject' => pm_no_usd((string)$d['email_subject'], $lead), 'body' => pm_no_usd((string)$d['email_body'], $lead) . $kitBlock . pm_outreach_footer($settings),
-        'headers' => ['List-Unsubscribe' => '<mailto:' . $fromAddr . '?subject=STOP>', 'Auto-Submitted' => 'no'], 'link' => function_exists('pm_link_card') ? pm_link_card() : null,
-        'attachments' => $kit ? pm_share_attachments() : []]);
+    $kitBlock = $which === 'drafts' && function_exists('pm_share_email_block') ? pm_share_email_block((string)$d['email_body']) : ''; // for the conversation record
+    $res = $mailer($settings, ['to' => $email] + pm_outreach_message($lead, $which, $settings));
     [$ok, $why, $mid] = array_pad((array)$res, 3, '');
     if (!$ok) {
         return $no('Could not send: ' . (function_exists('pm_mail_fail') ? pm_mail_fail($settings, (string)$why) : $why), 'smtp');

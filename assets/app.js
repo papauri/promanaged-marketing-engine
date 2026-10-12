@@ -123,6 +123,13 @@
     }).catch(function () { toast('Network problem. Try again.'); b.textContent = b.dataset.label; }).then(function () { b.disabled = false; });
   });
 
+  document.addEventListener('click', function (e) {          // the WhatsApp test uses the saved words: ask for a save first when the box was changed
+    var a = e.target.closest('[data-wa-saved]');
+    if (!a) return;
+    var ta = a.closest('form') && a.closest('form').querySelector('textarea[name=whatsapp]');
+    if (ta && ta.value.trim() !== a.getAttribute('data-wa-saved').trim()) { e.preventDefault(); toast('Press Save edits first, then test the new words.'); }
+  }, true);
+
   document.addEventListener('click', function (e) {          // WhatsApp and email links that take the words from the box next to them (as edited)
     var a = e.target.closest('[data-wa-open],[data-mail-open]');
     if (!a) return;

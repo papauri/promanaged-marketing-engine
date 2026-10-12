@@ -278,6 +278,18 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
           <textarea name="whatsapp" rows="2"><?= pm_h($dr['whatsapp'] ?? '') ?></textarea>
           <?php if (trim((string)($dr['whatsapp'] ?? '')) !== ''): ?><details class="aibox"><summary>The WhatsApp as it goes out (greeting and sign-off added)</summary><pre class="t-sm"><?= pm_h(pm_wa_text($l, (string)$dr['whatsapp'], $which === 'first')) ?></pre></details><?php endif; ?>
           <div class="btns"><button class="btn small">Save edits</button><?= pm_regen_lead_buttons($l, $which === 'followup' ? 'followup_draft' : 'drafts') ?></div>
+          <?php
+            $tsS = pm_settings();
+            $testTo = (string)($_SESSION['test_to'] ?? '') ?: ((string)($tsS['email'] ?? '') ?: (string)($tsS['smtp']['from_email'] ?? ''));
+            [$myWa, $myWaKind] = pm_wa_number((string)($tsS['phone'] ?? '')); $myWa = $myWaKind === 'landline' ? '' : $myWa;
+            $waSaved = (string)($dr['whatsapp'] ?? '');
+          ?>
+          <div class="testbar"><b>Test before it goes</b>
+            <input type="email" name="test_to" value="<?= pm_h($testTo) ?>" placeholder="Your email address" aria-label="Send the test email to">
+            <button class="btn small" name="do" value="send_test" title="Sends this exact email (signature, links and attachments included) to the address on the left. Your edits are saved first. Nothing is recorded on the lead.">Send me a test email</button>
+            <?php if (trim($waSaved) !== '' && $myWa !== ''): ?><a class="btn small" href="https://wa.me/<?= pm_h($myWa) ?>?text=<?= rawurlencode(pm_wa_text($l, $waSaved, $which === 'first')) ?>" target="_blank" rel="noopener noreferrer" data-wa-saved="<?= pm_h($waSaved) ?>" title="Opens WhatsApp to your own number with the message exactly as the lead will get it">Test the WhatsApp on my phone</a>
+            <?php elseif (trim($waSaved) !== ''): ?><span class="hint">Add a mobile number under Business details to test the WhatsApp on your phone.</span><?php endif; ?>
+          </div>
         </form>
         <?php else: ?><p class="hint">No message yet.</p><?php endif; ?>
       </div>

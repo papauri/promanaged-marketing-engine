@@ -903,6 +903,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             [$cok, $cmsg] = pm_contact_find_one($id);
             $back($cmsg, $cok ? 'ok' : 'err');
         }
+        if ($do === 'send_test') { // the email as the lead will get it, sent to me; the words on screen are saved first
+            $key = ($_POST['which'] ?? '') === 'followup' ? 'followup_draft' : 'drafts';
+            foreach (['email_subject', 'email_body', 'whatsapp'] as $f) {
+                if (isset($_POST[$f])) {
+                    $leads[$id][$key][$f] = trim((string)$_POST[$f]);
+                }
+            }
+            pm_leads_save($leads);
+            $to = trim((string)($_POST['test_to'] ?? ''));
+            $_SESSION['test_to'] = $to;
+            @set_time_limit(90);
+            [$tok, $tmsg] = pm_send_test($leads[$id], $key, $to);
+            $back($tmsg, $tok ? 'ok' : 'err');
+        }
         if ($do === 'save_draft') {
             $key = ($_POST['which'] ?? '') === 'followup' ? 'followup_draft' : 'drafts';
             $oldBody = trim((string)($lead[$key]['email_body'] ?? ''));
