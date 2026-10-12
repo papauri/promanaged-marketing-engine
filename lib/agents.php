@@ -887,7 +887,7 @@ function pm_brain_defaults(string $brand): array
     if ($brand === 'travel') {
         return [
             'about' => 'A direct booking platform connecting travellers with independent lodges, B&Bs, cottages, guest houses and safari camps across Malawi (stays only).',
-            'facts' => "Listing and onboarding are free for now: no commission, no listing fee, no monthly charge\nGuests pay the property directly, in kwacha\nBooking requests reach the host's dashboard and confirmations go out over WhatsApp\nHosts control their own rooms, rates and blocked dates\nEvery listing is reviewed before it goes live\nThere is a host starter guide",
+            'facts' => "Listing and onboarding are free for now: no commission, no listing fee, no monthly charge\nGuests pay the property directly, in kwacha\nBooking requests reach the host's dashboard and confirmations go out over WhatsApp\nHosts control their own rooms, rates and blocked dates\nGuests can chat with the host and video call them through Travel Malawi, so they can see the place and ask the host directly\nEvery listing is reviewed before it goes live\nThere is a host starter guide",
             'audience' => 'Owners and managers of independent places to stay in Malawi; travellers looking for them.',
             'voice' => 'Warm, local, proud of Malawi, plain words.',
             'never' => 'Never promise bookings, traffic or income.',

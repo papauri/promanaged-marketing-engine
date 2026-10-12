@@ -694,10 +694,11 @@ function pm_no_wa_invite(string $body, array $s, string $also = ''): string
     $verbs = 'message|text|contact|reach|chat with|write to|ping|call';
     $body = (string)preg_replace([
         '/,?\s+or\s+(?:' . $verbs . ')\s+(?:us|me)\s+(?:on|via|by|over|through)\s+WhatsApp\b,?/i', // ", or message us on WhatsApp,"
+        '/,?\s+or\s+(?:on|via|by|over)\s+WhatsApp\b,?/i', // ", or on WhatsApp,"
         '/,?\s+or\s+(?:WhatsApp|send|drop)\s+(?:us|me)(?:\s+an?\s+WhatsApp(?:\s+message)?)?\b,?/i', // ", or WhatsApp us," ", or send us a WhatsApp"
         '/\b(by|via|on|over)\s+(email|e-mail)\s+or\s+WhatsApp\b/i', // "by email or WhatsApp"
         '/\b(by|via|on|over)\s+WhatsApp\s+or\s+(email|e-mail)\b/i', // "by WhatsApp or email"
-    ], ['', '', '$1 $2', '$1 $2'], $body);
+    ], ['', '', '', '$1 $2', '$1 $2'], $body);
     $body = (string)preg_replace([
         '/[^.!?\n]*\b(?:' . $verbs . '|send|drop)\b[^.!?\n]*\b(?:us|me)\b[^.!?\n]*\bWhatsApp\b[^.!?\n]*[.!?]/i', // "You can also message us on WhatsApp."
         '/[^.!?\n]*\bWhatsApp\s+(?:us|me)\b[^.!?\n]*[.!?]/i', // "WhatsApp us any time."
