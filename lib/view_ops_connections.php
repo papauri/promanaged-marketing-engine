@@ -31,7 +31,9 @@ $aiHid = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input ty
 <form method="post" class="card" id="ai"><?= $aiHid ?>
   <h2>The AI that writes and searches</h2>
   <p class="hint mt-0">Shared by every business. <b>Today:</b> <?= number_format($us['total']) ?> tokens in <?= (int)$us['calls'] ?> calls<?= pm_budget() ? ' of a ' . number_format(pm_budget()) . ' budget' : '' ?><?= $us['agents'] ? ' (' . pm_h(implode(', ', array_map(fn($k, $v) => str_replace('_', ' ', $k) . ' ' . number_format($v), array_keys(array_slice($us['agents'], 0, 6, true)), array_slice($us['agents'], 0, 6, true)))) . ')' : '' ?>.
-    Searching with <?= pm_provider(true) === 'gemini' ? 'Gemini' : 'Claude' ?>, writing with <?= pm_provider(false) === 'gemini' ? 'Gemini' : 'Claude' ?>.</p>
+    Searching with <?= pm_provider(true) === 'gemini' ? 'Gemini' : 'Claude' ?>, writing with <?= pm_provider(false) === 'gemini' ? 'Gemini' : 'Claude' ?>.
+    <?php $cst = pm_load('ai_cache_stats', fn() => []); $cHit = (int)($cst[date('Y-m-d')]['hits'] ?? 0); $cWeek = array_sum(array_map(fn($r) => (int)($r['tokens'] ?? 0), array_slice($cst, -7, null, true))); ?>
+    <?php if ($cHit || $cWeek): ?><b>Answered from memory:</b> <?= $cHit ?> repeat question<?= $cHit === 1 ? '' : 's' ?> today, about <?= number_format($cWeek) ?> tokens saved in 7 days.<?php endif; ?></p>
   <div class="row">
     <div><label>Quality</label><select name="cfg[quality]"><option value="economy" <?= $acfg['quality'] === 'economy' ? 'selected' : '' ?>>Economy (cheapest)</option><option value="balanced" <?= $acfg['quality'] === 'balanced' ? 'selected' : '' ?>>Balanced (a stronger model for research and proposals)</option></select></div>
     <div><label>Gemini model</label><select name="cfg[gemini_model]"><option value="economy" <?= $acfg['gemini_model'] === 'economy' ? 'selected' : '' ?>>Economy (recommended)</option><option value="auto" <?= $acfg['gemini_model'] === 'auto' ? 'selected' : '' ?>>Spread across the newest three</option>

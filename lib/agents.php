@@ -366,17 +366,106 @@ function pm_agent_model(bool $web = false, string $tier = 'cheap'): string
  */
 function pm_claude(string $system, string $user, bool $web = false, int $maxTokens = 3000, string $tier = ''): string
 {
-    pm_budget_check();
     $tier = $tier ?: ($web ? 'std' : 'cheap');
-    if (isset($GLOBALS['PM_AI_STUB']) && is_callable($GLOBALS['PM_AI_STUB'])) { // tests: no network; tokens are estimated so the cost logic still runs
+    $stub = isset($GLOBALS['PM_AI_STUB']) && is_callable($GLOBALS['PM_AI_STUB']);
+    $ck = $stub && empty($GLOBALS['PM_AI_CACHE_TEST']) ? '' : pm_ai_cache_key($system, $user, $web, $maxTokens, $tier);
+    if ($ck !== '' && ($hit = pm_ai_cache_get($ck, $web ? 3 * 86400 : 6 * 3600)) !== null) { // the same question was answered a moment ago: no tokens, no wait (works over the budget too)
+        return $hit;
+    }
+    pm_budget_check();
+    if ($stub) { // tests: no network; tokens are estimated so the cost logic still runs
         $out = (string)($GLOBALS['PM_AI_STUB'])($system, $user, $tier, $maxTokens);
         pm_usage_add('stub', 'stub-' . $tier, (int)ceil((strlen($system) + strlen($user)) / 4), (int)ceil(strlen($out) / 4));
-        return $out;
+    } else {
+        if (getenv('PM_TEST')) {
+            throw new RuntimeException('AI not stubbed');
+        }
+        $out = pm_ai_call($web, $system, $user, $maxTokens, $tier);
     }
-    if (getenv('PM_TEST')) {
-        throw new RuntimeException('AI not stubbed');
+    if ($ck !== '') {
+        pm_ai_cache_put($ck, $out, (int)ceil((strlen($system) + strlen($user) + strlen($out)) / 4));
     }
-    return pm_ai_call($web, $system, $user, $maxTokens, $tier);
+    return $out;
+}
+
+/*
+ * Answer memory. Many questions reach the AI twice: a page that is opened again, a run that repeats a step, a playbook or brief rebuilt from the same facts.
+ * An identical question (same instructions, same facts, same business, same model tier) asked again within 6 hours (3 days for web research) gets the saved answer:
+ * no tokens and no wait. Only answers that came back as usable JSON are kept. It never answers:
+ *   - a request for something new on purpose ("New wording", "Write with AI", plan posts, draft a reply, "Make it again"): the callers in PM_AI_FRESH;
+ *   - the same question asked again within 2 minutes: that is "try again", so it goes to the AI and the new answer replaces the old one.
+ */
+const PM_AI_FRESH = ['pm_regen_words', 'pm_agent_compose', 'pm_agent_social_plan', 'pm_agent_social_reply', 'pm_agent_engage_playbook', 'pm_pp_words'];
+
+/** The memory key for a question, or '' when this question must go to the AI. */
+function pm_ai_cache_key(string $system, string $user, bool $web, int $maxTokens, string $tier): string
+{
+    if (!empty($GLOBALS['PM_AI_FRESH'])) {
+        return '';
+    }
+    foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 12) as $f) {
+        if (in_array($f['function'] ?? '', PM_AI_FRESH, true)) {
+            return '';
+        }
+    }
+    return sha1(implode("\x1f", [pm_brand(), $web ? 'web' : 'text', $tier, $maxTokens, $system, $user]));
+}
+
+function pm_ai_cache_dir(): string
+{
+    return PM_DATA . '/ai_cache';
+}
+
+/** The saved answer, or null (none, too old, or asked again within 2 minutes: a retry). Every ask is remembered for the retry rule. */
+function pm_ai_cache_get(string $key, int $ttl): ?string
+{
+    $f = pm_ai_cache_dir() . "/$key.json";
+    $c = is_file($f) ? json_decode((string)@file_get_contents($f), true) : null;
+    if (!is_array($c)) {
+        return null;
+    }
+    $retry = time() - (int)($c['asked'] ?? 0) < 120;
+    $c['asked'] = time();
+    @file_put_contents($f, json_encode($c, JSON_UNESCAPED_UNICODE), LOCK_EX);
+    if ($retry || time() - (int)($c['at'] ?? 0) > $ttl || !is_string($c['out'] ?? null)) {
+        return null;
+    }
+    pm_ai_cache_count((int)($c['tok'] ?? 0));
+    return $c['out'];
+}
+
+/** Keeps an answer that came back as usable JSON. Old answers are cleared now and then. */
+function pm_ai_cache_put(string $key, string $out, int $tok): void
+{
+    if (!is_array(pm_agent_json($out))) {
+        return; // a broken answer is never served again
+    }
+    $d = pm_ai_cache_dir();
+    if (!is_dir($d)) {
+        @mkdir($d, 0775, true);
+    }
+    @file_put_contents("$d/$key.json", json_encode(['at' => time(), 'asked' => time(), 'tok' => $tok, 'out' => $out], JSON_UNESCAPED_UNICODE), LOCK_EX);
+    if (mt_rand(1, 40) === 1) {
+        foreach (glob("$d/*.json") ?: [] as $old) {
+            if (filemtime($old) < time() - 4 * 86400) {
+                @unlink($old);
+            }
+        }
+    }
+}
+
+/** Counts a question answered from memory: [day => ['hits', 'tokens']] in data/ai_cache_stats.json (the last 30 days). */
+function pm_ai_cache_count(int $tok): void
+{
+    try {
+        pm_update('ai_cache_stats', function (array $s) use ($tok) {
+            $day = date('Y-m-d');
+            $s[$day] = ['hits' => (int)($s[$day]['hits'] ?? 0) + 1, 'tokens' => (int)($s[$day]['tokens'] ?? 0) + $tok];
+            ksort($s);
+            return array_slice($s, -30, null, true);
+        }, fn() => []);
+    } catch (Throwable) {
+    }
 }
 require_once __DIR__ . '/sx_learn.php';
 require_once __DIR__ . '/sx_harvest.php';
@@ -392,9 +481,9 @@ function pm_usage_file(): string { return PM_DATA . '/ai_usage.log'; }
 function pm_usage_add(string $provider, string $model, int $in, int $out, int $think = 0, string $ref = ''): void
 {
     $who = 'other';
-    foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 8) as $f) {
+    foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 12) as $f) {
         $fn = (string)($f['function'] ?? '');
-        if ($fn !== '' && !in_array($fn, ['pm_usage_add', 'pm_claude', 'pm_gemini', 'pm_anthropic', 'pm_gemini_call', '{closure}'], true) && !str_starts_with($fn, 'pm_gemini') && !str_starts_with($fn, 'pm_anthropic')) {
+        if ($fn !== '' && !in_array($fn, ['pm_usage_add', 'pm_claude', 'pm_gemini', 'pm_anthropic', 'pm_gemini_call', 'pm_ai_call', 'pm_ai_call_with', 'pm_ai_vision', '{closure}'], true) && !str_starts_with($fn, 'pm_gemini') && !str_starts_with($fn, 'pm_anthropic')) {
             $who = preg_replace('/^pm_(agent_)?/', '', $fn);
             break;
         }
