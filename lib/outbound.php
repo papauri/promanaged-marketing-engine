@@ -457,7 +457,7 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     $fromAddr = ($settings['smtp']['from_email'] ?? '') ?: ($settings['email'] ?? '');
     $kit = $which === 'drafts' && function_exists('pm_share_email_block'); // a first email also carries the share kit: the PDF and the direct links (follow-ups do not repeat it)
     $kitBlock = $kit ? pm_share_email_block((string)$d['email_body']) : '';
-    $res = $mailer($settings, ['to' => $email, 'subject' => $d['email_subject'], 'body' => $d['email_body'] . $kitBlock . pm_outreach_footer($settings),
+    $res = $mailer($settings, ['to' => $email, 'subject' => pm_no_usd((string)$d['email_subject'], $lead), 'body' => pm_no_usd((string)$d['email_body'], $lead) . $kitBlock . pm_outreach_footer($settings),
         'headers' => ['List-Unsubscribe' => '<mailto:' . $fromAddr . '?subject=STOP>', 'Auto-Submitted' => 'no'], 'link' => function_exists('pm_link_card') ? pm_link_card() : null,
         'attachments' => $kit ? pm_share_attachments() : []]);
     [$ok, $why, $mid] = array_pad((array)$res, 3, '');

@@ -14,7 +14,7 @@ function pm_tm_email_defaults(): array
     return [
         'intro' => 'Travel Malawi is a direct booking platform for independent lodges, B&Bs, cottages, guest houses and safari camps across Malawi.',
         'benefits_title' => 'What you get:',
-        'benefits' => ['Guests book and pay you directly, in kwacha or dollars.', 'You control your own rooms, rates and blocked dates.', 'There is a host starter guide to help you get set up.'],
+        'benefits' => ['Guests book and pay you directly, in {currency}.', 'You control your own rooms, rates and blocked dates.', 'There is a host starter guide to help you get set up.'],
         'steps_title' => 'How to start:',
         'steps' => ["Go to {link} and send your property's details (name, town, contact).", 'We review your listing before it goes live.',
             'Add your rooms, rates and blocked dates in your host dashboard. Booking requests then arrive there, and confirmations go out over WhatsApp.'],

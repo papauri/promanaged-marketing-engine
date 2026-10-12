@@ -470,6 +470,7 @@ function pm_ai_cache_count(int $tok): void
 require_once __DIR__ . '/sx_learn.php';
 require_once __DIR__ . '/sx_harvest.php';
 require_once __DIR__ . '/tm_email.php';
+require_once __DIR__ . '/localcur.php'; // the currency of the business we write to; never US dollars
 require_once __DIR__ . '/followups.php';
 require_once __DIR__ . '/subjects.php';
 require_once __DIR__ . '/contacts.php';
@@ -883,7 +884,7 @@ function pm_brain_defaults(string $brand): array
     if ($brand === 'travel') {
         return [
             'about' => 'A direct booking platform connecting travellers with independent lodges, B&Bs, cottages, guest houses and safari camps across Malawi (stays only).',
-            'facts' => "Listing and onboarding are free for now: no commission, no listing fee, no monthly charge\nGuests pay the property directly, in kwacha or dollars\nBooking requests reach the host's dashboard and confirmations go out over WhatsApp\nHosts control their own rooms, rates and blocked dates\nEvery listing is reviewed before it goes live\nThere is a host starter guide",
+            'facts' => "Listing and onboarding are free for now: no commission, no listing fee, no monthly charge\nGuests pay the property directly, in kwacha\nBooking requests reach the host's dashboard and confirmations go out over WhatsApp\nHosts control their own rooms, rates and blocked dates\nEvery listing is reviewed before it goes live\nThere is a host starter guide",
             'audience' => 'Owners and managers of independent places to stay in Malawi; travellers looking for them.',
             'voice' => 'Warm, local, proud of Malawi, plain words.',
             'never' => 'Never promise bookings, traffic or income.',
@@ -915,7 +916,7 @@ function pm_agents_company_brief(string $level = 'short'): string
     $s = pm_settings();
     $br = pm_brain();
     $facts = implode('; ', array_filter(array_map('trim', preg_split('/\R/', (string)$br['facts']))));
-    $core = "{$s['company_name']}: {$br['about']} Facts you may use, nothing beyond them: $facts. {$br['never']} Voice: {$br['voice']} Audience: {$br['audience']}";
+    $core = "{$s['company_name']}: {$br['about']} Facts you may use, nothing beyond them: $facts. {$br['never']} Voice: {$br['voice']} Audience: {$br['audience']} " . pm_local_currency_rule();
     if (pm_brand() === 'travel') {
         return $core . ' Package for every lead: #' . pm_onboarding_index() . ' Stay Onboarding.';
     }
@@ -1113,7 +1114,7 @@ function pm_agent_write(array $leads): array
     $system = pm_agents_company_brief('tiny') . "\nYou are writing outreach for {$s['company_name']} as " . ($sender !== '' ? "$sender (use this first name: " . explode(' ', $sender)[0] . ")" : "a member of the team (no personal name: introduce the company instead)") . ". $ask" . PM_EMAIL_CRAFT . ' ' . ($subjectLine !== '' ? $subjectLine . ' ' : '')
         . "Each item has subject_style: write that item's email subject in that style. " . PM_AGENT_RULES;
     $brand = pm_brand();
-    $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'city' => $l['city'], 'contact' => $l['contact'] ?? '',
+    $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'city' => $l['city'], 'currency' => pm_local_currency($l)['word'], 'contact' => $l['contact'] ?? '',
         'evidence' => array_slice($l['evidence'] ?? [], 0, 2), 'online_gaps' => array_slice($l['social_gaps'] ?? [], 0, 2), 'research' => pm_research_brief($l), 'lead_with' => $l['pain'] ?? '', 'how_it_stops' => pm_fix_for((string)($l['pain'] ?? '')),
         'subject_style' => pm_subject_style(pm_email_exp_arm((string)$l['id'], $brand))], $leads);
     return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
@@ -1433,7 +1434,7 @@ function pm_wa_text(array $lead, string $text, bool $kit = false): string
     } elseif (!str_contains($text, $s['company_name'])) {
         $text .= "\n\n— $who";
     }
-    return $text . "\n(Reply STOP and we won't message again.)";
+    return pm_no_usd($text, $lead) . "\n(Reply STOP and we won't message again.)";
 }
 
 /**
@@ -2180,7 +2181,7 @@ function pm_agent_compose(array $lead, string $channel, string $tone, string $le
     $sender = pm_sender_name();
     $system = pm_agents_company_brief('tiny') . "\nYou write one " . ($wa ? 'WhatsApp message' : 'email') . " for {$s['company_name']}, as " . ($sender !== '' ? $sender . ' (first name ' . explode(' ', $sender)[0] . ')' : 'a member of the team (no personal name: introduce the company)') . ".\n"
         . "Tone: $toneTxt\nAngle: $angleTxt\nLength: about $words words (never more than " . (int)($words * 1.25) . ").\nLanguage: $langTxt\n"
-        . PM_EMAIL_CRAFT . ' ' . ($wa ? 'This is the WhatsApp version.' : 'This is the email version.') . ' Reply JSON only.';
+        . PM_EMAIL_CRAFT . ' ' . ($wa ? 'This is the WhatsApp version.' : 'This is the email version.') . ' ' . pm_local_currency_rule($lead) . ' Reply JSON only.';
     $user = json_encode([
         'business' => $lead['name'], 'type' => $lead['type'], 'city' => $lead['city'], 'contact' => $lead['contact'] ?? '',
         'evidence' => array_slice($lead['evidence'] ?? [], 0, 3), 'research' => pm_research_brief($lead), 'online_gaps' => array_slice($lead['social_gaps'] ?? [], 0, 2), 'lead_with' => $lead['pain'] ?? '', 'how_it_stops' => pm_fix_for((string)($lead['pain'] ?? '')),
@@ -2193,7 +2194,7 @@ function pm_agent_compose(array $lead, string $channel, string $tone, string $le
     if (!is_array($out) || trim((string)($out['body'] ?? '')) === '') {
         throw new RuntimeException('The AI did not return a message. Try again.');
     }
-    return ['subject' => pm_subject_tidy(trim((string)($out['subject'] ?? '')), $lead), 'body' => pm_human_polish(trim((string)$out['body']), $wa ? 'whatsapp' : 'email')];
+    return ['subject' => pm_no_usd(pm_subject_tidy(trim((string)($out['subject'] ?? '')), $lead), $lead), 'body' => pm_no_usd(pm_human_polish(trim((string)$out['body']), $wa ? 'whatsapp' : 'email'), $lead)];
 }
 
 /** The picker shown above a message box. $target tells the script which fields to fill. */

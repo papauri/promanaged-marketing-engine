@@ -9,7 +9,7 @@
  * while never saved, change nothing: emails and WhatsApp messages end as they always did.
  */
 
-const PM_DM_VARS = ['first_name' => 'their first name', 'name' => 'their business', 'city' => 'their town', 'type' => 'kind of business', 'intro' => 'who is writing ("I\'m Grace from ...")',
+const PM_DM_VARS = ['first_name' => 'their first name', 'name' => 'their business', 'city' => 'their town', 'currency' => 'the money of their country (kwacha in Malawi, never dollars)', 'type' => 'kind of business', 'intro' => 'who is writing ("I\'m Grace from ...")',
     'sender' => 'your name', 'company' => 'your business name', 'tagline' => 'your tagline', 'phone' => 'your phone', 'email' => 'your email', 'website' => 'your website',
     'address' => 'your address', 'title' => 'your job title', 'link' => 'your website link', 'opening' => 'the line written for this lead (the AI writes it for Travel Malawi; otherwise who you are and how you came across them)'];
 
@@ -95,7 +95,7 @@ function pm_dm_vars(array $lead = [], string $opening = ''): array
     $v = ['first_name' => pm_dm_first($lead), 'name' => trim((string)($lead['name'] ?? '')) ?: 'your business', 'city' => $city !== '' && strcasecmp($city, 'Malawi') !== 0 ? $city : 'Malawi',
         'type' => trim((string)($lead['type'] ?? '')) ?: 'business', 'sender' => $sender, 'intro' => $me !== '' ? "I'm $me from $company" : "I am writing from $company", 'company' => $company,
         'tagline' => trim((string)($s['tagline'] ?? '')), 'phone' => trim((string)($s['phone'] ?? '')), 'email' => trim((string)($s['email'] ?? '')), 'website' => trim((string)($s['website'] ?? '')),
-        'address' => trim((string)($s['address'] ?? '')), 'title' => $sender !== '' && $sender === trim((string)($s['signatory_name'] ?? '')) ? trim((string)($s['signatory_title'] ?? '')) : '',
+        'address' => trim((string)($s['address'] ?? '')), 'currency' => pm_local_currency($lead)['word'], 'title' => $sender !== '' && $sender === trim((string)($s['signatory_name'] ?? '')) ? trim((string)($s['signatory_title'] ?? '')) : '',
         'link' => $link !== '' ? $link : (trim((string)($s['website'] ?? '')) !== '' ? 'https://' . preg_replace('#^https?://#i', '', trim((string)$s['website'])) : '')];
     $v['opening'] = $opening !== '' ? $opening : pm_dm_fill(pm_brand() === 'travel' ? PM_DM_OPENING_TRAVEL : PM_DM_OPENING, $v);
     return $v;

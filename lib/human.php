@@ -73,7 +73,7 @@ function pm_human_flags(string $text, string $channel = 'email'): array
  */
 function pm_human_polish(string $text, string $channel = 'email'): string
 {
-    $t = str_replace("\r\n", "\n", $text);
+    $t = str_replace("\r\n", "\n", function_exists('pm_no_usd') ? pm_no_usd($text) : $text); // never US dollars (lib/localcur.php)
     if (trim($t) === '') {
         return trim($t);
     }
