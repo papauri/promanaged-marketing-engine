@@ -282,12 +282,18 @@ function pm_pp_words(string $brand, string $jpeg, string $note, string $priceTex
 {
     $s = pm_settings();
     $pillars = array_values(array_filter(array_column(pm_social_pillars($brand), 'name'), fn($n) => !in_array(strtolower((string)$n), ['proof', 'offer'], true)));
-    $system = pm_agents_company_brief('tiny') . "\nYou write one social media post for {$s['company_name']} around a photo the owner took. Write like a top hospitality and small-business marketer: "
-        . 'three short paragraphs separated by a blank line: first a hook that stops the scroll with what the reader gets or feels; then two or three sentences that sell the feeling and the benefit '
-        . '(do not list every object in the photo, pick the one or two details that make someone want it); last, one easy invitation to send a WhatsApp message. '
-        . 'Describe only what is visible in the photo and what the owner wrote. Never invent features, amenities, distances, awards, numbers, dates, discounts or prices: the app adds the owner\'s price itself, so write no amount of money at all. '
-        . 'Never start with "Hello" or the business name. Plain words, no exclamation marks in a row, no hashtags inside the caption. ' . (defined('PM_HUMAN_RULES') ? PM_HUMAN_RULES : '')
-        . "\nReply JSON only: {\"headline\":\"at most 6 words for the picture\",\"sub\":\"at most 10 words under it\",\"caption\":\"45 to 90 words in three paragraphs\",\"hashtags\":[\"exactly 3 relevant tags\"],"
+    $system = pm_agents_company_brief('tiny') . "\nYou write one social media post for {$s['company_name']} around a photo the owner took. "
+        . 'Your job is to make the right person want this, not to describe the picture: the photo already shows what is in it, so repeating it wastes the caption. '
+        . 'Before writing, decide who would buy what this photo shows and speak to them as "you" (a guest or traveller for a room, a meal or a place; a customer for a product or a service; never partners, hosts or suppliers), '
+        . 'and the one feeling or result they want from it (rest, a view to wake up to, time together, a job done, a worry gone). '
+        . 'Write three parts. hook: one line of at most 14 words that puts the reader in the moment or names what they get; start with the reader, the moment or the feeling, never with "A", "An", "The", "This", "There" or an object. '
+        . 'body: two or three short sentences about how it feels or what changes for them; every sentence has the reader in it ("you", "your"), and at most two concrete details from the photo appear, only as part of what the reader does or feels; no inventory of objects, no sentence that starts with a count or an object, no "sits", "is set with", "stretches out", "features", "boasts", "there is". '
+        . 'invite: one easy sentence to send a WhatsApp message, with a small, true reason to do it now (ask about dates, check what is free), no invented urgency. '
+        . 'The difference, shown on a scene unlike yours (copy the approach, never the words): describing "A grey sofa sits by a window with a lamp on a side table." selling "Sunday has one plan now: you, this sofa and nowhere to be." '
+        . 'Facts: use only details visible in the photo or written by the owner. Never invent features, amenities, distances, awards, numbers, dates, discounts or prices: the app puts the owner\'s price on its own line just before the invite, so write no amount of money at all. '
+        . 'Never start with "Hello" or the business name. Plain words, short sentences, no hashtags or emoji in the text, no exclamation marks in a row. ' . (defined('PM_HUMAN_RULES') ? PM_HUMAN_RULES : '')
+        . "\nReply JSON only: {\"buyer\":\"who wants this and what they want from it, a few words\",\"headline\":\"at most 6 words: the benefit or the feeling, not a label of the objects\",\"sub\":\"at most 10 words under it\","
+        . "\"hook\":\"...\",\"body\":\"...\",\"invite\":\"...\",\"hashtags\":[\"exactly 3 relevant tags\"],"
         . "\"alt\":\"one sentence describing the photo for screen readers\",\"pillar\":\"one of: " . implode(' | ', $pillars ?: ['Tip/How-to']) . '"}';
     $user = json_encode(['owner_note' => $note, 'business' => $s['company_name'], 'there_is_a_price' => $priceText !== ''], JSON_UNESCAPED_UNICODE);
     $seen = false;
@@ -310,7 +316,18 @@ function pm_pp_words(string $brand, string $jpeg, string $note, string $priceTex
     $clean = fn($v, int $max) => mb_substr(trim(strip_tags(is_scalar($v) ? (string)$v : '')), 0, $max);
     $headline = pm_pp_drop_unsourced($clean($out['headline'] ?? '', 70), $src);
     $sub = pm_pp_drop_unsourced($clean($out['sub'] ?? '', 110), $src);
-    $caption = $clean($out['caption'] ?? '', 1200);
+    $caption = pm_pp_join_parts($out, $clean);
+    if ($caption !== '' && pm_pp_describes($caption) && pm_agents_ready()) {
+        try {
+            $fix = pm_agent_json(pm_claude($system . "\nYou cannot see the photo. The draft below describes the picture instead of selling it: rewrite it to the rules above, keeping only its true details.",
+                json_encode(['owner_note' => $note, 'buyer' => (string)($out['buyer'] ?? ''), 'draft' => $caption], JSON_UNESCAPED_UNICODE), false, 900, 'write'));
+            $better = is_array($fix) ? pm_pp_join_parts($fix, $clean) : '';
+            if ($better !== '' && !pm_pp_describes($better)) {
+                $caption = $better;
+            }
+        } catch (Throwable) {
+        }
+    }
     $caption = implode("\n\n", array_filter(array_map(fn($para) => pm_pp_drop_unsourced($para, $src), preg_split('/\R{2,}/u', $caption) ?: []), fn($x) => $x !== ''));
     if ($caption === '') {
         $caption = trim(($note !== '' ? rtrim($note, '. ') . ".\n\n" : '') . 'Send us a WhatsApp message to ask or to book.');
@@ -324,6 +341,33 @@ function pm_pp_words(string $brand, string $jpeg, string $note, string $priceTex
     $tags = array_values(array_slice(array_filter(array_map(fn($t) => '#' . preg_replace('/[^\p{L}\p{N}]/u', '', ltrim((string)$t, '#')), (array)($out['hashtags'] ?? [])), fn($t) => mb_strlen($t) > 2), 0, 3)); // Facebook does best with 3 or fewer
     $pillar = in_array((string)($out['pillar'] ?? ''), $pillars, true) ? (string)$out['pillar'] : ($pillars[0] ?? '');
     return ['headline' => $headline, 'sub' => $sub, 'caption' => $caption, 'hashtags' => $tags, 'alt' => $clean($out['alt'] ?? '', 300), 'pillar' => $pillar, 'seen' => $seen];
+}
+
+/** hook, body and invite as three paragraphs (a reply with one "caption" field is taken as it is). */
+function pm_pp_join_parts(array $out, callable $clean): string
+{
+    $parts = array_filter([$clean($out['hook'] ?? '', 200), $clean($out['body'] ?? '', 700), $clean($out['invite'] ?? '', 250)], fn($x) => $x !== '');
+    return count($parts) >= 2 ? implode("\n\n", $parts) : $clean($out['caption'] ?? '', 1200);
+}
+
+/** True when a caption reads like a list of what is in the picture rather than a reason to want it: it never speaks to the reader, opens on an object, or leans on describing verbs. */
+function pm_pp_describes(string $caption): bool
+{
+    $paras = preg_split('/\R{2,}/u', trim($caption)) ?: [];
+    $selling = implode(' ', array_slice($paras, 0, max(1, count($paras) - 1))); // the closing invitation always says "you": judge the rest
+    if (!preg_match('/\b(you|your|yours|yourself)\b/i', $selling)) {
+        return true;
+    }
+    $first = (string)(preg_split('/(?<=[.!?])\s+/u', trim($selling))[0] ?? '');
+    if (preg_match('/^(a|an|the|two|three|this|there)\b/i', $first) && !preg_match('/\b(you|your)\b/i', $first)) {
+        return true;
+    }
+    $sents = preg_split('/(?<=[.!?])\s+/u', trim($selling)) ?: [];
+    $noReader = array_filter($sents, fn($x) => !preg_match('/\b(you|your|yours|yourself)\b/i', $x));
+    if (count($noReader) >= 2 || array_filter($noReader, fn($x) => preg_match('/^(two|three|four|five|six|several|many|\d+)\b/i', $x))) {
+        return true; // most of it is about the objects, or it counts them
+    }
+    return preg_match_all('/\b(sits?|sitting|stands?|is set|are set|set with|stretch(es)? out|lined with|features?|boasts?|there (is|are)|surrounded by|adorned)\b/i', $selling) >= 2;
 }
 
 /** The caption with the owner's price as its own line, just before the closing invitation. */
