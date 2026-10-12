@@ -17,7 +17,7 @@ $chan = ['reply_comment' => 'Reply on Facebook', 'messenger' => 'Messenger', 'in
 <?php if (!$sc['ready']): ?>
 <?php elseif ($view === 'growth'):
     try {
-        pm_playbook_ensure($vb); // a playbook from a past day is brought up to date now (carried over, or written again if the people changed)
+        pm_playbook_ensure($vb, false); // no Researchers on a page view (they run with the scheduler and "Make it again"); a playbook from a past day is brought up to date now (carried over, or written again if the people changed)
     } catch (Throwable) {
     }
     $pb = pm_load('engage_playbook', fn() => [])[$vb] ?? null;
@@ -28,10 +28,11 @@ $chan = ['reply_comment' => 'Reply on Facebook', 'messenger' => 'Messenger', 'in
       <h2 class="m-0" id="playbook">Today's playbook <?= $pb ? '<span class="muted t-sm" style="font-weight:400">· made ' . pm_h($pb['at']) . '</span>' : '' ?></h2>
       <form method="post"><?= $fg('playbook') ?><button class="btn primary small"><?= $pb && $pb['day'] === date('Y-m-d') ? 'Make it again' : 'Make today\'s playbook' ?></button></form>
     </div>
-    <?php if (!$pb): ?><p class="hint">Who to engage today, when, where and with which words: built from everyone who reacted, commented or messaged, plus your warm leads. One AI call.</p>
+    <?php if (!$pb): ?><p class="hint">Who to engage today, when, where and with which words: built from everyone who reacted, commented or messaged, plus the warm leads whose turn it is. Up to <?= PM_PB_RESEARCH_MAX ?> Researchers study the businesses we know too little about first, side by side, then one AI call writes the tasks.</p>
     <?php else: ?>
       <?php if ($pb['day'] !== date('Y-m-d')): ?><p class="hint warnt">This playbook is from <?= pm_h($pb['day']) ?>. Make today's.</p><?php elseif (!empty($pb['carried_from'])): ?><p class="hint">Brought up to date this morning: <?= (int)($pb['carried'] ?? 0) ?> task<?= (int)($pb['carried'] ?? 0) === 1 ? '' : 's' ?> still open from <?= pm_h(date('j M', strtotime((string)$pb['carried_from']))) ?> <?= (int)($pb['carried'] ?? 0) ? '(what was done is gone)' : '' ?>; nobody new has needed a message.</p><?php endif; ?>
       <?php if (!$pb['tasks']): ?><p class="hint">No tasks today.</p><?php endif; ?>
+      <?php if (!empty($pb['researched'])): ?><p class="hint">The Researchers studied <?= (int)$pb['researched'] ?> business<?= (int)$pb['researched'] === 1 ? '' : 'es' ?> side by side before this playbook was written.</p><?php endif; ?>
       <?php if ($pb['focus']): ?><p class="lead"><?= pm_h($pb['focus']) ?></p><?php endif; ?>
       <p class="hint">Best times: <?= $pb['times']['hours'] ? pm_h(implode(', ', array_map(fn($h) => sprintf('%02d:00', $h), $pb['times']['hours']))) . ' · ' : '' ?><?= pm_h($pb['times']['note']) ?></p>
       <?php foreach ($pb['tasks'] as $t):
@@ -61,10 +62,18 @@ $chan = ['reply_comment' => 'Reply on Facebook', 'messenger' => 'Messenger', 'in
             <?php if ($postLink !== ''): ?><a class="btn small ghost" href="<?= pm_h($postLink) ?>" target="_blank" rel="noopener noreferrer">See the post ↗</a><?php endif; ?>
             <button class="btn small"><?= $t['done'] ? 'Undo' : 'Done' ?></button>
           </div>
-          <?php if ($lead): ?><details class="sx-more"><summary>About <?= pm_h($lead['name']) ?></summary>
+          <?php if ($lead): $rz = (array)($lead['research'] ?? []); ?><details class="sx-more"><summary>About <?= pm_h($lead['name']) ?><?= $rz ? ' · researched ' . pm_h(substr((string)($rz['at'] ?? ''), 0, 10)) : ' · not researched yet' ?></summary>
             <p class="hint"><?= pm_h(implode(' · ', array_filter([(string)($lead['type'] ?? ''), (string)($lead['city'] ?? ''), (string)(PM_LEAD_STATUSES[$lead['status']] ?? $lead['status']), (string)($lead['contact'] ?? ''), (string)($lead['phone'] ?? ''), (string)($lead['email'] ?? '')]))) ?></p>
+            <p class="hint"><?php foreach (['website' => 'Website', 'facebook' => 'Facebook', 'instagram' => 'Instagram'] as $lk => $ll): if (preg_match('#^https?://#i', (string)($lead[$lk] ?? ''))): ?><a href="<?= pm_h((string)$lead[$lk]) ?>" target="_blank" rel="noopener noreferrer"><?= $ll ?> ↗</a> &nbsp;<?php endif; endforeach; ?></p>
+            <?php if ($rz): ?>
+              <?php foreach (array_filter([(string)($rz['website']['verdict'] ?? ''), (string)($rz['social']['verdict'] ?? '')]) as $vd): ?><p class="hint"><?= pm_h($vd) ?></p><?php endforeach; ?>
+              <?php if ($dz = array_slice((array)($rz['discoveries'] ?? []), 0, 4)): ?><ul class="hint"><?php foreach ($dz as $d): ?><li><?= pm_h((string)($d['fact'] ?? '')) ?><?php if (preg_match('#^https?://#i', (string)($d['source'] ?? ''))): ?> <a href="<?= pm_h((string)$d['source']) ?>" target="_blank" rel="noopener noreferrer">source</a><?php endif; ?></li><?php endforeach; ?></ul><?php endif; ?>
+              <?php foreach (array_slice((array)($rz['news'] ?? []), 0, 2) as $nz): ?><p class="hint">News: <?= pm_h((string)($nz['headline'] ?? '')) ?></p><?php endforeach; ?>
+              <?php foreach (array_slice((array)($rz['hooks'] ?? []), 0, 2) as $hz): ?><p class="hint">Hook: “<?= pm_h((string)$hz) ?>”</p><?php endforeach; ?>
+            <?php endif; ?>
             <?php foreach (array_slice(array_reverse((array)($lead['notes'] ?? [])), 0, 2) as $ln): ?><p class="hint"><?= pm_h((string)$ln['at']) ?> · <?= pm_h((string)$ln['text']) ?></p><?php endforeach; ?>
-            <a class="btn small ghost" href="?tab=agents&amp;rl=<?= pm_h($lead['id']) ?>#l<?= pm_h($lead['id']) ?>" target="_blank" rel="noopener">Lead card in a new tab ↗</a>
+            <div class="btns"><?php if (pm_agents_ready()): ?><button class="btn small" name="do" value="pb_research" title="The Researcher studies their website, Facebook, Instagram, reviews and news (one web-searching AI call)"><?= $rz ? 'Research again' : 'Research this business' ?></button><?php endif; ?>
+            <a class="btn small ghost" href="?tab=agents&amp;rl=<?= pm_h($lead['id']) ?>#l<?= pm_h($lead['id']) ?>" target="_blank" rel="noopener">Lead card in a new tab ↗</a></div>
           </details><?php endif; ?>
         </div>
       </form>

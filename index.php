@@ -1610,9 +1610,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($do === 'autopilot_now') {
                 pm_redirect($to, pm_social_autopilot($vb, true) . '.');
             }
-            if ($do === 'playbook') {
+            if ($do === 'playbook') { // "Make it again": other businesses than the playbook it replaces, the unknown ones researched first
                 $pb = pm_agent_engage_playbook($vb, true);
-                pm_redirect($to, count($pb['tasks']) . ' engagement task(s) for today.');
+                pm_redirect($to, count($pb['tasks']) . ' engagement task(s) for today' . (!empty($pb['researched']) ? ', ' . (int)$pb['researched'] . ' business(es) researched first' : '') . (!empty($pb['research_errors']) ? '. Research problems: ' . implode('; ', (array)$pb['research_errors']) : '') . '.');
+            }
+            if ($do === 'pb_research') { // one playbook business studied now by the Researcher
+                $n = (int)($_POST['n'] ?? -1);
+                $tk = array_values(array_filter((array)(pm_load('engage_playbook', fn() => [])[$vb]['tasks'] ?? []), fn($x) => (int)$x['n'] === $n))[0] ?? null;
+                $lid = (string)($tk['lead_id'] ?? (str_starts_with((string)($tk['ref'] ?? ''), 'l:') ? substr((string)$tk['ref'], 2) : ''));
+                $lsr = pm_leads();
+                if ($lid === '' || !isset($lsr[$lid])) {
+                    pm_redirect($to . '#pt' . $n, 'That business is not in the leads.', 'err');
+                }
+                $rr = pm_agent_research($lsr[$lid]);
+                pm_apply_research($lsr[$lid], $rr);
+                pm_lead_note($lsr[$lid], 'Researched from the social playbook: ' . count($rr['discoveries']) . ' discoveries');
+                pm_leads_save($lsr);
+                pm_redirect($to . '#pt' . $n, 'Research done for ' . $lsr[$lid]['name'] . ': ' . count($rr['discoveries']) . ' discoveries. Press New wording to use it, or Make it again for a new playbook.');
             }
             if ($do === 'task_done') {
                 pm_playbook_tick($vb, (int)($_POST['n'] ?? -1), null, isset($_POST['text']) ? (string)$_POST['text'] : null);

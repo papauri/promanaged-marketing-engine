@@ -367,8 +367,8 @@ function pm_playbook_carry(array $pb, string $today): array
     return $pb;
 }
 
-/** Makes sure the playbook is today's: carries it over or writes a new one when the people or leads changed (one AI call at most a day). Returns what it did. */
-function pm_playbook_ensure(string $brand): string
+/** Makes sure the playbook is today's: carries it over or writes a new one when the people or leads changed (one AI call at most a day). $research false: no Researchers (a page view). Returns what it did. */
+function pm_playbook_ensure(string $brand, bool $research = true): string
 {
     if (!pm_social_cfg($brand)['ready']) {
         return 'no Page connected';
@@ -385,12 +385,12 @@ function pm_playbook_ensure(string $brand): string
         return $all;
     }, fn() => []);
     try {
-        $new = pm_agent_engage_playbook($brand);
+        $new = pm_agent_engage_playbook($brand, false, $research);
         return count($new['tasks']) . ' task(s)' . (!empty($new['carried']) ? ', ' . (int)$new['carried'] . ' carried over' : '');
     } catch (Throwable $e) {
         if (str_starts_with($e->getMessage(), 'Nobody to engage')) { // a quiet day is still today's playbook
             pm_update('engage_playbook', function (array $all) use ($brand) {
-                $all[$brand] = ['at' => date('Y-m-d H:i'), 'day' => date('Y-m-d'), 'sig' => '', 'focus' => 'Nobody to engage today: no new comments, messages or warm leads.', 'tasks' => [], 'moves' => [], 'times' => pm_fb_best_times($brand)];
+                $all[$brand] = ['at' => date('Y-m-d H:i'), 'day' => date('Y-m-d'), 'sig' => '', 'focus' => 'Nobody to engage today: no new comments, messages or warm leads.', 'tasks' => [], 'moves' => [], 'times' => pm_fb_best_times($brand), 'history' => (array)($all[$brand]['history'] ?? [])];
                 return $all;
             }, fn() => []);
             return 'quiet day';
@@ -491,35 +491,160 @@ function pm_playbook_tick(string $brand, int $n, ?bool $done = null, ?string $te
     }, fn() => []);
 }
 
-function pm_agent_engage_playbook(string $brand, bool $force = false): array
+/** How many businesses the Researcher swarm studies before a playbook is written (each is one web-searching AI call, run side by side). */
+const PM_PB_RESEARCH_MAX = 4;
+
+/** Businesses that were in a playbook in the last 3 days: lead id => ['day', 'ch' (the channel used)]. */
+function pm_playbook_recent(string $brand): array
+{
+    $h = (array)(pm_load('engage_playbook', fn() => [])[$brand]['history'] ?? []);
+    return array_filter($h, fn($v) => is_array($v) && strtotime((string)($v['day'] ?? '')) >= strtotime('-3 days'));
+}
+
+/**
+ * The warm leads for today's playbook. Those who answered us or have a proposal come first, always. The others take turns: a business that was in a playbook
+ * in the last 3 days (or in the one being replaced, $skip) waits until the ones nobody has worked on are done, so each day brings other businesses.
+ */
+function pm_playbook_pick(string $brand, int $max = 8, array $skip = []): array
+{
+    $lb = pm_brand_norm($brand);
+    $recent = pm_playbook_recent($brand);
+    $rank = ['replied' => 0, 'proposal' => 1, 'contacted' => 2, 'drafted' => 3, 'qualified' => 4];
+    $all = array_values(array_filter(pm_leads_read(), fn($l) => ($l['brand'] ?? 'promanaged') === $lb && isset($rank[$l['status'] ?? '']) && ($l['source'] ?? '') !== 'facebook'));
+    usort($all, fn($a, $b) => ($rank[$a['status']] <=> $rank[$b['status']]) ?: strcmp((string)($a['updated'] ?? ''), (string)($b['updated'] ?? '')));
+    $fresh = [];
+    $later = [];
+    foreach ($all as $l) {
+        $hot = in_array($l['status'], ['replied', 'proposal'], true);
+        if (!$hot && (isset($recent[$l['id']]) || in_array($l['id'], $skip, true))) {
+            $later[] = $l;
+        } else {
+            $fresh[] = $l;
+        }
+    }
+    usort($later, fn($a, $b) => strcmp((string)($recent[$a['id']]['day'] ?? ''), (string)($recent[$b['id']]['day'] ?? '')));
+    return array_slice(array_merge($fresh, $later), 0, $max);
+}
+
+/**
+ * The Researcher swarm: the picked businesses with no research (or research older than 30 days) are studied side by side, each by its own Researcher
+ * (website checked by code, then their Facebook, Instagram, reviews and news). What they find goes on the lead: links, gaps, discoveries, hooks.
+ * Returns [how many were studied, problems].
+ */
+function pm_playbook_research(array $picked): array
+{
+    $due = array_slice(array_values(array_filter($picked, fn($l) => empty($l['research']['at']) || strtotime((string)$l['research']['at']) < strtotime('-30 days'))), 0, PM_PB_RESEARCH_MAX);
+    if (!$due || !pm_agents_ready()) {
+        return [0, []];
+    }
+    require_once __DIR__ . '/swarm.php';
+    $tmp = PM_DATA . '/agent_jobs';
+    if (!is_dir($tmp)) {
+        mkdir($tmp, 0775, true);
+    }
+    @set_time_limit(300);
+    $res = pm_swarm(array_map(fn($l) => ['agent' => 'research', 'lead' => $l], $due), max(2, min(PM_PB_RESEARCH_MAX, (int)(pm_agents_config()['parallel'] ?? 3))), $tmp);
+    $leads = pm_leads();
+    $n = 0;
+    $err = [];
+    foreach ($res as $i => $r) {
+        $id = $due[$i]['id'];
+        if (!empty($r['ok']) && is_array($r['data']) && isset($leads[$id])) {
+            pm_apply_research($leads[$id], $r['data']);
+            pm_lead_note($leads[$id], 'Researched for the social playbook: ' . count((array)($r['data']['discoveries'] ?? [])) . ' discoveries');
+            $n++;
+        } else {
+            $err[] = $due[$i]['name'] . ': ' . mb_substr((string)($r['error'] ?? 'no answer'), 0, 80);
+        }
+    }
+    if ($n) {
+        pm_leads_save($leads);
+    }
+    pm_agent_log('Social', "Playbook research: $n of " . count($due) . ' businesses studied side by side' . ($err ? ' (' . implode('; ', $err) . ')' : ''));
+    return [$n, $err];
+}
+
+/** What the playbook writer knows about one business: what it does, where it is online, what the Researcher found, what was said last. */
+function pm_playbook_profile(array $l): array
+{
+    $r = (array)($l['research'] ?? []);
+    $rb = pm_research_brief($l);
+    $lastIn = '';
+    foreach (array_reverse((array)($l['thread'] ?? [])) as $m) {
+        if (($m['dir'] ?? '') === 'in') {
+            $lastIn = mb_substr((string)$m['text'], 0, 200);
+            break;
+        }
+    }
+    $notes = (array)($l['notes'] ?? []);
+    $note = $notes ? (array)end($notes) : [];
+    return array_filter([
+        'what_they_do' => trim((string)($l['type'] ?? '') . ' in ' . (string)($l['city'] ?? ''), ' in'),
+        'online' => array_filter(['website' => (string)($l['website'] ?? ''), 'facebook' => (string)($l['facebook'] ?? ''), 'instagram' => (string)($l['instagram'] ?? ''),
+            'website_verdict' => (string)($r['website']['verdict'] ?? ''), 'social_verdict' => (string)($r['social']['verdict'] ?? '')]),
+        'discoveries' => $rb['discoveries'], 'news' => $rb['news'], 'hooks' => $rb['hooks'],
+        'gaps' => array_slice((array)($l['social_gaps'] ?? []), 0, 2),
+        'last_from_them' => $lastIn,
+        'last_note' => mb_substr((string)($note['text'] ?? ''), 0, 160),
+    ]);
+}
+
+/**
+ * The channel to suggest for a lead today: someone who answered or has a proposal gets a direct one (WhatsApp, a call, email); the others are warmed up where they are,
+ * starting with a useful comment on their own Facebook Page or Instagram, and never on the same channel as the last playbook when another one is open.
+ */
+function pm_playbook_suggest(array $l, array $can, string $last = ''): string
+{
+    if (!$can) {
+        return '';
+    }
+    if (in_array($l['status'] ?? '', ['replied', 'proposal'], true)) {
+        foreach (['whatsapp', 'call', 'email'] as $c) {
+            if (in_array($c, $can, true)) {
+                return $c;
+            }
+        }
+    }
+    foreach (['comment_on_their_page', 'instagram_dm', 'whatsapp', 'email', 'call'] as $c) {
+        if (in_array($c, $can, true) && $c !== $last) {
+            return $c;
+        }
+    }
+    return $can[0];
+}
+
+/**
+ * Today's playbook. The swarm: the Social agent reads the people on our Page, the picker chooses the businesses whose turn it is, the Researcher swarm studies the ones
+ * we know too little about (side by side), and the writer builds each task on what was found, on the channel that fits. $research false skips the Researchers (a page view).
+ */
+function pm_agent_engage_playbook(string $brand, bool $force = false, bool $research = true): array
 {
     pm_brand_set($brand);
     $people = pm_fb_people($brand);
     pm_fb_capture_buyers($brand, $people);
     $crowd = array_slice(array_values(array_filter($people, fn($p) => !$p['spam'])), 0, 10);
-    $lb = pm_brand_norm($brand);
-    $hot = [];
-    foreach (pm_leads_read() as $l) {
-        if (($l['brand'] ?? 'promanaged') !== $lb || in_array($l['status'], ['won', 'lost', 'optout', 'new'], true) || ($l['source'] ?? '') === 'facebook') {
-            continue;
-        }
-        $hot[] = ['lead_id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'city' => $l['city'], 'status' => $l['status'], 'facebook' => $l['facebook'] ?? '', 'whatsapp' => ($l['whatsapp'] ?? '') ?: ($l['phone'] ?? ''),
-            'can' => pm_playbook_lead_channels($l),
-            'contact' => $l['contact'] ?? '', 'last' => $l['updated'] ?? '',
-            'known_about_them' => array_slice(array_values(array_filter(array_merge((array)($l['research']['hooks'] ?? []), array_slice((array)($l['evidence'] ?? []), 0, 2), array_slice((array)($l['social_gaps'] ?? []), 0, 1)))), 0, 3),
-            'stage' => ['qualified' => 'first contact', 'drafted' => 'first contact', 'contacted' => 'follow-up: we wrote before and had no answer', 'replied' => 'they answered us: move to a call or meeting', 'proposal' => 'proposal sent: help them decide'][$l['status']] ?? $l['status']];
+    $prev = pm_load('engage_playbook', fn() => [])[$brand] ?? null;
+    $history = (array)($prev['history'] ?? []);
+    $skip = $force && $prev ? array_values(array_filter(array_map(fn($t) => (string)($t['lead_id'] ?? ''), (array)($prev['tasks'] ?? [])))) : [];
+    $picked = pm_playbook_pick($brand, 8, $skip);
+    [$studied, $resErr] = $research ? pm_playbook_research($picked) : [0, []];
+    if ($studied) { // read again: the Researchers added links, gaps and discoveries
+        $fresh = pm_leads_read();
+        $picked = array_map(fn($l) => $fresh[$l['id']] ?? $l, $picked);
     }
-    $rank = ['replied' => 0, 'proposal' => 1, 'contacted' => 2, 'drafted' => 3, 'qualified' => 4];
-    usort($hot, fn($a, $b) => (($rank[$a['status']] ?? 5) <=> ($rank[$b['status']] ?? 5)) ?: strcmp($a['last'], $b['last']));
-    $hot = array_slice($hot, 0, 8);
+    $hot = [];
+    foreach ($picked as $l) {
+        $can = pm_playbook_lead_channels($l);
+        $hot[] = ['ref' => 'l:' . $l['id'], 'name' => $l['name'], 'contact' => (string)($l['contact'] ?? ''), 'status' => $l['status'],
+            'stage' => ['qualified' => 'first contact', 'drafted' => 'first contact', 'contacted' => 'follow-up: we wrote before and had no answer', 'replied' => 'they answered us: move to a call or meeting', 'proposal' => 'proposal sent: help them decide'][$l['status']] ?? $l['status'],
+            'can' => $can, 'suggested' => pm_playbook_suggest($l, $can, (string)($history[$l['id']]['ch'] ?? '')), 'profile' => pm_playbook_profile($l)];
+    }
     $times = pm_fb_best_times($brand);
     $posts = pm_fb_posts($brand, 5)['posts'];
-    // same people, same leads, same stage as last time: reuse the playbook (no AI call)
-    $age = fn(string $at) => (int)min(12, intdiv((int)max(0, time() - (strtotime($at) ?: time())), 259200)); // a lead that has been quiet for another three days is new news
-    $sig = md5(json_encode([array_map(fn($p) => [$p['id'], $p['commented'], $p['messaged'], $p['unanswered']], $crowd), array_map(fn($h) => [$h['lead_id'], $h['status'], $h['last'], $age((string)$h['last'])], $hot)]));
-    $prev = pm_load('engage_playbook', fn() => [])[$brand] ?? null;
+    // same people, same businesses, same stage and nothing newly researched: reuse the playbook (no AI call)
+    $sig = md5(json_encode([array_map(fn($p) => [$p['id'], $p['commented'], $p['messaged'], $p['unanswered']], $crowd), array_map(fn($l) => [$l['id'], $l['status'], (string)($l['updated'] ?? ''), (string)($l['research']['at'] ?? '')], $picked)]));
     if (!$force && $prev && ($prev['sig'] ?? '') === $sig && strtotime((string)$prev['at']) > time() - 3 * 86400) {
-        $prev = pm_playbook_carry($prev, date('Y-m-d')); // same people, same leads: nothing new to write, so no AI call
+        $prev = pm_playbook_carry($prev, date('Y-m-d'));
         pm_update('engage_playbook', function (array $all) use ($brand, $prev) {
             $all[$brand] = $prev;
             return $all;
@@ -531,26 +656,34 @@ function pm_agent_engage_playbook(string $brand, bool $force = false): array
     }
     $system = pm_agents_company_brief('tiny') . "\nYou are the business's sales-focused community manager. Today is " . date('l j F Y') . ". Build TODAY's engagement playbook that moves people closer to buying, "
         . "using only the people and leads given. For each task decide: who, why them now (their signal), when today (a clock time in Malawi time), channel "
-        . "(one of that person's 'can' list only: reply_comment and messenger on our Facebook Page, instagram_reply on our Instagram, comment_on_their_page or instagram_dm on their own profiles, whatsapp, call, email), "
-        . "picking where that person is most likely to answer: someone who wrote on our Page or Instagram is answered there first; use every channel that fits across the day, not only WhatsApp. The exact words to use (short, human, specific to what they said or do, one easy question, no prices, no pressure, never promise times or results), and the goal of the step. "
+        . "(one of that person's 'can' list only: reply_comment and messenger on our Facebook Page, instagram_reply on our Instagram, comment_on_their_page or instagram_dm on their own profiles, whatsapp, call, email). "
+        . "For a warm lead use its 'suggested' channel unless its profile gives a clear reason for another one from 'can'; someone who wrote on our Page or Instagram is answered there. Spread the day over the channels, not only WhatsApp. "
+        . "The exact words to use (short, human, specific, one easy question, no prices, no pressure, never promise times or results), and the goal of the step. "
+        . "Show that we know their business: build the first sentence on one real item from their 'profile' (a discovery, a news item, a hook, what is weak online, or what they said last); never open with what we do, never invent anything that is not in the profile. "
         . "How the words must read: like a real person from a small local business, not an advert. Greet by first name when 'contact' is a person's name, otherwise 'Hello'. English unless the person wrote to us in Chichewa. "
-        . "The first sentence is about THEM, built on one item from 'known_about_them' (or what they said on our Page); never open with what we do. At most one sentence about how we could help, phrased as a question or an offer to show, never a feature list. "
-        . "End with one easy question. WhatsApp and Messenger 25 to 50 words; sign off with '" . pm_sender_name() . "'. Match the 'stage': a follow-up refers lightly to our earlier message; after a proposal, offer to answer questions or walk them through it. "
-        . "Order by money: buyers and unanswered people first, then replied and proposal-stage leads, then follow-ups, then first contacts. Max 10 tasks. "
-        . "Messenger is only possible if 'window' is true. Commenting on a lead's own Facebook page or Instagram must add value (praise something real, a useful tip) and never sell. A public reply is shorter (10 to 30 words) and never asks for private details. "
-        . "Also give up to 3 'page_moves' for today (e.g. which post type to publish at which time, pin a post, a story, a live) and one line of 'focus'. Reply JSON only.";
+        . "At most one sentence about how we could help, phrased as a question or an offer to show, never a feature list. End with one easy question. "
+        . "WhatsApp, Messenger and Instagram messages 25 to 50 words, signed '" . pm_sender_name() . "'. A public comment or reply 10 to 30 words, adds value (praise something real, a useful tip), never sells and never asks for private details. "
+        . "Match the 'stage': a follow-up refers lightly to our earlier message; after a proposal, offer to answer questions or walk them through it. "
+        . "Order by money: buyers and unanswered people first, then replied and proposal-stage leads, then follow-ups, then first contacts. One task per person, max 10 tasks. Messenger is only possible if 'window' is true. "
+        . "Also give up to 3 'page_moves' for today (which post type to publish at which time, pin a post, a story, a live) and one line of 'focus'. Reply JSON only.";
     $user = json_encode(['best_times' => $times, 'our_last_posts' => array_map(fn($p) => ['when' => $p['at'], 'text' => mb_substr($p['message'], 0, 100), 'engagement' => $p['reactions'] + $p['comments'] + $p['shares']], $posts),
             'people_on_our_page' => array_map(fn($p) => ['ref' => 'p:' . $p['id'], 'name' => $p['name'], 'where' => ($p['platform'] ?? 'fb') === 'ig' ? 'Instagram' : 'Facebook', 'can' => pm_playbook_person_channels($p), 'reacted' => $p['reacted'], 'commented' => $p['commented'], 'messaged' => $p['messaged'], 'buying_words' => $p['buyer'],
                 'waiting_for_our_answer' => $p['unanswered'], 'window' => $p['window'] ?? false, 'said' => $p['said'], 'last' => $p['last']], $crowd),
-            'warm_leads' => array_map(fn($h) => ['ref' => 'l:' . $h['lead_id']] + $h, $hot)], JSON_UNESCAPED_UNICODE)
+            'warm_leads' => $hot], JSON_UNESCAPED_UNICODE)
         . "\nJSON: {\"focus\":\"\",\"tasks\":[{\"ref\":\"p:.. or l:..\",\"who\":\"\",\"why\":\"\",\"when\":\"HH:MM\",\"channel\":\"\",\"message\":\"\",\"goal\":\"\"}],\"page_moves\":[{\"when\":\"\",\"what\":\"\"}]}";
-    $out = pm_agent_json(pm_claude($system, $user, false, 2500, 'write'));
+    $out = pm_agent_json(pm_claude($system, $user, false, 3000, 'write'));
     if (!is_array($out) || !isset($out['tasks'])) {
         throw new RuntimeException('The playbook did not come back complete. Try again.');
     }
+    $byLead = array_column($picked, null, 'id');
     $tasks = [];
-    foreach (array_slice((array)$out['tasks'], 0, 10) as $i => $t) {
+    $seen = [];
+    foreach (array_slice((array)$out['tasks'], 0, 10) as $t) {
         $ref = (string)($t['ref'] ?? '');
+        if ($ref === '' || isset($seen[$ref])) {
+            continue; // one task per person
+        }
+        $seen[$ref] = true;
         $link = '';
         $act = [];
         $can = [];
@@ -559,27 +692,37 @@ function pm_agent_engage_playbook(string $brand, bool $force = false): array
             $link = $pp['links'][0] ?? '';
             $can = pm_playbook_person_channels($pp);
             $act = ['platform' => $pp['platform'] ?? 'fb', 'cid' => (string)(end($pp['comment_ids']) ?: ''), 'psid' => $pp['thread'] !== '' ? (string)$pp['id'] : '', 'window' => (bool)($pp['window'] ?? false)];
-        } elseif (str_starts_with($ref, 'l:')) {
+        } elseif (str_starts_with($ref, 'l:') && isset($byLead[substr($ref, 2)])) {
             $lid = substr($ref, 2);
-            $link = '?tab=agents&rl=' . $lid . '#lead-' . $lid;
-            $lr = pm_leads_read()[$lid] ?? [];
-            $can = $lr ? pm_playbook_lead_channels($lr) : [];
+            $link = '?tab=agents&rl=' . $lid . '#l' . $lid;
+            $can = pm_playbook_lead_channels($byLead[$lid]);
             $act = ['lead_id' => $lid];
+        } else {
+            continue; // someone the writer made up
         }
         $ch = (string)($t['channel'] ?? '');
         if ($can && !in_array($ch, $can, true)) { // a channel this person cannot be reached on: the best one they can
             $ch = $can[0];
         }
-        $tasks[] = ['n' => $i, 'ref' => $ref, 'who' => (string)($t['who'] ?? ''), 'why' => (string)($t['why'] ?? ''), 'when' => (string)($t['when'] ?? ''), 'channel' => $ch,
+        $tasks[] = ['ref' => $ref, 'who' => (string)($t['who'] ?? ''), 'why' => (string)($t['why'] ?? ''), 'when' => (string)($t['when'] ?? ''), 'channel' => $ch,
             'message' => pm_human_polish((string)($t['message'] ?? ''), $ch === 'email' ? 'email' : 'whatsapp'), 'goal' => (string)($t['goal'] ?? ''), 'link' => $link, 'done' => false] + $act;
     }
     usort($tasks, fn($a, $b) => strcmp($a['when'], $b['when']));
-    $pb = ['at' => date('Y-m-d H:i'), 'day' => date('Y-m-d'), 'sig' => $sig, 'focus' => (string)($out['focus'] ?? ''), 'tasks' => $tasks, 'moves' => array_slice((array)($out['page_moves'] ?? []), 0, 3), 'times' => $times];
+    foreach ($tasks as $i => &$t) {
+        $t = ['n' => $i] + $t;
+        if (!empty($t['lead_id'])) {
+            $history[$t['lead_id']] = ['day' => date('Y-m-d'), 'ch' => $t['channel']];
+        }
+    }
+    unset($t);
+    $history = array_filter($history, fn($v) => is_array($v) && strtotime((string)($v['day'] ?? '')) >= strtotime('-14 days'));
+    $pb = ['at' => date('Y-m-d H:i'), 'day' => date('Y-m-d'), 'sig' => $sig, 'focus' => (string)($out['focus'] ?? ''), 'tasks' => $tasks, 'moves' => array_slice((array)($out['page_moves'] ?? []), 0, 3), 'times' => $times,
+        'researched' => $studied, 'research_errors' => $resErr, 'history' => $history];
     pm_update('engage_playbook', function (array $all) use ($brand, $pb) {
         $all[$brand] = $pb;
         return $all;
     }, fn() => []);
-    pm_agent_log('Social', 'Engagement playbook ready: ' . count($tasks) . ' task(s)');
+    pm_agent_log('Social', 'Engagement playbook ready: ' . count($tasks) . ' task(s)' . ($studied ? ", $studied business(es) researched first" : ''));
     return $pb;
 }
 
