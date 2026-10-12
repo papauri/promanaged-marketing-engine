@@ -124,6 +124,19 @@ function pm_proposal_from_post(array $in, array $settings): array
     }
     $cur = pm_currency($settings, $t('currency') ?: (string)($settings['default_quote_currency'] ?? $settings['currency']));
     $rate = (float)($in['rate'] ?? 0);
+    // The lead (and the AI wording written for it) only carries over while the form is still about that business: typed over with another client,
+    // the proposal is not recorded on the first lead, and the pipeline finds the right one by email or name instead.
+    $leadId = (string)($_SESSION['draft']['lead_id'] ?? '');
+    $sameLead = true;
+    if ($leadId !== '') {
+        $ld = pm_leads_read()[$leadId] ?? null;
+        $norm = fn($v) => preg_replace('/[^a-z0-9]/', '', strtolower((string)$v));
+        $sameLead = is_array($ld) && (($norm($ld['name'] ?? '') !== '' && $norm($ld['name'] ?? '') === $norm($t('business')))
+            || (trim((string)($ld['email'] ?? '')) !== '' && strcasecmp(trim((string)$ld['email']), $t('email')) === 0));
+        if (!$sameLead) {
+            $leadId = '';
+        }
+    }
     return [
         'business' => $t('business'), 'contact' => $t('contact'), 'contact_title' => $t('contact_title'),
         'email' => $t('email'), 'phone' => $t('phone'), 'address' => $t('address'), 'tpin' => $t('tpin'),
@@ -137,7 +150,7 @@ function pm_proposal_from_post(array $in, array $settings): array
         'cc' => $t('cc'), 'subject' => $t('subject'), 'body' => (string)($in['body'] ?? ''),
         'ai_edited' => !empty($in['edit_use']) ? pm_parse_edit((array)($in['edit'] ?? [])) : null,
         'charge' => !empty($in['charge']), 'price_mode' => ($in['price_mode'] ?? '') === 'from' ? 'from' : 'exact',
-        'ai' => !empty($in['clear_ai']) ? null : (!empty($in['edit_use']) ? pm_parse_edit((array)($in['edit'] ?? [])) : ($_SESSION['draft']['ai'] ?? null)), 'lead_id' => (string)($_SESSION['draft']['lead_id'] ?? ''),
+        'ai' => !empty($in['clear_ai']) ? null : (!empty($in['edit_use']) ? pm_parse_edit((array)($in['edit'] ?? [])) : ($sameLead ? ($_SESSION['draft']['ai'] ?? null) : null)), 'lead_id' => $leadId,
     ];
 }
 
@@ -893,83 +906,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($do === 'save_draft') {
             $key = ($_POST['which'] ?? '') === 'followup' ? 'followup_draft' : 'drafts';
             $oldBody = trim((string)($lead[$key]['email_body'] ?? ''));
-            $leads[$id][$key] = ['email_subject' => trim((string)$_POST['email_subject']), 'email_body' => trim((string)$_POST['email_body']), 'whatsapp' => trim((string)$_POST['whatsapp'])];
+            $leads[$id][$key] = array_replace((array)($lead[$key] ?? []), ['email_subject' => trim((string)$_POST['email_subject']), 'email_body' => trim((string)$_POST['email_body']), 'whatsapp' => trim((string)$_POST['whatsapp'])]); // other draft details (source, checks) are kept
             if ($key === 'drafts' && $oldBody !== '' && ($oldBody !== $leads[$id][$key]['email_body'] || !empty($lead[$key]['edited_at']))) {
                 $leads[$id][$key]['edited_at'] = (string)($lead[$key]['edited_at'] ?? '') ?: date('Y-m-d H:i'); // written by hand: a bulk redraft never overwrites it
             }
-            foreach (['email', 'phone', 'contact'] as $f) {
-                $leads[$id][$f] = trim((string)($_POST[$f] ?? $lead[$f] ?? ''));
+            $newEmail = trim((string)($_POST['email'] ?? $lead['email'] ?? ''));
+            if ($newEmail !== '' && !filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
+                $back('That email address is not valid: nothing was saved.', 'err');
             }
+            if (strcasecmp($newEmail, (string)($lead['email'] ?? '')) !== 0 && $newEmail !== '') {
+                unset($leads[$id]['email_bad'], $leads[$id]['bounced_at'], $leads[$id]['email_rejected']); // a new address: the old bounce no longer applies
+                $leads[$id]['email_src'] = 'owner';
+            }
+            $leads[$id]['email'] = $newEmail;
+            $newPhone = trim((string)($_POST['phone'] ?? $lead['phone'] ?? ''));
+            if ($newPhone !== trim((string)($lead['phone'] ?? '')) && $newPhone !== '' && pm_wa_number($newPhone)[1] !== 'landline') {
+                $leads[$id]['whatsapp'] = $newPhone; // the box is "Phone / WhatsApp": a mobile typed here is the one WhatsApp uses
+            }
+            $leads[$id]['phone'] = $newPhone;
+            $leads[$id]['contact'] = trim((string)($_POST['contact'] ?? $lead['contact'] ?? ''));
             if ($key === 'drafts' && in_array($lead['status'], ['new', 'qualified'], true)) {
                 $leads[$id]['status'] = 'drafted';
             }
             pm_leads_save($leads);
             $back('Draft saved.');
         }
-        if ($do === 'send') {
+        if ($do === 'send') { // one path for every email to a lead, with every check (lib/outbound.php pm_send_first)
             $which = ($_POST['which'] ?? '') === 'followup' ? 'followup_draft' : 'drafts';
-            if (function_exists('pm_send_first')) {
-                $res = pm_send_first($leads, $id, $which);
-                if (!empty($res['ok'])) {
-                    $leads[$id]['last_out'] = date('Y-m-d H:i');
-                    unset($leads[$id]['awaiting_reply_since']);
-                    pm_leads_save($leads);
-                }
-                $back((string)$res['msg'], !empty($res['ok']) ? 'ok' : 'err');
+            $res = pm_send_first($leads, $id, $which);
+            if (!empty($res['ok'])) {
+                unset($leads[$id]['awaiting_reply_since']);
+                pm_leads_save($leads);
             }
-            $d = $lead[$which] ?? [];
-            $d['email_subject'] = pm_subject_tidy((string)($d['email_subject'] ?? ''), $lead);
-            if ($lead['status'] === 'optout') {
-                $back($lead['name'] . ' asked not to be contacted.', 'err');
-            }
-            if (pm_sent_today($leads) >= $acfg['send_cap']) {
-                $back("You have reached today's limit of {$acfg['send_cap']} emails. Raise it under Sales > Targeting and messages if you want more.", 'err');
-            }
-            if (empty($d['email_body']) || !filter_var($lead['email'] ?? '', FILTER_VALIDATE_EMAIL)) {
-                $back('This lead needs a valid email address and a draft first.', 'err');
-            }
-            if (pm_suppressed($leads, $lead['email'], $id)) {
-                $back('That address or company asked not to be contacted.', 'err');
-            }
-            if ($which === 'drafts' && !empty($lead['sent'])) {
-                $back('You have already sent this business a first email. Use a follow-up instead.', 'err');
-            }
-            $dom = pm_email_domain($lead['email']);
-            if (!in_array($dom, PM_FREE_MAIL, true)) {
-                foreach ($leads as $o) {
-                    foreach ((array)($o['sent'] ?? []) as $at) {
-                        if (($o['id'] ?? '') !== $id && pm_email_domain((string)($o['email'] ?? '')) === $dom && strtotime((string)$at) > time() - 7 * 86400) {
-                            $back("Someone at $dom was already emailed this week ({$o['name']}). Wait a week so one company is not contacted twice.", 'err');
-                        }
-                    }
-                }
-            }
-            if ($problems = pm_outreach_lint((string)$d['email_subject'], (string)$d['email_body'], $which === 'drafts')) {
-                $back('Not sent. ' . implode(' ', $problems) . ' Edit the draft and try again.', 'err');
-            }
-            $fromAddr = $settings['smtp']['from_email'] ?: $settings['email'];
-            $kitBlock = $which === 'drafts' ? pm_share_email_block((string)$d['email_body']) : ''; // a first email also carries the share kit: the PDF and the direct links
-            [$ok, $why, $msgId] = pm_mail($settings, ['to' => $lead['email'], 'subject' => $d['email_subject'], 'body' => $d['email_body'] . $kitBlock . pm_outreach_footer($settings),
-                'headers' => ['List-Unsubscribe' => '<mailto:' . $fromAddr . '?subject=STOP>', 'Auto-Submitted' => 'no'], 'link' => pm_link_card(),
-                'attachments' => $which === 'drafts' ? pm_share_attachments() : []]);
-            if (!$ok) {
-                $back('Could not send: ' . pm_mail_fail($settings, (string)$why), 'err');
-            }
-            if (empty($leads[$id]['owner']) && ($GLOBALS['PM_WHO'] ?? '') !== '') {
-                $leads[$id]['owner'] = $GLOBALS['PM_WHO']; // whoever sends it owns the follow-up
-            }
-            $leads[$id]['sent'][] = date('Y-m-d H:i');
-            $leads[$id]['thread'][] = ['dir' => 'out', 'at' => date('Y-m-d H:i'), 'text' => $d['email_body'] . $kitBlock];
-            $leads[$id]['last_contacted'] = $leads[$id]['last_out'] = date('Y-m-d H:i');
-            pm_lead_add_msgid($leads[$id], (string)$msgId);
-            $leads[$id]['status'] = 'contacted';
-            if ($which === 'followup_draft') {
-                $leads[$id]['followups'] = (int)($lead['followups'] ?? 0) + 1;
-                unset($leads[$id]['followup_draft']);
-            }
-            pm_lead_note($leads[$id], ($which === 'drafts' ? 'First email' : 'Follow-up') . ' sent to ' . $lead['email']);
-            pm_leads_save($leads);
-            $back('Sent to ' . $lead['name'] . '.');
+            $back((string)$res['msg'], !empty($res['ok']) ? 'ok' : 'err');
         }
         if ($do === 'paste_reply') {
             $text = trim((string)($_POST['text'] ?? ''));
@@ -1206,8 +1175,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pm_leads_save($leads);
             $back();
         }
-        if ($do === 'whatsapp_sent') {
-            $leads[$id]['last_contacted'] = date('Y-m-d H:i');
+        if ($do === 'whatsapp_sent') { // recorded exactly as a message sent through the app: counted, in the thread, and the queue moves on
+            $now = date('Y-m-d H:i');
+            $leads[$id]['wa_sent'][] = $now;
+            $leads[$id]['last_contacted'] = $leads[$id]['last_out'] = $now;
+            if (count($leads[$id]['wa_sent']) > 1) {
+                $leads[$id]['followups'] = (int)($lead['followups'] ?? 0) + 1;
+                unset($leads[$id]['followup_draft']);
+            }
+            $leads[$id]['thread'][] = ['dir' => 'out', 'at' => $now, 'text' => '(WhatsApp sent from the phone)', 'ch' => 'wa'];
             if (in_array($lead['status'], ['new', 'qualified', 'drafted'], true)) {
                 $leads[$id]['status'] = 'contacted';
             }
@@ -1252,6 +1228,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pm_redirect('proposal', 'Loaded ' . $lead['name'] . ' from your leads. Check the package and generate the proposal.' . ($unpriced ? ' This package has no price yet: type the price on the form or set it in the Template tab.' : ''), $unpriced ? 'err' : 'ok');
         }
         if ($do === 'delete') {
+            pm_suppress_remember($leads[$id]); // a STOP outlives the lead
             unset($leads[$id]);
             pm_leads_save($leads);
             $back('Removed.');
@@ -1265,6 +1242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($h[$i]['proposal'])) {
             $_SESSION['draft'] = $h[$i]['proposal'];
             $_SESSION['draft']['date'] = date('Y-m-d');
+            unset($_SESSION['draft']['lead_id'], $_SESSION['draft']['ai']); // "use again" may be for another client: the pipeline matches by email or name, and the tailored wording is not reused
             $_SESSION['abrand'] = pm_brand_of_type((string)($tpl['packages'][(int)($h[$i]['proposal']['package'] ?? 0)]['type'] ?? ''));
         }
         pm_redirect('proposal', 'Loaded ' . ($h[$i]['business'] ?? 'proposal') . '. Change what you need and generate again.');
@@ -1348,7 +1326,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['ok' => false, 'error' => $lw['name'] . ' asked not to be contacted.']);
             exit;
         }
-        $lintW = pm_outreach_lint('WhatsApp message', $textW, !$isReply && empty($lw['wa_sent']));
+        $lintW = pm_outreach_lint('WhatsApp message', pm_wa_own_words($textW), !$isReply && empty($lw['wa_sent'])); // the business's own links and sign-off are not counted against the message
         if ($isReply) { // an answer to what they wrote: not a first message, not counted in the daily cap; the lint is advice only
             $lintW = array_values(array_filter($lintW, fn($x) => !str_starts_with($x, 'The message is')));
             pm_reply_sent($lw, $textW, 'wa');
@@ -1356,6 +1334,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             unset($lw);
             pm_leads_save($leadsW);
             echo json_encode(['ok' => true, 'warn' => implode(' ', $lintW)]);
+            exit;
+        }
+        if (pm_phone_suppressed($leadsW, $lw) || (filter_var($lw['email'] ?? '', FILTER_VALIDATE_EMAIL) && pm_suppressed($leadsW, (string)$lw['email'], $idw))) {
+            echo json_encode(['ok' => false, 'error' => 'That number or company asked not to be contacted (to this business or another).']);
             exit;
         }
         $capW = (int)pm_agents_config()['wa_cap'];

@@ -43,6 +43,7 @@ function pm_settings_save(array $settings, string $vb): array
         foreach (['company_name', 'tagline', 'address', 'phone', 'email', 'website', 'signatory_name', 'signatory_title', 'ref_prefix'] as $k) {
             $new[$k] = $text($in, $k);
         }
+        $new['company_name'] = $new['company_name'] !== '' ? mb_substr($new['company_name'], 0, 80) : ((string)($settings['company_name'] ?? '') ?: 'ProManaged IT'); // a business always has a name
         $new['accent_color'] = preg_match('/^#[0-9a-fA-F]{6}$/', (string)($in['accent_color'] ?? '')) ? $in['accent_color'] : $settings['accent_color'];
         $new['next_ref'] = max(1, (int)($in['next_ref'] ?? 1));
         $new['link_url'] = pm_clean_url((string)($in['link_url'] ?? ''));
@@ -57,7 +58,7 @@ function pm_settings_save(array $settings, string $vb): array
         $tv['next_ref'] = max(1, (int)($tin['next_ref'] ?? ($tv['next_ref'] ?? 1)));
         $tv['online_signing'] = !empty($tin['online_signing']);
         $tv['esign_tags'] = !empty($tin['esign_tags']);
-        $tv['company_name'] = $tv['company_name'] ?: 'Travel Malawi';
+        $tv['company_name'] = $tv['company_name'] !== '' ? mb_substr($tv['company_name'], 0, 80) : ((string)($settings['travel']['company_name'] ?? '') ?: 'Travel Malawi');
         $tv['accent_color'] = preg_match('/^#[0-9a-fA-F]{6}$/', (string)($tin['accent_color'] ?? '')) ? $tin['accent_color'] : ($tv['accent_color'] ?? '#047857');
         $tv['charging'] = !empty($tin['charging']);
         $tv['link_url'] = pm_clean_url((string)($tin['link_url'] ?? ''));

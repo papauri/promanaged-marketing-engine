@@ -116,8 +116,11 @@ function pm_swarm(array $jobs, int $parallel, string $tmp, ?callable $beat = nul
             $i = array_shift($queue);
             $file = "$tmp/job_" . getmypid() . "_$i.json";
             file_put_contents($file, json_encode($jobs[$i] + ['brand' => pm_brand()], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
-            $p = proc_open([$php, __DIR__ . '/agent_worker.php', $file], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes);
+            // the worker's output goes to a file, never to a pipe nobody reads: a full pipe would freeze the worker until the time limit
+            $p = proc_open([$php, __DIR__ . '/agent_worker.php', $file], [['pipe', 'r'], ['file', "$file.log", 'w'], ['file', "$file.log", 'a']], $pipes);
             if (is_resource($p)) {
+                @fclose($pipes[0]);
+                $pipes = [];
                 $running[$i] = [$p, $pipes, $file, time()];
             } else {
                 $results[$i] = ['ok' => false, 'data' => null, 'error' => 'could not start worker'];
@@ -141,10 +144,12 @@ function pm_swarm(array $jobs, int $parallel, string $tmp, ?callable $beat = nul
                 $results[$i] = ['ok' => false, 'data' => null, 'error' => "timeout (agent stopped after {$limit}s)"];
             } else {
                 $out = is_file("$file.out.json") ? json_decode((string)file_get_contents("$file.out.json"), true) : null;
-                $results[$i] = is_array($out) ? $out : ['ok' => false, 'data' => null, 'error' => 'worker crashed'];
+                $log = is_file("$file.log") ? trim((string)preg_replace('/\s+/', ' ', (string)file_get_contents("$file.log", false, null, 0, 4000))) : '';
+                $results[$i] = is_array($out) ? $out : ['ok' => false, 'data' => null, 'error' => 'worker crashed' . ($log !== '' ? ': ' . mb_substr($log, -300) : '')];
             }
             @unlink($file);
             @unlink("$file.out.json");
+            @unlink("$file.log");
             unset($running[$i]);
         }
         if ($beat && time() - $lastBeat >= 10) {
@@ -265,6 +270,7 @@ try {
             $all = pm_leads();
             $leads = array_filter($all, $isMine);
         } catch (Throwable $e) {
+            pm_brand_set($brand); // the inbox switches business per reply: never carry on as another business
             $stats['errors']++;
             pm_agent_log('Reply', 'Inbox check failed: ' . $e->getMessage(), true);
         }
@@ -317,7 +323,9 @@ try {
                             foreach (array_diff(pm_brand_ids(), [$brand]) as $ob) { // another business has it: still a lead here, flagged both ways
                                 if ($dupe === null && ($o = pm_lead_find_dupe($pool, $cand, $ob)) !== null) {
                                     $alsoIn = $ob;
-                                    $all[$o]['also_in'] = $brand;
+                                    if (isset($all[$o])) { // an archived lead is not in the file: never create a stub for it
+                                        $all[$o]['also_in'] = $brand;
+                                    }
                                     break;
                                 }
                             }
@@ -383,6 +391,12 @@ try {
                         continue;
                     }
                     $id = pm_lead_id(trim((string)$b['name']), $c, $brand);
+                    if (isset($leads[$id]) || isset($pool[$id])) { // known by name and town: fill gaps, never replace it (its history, sends and any STOP stay)
+                        if (isset($leads[$id]) && pm_lead_merge_missing($leads[$id], $b)) {
+                            $stats['merged'] = ($stats['merged'] ?? 0) + 1;
+                        }
+                        continue;
+                    }
                     $leads[$id] = [
                         'id' => $id, 'brand' => $brand, 'name' => trim((string)$b['name']), 'type' => (string)($b['type'] ?? ''), 'city' => $c,
                         'address' => '', 'website' => (string)($b['website'] ?? ''), 'phone' => (string)($b['phone'] ?? ''), 'email' => (string)($b['email'] ?? ''), 'whatsapp' => '',
@@ -399,7 +413,7 @@ try {
             } catch (Throwable $e) {
                 pm_agent_log('Watcher', 'failed: ' . $e->getMessage(), true);
             }
-            pm_save('watch_state', [$brand => date('Y-m-d')] + $ws);
+            pm_update('watch_state', fn(array $w) => array_replace($w, [$brand => date('Y-m-d')]), fn() => []); // under the lock: another business's run may be saving too
         }
     }
 
@@ -431,7 +445,8 @@ try {
     $newIds = $only === 'names'
         ? array_slice(array_keys(array_filter($leads, fn($l) => !in_array($l['status'], ['won', 'lost', 'optout'], true) && empty($l['contact']) && empty($l['contact_hint'])
             && (($c = strtotime((string)($l['contact_checked'] ?? ''))) === false || $c < strtotime('-30 days')))), 0, 12)
-        : array_slice(array_keys(array_filter($leads, fn($l) => $l['status'] === 'new' && (empty($l['email']) || empty($l['contact'])))), 0, 10);
+        : array_slice(array_keys(array_filter($leads, fn($l) => $l['status'] === 'new' && (empty($l['email']) || empty($l['contact']))
+            && (($c = strtotime((string)($l['contact_checked'] ?? ''))) === false || $c < strtotime('-30 days')))), 0, 10); // a lead searched lately is not paid for again
     if ($cfg['enabled']['contact'] && $newIds) {
         $progress('Contact Finders on ' . count($newIds) . ' leads');
         $jobs = array_map(fn($id) => ['agent' => 'contact', 'lead' => $leads[$id]], $newIds);
@@ -492,7 +507,7 @@ try {
             $progress('Re-checking ' . count($stale) . ' old contact details');
             $jobs = array_map(fn($b) => ['agent' => 'reverify', 'leads' => $b], array_chunk($stale, 3));
             foreach (pm_swarm_retry($jobs, $cfg['parallel'], $tmp, $beat, 'leads') as $r) {
-                if (!$r['ok'] || empty($r['data'])) {
+                if (!$jobFailed($r, 'Contact re-check', '') || empty($r['data'])) {
                     continue;
                 }
                 foreach ($r['data'] as $d) {
@@ -540,7 +555,7 @@ try {
                 if ($brand === 'travel') { // packages and proposals belong to the two businesses that have a price list
                     $leads[$id]['package'] = pm_onboarding_index();
                 } elseif (!pm_brand_is_custom($brand)) {
-                    $leads[$id]['package'] = (int)($q['package'] ?? 0);
+                    $leads[$id]['package'] = max(0, min(count((array)(pm_template()['packages'] ?? [])) - 1, (int)($q['package'] ?? 0))); // a number outside the price list opens nothing
                 }
                 $leads[$id]['pain'] = (string)($q['pain'] ?? '');
                 $leads[$id]['offering'] = pm_clean_offering($q['offering'] ?? '') ?: ($leads[$id]['offering'] ?? '');
@@ -562,9 +577,10 @@ try {
     // ---- 3b. Researchers: website, socials and news for the best leads (web search, so capped) ----
     $rs = array_values(array_filter($leads, fn($l) => in_array($l['status'], ['qualified', 'new'], true) && ($l['score'] ?? 0) >= 65 && empty($l['research'])));
     usort($rs, fn($a, $b) => $b['score'] <=> $a['score']);
-    $rs = array_slice($rs, 0, (int)($cfg['research_per_day'] ?? 5));
-    if (function_exists('pm_research_queue')) { // follow-up-bound and proposal-bound leads get a fresh research pass too
-        $extra = array_filter(pm_research_queue($leads, 2), fn($l) => !in_array((string)($l['id'] ?? ''), array_column($rs, 'id'), true));
+    $rsRoom = max(0, (int)($cfg['research_per_day'] ?? 5) - count(array_filter($leads, fn($l) => str_starts_with((string)($l['research']['at'] ?? ''), $today)))); // a day's allowance, not a run's
+    $rs = array_slice($rs, 0, $rsRoom);
+    if (function_exists('pm_research_queue') && $rsRoom > count($rs)) { // follow-up-bound and proposal-bound leads get a fresh research pass too, inside the same allowance
+        $extra = array_slice(array_filter(pm_research_queue($leads, 2), fn($l) => !in_array((string)($l['id'] ?? ''), array_column($rs, 'id'), true)), 0, $rsRoom - count($rs));
         $rs = array_merge($rs, array_values($extra));
     }
     if (($cfg['enabled']['research'] ?? true) && $rs && !$hold) {
@@ -622,7 +638,7 @@ try {
 
     // ---- 4. Writers ----
     $todo = array_values(array_filter($leads, fn($l) => $l['status'] === 'qualified' && ($l['score'] ?? 0) >= 60
-        && (!empty($l['email']) || !empty($l['phone'])) && empty($l['drafts'])));
+        && (!empty($l['email']) || !empty($l['phone'])) && empty($l['drafts']) && !pm_lead_is_client($l))); // a client is messaged personally, never with a cold draft
     usort($todo, fn($a, $b) => $b['score'] <=> $a['score']);
     $todo = array_slice($todo, 0, 30);
     if ($hold && $todo && $cfg['enabled']['writer']) {
@@ -631,16 +647,24 @@ try {
     } elseif ($cfg['enabled']['writer'] && $todo) {
         $progress('Writers drafting ' . count($todo) . ' messages');
         $jobs = array_map(fn($b) => ['agent' => 'write', 'leads' => $b], array_chunk($todo, 6));
-        foreach (pm_swarm_retry($jobs, $cfg['parallel'], $tmp, $beat, 'leads') as $r) {
+        $byAi = !(function_exists('pm_dm_use_default') && pm_dm_use_default($brand)); // the default message has one subject for all: not part of the subject experiment
+        $results = pm_swarm_retry($jobs, $cfg['parallel'], $tmp, $beat, 'leads');
+        $fresh = pm_leads_read(); // what the owner did while the writers worked (a draft applied by hand, a reply) is not written over
+        foreach ($results as $r) {
             if (!$jobFailed($r, 'Writer', '')) {
                 continue;
             }
             foreach ($r['data'] as $w) {
                 $id = (string)($w['id'] ?? '');
+                if (isset($fresh[$id]) && (!empty($fresh[$id]['drafts']) || !in_array($fresh[$id]['status'] ?? '', ['new', 'qualified'], true))) {
+                    continue;
+                }
                 if (isset($leads[$id]) && !empty($w['email_body'])) {
                     $L = $leads[$id];
                     $leads[$id]['drafts'] = ['email_subject' => (string)$w['email_subject'], 'email_body' => (string)$w['email_body'], 'whatsapp' => (string)($w['whatsapp'] ?? '')];
-                    $leads[$id]['email_arm'] = function_exists('pm_email_exp_arm') ? pm_email_exp_arm((string)$id, $brand) : 'A'; // subject experiment arm
+                    if ($byAi) {
+                        $leads[$id]['email_arm'] = function_exists('pm_email_exp_arm') ? pm_email_exp_arm((string)$id, $brand) : 'A'; // subject experiment arm
+                    }
                     $leads[$id]['variant'] = ['angle' => mb_substr((string)($L['pain'] ?? ''), 0, 60), 'research' => !empty($L['research']), 'named' => !empty($L['contact']),
                         'channel_first' => !empty($L['email']) ? 'email' : 'whatsapp']; // what was tried, so the Director can learn what gets replies
                     $leads[$id]['status'] = 'drafted';
@@ -678,7 +702,8 @@ try {
             }
             $d = $r['data'];
             $leads[$id]['proposal_ai'] = [
-                'ai' => ['cover_hook' => (string)($d['cover_hook'] ?? ''), 'intro' => (string)($d['intro'] ?? ''), 'what_we_know' => (array)($d['what_we_know'] ?? []), 'pain_points' => (array)$d['pain_points']],
+                'ai' => ['cover_hook' => (string)($d['cover_hook'] ?? ''), 'intro' => (string)($d['intro'] ?? ''), 'what_we_know' => (array)($d['what_we_know'] ?? []), 'pain_points' => (array)$d['pain_points'],
+                    'gains' => array_values(array_filter(array_map('strval', (array)($d['gains'] ?? []))))], // the tailored gains were paid for: keep them, as the on-demand path does
                 'personal_note' => (string)($d['personal_note'] ?? ''), 'subject' => (string)($d['email_subject'] ?? ''), 'body' => (string)($d['email_body'] ?? ''), 'at' => date('Y-m-d H:i'),
             ];
             $stats['proposals'] = ($stats['proposals'] ?? 0) + 1;
@@ -692,12 +717,17 @@ try {
     if ($cfg['enabled']['followup'] && $due) {
         $progress('Follow-up agent on ' . count($due) . ' leads');
         $jobs = array_map(fn($b) => ['agent' => 'followup', 'leads' => $b], array_chunk($due, 6));
-        foreach (pm_swarm_retry($jobs, $cfg['parallel'], $tmp, $beat, 'leads') as $r) {
+        $results = pm_swarm_retry($jobs, $cfg['parallel'], $tmp, $beat, 'leads');
+        $fresh = pm_leads_read(); // a STOP, a reply or a follow-up sent while the agent wrote: no draft for that lead
+        foreach ($results as $r) {
             if (!$jobFailed($r, 'Follow-up', '')) {
                 continue;
             }
             foreach ($r['data'] as $w) {
                 $id = (string)($w['id'] ?? '');
+                if (isset($fresh[$id]) && (($fresh[$id]['status'] ?? '') !== 'contacted' || !empty($fresh[$id]['followup_draft']) || !empty($fresh[$id]['awaiting_reply_since']))) {
+                    continue;
+                }
                 if (isset($leads[$id]) && !empty($w['email_body'])) {
                     $leads[$id]['followup_draft'] = ['email_subject' => (string)$w['email_subject'], 'email_body' => (string)$w['email_body'], 'whatsapp' => (string)($w['whatsapp'] ?? '')];
                     if (function_exists('pm_followup_arm')) {
@@ -711,7 +741,7 @@ try {
     }
 
     // ---- 6. Win-back: one fresh angle for lost leads, on a long cooldown ----
-    $wbDue = function_exists('pm_winback_due') ? pm_winback_due($leads, 2) : [];
+    $wbDue = $only === '' && ($cfg['enabled']['followup'] ?? true) && function_exists('pm_winback_due') ? pm_winback_due($leads, 2) : [];
     if ($wbDue) {
         $progress('Win-back agent on ' . count($wbDue) . ' lost leads');
         $jobs = array_map(fn($b) => ['agent' => 'winback', 'leads' => $b], array_chunk($wbDue, 2));
@@ -733,7 +763,7 @@ try {
     }
 
     // ---- 7. Post-sign: testimonial, review and referral asks after a signed deal ----
-    $psDue = function_exists('pm_postsign_due') ? pm_postsign_due($leads, 3) : [];
+    $psDue = $only === '' && function_exists('pm_postsign_due') ? pm_postsign_due($leads, 3) : [];
     if ($psDue) {
         $progress('Post-sign agent on ' . count($psDue) . ' new clients');
         $jobs = array_map(fn($b) => ['agent' => 'postsign', 'leads' => $b], array_chunk($psDue, 3));

@@ -88,7 +88,7 @@ function pm_sx_social_rows(string $brand, int $days): array
         return $cache[$key];
     }
     $since = date('Y-m-d', strtotime("-$days days"));
-    $raw = pm_leads();
+    $raw = pm_leads_read();
     $base = [];
     if (function_exists('pm_attrib_leads')) {
         try {

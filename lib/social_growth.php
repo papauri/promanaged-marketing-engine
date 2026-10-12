@@ -418,7 +418,7 @@ function pm_agent_engage_playbook(string $brand, bool $force = false): array
     $crowd = array_slice(array_values(array_filter($people, fn($p) => !$p['spam'])), 0, 10);
     $lb = pm_brand_norm($brand);
     $hot = [];
-    foreach (pm_leads() as $l) {
+    foreach (pm_leads_read() as $l) {
         if (($l['brand'] ?? 'promanaged') !== $lb || in_array($l['status'], ['won', 'lost', 'optout', 'new'], true) || ($l['source'] ?? '') === 'facebook') {
             continue;
         }

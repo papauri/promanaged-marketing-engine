@@ -58,7 +58,7 @@ function pm_suggest_pool(bool $withSeen = true): array
                 'brand' => pm_brand_norm($l['brand'] ?? ''), 'src' => $src, 'id' => $id, 'score' => (int)($l['score'] ?? 0)];
         }
     };
-    foreach (pm_leads() as $id => $l) {
+    foreach (pm_leads_read() as $id => $l) {
         if (is_array($l)) {
             $add($l, (string)($l['id'] ?? $id), 'lead');
         }

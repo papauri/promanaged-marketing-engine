@@ -460,7 +460,7 @@ function pm_social_snapshot_day(string $brand, bool $force = false): ?array
     }
     $row += $tot;
     $row += ['buyers' => 0, 'web_leads' => 0, 'fb_leads' => 0];
-    foreach (pm_leads() as $l) {
+    foreach (pm_leads_read() as $l) {
         if (($l['brand'] ?? 'promanaged') !== $brand || !str_starts_with((string)($l['created'] ?? ''), $day)) {
             continue;
         }

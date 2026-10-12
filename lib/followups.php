@@ -136,7 +136,7 @@ function pm_job_followup_drafts(string $brand): string
     if (empty($cfg['enabled']['followup']) || (pm_load('followup_job', fn() => [])[$brand] ?? '') === $day || (pm_run_state()['state'] ?? '') === 'running') {
         return '';
     }
-    $mine = array_filter(pm_leads(), fn($l) => ($l['brand'] ?? 'promanaged') === $brand);
+    $mine = array_filter(pm_leads_read(), fn($l) => ($l['brand'] ?? 'promanaged') === $brand);
     $stamp = function () use ($brand, $day) {
         pm_update('followup_job', function (array $s) use ($brand, $day) {
             $s[$brand] = $day;

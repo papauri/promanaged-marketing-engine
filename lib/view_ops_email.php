@@ -52,7 +52,7 @@ pm_brand_set($vb);
             $sm = array_merge($sm, ['host' => $e['TM_SMTP_HOST'] ?? '', 'port' => $e['TM_SMTP_PORT'] ?? 465, 'encryption' => strtolower($e['TM_SMTP_SECURE'] ?? 'ssl'),
                 'username' => $e['TM_SMTP_USER'] ?? '', 'from_email' => $e['TM_SMTP_FROM'] ?? '', 'from_name' => $e['TM_SMTP_FROM_NAME'] ?? ($sm['from_name'] ?? '')]);
         }
-        $name = $tr ? $c['company_name'] : 'ProManaged IT';
+        $name = trim((string)($c['company_name'] ?? '')) ?: pm_brand_name($b); // the name as typed: renaming the business renames it everywhere
         $hide = $vb === $b ? '' : 'hidden';
         ?>
     <div class="card" <?= $hide ?>><h2><?= pm_h($name) ?> · Sending</h2>

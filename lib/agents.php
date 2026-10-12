@@ -168,11 +168,43 @@ function pm_agents_missing_key(): string
  * loading remembers what each lead looked like, and saving (under a lock) writes back only the leads this process
  * changed, added or removed, on top of whatever is on disk now.
  */
+/**
+ * The leads, for reading only. Unlike pm_leads() it leaves the save snapshot alone: a page or a job that loaded the leads, changes some and saves them must
+ * not have its snapshot replaced by a helper that only looks, or its save would write back its stale copy of every lead another process changed meanwhile
+ * (an email marked sent by the drip would come back as unsent and go out twice).
+ */
+function pm_leads_read(): array
+{
+    return pm_load('leads', fn() => []);
+}
+
+/** The leads, to change and save with pm_leads_save(): remembers what was loaded, so the save writes only what this process changed. */
 function pm_leads(): array
 {
     $l = pm_load('leads', fn() => []);
-    $GLOBALS['PM_LEADS_SNAP'] = array_map(fn($x) => md5(json_encode($x)), $l);
+    $GLOBALS['PM_LEADS_SNAP'] = $l; // the copy as loaded: the save compares field by field against it
     return $l;
+}
+
+/**
+ * One lead as it should be saved: the fields this process changed (it holds $mine, it loaded $base) laid over what is on disk now ($disk), so a field another
+ * process changed meanwhile (an email marked sent, a STOP, a reply) is kept unless this process changed that same field too.
+ */
+function pm_lead_merge_fields(array $disk, array $base, array $mine): array
+{
+    foreach (array_unique(array_merge(array_keys($base), array_keys($mine))) as $f) {
+        $was = array_key_exists($f, $base) ? $base[$f] : "\0missing";
+        $now = array_key_exists($f, $mine) ? $mine[$f] : "\0missing";
+        if ($was === $now) {
+            continue; // not touched here: whatever is on disk stands
+        }
+        if ($now === "\0missing") {
+            unset($disk[$f]);
+        } else {
+            $disk[$f] = $now;
+        }
+    }
+    return $disk;
 }
 
 function pm_leads_save(array $leads): void
@@ -189,14 +221,23 @@ function pm_leads_save(array $leads): void
         }
     }
     $snap = $GLOBALS['PM_LEADS_SNAP'] ?? null;
-    if ($snap === null) {
+    if (!is_array($snap)) {
         $out = $leads;
     } else {
         $out = pm_load('leads', fn() => []);
         foreach ($leads as $k => $v) {
-            if (($snap[$k] ?? null) !== md5(json_encode($v))) {
-                $out[$k] = $v; // changed or new in this process
+            $base = $snap[$k] ?? null;
+            if (is_array($base) && $base === $v) {
+                continue; // unchanged in this process
             }
+            if (!is_array($base) || !isset($out[$k]) || !is_array($out[$k]) || !is_array($v)) {
+                if (is_array($base) && !isset($out[$k])) {
+                    continue; // removed by another process (deleted or forgotten) while this one ran: never bring it back
+                }
+                $out[$k] = $v; // new in this process
+                continue;
+            }
+            $out[$k] = pm_lead_merge_fields($out[$k], $base, $v); // only the fields this process changed
         }
         foreach ($snap as $k => $h) {
             if (!isset($leads[$k])) {
@@ -205,7 +246,7 @@ function pm_leads_save(array $leads): void
         }
     }
     pm_save('leads', $out);
-    $GLOBALS['PM_LEADS_SNAP'] = array_map(fn($x) => md5(json_encode($x)), $leads);
+    $GLOBALS['PM_LEADS_SNAP'] = $leads;
     if ($lock) {
         flock($lock, LOCK_UN);
         fclose($lock);
@@ -934,9 +975,12 @@ function pm_agent_qualify(array $leads): array
         'signals' => array_slice($l['need_signals'] ?? [], 0, 2), 'reachable' => !empty($l['email']) || !empty($l['phone'])]
         + (!empty($l['research']) ? ['research' => pm_research_brief($l), 'previous_score' => (int)($l['score'] ?? 0)] : []), $leads);
     return pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
-        . (pm_brand_is_custom(pm_brand())
+        . (pm_brand() === 'travel' // one free package and no product lines: only the score, the need to lead with and the reason
+            ? "\nJSON array of {\"id\",\"score\",\"pain\":\"the need to lead with\",\"reason\":\"one short sentence\",\"skip\":false}"
+            : '')
+        . (pm_brand() === 'travel' ? '' : (pm_brand_is_custom(pm_brand())
             ? "\nJSON array of {\"id\",\"score\",\"offering\":\"name of the offering that fits\",\"pain\":\"the need to lead with\",\"reason\":\"one short sentence\",\"skip\":false}"
-            : "\nJSON array of {\"id\",\"score\",\"package\":index,\"offering\":\"build, source or support\",\"pain\":\"pain point/need to lead with\",\"reason\":\"one short sentence\",\"skip\":false}"), false, 2500)));
+            : "\nJSON array of {\"id\",\"score\",\"package\":index,\"offering\":\"build, source or support\",\"pain\":\"pain point/need to lead with\",\"reason\":\"one short sentence\",\"skip\":false}")), false, 2500)));
 }
 
 /** The rules for every first email: short, specific, exciting, honest, no prices. */
@@ -992,11 +1036,20 @@ function pm_agent_followup(array $leads): array
 {
     $s = pm_settings();
     $subjectRule = 'written like a normal subject line: a capital letter first and a capital letter on every town, area, road, person and business name (for example \'Rooms near the Shire River barrage?\'), every other word in ordinary lowercase, no full stop, no exclamation marks, no word in ALL CAPS except an acronym such as VAT';
-    $system = pm_agents_company_brief('tiny') . "\nYou are the Follow-up agent for {$s['company_name']}. Write a 40-word follow-up email and 25-word WhatsApp that add ONE new angle (a different gain, or a one-page plan offer). "
+    $system = pm_agents_company_brief('tiny') . "\nYou are the Follow-up agent for {$s['company_name']}. Write a 40-word follow-up email and 25-word WhatsApp that add ONE new angle (a different gain, or a one-page plan offer).  Read their_last_message and our_last_message: never repeat our last message, never quote words they did not write, and if their_last_message is empty never say they said anything. followups_already_sent tells you how many nudges came before: each one must add a different reason."
         . "Match the state: for \"opened\" (they opened our proposal or email but stayed quiet) gently reference what they saw and add one new, true reason; for \"silent\" (never engaged) be shorter and lead with one specific fact about their business; for \"replied\" pick up their last words, never repeat a whole earlier message. "
         . "No prices, no guilt, no pressure, no urgency. Plain text, no sign-off. Each item has subject_style: write that item's email subject in that style, $subjectRule. "
         . pm_email_exp_followup_example(pm_brand()) . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
+    $last = function (array $l, string $dir): string { // the latest message each way, so "pick up their last words" has their words to pick up
+        foreach (array_reverse((array)($l['thread'] ?? [])) as $m) {
+            if (($m['dir'] ?? '') === $dir && trim((string)($m['text'] ?? '')) !== '') {
+                return mb_substr(trim((string)$m['text']), 0, $dir === 'in' ? 400 : 300);
+            }
+        }
+        return '';
+    };
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'contact' => $l['contact'] ?? '', 'used' => mb_substr($l['drafts']['email_body'] ?? '', 0, 220),
+        'their_last_message' => $last($l, 'in'), 'our_last_message' => $last($l, 'out'), 'followups_already_sent' => (int)($l['followups'] ?? 0),
         'state' => pm_lead_engagement((array)$l), 'views' => (int)($l['view_count'] ?? 0), 'last_seen' => (string)($l['last_viewed_at'] ?? ''),
         'subject_style' => pm_subject_style(pm_followup_arm((array)$l))], $leads);
     return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}", false, 1800))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);
@@ -1057,10 +1110,81 @@ function pm_email_domain(string $email): string
     return strtolower(substr(strrchr($email, '@') ?: '', 1));
 }
 
+/** The last nine digits of every number in a lead's phone and WhatsApp fields ("0888 123 456 / 0999 123 456" gives two). */
+function pm_lead_phone_keys(array $l): array
+{
+    $out = [];
+    foreach ([(string)($l['whatsapp'] ?? ''), (string)($l['phone'] ?? '')] as $raw) {
+        foreach (preg_split('/[\/,;]| or | and /i', $raw) ?: [] as $part) {
+            $n = preg_replace('/\D+/', '', (string)preg_replace('/\b(ext|x)\b.*$/i', '', $part));
+            if (strlen($n) >= 9) {
+                $out[] = substr($n, -9);
+            }
+        }
+    }
+    return array_values(array_unique($out));
+}
+
+/**
+ * Do-not-contact records that outlive the lead: when a lead that said STOP is removed or forgotten, only one-way fingerprints of its address, company domain
+ * and numbers are kept (data/suppress.json), so a scout finding the business again can never contact it, and nothing readable about the person is left.
+ */
+function pm_suppress_fingerprints(): array
+{
+    return (array)pm_load('suppress', fn() => []);
+}
+
+function pm_suppress_remember(array $l): void
+{
+    if (($l['status'] ?? '') !== 'optout') {
+        return;
+    }
+    $keys = [];
+    $e = strtolower(trim((string)($l['email'] ?? '')));
+    if ($e !== '') {
+        $keys[] = 'e:' . sha1($e);
+        $d = pm_email_domain($e);
+        if ($d !== '' && !in_array($d, PM_FREE_MAIL, true)) {
+            $keys[] = 'd:' . sha1($d);
+        }
+    }
+    foreach (pm_lead_phone_keys($l) as $p) {
+        $keys[] = 'p:' . sha1($p);
+    }
+    if ($keys) {
+        pm_update('suppress', fn(array $s) => array_values(array_unique(array_merge($s, $keys))), fn() => []);
+    }
+}
+
+/** True when this lead's numbers belong to anyone who said STOP (another lead of any business, or a removed one). */
+function pm_phone_suppressed(array $leads, array $lead): bool
+{
+    $mine = pm_lead_phone_keys($lead);
+    if (!$mine) {
+        return false;
+    }
+    $fp = pm_suppress_fingerprints();
+    foreach ($mine as $p) {
+        if (in_array('p:' . sha1($p), $fp, true)) {
+            return true;
+        }
+    }
+    foreach ($leads as $l) {
+        if (($l['status'] ?? '') === 'optout' && ($l['id'] ?? '') !== ($lead['id'] ?? '') && array_intersect($mine, pm_lead_phone_keys($l))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /** True if this address (or its company domain) belongs to anyone who said STOP. */
 function pm_suppressed(array $leads, string $email, string $exceptId = ''): bool
 {
     $d = pm_email_domain($email);
+    $fp = pm_suppress_fingerprints();
+    if ($fp && trim($email) !== '' && (in_array('e:' . sha1(strtolower(trim($email))), $fp, true) || ($d !== '' && !in_array($d, PM_FREE_MAIL, true) && in_array('d:' . sha1($d), $fp, true)))) {
+        return true; // a removed lead that said STOP
+    }
     foreach ($leads as $l) {
         if (($l['status'] ?? '') !== 'optout' || ($l['id'] ?? '') === $exceptId) {
             continue;
@@ -1126,10 +1250,28 @@ function pm_sent_today(array $leads): int
     return $n;
 }
 
+/** Is this lead a business we already serve (Sales > Targeting > existing clients)? Travel Malawi has none: a ProManaged client can still list its stay. */
+function pm_lead_is_client(array $l): bool
+{
+    $b = (string)($l['brand'] ?? 'promanaged');
+    if ($b === 'travel') {
+        return false;
+    }
+    $name = (string)($l['name'] ?? '');
+    foreach ((array)(pm_agents_config($b)['existing_clients'] ?? []) as $c) {
+        if (trim((string)$c) !== '' && stripos($name, trim((string)$c)) !== false) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /** Malawi numbers in any common spelling -> ['265881234567' (digits), 'mobile'|'landline'|'unknown'], from the first usable number in the text. */
 function pm_wa_number(string $raw): array
 {
+    $landline = null; // a landline is kept only if no part of the field is a mobile ("01 234 567 / 0888 123 456" gives the mobile)
     foreach (preg_split('/[\/,;]| or | and /i', $raw) as $part) {
+        $part = (string)preg_replace('/\b(ext|extension|x)\.?\s*\d.*$/i', '', $part); // "0888 123 456 ext 2": the extension is not part of the number
         $n = preg_replace('/\D+/', '', $part);
         if ($n === '') {
             continue;
@@ -1137,22 +1279,26 @@ function pm_wa_number(string $raw): array
         if (str_starts_with($n, '00')) {
             $n = substr($n, 2);
         }
+        if (str_starts_with($n, '2650')) {
+            $n = '265' . substr($n, 4); // "+265 (0)99 281 3240": the trunk 0 written after the country code
+        }
         if (str_starts_with($n, '0')) {
             $n = '265' . substr($n, 1);
         } elseif (strlen($n) === 9 && !str_starts_with($n, '265')) {
             $n = '265' . $n;
         }
-        if (str_starts_with($n, '265') && strlen($n) === 12) {
-            return [$n, in_array($n[3], ['8', '9'], true) ? 'mobile' : 'landline']; // Malawi mobiles start 8 or 9 (088, 099...)
+        if (str_starts_with($n, '265') && strlen($n) === 12 && in_array($n[3], ['8', '9'], true)) {
+            return [$n, 'mobile']; // Malawi mobiles start 8 or 9 (088, 099...)
         }
         if (str_starts_with($n, '265')) {
-            return [$n, 'landline']; // a Malawi number with too few digits is a landline or incomplete
+            $landline ??= [$n, 'landline']; // a landline, or a Malawi number with too few digits: look on for a mobile
+            continue;
         }
         if (strlen($n) >= 10 && strlen($n) <= 15) {
             return [$n, 'unknown']; // another country: assume it can have WhatsApp
         }
     }
-    return ['', 'unknown'];
+    return $landline ?? ['', 'unknown'];
 }
 
 /** The best number for WhatsApp: the WhatsApp field first, then the phone. Returns [digits, kind]. */
@@ -1199,6 +1345,34 @@ function pm_wa_text(array $lead, string $text, bool $kit = false): string
         $text .= "\n\n— $who";
     }
     return $text . "\n(Reply STOP and we won't message again.)";
+}
+
+/**
+ * A WhatsApp message without what pm_wa_text added itself (the website line, the share-kit links, the sign-off and the STOP line), so the wording rules
+ * check what a person wrote: the business's own links are not "too many links". A link the owner typed into the message still counts.
+ */
+function pm_wa_own_words(string $text): string
+{
+    $mine = [pm_link_wa_line()];
+    foreach (function_exists('pm_share_items') ? pm_share_items() : [] as $it) {
+        $mine[] = (string)$it['url'];
+    }
+    $mine = array_filter($mine, fn($u) => $u !== '');
+    $sig = function_exists('pm_dm_wa_signature') ? (string)pm_dm_wa_signature() : '';
+    $keep = [];
+    foreach (preg_split('/\R/', $text) ?: [] as $line) {
+        $t = trim($line);
+        if (preg_match('/^\(Reply STOP/i', $t) || ($sig !== '' && $t === trim($sig)) || preg_match('/^—\s/u', $t)) {
+            continue;
+        }
+        foreach ($mine as $u) {
+            if ($t === $u || str_ends_with($t, ': ' . $u)) {
+                continue 2;
+            }
+        }
+        $keep[] = $line;
+    }
+    return trim(implode("\n", $keep));
 }
 
 function pm_wa_sent_today(array $leads): int
@@ -1258,8 +1432,8 @@ function pm_wa_queue(array $leads): array
             continue; // already our client
         }
         [$num] = pm_wa_best($l);
-        if ($num === '') {
-            continue;
+        if ($num === '' || pm_phone_suppressed($leads, $l)) {
+            continue; // no usable number, or that number said STOP (to this business or another)
         }
         $kind = 'first';
         $draft = $l['drafts']['whatsapp'] ?? '';
@@ -1434,7 +1608,7 @@ function pm_daily_plan(array $leads, array $cfg): array
         }
         return false;
     };
-    $cap = max(0, $cfg['send_cap'] - pm_sent_today($leads));
+    $cap = max(0, (function_exists('pm_effective_send_cap') ? pm_effective_send_cap($cfg) : (int)$cfg['send_cap']) - pm_sent_today($leads)); // the limit in force today (warm-up), not the ceiling
     // existing ProManaged clients are never cold-pitched: they get a check-in that looks for the next job instead
     $clients = (array)(pm_agents_config(pm_brand_is_custom(pm_brand()) ? pm_brand() : 'promanaged')['existing_clients'] ?? []); // an added business has its own clients
     $isClient = fn($l) => (bool)array_filter($clients, fn($x) => $x !== '' && stripos((string)$l['name'], (string)$x) !== false);
@@ -1445,7 +1619,7 @@ function pm_daily_plan(array $leads, array $cfg): array
                 : "{$l['name']} is already a client: call your contact, ask how things are going and what else is slowing them down", $l['id'], 2, 'client-checkin');
         }
     }
-    $ready = array_filter($leads, fn($l) => ($l['status'] ?? '') === 'drafted' && !$isClient($l) && !pm_lead_snoozed($l) && !pm_lead_email_dead($l));
+    $ready = array_filter($leads, fn($l) => ($l['status'] ?? '') === 'drafted' && empty($l['approved_at']) && !$isClient($l) && !pm_lead_snoozed($l) && !pm_lead_email_dead($l)); // approved ones are already in the send queue
     usort($ready, fn($a, $b) => ($b['score'] ?? 0) <=> ($a['score'] ?? 0));
     $n = count($ready);
     if ($n) {
@@ -1625,29 +1799,20 @@ function pm_lead_resolve(array $leads, string $leadId, string $email, string $bu
         return $leadId;
     }
     $brand = pm_brand();
-    $pick = function (array $ids) use ($leads, $brand): string {
-        $mine = array_values(array_filter($ids, fn($i) => ($leads[$i]['brand'] ?? 'promanaged') === $brand));
-        return (string)(($mine ?: $ids)[0]);
-    };
+    $leads = array_filter($leads, fn($l) => ($l['brand'] ?? 'promanaged') === $brand); // a proposal of one business never moves another business's lead
     $email = strtolower(trim($email));
     if ($email !== '') {
-        $hits = [];
         foreach ($leads as $id => $l) {
-            if (strtolower(trim((string)($l['email'] ?? ''))) === $email) {
-                $hits[] = (string)$id;
+            if (strtolower(trim((string)($l['email'] ?? ''))) === $email || in_array($email, array_map('strtolower', (array)($l['alt_emails'] ?? [])), true)) {
+                return (string)$id;
             }
-        }
-        if ($hits) {
-            return $pick($hits);
         }
     }
     $business = trim($business);
     if ($business !== '') {
-        foreach (array_unique(array_merge([$brand], pm_brand_ids())) as $b) {
-            $id = pm_lead_id($business, $city, $b);
-            if (isset($leads[$id])) {
-                return $id;
-            }
+        $id = pm_lead_id($business, $city, $brand);
+        if (isset($leads[$id])) {
+            return $id;
         }
         $norm = fn($n) => preg_replace('/\b(hotel|lodge|ltd|limited|the|restaurant|bar|gym|&|and)\b|[^a-z0-9]+/i', '', strtolower((string)$n));
         $want = $norm($business);
@@ -1657,11 +1822,8 @@ function pm_lead_resolve(array $leads, string $leadId, string $email, string $bu
                 $hits[] = (string)$id;
             }
         }
-        if ($hits) {
-            $mine = array_values(array_filter($hits, fn($i) => ($leads[$i]['brand'] ?? 'promanaged') === $brand));
-            if (count($mine) === 1 || (!$mine && count($hits) === 1)) {
-                return $mine[0] ?? $hits[0];
-            }
+        if (count($hits) === 1) {
+            return $hits[0]; // only a single clear match by name
         }
     }
     return null;
@@ -1781,6 +1943,9 @@ function pm_lead_merge_missing(array &$into, array $b): bool
     $changed = false;
     foreach (['website', 'phone', 'email', 'address', 'facebook', 'instagram'] as $f) {
         $v = trim((string)($b[$f] ?? ''));
+        if ($f === 'email' && $v !== '' && (strcasecmp($v, (string)($into['email_bad'] ?? '')) === 0 || strcasecmp($v, (string)($into['email_rejected'] ?? '')) === 0)) {
+            continue; // an address that bounced or failed the check is not brought back
+        }
         if ($v !== '' && trim((string)($into[$f] ?? '')) === '') {
             $into[$f] = $v;
             $changed = true;
@@ -1823,8 +1988,14 @@ function pm_scout_targets(array $cfg, ?array $weights = null): array
     if ($weights) { // the Director's numeric weights decide how many slots each type gets
         $sectors = pm_weighted_pick($cfg['sectors'], $weights, $n, $day * $n);
         $out = [];
+        $used = [];
         for ($i = 0; $i < $n; $i++) {
-            $out[] = [$sectors[$i], $cfg['cities'][($day * 7 + $i * 3) % $C]];
+            $ci = ($day * $n + $i) % $C; // a different town on each of today's searches, moving on every day
+            for ($t = 0; $t < $C && isset($used[$sectors[$i] . '|' . $ci]); $t++) {
+                $ci = ($ci + 1) % $C; // never the same type in the same town twice in a day
+            }
+            $used[$sectors[$i] . '|' . $ci] = 1;
+            $out[] = [$sectors[$i], $cfg['cities'][$ci]];
         }
         return $out;
     }

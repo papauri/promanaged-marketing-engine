@@ -183,7 +183,7 @@ function pm_home_depts(string $brand, array $d): array
 /** A business in a line: for the strip of all businesses. Cheap: counts only, no pipeline work. */
 function pm_home_glance(string $brand): array
 {
-    $leads = array_filter(pm_leads(), fn($l) => ($l['brand'] ?? 'promanaged') === $brand);
+    $leads = array_filter(pm_leads_read(), fn($l) => ($l['brand'] ?? 'promanaged') === $brand);
     $replies = count(array_filter($leads, fn($l) => ($l['status'] ?? '') !== 'optout' && (($l['status'] ?? '') === 'replied' || !empty($l['awaiting_reply_since']))));
     $posts = count(array_filter(pm_social_posts(), fn($p) => ($p['brand'] ?? 'promanaged') === $brand && in_array($p['status'] ?? '', ['draft', 'review'], true)));
     return ['leads' => count($leads), 'replies' => $replies, 'posts_waiting' => $posts, 'fb' => pm_social_cfg($brand)['ready']];

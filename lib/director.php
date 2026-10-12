@@ -90,7 +90,7 @@ function pm_pipeline_src_label(array $l): string
 /** Funnel and money numbers for one brand. Leads that came to us (Facebook, website) are kept out of the outreach reply rate. */
 function pm_pipeline_stats(string $brand): array
 {
-    $leads = array_filter(pm_leads(), fn($l) => ($l['brand'] ?? 'promanaged') === $brand);
+    $leads = array_filter(pm_leads_read(), fn($l) => ($l['brand'] ?? 'promanaged') === $brand);
     // Proposals and signed deals, from History.
     $norm = fn($n) => preg_replace('/[^a-z0-9]+/', '', strtolower((string)$n));
     $deals = pm_signed_deals($brand);
@@ -242,7 +242,7 @@ function pm_director_brief(bool $force = false): array
         . "Replies from people who wrote to us first (inbound) are not outreach results. If backlog is high, say to send or clear drafts before finding more leads. "
         . "The pipeline also says what is waiting right now: awaiting_reply (people who wrote to us: answer them first), followups_due (leads we already wrote to that went quiet, of which followups_to_draft still have no draft: the Follow-up agent drafts them with AI), drafts_unsent and approved_waiting. "
         . "If followups_due is above 0, one priority must say to review and send the follow-ups (and to draft the missing ones with AI); never tell the owner to send something that is not drafted yet. "
-        . "Reply JSON only: {\"headline\":\"one sentence\",\"priorities\":[\"3 to 5 specific actions for today\"],\"focus\":[\"up to 3 business types from segments or target_types to search more of\"],\"drop\":[\"types to search less of, or empty\"],\"experiment\":\"one small thing to test this week\",\"focus_weights\":{\"type\":0 to 100, how many of today's searches each type deserves, only for types in target_types}\"";
+        . "Reply JSON only: {\"headline\":\"one sentence\",\"priorities\":[\"3 to 5 specific actions for today\"],\"focus\":[\"up to 3 business types from segments or target_types to search more of\"],\"drop\":[\"types to search less of, or empty\"],\"experiment\":\"one small thing to test this week\",\"focus_weights\":{\"type\":0 to 100, how many of today's searches each type deserves, only for types in target_types}";
     $ai = $stats; // by_src can be long: only the five biggest sources go to the AI
     $ai['by_src'] = array_slice($ai['by_src'] ?? [], 0, 5, true);
     $ai['won_value_by_src'] = array_slice($ai['won_value_by_src'] ?? [], 0, 5, true);
@@ -267,8 +267,7 @@ function pm_director_brief(bool $force = false): array
         $keep = $mine;
         $keep['error'] = mb_substr($err, 0, 200);
         $keep['error_at'] = time();
-        $all[$brand] = $keep; // only the error is recorded; date and headline stay as they were
-        pm_save('director', $all);
+        pm_update('director', fn(array $d) => array_replace($d, [$brand => $keep]), fn() => []); // only the error is recorded; date and headline stay as they were (under the lock: another business may be saving)
         return $show($keep, $keep['error']);
     }
     $list = fn($k) => array_values(array_filter(array_map('strval', (array)($out[$k] ?? []))));
@@ -297,8 +296,7 @@ function pm_director_brief(bool $force = false): array
         }
         $brief['social_note'] = mb_substr(trim((string)($out['social_note'] ?? '')), 0, 240);
     }
-    $all[$brand] = $brief;
-    pm_save('director', $all);
+    pm_update('director', fn(array $d) => array_replace($d, [$brand => $brief]), fn() => []); // only this business's brief, under the lock
     return $brief;
 }
 

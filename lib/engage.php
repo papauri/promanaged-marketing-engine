@@ -324,7 +324,54 @@ function pm_funnel_mark(string $leadId, string $email, string $business, string 
 /* ---------------- Mail reading (IMAP) ---------------- */
 
 /** Where to read replies for a brand: IMAP_* (or its SMTP login) for ProManaged IT, TM_IMAP_* (or TM_SMTP_*) for Travel Malawi. */
+/**
+ * The inbox server when only the sending server is known. Many hosts use one name for both (mail.example.com), but the big providers do not: their SMTP name does
+ * not answer on the IMAP port, so replies were never read. Known providers are mapped; any other "smtp." name is tried as it is, then as "imap." and "mail.".
+ * Returns the hosts to try, best first.
+ */
+function pm_imap_hosts_for(string $smtpHost): array
+{
+    $h = strtolower(trim($smtpHost));
+    $known = ['smtp.privateemail.com' => 'mail.privateemail.com', 'smtp.gmail.com' => 'imap.gmail.com', 'smtp.googlemail.com' => 'imap.gmail.com', 'smtp.office365.com' => 'outlook.office365.com',
+        'smtp-mail.outlook.com' => 'outlook.office365.com', 'smtp.zoho.com' => 'imap.zoho.com', 'smtppro.zoho.com' => 'imappro.zoho.com', 'smtp.mail.yahoo.com' => 'imap.mail.yahoo.com',
+        'smtp.titan.email' => 'imap.titan.email', 'smtp.hostinger.com' => 'imap.hostinger.com', 'smtpout.secureserver.net' => 'imap.secureserver.net', 'smtp.ionos.com' => 'imap.ionos.com'];
+    if ($h === '') {
+        return [];
+    }
+    if (isset($known[$h])) {
+        return [$known[$h]];
+    }
+    return str_starts_with($h, 'smtp.') ? array_values(array_unique([$h, 'imap.' . substr($h, 5), 'mail.' . substr($h, 5)])) : [$h];
+}
+
+/** Opens the inbox connection, trying each candidate host: [stream|null, host used, error]. */
+function pm_imap_open(array $c, int $timeout)
+{
+    $scheme = $c['secure'] === 'none' ? 'tcp' : 'ssl';
+    $verify = strtolower(pm_env()['IMAP_VERIFY'] ?? 'on') !== 'off'; // only turn off if PHP has no CA bundle and you accept the risk
+    $err = '';
+    foreach ((array)($c['hosts'] ?? [$c['host']]) as $host) {
+        $ctx = stream_context_create(['ssl' => ['verify_peer' => $verify, 'verify_peer_name' => $verify]]);
+        $fp = @stream_socket_client("$scheme://$host:{$c['port']}", $en, $es, $timeout, STREAM_CLIENT_CONNECT, $ctx);
+        if ($fp) {
+            return [$fp, $host, ''];
+        }
+        $err = $err === '' ? (string)$es : $err;
+    }
+    return [null, (string)$c['host'], $err];
+}
+
 function pm_imap_settings(string $brand = 'promanaged'): array
+{
+    $c = pm_imap_settings_raw($brand);
+    $c['hosts'] = $c['explicit'] ? [$c['host']] : pm_imap_hosts_for($c['host']);
+    $c['host'] = $c['hosts'][0] ?? '';
+    unset($c['explicit']);
+    return $c;
+}
+
+/** The inbox login as configured: an IMAP host of its own, else the sending server's ('explicit' says which). */
+function pm_imap_settings_raw(string $brand = 'promanaged'): array
 {
     $e = pm_env();
     if (pm_brand_is_custom($brand)) { // an added business: its own .env keys, else the mailbox typed in its settings
@@ -332,6 +379,7 @@ function pm_imap_settings(string $brand = 'promanaged'): array
         $sm = (array)pm_brand_setting($brand, 'smtp', []);
         $im = (array)pm_brand_setting($brand, 'imap', []);
         return [
+            'explicit' => isset($e[$p . 'IMAP_HOST']) || (!isset($e[$p . 'SMTP_HOST']) && trim((string)($im['host'] ?? '')) !== ''),
             'host' => $e[$p . 'IMAP_HOST'] ?? $e[$p . 'SMTP_HOST'] ?? (trim((string)($im['host'] ?? '')) ?: (string)($sm['host'] ?? '')),
             'port' => (int)($e[$p . 'IMAP_PORT'] ?? ($im['port'] ?? 993)), 'secure' => strtolower($e[$p . 'IMAP_SECURE'] ?? ($im['secure'] ?? 'ssl')),
             'user' => $e[$p . 'IMAP_USER'] ?? $e[$p . 'SMTP_USER'] ?? (string)($sm['username'] ?? ''), 'pass' => $e[$p . 'IMAP_PASS'] ?? $e[$p . 'SMTP_PASS'] ?? (string)($sm['password'] ?? ''),
@@ -339,6 +387,7 @@ function pm_imap_settings(string $brand = 'promanaged'): array
     }
     $p = $brand === 'travel' && pm_tm_smtp_from_env() ? 'TM_' : '';
     return [
+        'explicit' => isset($e[$p . 'IMAP_HOST']),
         'host' => $e[$p . 'IMAP_HOST'] ?? $e[$p . 'SMTP_HOST'] ?? '', 'port' => (int)($e[$p . 'IMAP_PORT'] ?? 993), 'secure' => strtolower($e[$p . 'IMAP_SECURE'] ?? 'ssl'),
         'user' => $e[$p . 'IMAP_USER'] ?? $e[$p . 'SMTP_USER'] ?? '', 'pass' => $e[$p . 'IMAP_PASS'] ?? $e[$p . 'SMTP_PASS'] ?? '',
     ];
@@ -351,7 +400,10 @@ function pm_imap_boxes(): array
     foreach (pm_brand_ids() as $b) {
         $c = pm_imap_settings($b);
         if ($c['host'] !== '' && $c['user'] !== '' && $c['pass'] !== '') {
-            $boxes[strtolower($c['host'] . '|' . $c['user'])] = $c;
+            $k = strtolower($c['host'] . '|' . $c['user']);
+            $brands = (array)($boxes[$k]['brands'] ?? []);
+            $boxes[$k] = $c + ['key' => $k];
+            $boxes[$k]['brands'] = array_merge($brands, [$b]); // the businesses this mailbox answers for: replies are matched to their leads first
         }
     }
     return array_values($boxes);
@@ -393,13 +445,11 @@ function pm_imap_login_check(array $c): array
     if (isset($GLOBALS['PM_IMAP_CHECK_STUB']) && is_callable($GLOBALS['PM_IMAP_CHECK_STUB'])) {
         return $GLOBALS['PM_IMAP_CHECK_STUB']($c);
     }
-    $scheme = $c['secure'] === 'none' ? 'tcp' : 'ssl';
-    $verify = strtolower(pm_env()['IMAP_VERIFY'] ?? 'on') !== 'off';
-    $ctx = stream_context_create(['ssl' => ['verify_peer' => $verify, 'verify_peer_name' => $verify]]);
-    $fp = @stream_socket_client("$scheme://{$c['host']}:{$c['port']}", $en, $es, 15, STREAM_CLIENT_CONNECT, $ctx);
+    [$fp, $host, $es] = pm_imap_open($c, 15);
     if (!$fp) {
-        return [false, "could not reach {$c['host']}: $es"];
+        return [false, 'could not reach ' . implode(' or ', (array)($c['hosts'] ?? [$c['host']])) . ": $es (set IMAP_HOST in .env to the inbox server your mail host gives you)"];
     }
+    $c['host'] = $host;
     stream_set_timeout($fp, 15);
     fgets($fp, 4096);
     $q = fn($v) => '"' . addcslashes($v, '"\\') . '"';
@@ -413,12 +463,9 @@ function pm_imap_login_check(array $c): array
  * Recent messages from the inbox: [{uid, message_id, from_email, from_name, subject, text, auto}].
  * Messages are only peeked, never marked read or deleted.
  */
-function pm_imap_recent(array $c, int $days = 14, int $max = 60): array
+function pm_imap_recent(array $c, int $days = 14, int $max = 80, array $done = []): array
 {
-    $scheme = $c['secure'] === 'none' ? 'tcp' : 'ssl';
-    $verify = strtolower(pm_env()['IMAP_VERIFY'] ?? 'on') !== 'off'; // only turn off if PHP has no CA bundle and you accept the risk
-    $ctx = stream_context_create(['ssl' => ['verify_peer' => $verify, 'verify_peer_name' => $verify]]);
-    $fp = @stream_socket_client("$scheme://{$c['host']}:{$c['port']}", $en, $es, 20, STREAM_CLIENT_CONNECT, $ctx);
+    [$fp, $host, $es] = pm_imap_open($c, 20);
     if (!$fp) {
         throw new RuntimeException("Could not reach the mail server {$c['host']}: $es" . (str_contains((string)$es, 'certificate') || str_contains((string)$es, 'SSL') ? ' (If PHP has no certificate bundle, set openssl.cafile in php.ini, or IMAP_VERIFY=off in .env to accept the risk.)' : ''));
     }
@@ -429,17 +476,19 @@ function pm_imap_recent(array $c, int $days = 14, int $max = 60): array
         fclose($fp);
         throw new RuntimeException('The mail server refused the login. Check IMAP_USER and IMAP_PASS (or SMTP_USER and SMTP_PASS) in .env.');
     }
-    pm_imap_cmd($fp, 'a2', 'SELECT INBOX');
+    $sel = pm_imap_cmd($fp, 'a2', 'SELECT INBOX');
+    $validity = preg_match('/UIDVALIDITY (\d+)/i', $sel, $vm) ? $vm[1] : '0';
     $search = pm_imap_cmd($fp, 'a3', 'UID SEARCH SINCE ' . date('d-M-Y', strtotime("-$days days")));
     preg_match('/\* SEARCH([\d ]*)/', $search, $m);
-    $uids = array_slice(array_filter(explode(' ', trim($m[1] ?? ''))), -$max);
+    // only messages not handled yet, oldest first: a long weekend away drains over a few checks instead of the oldest ones being skipped for ever
+    $uids = array_slice(array_values(array_diff(array_filter(explode(' ', trim($m[1] ?? ''))), array_map('strval', (array)($done[$validity] ?? [])))), 0, $max);
     $out = [];
     foreach ($uids as $n => $uid) {
         $raw = pm_imap_cmd($fp, 'f' . $n, "UID FETCH $uid (BODY.PEEK[]<0.80000>)");
         $a = strpos($raw, "\n");
         $msg = substr($raw, $a === false ? 0 : $a + 1);
         $msg = preg_replace('/\r?\n\)\r?\nf' . $n . ' OK.*$/s', '', $msg);
-        $out[] = ['uid' => (int)$uid] + pm_parse_mail($msg);
+        $out[] = ['uid' => (int)$uid, 'uidv' => $validity] + pm_parse_mail($msg);
     }
     pm_imap_cmd($fp, 'z', 'LOGOUT');
     fclose($fp);
@@ -637,6 +686,7 @@ function pm_apply_reply(array &$lead, string $text, array $r, string $mode, ?cal
     $lead['reply_intent'] = $intent;
     if (in_array($intent, PM_HUMAN_INTENTS, true)) {
         $lead['last_reply'] = $now; // bounce, out of office and stop are not replies
+        unset($lead['approved_at'], $lead['send_after'], $lead['followup_approved']); // they wrote back: no queued cold email or follow-up goes out on its own
     }
     unset($lead['followup_draft']);
 
@@ -697,7 +747,11 @@ function pm_apply_reply(array &$lead, string $text, array $r, string $mode, ?cal
     $lead['reply_draft'] = ['subject' => $subject, 'body' => trim((string)($r['reply_body'] ?? '')), 'whatsapp' => pm_wa_reply_clean((string)($r['whatsapp'] ?? '')),
         'needs_human' => !empty($r['needs_human']), 'next_step' => (string)($r['next_step'] ?? ''), 'ch' => $ch];
     $kitBrand = (string)($lead['brand'] ?? pm_brand());
-    if (function_exists('pm_share_wanted_docs') && ($want = pm_share_wanted_docs($kitBrand, $text)) && ($lead['reply_draft']['body'] !== '' || $lead['reply_draft']['whatsapp'] !== '')) { // they asked for the pack: it is attached, and its link goes in the WhatsApp answer
+    $want = function_exists('pm_share_wanted_docs') ? pm_share_wanted_docs($kitBrand, $text) : [];
+    if (!$want && function_exists('pm_share_wanted_docs') && preg_match('/\battach/i', (string)$lead['reply_draft']['body'])) {
+        $want = pm_share_wanted_docs($kitBrand, 'please send the pack'); // the answer says the pack is attached: then it is
+    }
+    if ($want && ($lead['reply_draft']['body'] !== '' || $lead['reply_draft']['whatsapp'] !== '')) { // they asked for the pack: it is attached, and its link goes in the WhatsApp answer
         [$lead['reply_draft']['body'], $lead['reply_draft']['whatsapp']] = pm_share_reply_text($kitBrand, $want, (string)$lead['reply_draft']['body'], (string)$lead['reply_draft']['whatsapp']);
         $lead['reply_draft']['attach'] = $want;
     }
@@ -836,7 +890,10 @@ function pm_inbox_process(array $messages, array &$leads, array &$seen, string $
             continue; // our own copy of something we sent
         }
         $dsn = !empty($m['dsn']);
-        $id = pm_match_lead($leads, $m['from_email'], $m);
+        $boxBrands = (array)($m['brands'] ?? []);
+        $id = ($boxBrands ? pm_match_lead(array_filter($leads, fn($l) => in_array((string)($l['brand'] ?? 'promanaged'), $boxBrands, true)), $m['from_email'], $m) : null)
+            ?? pm_match_lead($leads, $m['from_email'], $m); // the business whose mailbox it reached first, then any
+        $stopSubj = !$dsn && pm_looks_like_stop((string)($m['subject'] ?? '')); // our List-Unsubscribe header sends "STOP" in the subject, often with no text
         if ($id === null) {
             if (!$dsn && empty($m['auto']) && empty($m['bulk']) && trim((string)$m['text']) !== '') {
                 pm_inbox_unmatched_add($m);
@@ -848,10 +905,13 @@ function pm_inbox_process(array $messages, array &$leads, array &$seen, string $
         if ($dsn && ($m['dsn_kind'] ?? '') === 'ok') {
             continue; // a delivery receipt, nothing to do
         }
+        if ($stopSubj) {
+            $m['text'] = 'STOP (subject: ' . mb_substr((string)$m['subject'], 0, 80) . ')' . (trim((string)$m['text']) !== '' ? "\n\n" . $m['text'] : '');
+        }
         if (!$dsn && trim((string)$m['text']) === '') {
             continue;
         }
-        if (!$dsn && !empty($m['auto']) && !preg_match('/out of office|auto.?reply|automatic reply|vacation|away from (the )?office/i', $m['subject'] . ' ' . $m['text'])) {
+        if (!$dsn && !$stopSubj && !empty($m['auto']) && !preg_match('/out of office|auto.?reply|automatic reply|vacation|away from (the )?office/i', $m['subject'] . ' ' . $m['text'])) {
             pm_lead_note($leads[$id], 'Automatic message received (ignored)');
             continue;
         }
@@ -860,9 +920,12 @@ function pm_inbox_process(array $messages, array &$leads, array &$seen, string $
         if (!$dsn && strlen($mid) < 200) {
             $leads[$id]['last_in_id'] = $mid; // an automatic answer threads under this message
         }
+        $leads[$id]['_reply_to'] = $m['from_email']; // an automatic answer goes to the person who wrote, not only the main address (never saved)
         try {
             [$what, $r] = pm_handle_incoming($leads[$id], $dsn ? 'Delivery failure notice' : (string)$m['text'], 'email', $m, $mode, $send, $classify);
+            unset($leads[$id]['_reply_to']);
         } catch (Throwable $e) {
+            unset($leads[$id]['_reply_to']);
             pm_agent_log('Reply', $leads[$id]['name'] . ': ' . $e->getMessage());
             array_pop($seen); // try again next time
             if ($prevIn === null) {
@@ -893,21 +956,39 @@ function pm_inbox_poll(?callable $send = null, ?array &$report = null): array
         return [0, 'Mail reading is not set up (IMAP_HOST, IMAP_USER, IMAP_PASS in .env).'];
     }
     $seen = pm_load('inbox_seen', fn() => []);
+    $uidState = pm_load('inbox_uids', fn() => []); // per mailbox: the UIDs already handled, so they are not downloaded again
     $leads = pm_leads();
     $mode = pm_agents_config('promanaged')['reply_mode'] ?? 'draft';
     $was = pm_brand();
     $messages = [];
-    foreach (pm_imap_boxes() as $box) { // each brand's own inbox (read once when they share an account)
-        try {
-            $messages = array_merge($messages, pm_imap_recent($box));
-        } catch (Throwable $e) {
-            pm_agent_log('Reply', 'Inbox check failed for ' . $box['user'] . ': ' . $e->getMessage());
+    try {
+        foreach (pm_imap_boxes() as $box) { // each brand's own inbox (read once when they share an account)
+            try {
+                foreach (pm_imap_recent($box, 14, 80, (array)($uidState[$box['key']] ?? [])) as $m) {
+                    $messages[] = $m + ['brands' => $box['brands'], 'box' => $box['key']];
+                }
+            } catch (Throwable $e) {
+                pm_agent_log('Reply', 'Inbox check failed for ' . $box['user'] . ': ' . $e->getMessage());
+            }
+        }
+        $handled = pm_inbox_process($messages, $leads, $seen, $mode, $send, $report);
+    } finally {
+        pm_brand_set($was); // the inbox answers each lead as its own business: never leave the caller as another one
+    }
+    foreach ($messages as $m) { // handled (or deliberately skipped) messages are not fetched again; a failed one stays for the next check
+        if (in_array((string)$m['message_id'], $seen, true) && !empty($m['uid'])) {
+            $uidState[$m['box']][$m['uidv']][] = (int)$m['uid'];
         }
     }
-    $handled = pm_inbox_process($messages, $leads, $seen, $mode, $send, $report);
-    pm_brand_set($was);
+    foreach ($uidState as $bk => $byV) {
+        foreach ((array)$byV as $v => $list) {
+            $uidState[$bk][$v] = array_slice(array_values(array_unique(array_map('intval', (array)$list))), -3000);
+        }
+    }
+    // what was handled is recorded first: if saving the leads then fails, the same message is not answered twice on the next check
+    pm_save('inbox_seen', array_slice($seen, -2000));
+    pm_save('inbox_uids', $uidState);
     pm_leads_save($leads);
-    pm_save('inbox_seen', array_slice($seen, -600));
     $extra = count($report['unmatched']) ? ' ' . count($report['unmatched']) . ' could not be matched to a lead: see "Unmatched replies".' : '';
     return [$handled, ($handled ? "$handled repl" . ($handled === 1 ? 'y' : 'ies') . ' handled.' : 'No new replies.') . $extra];
 }
@@ -916,7 +997,7 @@ function pm_inbox_poll(?callable $send = null, ?array &$report = null): array
 function pm_send_reply(array $lead, string $subject, string $body, array $attachments = []): array
 {
     $s = pm_settings();
-    if (($lead['status'] ?? '') === 'optout' || pm_suppressed(pm_leads(), (string)($lead['email'] ?? ''), (string)($lead['id'] ?? ''))) {
+    if (($lead['status'] ?? '') === 'optout' || pm_suppressed(pm_leads_read(), (string)($lead['email'] ?? ''), (string)($lead['id'] ?? ''))) {
         return [false, 'That address asked not to be contacted.', ''];
     }
     $sig = array_filter([$s['signatory_name'] ?? '', ($s['signatory_name'] ?? '') !== '' ? ($s['signatory_title'] ?? '') : '', $s['company_name'], $s['phone'] ?? '', $s['website'] ?? '']);
@@ -926,6 +1007,11 @@ function pm_send_reply(array $lead, string $subject, string $body, array $attach
         $hdr['In-Reply-To'] = $hdr['References'] = (string)$lead['last_in_id'];
     }
     $mine = function_exists('pm_dm_signature') ? pm_dm_signature() : null; // the signature the owner wrote, else the usual one
-    return pm_mail($s, ['to' => $lead['email'], 'subject' => $subject, 'body' => $body . "\n\n" . ($mine ?? "Kind regards,\n" . implode("\n", $sig)) . "\n\n(Reply STOP at any time and we will stop contacting you.)",
+    $to = (string)($lead['email'] ?? '');
+    $rt = strtolower(trim((string)($lead['_reply_to'] ?? '')));
+    if ($rt !== '' && filter_var($rt, FILTER_VALIDATE_EMAIL) && !pm_suppressed(pm_leads_read(), $rt, (string)($lead['id'] ?? ''))) {
+        $to = $rt; // the colleague who wrote gets the answer
+    }
+    return pm_mail($s, ['to' => $to, 'subject' => $subject, 'body' => $body . "\n\n" . ($mine ?? "Kind regards,\n" . implode("\n", $sig)) . "\n\n(Reply STOP at any time and we will stop contacting you.)",
         'headers' => $hdr, 'attachments' => $attachments]);
 }

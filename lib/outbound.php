@@ -406,6 +406,15 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     if (($lead['status'] ?? '') === 'optout') {
         return $no(($lead['name'] ?? 'This business') . ' asked not to be contacted.');
     }
+    if ($which === 'drafts' && !in_array($lead['status'] ?? '', ['new', 'qualified', 'drafted'], true)) {
+        return $no(($lead['name'] ?? 'This business') . ' is past the cold first email (they wrote back, have a proposal, or the lead is closed): answer them personally instead.');
+    }
+    if ($which !== 'drafts' && empty($lead['sent'])) {
+        return $no('No first email has gone to this address yet, so a follow-up would refer to an email they never had. Send the first email instead.');
+    }
+    if ($which === 'drafts' && pm_lead_is_client($lead)) {
+        return $no(($lead['name'] ?? 'This business') . ' is already a client: message them personally, not with a cold email.');
+    }
     if (($b = pm_send_breaker())['blocked']) {
         return $no($b['why'], 'breaker');
     }
@@ -434,6 +443,10 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     }
     if ($problems = pm_outreach_lint((string)($d['email_subject'] ?? ''), (string)$d['email_body'], $which === 'drafts')) {
         return $no('Not sent. ' . implode(' ', $problems) . ' Edit the draft and try again.');
+    }
+    $disk = pm_load('leads', fn() => [])[$id] ?? null; // what another process (the drip, the inbox, a second screen) did meanwhile decides
+    if (is_array($disk) && (($disk['status'] ?? '') === 'optout' || ($which === 'drafts' && !empty($disk['sent'])) || ($which !== 'drafts' && count((array)($disk['sent'] ?? [])) > count((array)($lead['sent'] ?? []))))) {
+        return $no(($disk['status'] ?? '') === 'optout' ? ($lead['name'] ?? 'This business') . ' asked not to be contacted.' : 'This email was sent a moment ago from elsewhere: not sent twice.');
     }
     if ($mailer === null) {
         if (!function_exists('pm_mail') && is_file(__DIR__ . '/mail.php')) {
@@ -490,7 +503,7 @@ function pm_approve_for_send(array &$leads, array $ids): int
     foreach (array_unique($ids) as $id) {
         $l = $leads[$id] ?? null;
         $d = (array)($l['drafts'] ?? []);
-        if (!$l || !in_array($l['status'] ?? '', ['drafted', 'qualified'], true) || !empty($l['approved_at']) || !empty($l['sent']) || empty($d['email_body'])) {
+        if (!$l || !in_array($l['status'] ?? '', ['drafted', 'qualified'], true) || !empty($l['approved_at']) || !empty($l['sent']) || empty($d['email_body']) || pm_lead_is_client($l)) {
             continue;
         }
         $email = trim((string)($l['email'] ?? ''));
@@ -528,7 +541,7 @@ function pm_unapprove(array &$leads, array $ids): int
 /** Approved leads, best score first (optionally one brand). */
 function pm_send_queue(array $leads, ?string $brand = null): array
 {
-    $q = array_filter($leads, fn($l) => !empty($l['approved_at']) && !in_array($l['status'] ?? '', ['optout', 'won', 'lost'], true)
+    $q = array_filter($leads, fn($l) => !empty($l['approved_at']) && (!empty($l['sent']) ? !in_array($l['status'] ?? '', ['optout', 'won', 'lost'], true) : in_array($l['status'] ?? '', ['new', 'qualified', 'drafted'], true))
         && ($brand === null || ($l['brand'] ?? 'promanaged') === $brand));
     uasort($q, fn($a, $b) => [(int)($b['score'] ?? 0), (string)($a['approved_at'])] <=> [(int)($a['score'] ?? 0), (string)($b['approved_at'])]);
     return $q;
@@ -812,7 +825,7 @@ function pm_web_notify(array $lead, bool $merged): bool
         $from = function_exists('pm_lead_src_tag') ? pm_lead_src_tag($lead) : (is_string($lead['src'] ?? null) ? $lead['src'] : '');
         $by = '';
         if (!empty($lead['referred_by'])) {
-            $rl = pm_leads()[$lead['referred_by']] ?? null;
+            $rl = pm_leads_read()[$lead['referred_by']] ?? null;
             $by = "\nReferred by: " . ($rl['name'] ?? 'an existing client') . ($rl && !empty($rl['contact']) ? ' (' . $rl['contact'] . ')' : '');
         }
         $post = '';

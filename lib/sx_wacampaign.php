@@ -106,6 +106,9 @@ function pm_wac_skip_reason(array $lead, array $leads, array $cfg, bool $optinOn
     if (pm_wa_best($lead)[0] === '') {
         return 'no mobile number';
     }
+    if (pm_phone_suppressed($leads, $lead)) {
+        return 'that number asked us to stop';
+    }
     if ($optinOnly && function_exists('pm_wa_optin') && !pm_wa_optin($lead)) { // C3-A01: only people who agreed to WhatsApp messages, unless the campaign says otherwise
         return 'no WhatsApp opt-in on record';
     }

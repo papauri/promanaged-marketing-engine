@@ -66,8 +66,10 @@ function pm_brand_norm(mixed $b): string
 /** The name shown for a business (labels, alerts, log lines). */
 function pm_brand_name(string $b): string
 {
-    if (isset(PM_BUILTIN_BRANDS[$b])) {
-        return PM_BUILTIN_BRANDS[$b];
+    if (isset(PM_BUILTIN_BRANDS[$b])) { // the name typed in Operations > Business details, else the built-in one (the id never changes, only what people see)
+        $raw = pm_load('settings', 'pm_default_settings');
+        $n = trim((string)($b === 'travel' ? ($raw['travel']['company_name'] ?? '') : ($raw['company_name'] ?? '')));
+        return $n !== '' ? $n : PM_BUILTIN_BRANDS[$b];
     }
     $row = pm_brands_custom(true)[$b] ?? null;
     if (!$row) {
@@ -440,11 +442,7 @@ function pm_brand_checklist(string $b): array
 /** The business name for headings: the name saved in its settings (so a renamed business reads right), else the built-in or onboarding name. */
 function pm_brand_title(array $settings, string $b): string
 {
-    if ($b === 'promanaged') {
-        return PM_BUILTIN_BRANDS['promanaged'];
-    }
-    $n = trim((string)(pm_brand_block($settings, $b)['company_name'] ?? ''));
-    return $n !== '' ? $n : pm_brand_name($b);
+    return pm_brand_name($b); // always the saved name of THAT business, whichever business the settings in hand belong to
 }
 
 /**

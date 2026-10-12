@@ -89,11 +89,8 @@ if (!function_exists('pm_wa_biz_cfg')) {
             if ((!$withOptout && ($l['status'] ?? '') === 'optout') || ($brands && !in_array((string)($l['brand'] ?? 'promanaged'), $brands, true))) {
                 continue;
             }
-            foreach (['whatsapp', 'phone'] as $f) {
-                $p = pm_wa_biz_norm((string)($l[$f] ?? ''));
-                if ($p !== '' && (str_ends_with($p, substr($n, -9)) && str_ends_with($n, substr($p, -9)))) {
-                    return $l;
-                }
+            if (in_array(substr($n, -9), pm_lead_phone_keys($l), true)) { // every number in the field, not the digits of all of them run together
+                return $l;
             }
         }
         return null;
@@ -154,7 +151,11 @@ if (!function_exists('pm_wa_biz_cfg')) {
     {
         $brand = pm_brand();
         if (pm_looks_like_stop($text)) {
-            return 'STOP from a number with no lead: nothing to stop';
+            $n9 = substr(pm_wa_biz_norm($from), -9);
+            if (strlen($n9) === 9) { // remembered as a fingerprint: a lead found later with this number is never messaged
+                pm_update('suppress', fn(array $s) => array_values(array_unique(array_merge($s, ['p:' . sha1($n9)]))), fn() => []);
+            }
+            return 'STOP from a number with no lead: remembered, it will never be messaged';
         }
         if (!pm_rate_hit('wabiznew', $brand, 30, 86400)) {
             return 'too many new numbers today: ignored';

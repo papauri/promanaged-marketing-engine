@@ -145,7 +145,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     <?php foreach (array_slice($plan, 6) as $t): ?><div class="task <?= $t['done'] ? 'done' : '' ?>">
       <form method="post"><?= $post('', 'plan', $hid('task', $t['id']) . ($t['done'] ? '' : $hid('done', 1))) ?><button title="Mark done" aria-label="Mark done"><?= $t['done'] ? '✓' : '' ?></button></form>
       <span><?= pm_h($t['title']) ?></span><?= $taskExtra($t) ?></div><?php endforeach; ?></details><?php endif; ?>
-<?php if ((int)(($dir['stats'] ?? [])['followups_to_draft'] ?? 0) > 0): ?><form method="post"><?= $post('', 'followups_ai') ?><button class="btn small primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?> title="The Follow-up agent writes them for you to read; nothing is sent">Draft <?= (int)$dst['followups_to_draft'] ?> follow-up<?= (int)$dst['followups_to_draft'] === 1 ? '' : 's' ?> with AI</button></form><?php endif; ?>
+<?php if ((int)(($dir['stats'] ?? [])['followups_to_draft'] ?? 0) > 0): ?><form method="post"><?= $post('', 'followups_ai') ?><button class="btn small primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?> title="The Follow-up agent writes them for you to read; nothing is sent">Draft <?= (int)$ds['followups_to_draft'] ?> follow-up<?= (int)$ds['followups_to_draft'] === 1 ? '' : 's' ?> with AI</button></form><?php endif; ?>
 </details>
 <?php endif; ?>
 
@@ -179,7 +179,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     $which = ($l['status'] === 'contacted' && !empty($l['followup_draft'])) ? 'followup' : 'first';
     $dr = $which === 'followup' ? $l['followup_draft'] : ($l['drafts'] ?? []);
     $canMail = !empty($dr['email_body']) && filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) && $l['status'] !== 'optout';
-    $wa = !empty($dr['whatsapp']) ? pm_wa_link($l, $dr['whatsapp']) : '';
+    $wa = !empty($dr['whatsapp']) && ($l['status'] ?? '') !== 'optout' ? pm_wa_link($l, $dr['whatsapp']) : ''; // nobody who said STOP gets a WhatsApp button
     $hasReply = !empty($l['reply_draft']);
 ?>
 <details class="lead" id="l<?= pm_h($id) ?>" <?= ($which === 'followup' || $waiting($l) || $focusId === $id) ? 'open' : '' ?>>
@@ -285,7 +285,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 
     <div class="actions">
       <?php if ($canMail): ?><form method="post" onsubmit="return confirm('Send this email to <?= pm_h(addslashes($l['email'])) ?> now?')"><?= $post($id, 'send', $hid('which', $which)) ?><button class="btn primary"><?= $which === 'followup' ? 'Send follow-up' : 'Send email' ?></button></form><?php endif; ?>
-      <?php if ($wa): ?><a class="btn" href="<?= pm_h(pm_wa_link($l, pm_wa_text($l, $dr['whatsapp'], $which === 'first'))) ?>" target="_blank" rel="noopener noreferrer">WhatsApp</a><?php endif; ?>
+      <?php if ($wa): $waFull = pm_wa_text($l, $dr['whatsapp'], $which === 'first'); ?><a class="btn" data-wa-log data-first data-id="<?= pm_h($id) ?>" data-csrf="<?= pm_h($csrf) ?>" data-text="<?= pm_h($waFull) ?>" data-url="<?= pm_h(pm_wa_link($l, '')) ?>" href="<?= pm_h(pm_wa_link($l, $waFull)) ?>" target="_blank" rel="noopener noreferrer" title="Checked and logged like the WhatsApp page: daily limit, STOP and the wording rules">WhatsApp</a><?php endif; ?>
       <?php if ($tel = pm_tel_link($l)): ?><a class="btn" href="<?= pm_h($tel) ?>">Call</a><?php endif; ?>
       <?php if (($l['status'] ?? '') === 'contacted' && empty($l['followup_draft']) && !pm_lead_email_dead($l) && pm_agents_ready()): ?><form method="post"><?= $post($id, 'followup_ai') ?><button class="btn" title="The Follow-up agent writes a follow-up for you to read; nothing is sent">Draft follow-up with AI</button></form><?php endif; ?>
       <form method="post"><?= $post($id, 'research') ?><button class="btn" title="Website, Facebook, Instagram, reviews and recent news"><?= empty($l['research']) ? 'Research' : 'Research again' ?></button></form>
@@ -306,7 +306,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <?php if ($focusId === ''): ?><a class="btn" href="?tab=agents&lead=<?= pm_h($id) ?>" title="Work on this business alone">Focus</a><?php endif; ?>
       <details class="more drop"><summary class="btn">More</summary>
         <div class="menu">
-          <?php if ($wa): ?><form method="post"><?= $post($id, 'whatsapp_sent') ?><button class="btn small">I sent the WhatsApp</button></form><?php endif; ?>
+          <?php if ($wa): ?><form method="post"><?= $post($id, 'whatsapp_sent') ?><button class="btn small" title="For a message you sent from your phone without the button above">I sent a WhatsApp from my phone</button></form><?php endif; ?>
           <?php if (!empty($dr['email_body'])): ?><button type="button" class="btn small" data-copy="<?= pm_h(($dr['email_subject'] ?? '') . "\n\n" . $dr['email_body']) ?>">Copy the email text</button><?php endif; ?>
           <?php if (!empty($dr['whatsapp'])): ?><button type="button" class="btn small" data-copy="<?= pm_h($dr['whatsapp']) ?>">Copy the WhatsApp text</button><?php endif; ?>
           <?php if ($team): ?><form method="post" class="assign"><?= $post($id, 'assign') ?><select name="owner" onchange="this.form.requestSubmit()" aria-label="Assign to"><option value="">Assign to…</option><?php foreach ($team as $m): ?><option <?= ($l['owner'] ?? '') === $m ? 'selected' : '' ?>><?= pm_h($m) ?></option><?php endforeach; ?></select></form><?php endif; ?>

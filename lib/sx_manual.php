@@ -584,7 +584,7 @@ function pm_host_kit_message(array $p, array $row): array
     $name = trim((string)($row['client_name'] ?? ''));
     $lead = null;
     if (($row['lead_id'] ?? '') !== '' && function_exists('pm_leads')) {
-        foreach (pm_leads() as $l) {
+        foreach (pm_leads_read() as $l) {
             if (($l['id'] ?? '') === $row['lead_id']) {
                 $lead = $l;
             }

@@ -91,15 +91,17 @@ foreach (array_slice($cands, 0, 15) as [$id]) {
     if ($r['kind'] === 'cap') {
         continue; // approval stays for tomorrow
     }
+    if ($r['kind'] === 'smtp') { // the mail server failed, not the lead: it keeps its approval and is tried again tomorrow
+        $leads[$id]['send_fail_at'] = date('Y-m-d');
+        pm_agent_log('Sender', 'Mail server problem, ' . $l['name'] . ' waits until tomorrow: ' . $r['msg'], true);
+        $dirty = true;
+        $done = true; // do not hammer a failing mail server
+        break;
+    }
     unset($leads[$id]['approved_at'], $leads[$id]['send_after']);
     pm_lead_note($leads[$id], 'Not sent: ' . $r['msg']);
     pm_agent_log('Sender', 'Did not send to ' . $l['name'] . ': ' . $r['msg']);
     $dirty = true;
-    if ($r['kind'] === 'smtp') {
-        $leads[$id]['send_fail_at'] = date('Y-m-d');
-        $done = true; // do not hammer a failing mail server
-        break;
-    }
 }
 if ($dirty) {
     pm_leads_save($leads);

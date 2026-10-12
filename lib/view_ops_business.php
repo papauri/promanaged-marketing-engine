@@ -68,7 +68,7 @@ if ($isCustom): // a business added in the app: one form, saved by brand_save (t
         $tr = $b === 'travel';
         $c = $tr ? (array)$settings['travel'] : $settings;
         $n = fn(string $k) => $tr ? "s[travel][$k]" : "s[$k]";
-        $name = $tr ? $c['company_name'] : 'ProManaged IT';
+        $name = trim((string)($c['company_name'] ?? '')) ?: pm_brand_name($b); // the name as typed: renaming the business renames it everywhere
         $logo = $tr ? 'assets/travel_logo.png' : 'assets/logo.png';
         $sig = $tr ? 'assets/travel_signature.png' : 'assets/signature.png';
         $hide = $vb === $b ? '' : 'hidden';

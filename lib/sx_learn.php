@@ -123,21 +123,44 @@ function pm_jobg_outcome_weights(): string
     return implode('; ', $out);
 }
 
-/** $n items from $items, weighted by $weights (key => weight), rotating with $offset so every item gets a turn. */
+/**
+ * $n items from $items, weighted by $weights (key => weight), rotating with $offset so every item gets a turn. The items are interleaved in proportion to their
+ * weights (smooth weighted round robin over a cycle of about 20 slots), so a heavy type gets most searches without taking every search for weeks, and a type
+ * with no weight given still gets its share. A weight of 0 leaves a type out, unless every weight is 0.
+ */
 function pm_weighted_pick(array $items, array $weights, int $n, int $offset = 0): array
 {
     $items = array_values($items);
-    if (!$items) {
+    if (!$items || $n <= 0) {
         return [];
     }
-    $expand = [];
+    $w = [];
     foreach ($items as $it) {
-        $times = max(1, (int)round((float)($weights[$it] ?? 1.0) / 0.25));
-        $expand = array_merge($expand, array_fill(0, $times, $it));
+        $w[$it] = max(0.0, (float)($weights[$it] ?? 1.0));
+    }
+    if (array_sum($w) <= 0) {
+        $w = array_fill_keys($items, 1.0);
+    }
+    $total = array_sum($w);
+    $slots = [];
+    foreach ($w as $it => $x) { // whole slots out of 20, at least one for any item with weight
+        $slots[$it] = $x > 0 ? max(1, (int)round(20 * $x / $total)) : 0;
+    }
+    $cycle = [];
+    $cur = array_fill_keys(array_keys($slots), 0);
+    $sum = array_sum($slots);
+    for ($k = 0; $k < $sum; $k++) {
+        foreach ($slots as $it => $sl) {
+            $cur[$it] += $sl;
+        }
+        arsort($cur);
+        $best = array_key_first($cur);
+        $cycle[] = (string)$best;
+        $cur[$best] -= $sum;
     }
     $out = [];
     for ($i = 0; $i < $n; $i++) {
-        $out[] = $expand[($offset + $i) % count($expand)];
+        $out[] = $cycle[($offset + $i) % count($cycle)];
     }
     return $out;
 }
@@ -353,6 +376,9 @@ function pm_winback_due(array $leads, int $max = 2): array
     foreach ($leads as $l) {
         if (($l['status'] ?? '') !== 'lost' || ($l['brand'] ?? 'promanaged') !== pm_brand()) {
             continue;
+        }
+        if (empty($l['sent']) && empty($l['wa_sent']) && empty($l['last_reply'])) {
+            continue; // never contacted (the Qualifier set it aside): there is no "no" to win back
         }
         $lostAt = strtotime((string)($l['lost_at'] ?? $l['updated'] ?? '')) ?: 0;
         $wb = strtotime((string)($l['winback_at'] ?? ''));
@@ -575,29 +601,34 @@ function pm_bounce_rate7(array $leads, string $brand): array
 }
 
 /**
- * The warm-up cap, nudged by the trailing bounce rate: healthy weeks drift +1/day (never above the base);
- * a bouncy week (3%+) drops -2/day (never below 1). The breaker still trips at 5%.
+ * The warm-up cap, nudged by the trailing bounce rate, once a day: healthy weeks drift +1/day (never above the base); a bouncy week (3%+) drops -2/day (never
+ * below 1). The day's value is worked out on the first call of the day and then only read, and it never exceeds today's base, so lowering the limit in Targeting
+ * takes effect at once and a limit of 0 sends nothing. The breaker still trips at 5%.
  */
 function pm_adaptive_send_cap(int $base, string $brand): int
 {
-    $st = pm_ob_read('send_caps');
-    $d = (int)($st[$brand]['day'] ?? 0);
-    $v = (int)($st[$brand]['value'] ?? 0);
-    if ($d !== (int)date('Ymd')) {
-        $v = $base;
-        $d = (int)date('Ymd');
+    if ($base <= 0) {
+        return 0;
+    }
+    $today = (int)date('Ymd');
+    $row = (array)(pm_ob_read('send_caps')[$brand] ?? []);
+    if ((int)($row['day'] ?? 0) === $today) {
+        return max(1, min($base, (int)($row['value'] ?? $base)));
     }
     $r = pm_bounce_rate7(pm_load('leads', fn() => []), $brand);
-    if ($r['sends'] >= 5 && $r['rate'] >= 0.03) {
+    $v = min($base, max(1, (int)($row['value'] ?? $base)));
+    if ($r['sends'] < 5) {
+        $v = $base; // too few sends to judge: the warm-up base
+    } elseif ($r['rate'] >= 0.03) {
         $v = max(1, $v - 2);
-    } elseif ($r['sends'] >= 5 && $r['rate'] <= 0.005) {
+    } elseif ($r['rate'] <= 0.005) {
         $v = min($base, $v + 1);
     }
-    pm_ob_update('send_caps', function ($s) use ($brand, $d, $v) {
-        $s[$brand] = ['day' => $d, 'value' => $v];
+    pm_ob_update('send_caps', function ($s) use ($brand, $today, $v) {
+        $s[$brand] = ['day' => $today, 'value' => $v];
         return $s;
     });
-    return max(1, $v);
+    return max(1, min($base, $v));
 }
 
 /* ---------------- MG-G03 · privacy: forget & export ---------------- */
@@ -613,6 +644,7 @@ function pm_lead_forget(string $id): array
         return ['ok' => false, 'msg' => 'No such lead.', 'done' => []];
     }
     $name = (string)(($l ?? $archived)['name'] ?? '');
+    pm_suppress_remember($l ?? $archived); // a STOP outlives the lead, as a fingerprint only (nothing readable is kept)
     if ($l) {
         unset($leads[$id]);
         pm_leads_save($leads);

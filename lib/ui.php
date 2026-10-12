@@ -198,12 +198,12 @@ function pm_ui_biz_menu(array $settings, string $vb, string $tab, string $view):
     $hasLogo = is_file(PM_ROOT . '/' . $logo);
     $h = '<div class="dd biz"><button type="button" class="ddbtn bizbtn" aria-haspopup="true" aria-expanded="false">'
         . ($hasLogo ? '<img class="' . ($vb === 'travel' ? 'sq' : '') . '" src="' . pm_h($logo) . '?v=' . (int)@filemtime(PM_ROOT . '/' . $logo) . '" alt="">' : pm_ui_dot(pm_ui_accent($settings, $vb)))
-        . '<span class="bizname">' . pm_h($vb === 'promanaged' ? (string)$settings['company_name'] : pm_brand_title($settings, $vb)) . '</span><span class="caret"></span></button>'
+        . '<span class="bizname">' . pm_h(pm_brand_name($vb)) . '</span><span class="caret"></span></button>'
         . '<div class="menu" role="menu"><div class="menuhd">Working on</div>';
     foreach (pm_brand_ids() as $bid) {
         $href = '?tab=' . $keep . ($view !== '' && $tab === 'social' ? '&view=' . $view : '') . '&brand=' . $bid;
         $h .= '<a role="menuitem" href="' . pm_h($href) . '" class="item' . ($bid === $vb ? ' on' : '') . '">' . pm_ui_dot(pm_ui_accent($settings, $bid)) . '<span>'
-            . pm_h($bid === 'promanaged' ? (string)$settings['company_name'] : pm_brand_title($settings, $bid)) . '</span>' . ($bid === $vb ? '<b class="tick">✓</b>' : '') . '</a>';
+            . pm_h(pm_brand_name($bid)) . '</span>' . ($bid === $vb ? '<b class="tick">✓</b>' : '') . '</a>';
     }
     return $h . '<hr><a role="menuitem" class="item" href="?tab=business&amp;new=1"><span class="plus">+</span><span>Add a business</span></a>'
         . '<a role="menuitem" class="item" href="?tab=settings"><span class="plus">⚙</span><span>Business settings</span></a></div></div>';
@@ -261,7 +261,7 @@ function pm_view_biz_grid(array $settings, string $vb, string $csrf): void
     foreach (pm_brand_ids() as $bid) {
         $logo = pm_brand_asset($bid, 'logo');
         $n = count(array_filter($leads, fn($l) => ($l['brand'] ?? 'promanaged') === $bid));
-        $title = $bid === 'promanaged' ? (string)$settings['company_name'] : pm_brand_title($settings, $bid);
+        $title = pm_brand_name($bid);
         $tag = trim((string)(pm_brand_block($settings, $bid)['tagline'] ?? ''));
         echo '<div class="bizcard' . ($bid === $vb ? ' on' : '') . '" style="--bz:' . pm_h(pm_ui_accent($settings, $bid)) . '"><div class="bzhead">'
             . (is_file(PM_ROOT . '/' . $logo) ? '<img class="' . ($bid === 'travel' ? 'sq' : '') . '" src="' . pm_h($logo) . '?v=' . (int)@filemtime(PM_ROOT . '/' . $logo) . '" alt="">' : pm_ui_dot(pm_ui_accent($settings, $bid)))

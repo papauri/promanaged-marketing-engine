@@ -135,16 +135,20 @@
     var a = e.target.closest('[data-wa-log]');
     if (!a) return;
     var scope = a.closest('.replybox, .repcard'), ta = scope && scope.querySelector('textarea[name=whatsapp]');
-    var text = ta ? ta.value.trim() : '';
+    var text = ta ? ta.value.trim() : (a.getAttribute('data-text') || '').trim();   // a lead card's button carries its message
     if (!text) { e.preventDefault(); alert('Write the answer first.'); return; }
-    a.href = a.getAttribute('data-url').split('?text=')[0] + '?text=' + encodeURIComponent(text);   // link opens in a new tab as normal
+    var url = a.getAttribute('data-url').split('?text=')[0] + '?text=' + encodeURIComponent(text);
+    var first = a.hasAttribute('data-first'), w = null;
+    if (first) { e.preventDefault(); w = window.open('about:blank', '_blank'); }   // a first message opens only once the checks pass (limit, STOP, wording)
+    else { a.href = url; }                                                          // an answer opens at once, as a normal link
     var fd = new FormData();
-    fd.append('csrf', a.getAttribute('data-csrf')); fd.append('action', 'wa_log'); fd.append('id', a.getAttribute('data-id')); fd.append('text', text); fd.append('reply', '1');
+    fd.append('csrf', a.getAttribute('data-csrf')); fd.append('action', 'wa_log'); fd.append('id', a.getAttribute('data-id')); fd.append('text', text); if (!first) fd.append('reply', '1');
     fetch('index.php', { method: 'POST', body: fd, credentials: 'same-origin', keepalive: true }).then(function (r) { return r.json(); }).then(function (j) {
-      if (!j || !j.ok) { alert((j && j.error) || 'Could not log the reply.'); return; }
+      if (!j || !j.ok) { if (w) w.close(); alert((j && j.error) || 'Could not log the message.'); return; }
+      if (w) { w.opener = null; w.location.href = url; }
       if (j.warn) alert('Logged. A note on the wording: ' + j.warn);
       a.textContent = 'Logged'; if (scope) scope.style.opacity = '.55';
-    }).catch(function () { alert('Network problem: the reply was not logged. Reload and press Reply on WhatsApp again.'); });
+    }).catch(function () { if (w) w.close(); alert('Network problem: nothing was logged. Reload and try again.'); });
   });
 
   document.addEventListener('click', function (e) {          // "Put in email / WhatsApp": a research starter goes into this lead's message box
