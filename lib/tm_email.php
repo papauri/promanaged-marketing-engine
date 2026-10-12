@@ -14,14 +14,16 @@ function pm_tm_email_defaults(): array
     return [
         'intro' => 'Travel Malawi is a direct booking platform for independent lodges, B&Bs, cottages, guest houses and safari camps across Malawi.',
         'benefits_title' => 'What you get:',
-        'benefits' => ['Guests book and pay you directly, in {currency}.', 'Guests can chat and video call with you, so they see your place before they book.', // where we win: the guest meets the host before they come
-            'There is a host starter guide to help you get set up.'], // their own rooms, rates and dates are in step 3
+        'benefits' => ['Guests pay you directly, in {currency}: mobile money, bank or cash.',
+            'Guests chat and video call with you in the app, so they see your place before booking.', // where we win: the guest meets the host before they come
+            'Ulendo, our AI concierge, works with you and your manager: it writes your listing and helps answer guests.',
+            'There is a host starter guide to help you get set up.'],
         'steps_title' => 'How to start:',
-        'steps' => ["Go to {link} and send your property's details (name, town, contact).", 'We review your listing before it goes live.',
-            'Add your rooms, rates and blocked dates in your host dashboard. Booking requests then arrive there, and confirmations go out over WhatsApp.'],
+        'steps' => ["Send your property's details at {link}, or reply and our concierge team sets your listing up for you.", 'We review it before it goes live.',
+            'Add your rooms and rates in your host dashboard, and booking requests arrive there.'],
         'link' => PM_TM_LINK,
         'free' => 'There is no commission, no listing fee and no monthly charge for now.',
-        'why' => 'We are building the platform together with our first hosts, so we are not charging while we do.',
+        'why' => '', // kept short: the first email must stay under 190 words
         'closing' => 'Shall I send you the host starter guide?',
     ];
 }
@@ -128,7 +130,7 @@ function pm_tm_write(array $leads): array
         . 'email_subject: under 45 characters, specific to them, truthful, in the subject_style given, written like a normal subject line: a capital letter first and a capital letter on every town, area, road, person and business name (for example "Rooms near the Shire River barrage?"), every other word in ordinary lowercase, no full stop, no exclamation marks, no word in ALL CAPS except an acronym such as VAT. '
         . 'opening: at most two short sentences and 40 words: first who you are in one natural sentence (first name and company), then ONE true observation about their place from the evidence or research, such as how you came across it. '
         . 'No greeting, no sign-off, no promises, no numbers, no prices, no link, no exclamation marks. '
-        . 'whatsapp: 30 to 45 words, one paragraph: a greeting with the first name if given, who you are, the gain (direct bookings with no commission, and guests can chat and video call with them before they come), one easy question. '
+        . 'whatsapp: 30 to 45 words, one paragraph: a greeting with the first name if given, who you are, the gain (direct bookings with no commission; guests chat and video call with them before they come; Ulendo, the AI chat concierge, helps them and their manager), one easy question. '
         . 'The rest of the email (what the platform is, the benefits, the set-up steps, the link and that it is free) is a fixed text the app adds, so never describe it. '
         . ($subjectLine !== '' ? $subjectLine . ' ' : '') . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'] ?? '', 'city' => $l['city'] ?? '', 'contact' => $l['contact'] ?? '', 'evidence' => array_slice((array)($l['evidence'] ?? []), 0, 2),

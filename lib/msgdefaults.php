@@ -41,7 +41,7 @@ function pm_dm_seed(string $brand): array
     if ($brand === 'travel') {
         $pack = function_exists('pm_share_pack_state') && pm_share_pack_state('travel') !== 'none';
         return ['email_subject' => 'Direct bookings for {name}', 'email_body' => pm_tm_email_compose([], '', true),
-            'whatsapp' => 'Hello {first_name}, {intro}. We help independent stays like {name} take direct bookings with no commission, guests can chat and video call with you before they come, and listing is free for now. '
+            'whatsapp' => 'Hello {first_name}, {intro}. We help independent stays like {name} take direct bookings with no commission. Guests chat and video call with you before they come, and Ulendo, our AI concierge, helps you and your manager answer them. Listing is free for now. '
                 . ($pack ? 'The host starter pack and the links to get listed are below.' : 'May I send you the details?'),
             'signature' => $sig, 'wa_signature' => '— {sender}, {company}'];
     }
