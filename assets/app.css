@@ -864,3 +864,16 @@ label.tick input { width:auto; margin:0 }
 .admx:hover { color:var(--bad); background:var(--bad-bg); }
 .delpick { padding:1px 4px; background:var(--bad-bg); border-color:var(--bad-line); }
 .admbar { background:#fff; border-color:var(--bad-line); }
+
+/* ===== phones: nothing wider than the screen ===== */
+select { max-width:100%; }
+img, video, canvas, iframe, svg, table { max-width:100%; }
+@media (max-width:860px) {
+.findrow > *, .row > div { min-width:0; }
+.chip, .pill, .sx-chip, .rs-chip { white-space:normal; max-width:100%; }
+details.card > summary { flex-wrap:wrap; }
+details.drop .menu { position:static; min-width:0; max-width:100%; margin-top:6px; box-shadow:none; } /* opens under its button, inside the screen */
+.sx-bulk:not(.on) { position:static; box-shadow:none; } /* the bulk bar only follows the thumb once something is ticked */
+pre, code { white-space:pre-wrap; word-break:break-word; }
+.hint, p, li, td { overflow-wrap:anywhere; }
+}
