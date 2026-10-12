@@ -27,7 +27,7 @@ if ($path === '/wa.php') { // WhatsApp Business responder webhook (off unless co
     require __DIR__ . '/wa.php';
     return true;
 }
-if (preg_match('#^/assets/[A-Za-z0-9._-]+$#', $path) && is_file(__DIR__ . $path)) {
+if (preg_match('#^/assets/(fonts/)?[A-Za-z0-9._-]+$#', $path) && is_file(__DIR__ . $path)) { // the interface fonts live in assets/fonts
     return false; // let the built-in server send the static file
 }
 http_response_code(404);
