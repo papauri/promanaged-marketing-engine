@@ -677,7 +677,11 @@ function pm_card_l_photo_bg(array &$c): bool
     $k = max($c['W'] / $sw, $c['H'] / $sh);
     $cw = (int)ceil($c['W'] / $k);
     $ch = (int)ceil($c['H'] / $k);
-    imagecopyresampled($c['im'], $src, 0, 0, (int)(($sw - $cw) / 2), (int)(($sh - $ch) / 2), $c['W'], $c['H'], $cw, $ch);
+    $fx = (float)($a['focus'][0] ?? 0.5); // where the subject is (a photo edited by "Post from a photo"), else the middle
+    $fy = (float)($a['focus'][1] ?? 0.5);
+    $sx = (int)max(0, min($sw - $cw, round($fx * $sw - $cw / 2)));
+    $sy = (int)max(0, min($sh - $ch, round($fy * $sh - $ch / 2)));
+    imagecopyresampled($c['im'], $src, 0, 0, $sx, $sy, $c['W'], $c['H'], $cw, $ch);
     imagedestroy($src);
     $c['credit'] = trim((string)($a['credit'] ?? ''));
     return true;
@@ -687,7 +691,7 @@ function pm_card_l_photo(array &$c, int $top, int $bottom): void
 {
     // the picture was drawn first (see pm_card_draw_layout); here: gradient, words, credit
     $im = $c['im'];
-    $gTop = $top + (int)(($bottom - $top) * 0.28);
+    $gTop = $top + (int)(($bottom - $top) * (($c['p']['src'] ?? '') === 'photo_post' ? 0.5 : 0.28)); // a photo-led post keeps more of the picture clear
     for ($y = $gTop; $y <= $bottom; $y++) {
         $t = ($y - $gTop) / max(1, $bottom - $gTop);
         $alpha = (int)round(127 - 127 * 0.82 * min(1, $t * 1.15));
@@ -710,6 +714,53 @@ function pm_card_l_photo(array &$c, int $top, int $bottom): void
     }
 }
 
+/**
+ * The price box: the owner's own price (post field price.text, never written by the AI) in a badge in the business colour, top right, clear of the eyebrow.
+ * "From" and the unit are set smaller than the amount so the figure reads at a glance on a phone.
+ */
+function pm_card_price_box(array &$c, int $y): void
+{
+    $pr = (array)($c['p']['price'] ?? []);
+    $text = trim((string)($pr['text'] ?? ''));
+    if ($text === '' || (float)($pr['amount'] ?? 0) <= 0) {
+        return;
+    }
+    $cur = strtoupper((string)($pr['currency'] ?? ''));
+    $amount = $cur . ' ' . number_format((float)$pr['amount'], abs((float)$pr['amount'] - round((float)$pr['amount'])) < 0.005 ? 0 : 2);
+    $top = !empty($pr['from']) ? 'FROM' : '';
+    $unit = trim((string)($pr['unit'] ?? ''));
+    $s = $c['s'];
+    $bigPx = 64 * $s;
+    $smallPx = 26 * $s;
+    $maxW = (int)($c['W'] * 0.46);
+    while ($bigPx > 30 * $s && pm_card_tw($c['f']['sansb'], $bigPx, $amount) > $maxW) {
+        $bigPx -= 2;
+    }
+    $padX = (int)(30 * $s);
+    $padY = (int)(22 * $s);
+    $wBig = pm_card_tw($c['f']['sansb'], $bigPx, $amount);
+    $wTop = $top !== '' ? pm_card_spaced_w($c, $top, $smallPx) : 0;
+    $wUnit = $unit !== '' ? pm_card_tw($c['f']['sans'], $smallPx * 1.15, $unit) : 0;
+    $bw = max($wBig, $wTop, $wUnit) + 2 * $padX;
+    $bh = (int)($padY * 2 + $bigPx * 1.05 + ($top !== '' ? $smallPx * 1.5 : 0) + ($unit !== '' ? $smallPx * 1.6 : 0));
+    $x2 = $c['W'] - $c['pad'];
+    $x1 = $x2 - $bw;
+    $y1 = max($y + (int)(18 * $s), $c['top'] + $c['pad']);
+    $y2 = $y1 + $bh;
+    imagefilledrectangle($c['im'], $x1 + (int)(6 * $s), $y1 + (int)(8 * $s), $x2 + (int)(6 * $s), $y2 + (int)(8 * $s), imagecolorallocatealpha($c['im'], 0, 0, 0, 90)); // soft shadow
+    pm_card_rrect($c, $x1, $y1, $x2, $y2, (int)(20 * $s), $c['accent']);
+    $ty = $y1 + $padY;
+    if ($top !== '') {
+        pm_card_spaced($c, $top, $smallPx, $c['on'], $x1 + $padX, $ty);
+        $ty += (int)($smallPx * 1.5);
+    }
+    pm_card_draw($c, [$amount], $c['f']['sansb'], $bigPx, $c['on'], $x1 + $padX, $ty, 1.05);
+    $ty += (int)($bigPx * 1.05);
+    if ($unit !== '') {
+        pm_card_draw($c, [$unit], $c['f']['sans'], $smallPx * 1.15, $c['on'], $x1 + $padX, $ty + (int)(6 * $s), 1.2);
+    }
+}
+
 /** Draws the whole card for a layout. */
 function pm_card_draw_layout(array &$c, string $layout): void
 {
@@ -722,6 +773,7 @@ function pm_card_draw_layout(array &$c, string $layout): void
         // small label on the picture, then the gradient and words
         $y = pm_card_eyebrow($c);
         pm_card_l_photo($c, $top, $strip);
+        pm_card_price_box($c, $y);
     } else {
         $y = pm_card_eyebrow($c, null, $layout === 'slide' ? ((int)($c['slide'] ?? 1) + 1) . '/' . (count((array)($c['p']['slides'] ?? [])) + 1) : '');
         $gap = (int)round(34 * $c['s']);

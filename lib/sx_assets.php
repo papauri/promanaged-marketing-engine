@@ -90,7 +90,11 @@ function pm_sx_asset_clean(array $in, array $base = []): array
             'place' => mb_substr(trim((string)($in['tags']['place'] ?? ($base['tags']['place'] ?? ''))), 0, 80)],
         'expires' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $exp) ? $exp : '', 'created' => (string)$row['created'], 'uses' => array_values((array)$row['uses']),
         'w' => (int)($row['w'] ?? 0), 'h' => (int)($row['h'] ?? 0),
-    ];
+    ] + array_filter([ // a picture edited by "Post from a photo": where its subject is, what was done, and the original it came from
+        'focus' => is_array($f = $in['focus'] ?? ($base['focus'] ?? null)) && count($f) === 2 ? [max(0.0, min(1.0, (float)$f[0])), max(0.0, min(1.0, (float)$f[1]))] : null,
+        'edits' => array_values(array_map(fn($x) => mb_substr((string)$x, 0, 40), array_slice((array)($in['edits'] ?? ($base['edits'] ?? [])), 0, 8))) ?: null,
+        'edited_of' => preg_match('/^[a-f0-9]{12}$/', (string)($in['edited_of'] ?? ($base['edited_of'] ?? ''))) ? (string)($in['edited_of'] ?? $base['edited_of']) : null,
+    ], fn($v) => $v !== null);
 }
 
 /** Inserts or updates a row (an unknown id needs a 'file' that exists in data/social/assets/). Returns the stored row, or [] when refused. */

@@ -824,7 +824,8 @@ function pm_social_lint(string $caption, string $brand, string $channel = 'faceb
     if (preg_match('/guarantee/i', $c)) {
         $why[] = 'Promises a guarantee.';
     }
-    if (preg_match('/(?i:\b(MWK|USD|ZAR|ZMW|GBP|EUR|kwacha)\b)|[$£€]\s?\d|(?<![A-Za-z])K\s?\d|\d\s?[Kk]\b/', $c)) {
+    $priceOwn = trim((string)($post['price']['text'] ?? '')); // the owner's own price on a post from a photo: that exact figure may appear, no other
+    if (preg_match('/(?i:\b(MWK|USD|ZAR|ZMW|GBP|EUR|kwacha)\b)|[$£€]\s?\d|(?<![A-Za-z])K\s?\d|\d\s?[Kk]\b/', $priceOwn !== '' ? str_ireplace($priceOwn, '', $c) : $c)) {
         $why[] = 'Contains a price or money amount.';
     }
     if ($channel === 'facebook' && preg_match('/link in (my |our )?bio/i', $c)) {
