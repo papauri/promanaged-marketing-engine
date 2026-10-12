@@ -19,7 +19,7 @@ $fields = function (array $o) use ($def): string {
     $h = '<div class="row"><div><label>What are you offering? *</label><input type="text" name="title" maxlength="70" required value="' . $v('title') . '" placeholder="e.g. A free site visit"></div>'
         . '<div><label>Comment keyword</label><input type="text" name="keyword" maxlength="10" value="' . $v('keyword') . '" placeholder="QUOTE"></div></div>'
         . '<label>The problem you fix, in your customer\'s words</label><input type="text" name="problem" maxlength="140" value="' . $v('problem') . '" placeholder="e.g. Rooms sold twice">'
-        . '<label>What you do about it</label><input type="text" name="fix" maxlength="160" value="' . $v('fix') . '" placeholder="e.g. We put every booking in one calendar.">'
+        . '<label>What you do about it</label><textarea name="fix" rows="2" maxlength="160" placeholder="e.g. We put every booking in one calendar.">' . $v('fix') . '</textarea>'
         . '<label>Something that really happened (optional, for the "something that happened" post)</label><input type="text" name="proof" maxlength="160" value="' . $v('proof') . '" placeholder="Only what is true">'
         . '<label>Signs your customer needs it (optional, one per line, up to four)</label><textarea name="signs" rows="3" placeholder="You lose track of who has paid&#10;You answer the same questions all day">' . $v('signs') . '</textarea>'
         . '<div class="row"><div><label>Button</label><select name="button">';
@@ -27,7 +27,7 @@ $fields = function (array $o) use ($def): string {
         $h .= '<option value="' . $k . '"' . (($o['button'] ?? 'whatsapp') === $k ? ' selected' : '') . '>' . pm_h($l) . '</option>';
     }
     $h .= '</select></div><div><label>Ends on (optional)</label><input type="date" name="ends" value="' . $v('ends') . '"></div></div>'
-        . '<label>Reply to people who comment the keyword (optional; a plain default is used if empty)</label><input type="text" name="reply" maxlength="240" value="' . $v('reply') . '" placeholder="Thanks for sending it. Tell us a little about what you need and a person will reply.">'
+        . '<label>Reply to people who comment the keyword (optional; a plain default is used if empty)</label><textarea name="reply" rows="2" maxlength="240" placeholder="Thanks for sending it. Tell us a little about what you need and a person will reply.">' . $v('reply') . '</textarea>'
         . '<label>Questions on the landing page form (up to three)</label>';
     $qs = array_pad((array)($o['questions'] ?? $def['questions']), 3, ['label' => '', 'options' => []]);
     foreach (array_slice($qs, 0, 3) as $i => $q) {
@@ -38,20 +38,7 @@ $fields = function (array $o) use ($def): string {
 };
 ?>
 <?= pm_social_nav('leadposts') ?>
-<?php if (!$hasWa || !$hosted): ?>
-<div class="card nofold"><b>Before the buttons work well:</b>
-  <ul class="hint mt-1 ml-4">
-    <?php if (!$hasWa): ?><li>Set a mobile <b>WhatsApp number</b> in <a href="?tab=settings&amp;brand=<?= pm_h($vb) ?>">Settings</a>. The tap-to-chat button and the picture need it.</li><?php endif; ?>
-    <?php if (!$hosted): ?><li>The landing page and its form need the app online (<code>APP_URL</code> in .env). Until then every post's button opens WhatsApp instead, which works anywhere.</li><?php endif; ?>
-  </ul></div>
-<?php endif; ?>
-
-<div class="card nofold">
-  <b>Free, unlimited, and honest.</b> Pick an offer, choose the templates and the volume, and get ready-to-approve posts with a picture that carries a real button, a comment keyword that turns commenters into leads,
-  and a landing page that collects their details. Nothing here costs money, and nothing is published until you approve it in Plan.
-  <p class="hint mt-1">Posts go out one a day by the normal schedule. Facebook does not let a normal post carry a clickable button, so the button is in the picture, on the landing page, and as the tap-to-chat link; set the Page's own action button to "Send WhatsApp message" too (Channels).
-    Want paid reach? The <a href="?tab=social&amp;view=ads">Ads</a> screen plans a paused campaign you can switch on.</p>
-</div>
+<p class="hint mt-0">Pick an offer and get ready-to-approve posts with a picture that carries a button, a comment keyword that turns commenters into leads, and a landing page that collects their details. Nothing is published until you approve it in <a href="?tab=social">Plan</a>. Free and unlimited; paid reach is <a href="?tab=social&amp;view=ads">Ads</a>.</p>
 
 <?php foreach ($offers as $o):
     $st = pm_lp_stats($o);
@@ -103,7 +90,7 @@ $fields = function (array $o) use ($def): string {
 <?php endforeach; ?>
 
 <?php $ideas = pm_lp_ideas($vb); ?>
-<div class="card nofold" id="ideas">
+<div class="card" data-fold="closed" id="ideas">
   <h2>Not sure what to offer?</h2>
   <p class="hint mt-0">Get three ideas from what this business told the app: its facts, what it offers, its free first step and who it wants to reach. <?= pm_agents_ready() ? 'The AI writes them, using only those facts.' : 'The AI is not set up, so you get the free first step as a starting point.' ?></p>
   <form method="post" class="btns"><?= $sx('lp_suggest') ?><button class="btn small primary"><?= $ideas['rows'] ? 'Suggest different ideas' : 'Suggest offers' ?></button>

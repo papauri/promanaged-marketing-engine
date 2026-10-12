@@ -18,15 +18,12 @@ $bt = pm_bt_store($vb);
 $waiting = array_values(array_filter((array)$bt['proposals'], fn($p) => ($p['status'] ?? '') === 'new'));
 $lastRun = (array)($bt['runs'][0] ?? []);
 $aiOn = pm_agents_ready();
-$roles = [['Researcher', 'Reads the facts, the voice and the brand colour', true], ['Creative director', 'Proposes several kits in one AI call', $aiOn], ['Copy editor', 'Holds the words to the human-voice rules', true],
-    ['Art critic', 'Scores every kit and sends weak ones back', true], ['Producer', 'Draws the best three for you', true], ['Copywriter', 'Writes the missing profile words', $aiOn]];
 $pv = fn(string $kind, string $id, int $w, int $h = 0) => '?studio=' . $kind . '&b=' . urlencode($vb) . '&id=' . $id . '&w=' . $w . ($kind === 'cover' ? '&h=' . $h . '&t=facebook' : '') . '&v=' . PM_SD_VERSION;
 $btx = fn(string $do, string $extra = '') => '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="' . pm_h($do) . '">' . $extra;
 ?>
 <div class="card bt" id="team">
   <h2>Your brand team</h2>
-  <p class="hint mt-0">A small team works in a loop so you choose between good kits instead of building one from nothing. The <b>Creative director</b> proposes kits; the <b>Copy editor</b> and the <b>Art critic</b> score each one (readable, short, human, not a repeat, close to the brand colour); anything weak goes back for a second round. You get the best three. <b>Nothing changes until you press Use this kit.</b></p>
-  <div class="crew-row"><?php foreach ($roles as [$rn, $rd, $on]): ?><span class="crew-chip<?= $on ? '' : ' off' ?>" title="<?= pm_h($rd . ($on ? '' : ' (needs an AI key)')) ?>"><i></i><?= pm_h($rn) ?></span><?php endforeach; ?></div>
+  <p class="hint mt-0">A small team proposes whole kits (style, colours, wording), scores them and gives you the best three. <b>Nothing changes until you press Use this kit.</b></p>
   <form method="post" class="findrow bt-run"><?= $btx('bt_run') ?>
     <button class="btn primary" <?= pm_studio_can_draw() ? '' : 'disabled title="This server cannot draw pictures"' ?>><?= $waiting ? 'Ask for a fresh set' : 'Ask the team for kits' ?></button>
     <label class="check m-0"><input type="checkbox" name="words" value="1" <?= $aiOn ? 'checked' : 'disabled' ?>> also write the missing profile words</label>
@@ -69,13 +66,11 @@ $pdShots = pm_swarm_waiting($vb, 'photo');
 $pdRun = (array)($pd['runs'][0] ?? []);
 $inUseHead = ($sd = pm_studio_saved($vb)) ? (string)$sd['headline'] : (string)$cfg['cover_head'];
 $inUseLine = $sd ? (string)$sd['subline'] : (string)$cfg['cover_line'];
-$chips = fn(array $names, bool $on) => implode('', array_map(fn($n) => '<span class="crew-chip' . ($on ? '' : ' off') . '" title="' . ($on ? '' : 'Needs an AI key') . '"><i></i>' . pm_h($n) . '</span>', $names));
 $kind = ['place' => 'The place', 'work' => 'The work', 'people' => 'The people'];
 ?>
 <div class="card bt" id="wording">
   <h2>Cover wording: your writers' room</h2>
-  <p class="hint mt-0">Four writers, each with their own angle, write the headline and the supporting line for the cover; the <b>Copy editor</b> scores every option and sends weak ones back once. Anything that adds a number or a claim your facts do not give is thrown out before you see it. <b>Nothing changes until you press Use this wording.</b></p>
-  <div class="crew-row"><?= $chips(array_keys(PM_CD_WRITERS), $aiOn) ?><?= $chips(['Copy editor'], true) ?></div>
+  <p class="hint mt-0">Four writers each write the cover headline and supporting line, and an editor scores them. Anything that adds a number or claim your facts do not give is thrown out. <b>Nothing changes until you press Use this wording.</b></p>
   <p class="hint mb-2">In use now: <b><?= pm_h($inUseHead) ?></b><?= $inUseLine !== '' ? ' · ' . pm_h($inUseLine) : '' ?></p>
   <form method="post" class="findrow bt-run"><?= $btx('cd_run') ?>
     <button class="btn primary"><?= $cdOpts ? 'Ask for fresh wording' : 'Ask the writers' ?></button>
@@ -103,8 +98,7 @@ $kind = ['place' => 'The place', 'work' => 'The work', 'people' => 'The people']
 
 <div class="card bt" id="photo">
   <h2>Cover photo: your photo desk</h2>
-  <p class="hint mt-0">The <b>Photo scout</b> gathers the photos you already have (the cover photo in use, the picture your website shares, your photo library) and the <b>Photo critic</b> reads each one for a cover: size, shape, light, contrast, sharpness, and how busy it is where the headline sits, with a plain fix for every problem. The <b>Photo director</b> (AI) can write shot briefs for what to photograph next. Real photos only: nothing is generated or bought.</p>
-  <div class="crew-row"><?= $chips(['Photo scout', 'Photo critic'], true) ?><?= $chips(['Photo director'], $aiOn) ?></div>
+  <p class="hint mt-0">Reads the photos you already have (cover in use, the picture your website shares, your library) and says which would work as a cover, with a plain fix for each problem. Real photos only: nothing is generated or bought.</p>
   <form method="post" class="findrow bt-run"><?= $btx('pd_run') ?>
     <button class="btn primary"><?= $pdPhotos || $pdShots ? 'Look again' : 'Ask the photo desk' ?></button>
     <label class="check m-0"><input type="checkbox" name="brief" value="1" <?= $aiOn ? 'checked' : '' ?>> also write shot briefs<?= $aiOn ? '' : ' (plain ones without an AI key)' ?></label>

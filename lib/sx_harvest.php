@@ -546,7 +546,7 @@ function pm_panel_results_reviews(string $vb, array $ctx = []): string
     $max = max(1, max($by));
     $h = '<div class="card"><h2>Google reviews won</h2>';
     if (!$total && !$asked) {
-        return $h . '<p class="hint">Nothing counted yet. When a client posts a review after your ask, press "They posted the review" on their lead (Agents &gt; the thank-you asks) and it is counted here.</p></div>';
+        return ''; // nothing to show yet: no empty card
     }
     $h .= '<table class="sx-table"><tbody>';
     foreach ($by as $m => $n) {

@@ -11,10 +11,7 @@ $cp = fn(string $text, string $label = 'Copy') => '<button type="button" class="
 <?= pm_social_nav('channels') ?>
 <div class="sxv">
 
-<div class="card"><b>Instagram</b>
-  <p class="hint"><?= pm_h(pm_ig_next_step($vb)) ?></p>
-  <p class="hint">Honest limits: the app posts to Facebook, Instagram (when linked and online) and LinkedIn. TikTok, YouTube Shorts, Google, WhatsApp Status and Channels, X and your personal LinkedIn have no safe automatic route for a small business (posting on them needs audited API access or a personal number), so this page prepares the exact text and picture and you press Copy, post, then Mark posted.</p>
-</div>
+<p class="hint mt-0">Honest limits: the app posts to Facebook, Instagram (when linked and online) and LinkedIn. TikTok, YouTube Shorts, Google, WhatsApp Status and Channels, X and your personal LinkedIn have no safe automatic route for a small business (posting on them needs audited API access or a personal number), so this page prepares the exact text and picture and you press Copy, post, then Mark posted.</p>
 
 <div class="card" id="tasks">
   <h2>Today's hand-post tasks</h2>
@@ -130,10 +127,9 @@ $cp = fn(string $text, string $label = 'Copy') => '<button type="button" class="
 </div>
 
 <?php $kits = pm_host_kits($vb); $travel = $vb === 'travel'; ?>
-<div class="card" id="kits">
+<?php if ($kits): ?><div class="card" id="kits">
   <h2><?= $travel ? 'Host share kits' : 'Client share kits' ?></h2>
   <p class="hint">When a published post features a <?= $travel ? 'host' : 'client' ?> who gave consent, send them the post with a picture and a badge. Sharing is their choice, and tagging is a manual step: the message never promises one.</p>
-  <?php if (!$kits): ?><p class="hint">No kits waiting.</p><?php endif; ?>
   <?php foreach ($kits as $kit): $cards = pm_host_kit_cards($kit); ?>
   <div class="sx-card"><div class="sxh"><b><?= pm_h((string)($kit['row']['client_name'] ?: 'Featured')) ?></b> <span class="muted"><?= pm_h((string)$kit['post']['headline']) ?></span></div>
     <pre><?= pm_h($kit['msg']) ?></pre>
@@ -143,7 +139,7 @@ $cp = fn(string $text, string $label = 'Copy') => '<button type="button" class="
         <?php if ($cards['link'] !== ''): ?><p class="hint">Link for the badge: <?= pm_h($cards['link']) ?> <?= $cp($cards['link'], 'Copy link') ?></p><?php endif; ?></div><?php endif; ?></div>
     <form method="post" class="inl"><?= $fx('task_done', $hid('id', (string)$kit['post']['id']) . $hid('ch', 'host_kit')) ?><button class="btn small primary">Mark sent</button><button class="btn small" name="how" value="skipped">Skip</button></form></div>
   <?php endforeach; ?>
-</div>
+</div><?php endif; ?>
 
 <?php $gp = pm_gbp_pack($vb, 2); $rd = (array)($cfg['review_draft'] ?? []); ?>
 <div class="card" id="google">

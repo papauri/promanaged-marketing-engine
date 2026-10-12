@@ -68,7 +68,7 @@ function pm_lp_defaults(string $brand): array
     $p = pm_brand_profile($brand);
     $title = $p['magnet'] !== '' ? ucfirst($p['magnet']) : '';
     $kw = $p['cta_keyword'] !== '' ? $p['cta_keyword'] : 'QUOTE';
-    $off = (array)(pm_agents_config($brand)['offerings'] ?? []);
+    $off = $brand === 'travel' ? [] : (array)(pm_agents_config($brand)['offerings'] ?? []); // Travel Malawi has no list of what it sells: the settings of ProManaged IT are not its own
     return ['title' => $title, 'problem' => '', 'fix' => $off ? pm_lp_line(trim(explode(':', (string)$off[0], 2)[1] ?? (string)$off[0]), 120) : '', 'keyword' => $kw, 'button' => 'whatsapp', 'volume' => 'bold',
         'questions' => [['label' => 'What kind of business do you run?', 'options' => []], ['label' => 'What would help you most?', 'options' => []]]];
 }
@@ -94,7 +94,7 @@ function pm_lp_suggest(string $brand): array
     $brain = pm_brain($brand);
     $cfg = pm_agents_config($brand);
     $t = pm_brand_targeting($brand);
-    $offerings = array_values(array_filter(array_map('strval', (array)($cfg['offerings'] ?? []))));
+    $offerings = $brand === 'travel' ? [] : array_values(array_filter(array_map('strval', (array)($cfg['offerings'] ?? []))));
     $facts = array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($brain['facts'] ?? '')) ?: [])));
     $made = array_map('mb_strtolower', array_column(pm_lp_for_brand($brand), 'title'));
     $own = mb_strtolower(implode("\n", array_merge([pm_brand_name($brand), (string)$brain['about'], (string)$p['magnet']], $offerings, $facts)));

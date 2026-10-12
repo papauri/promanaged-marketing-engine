@@ -40,8 +40,8 @@ $tz = fn($s) => $s === '' ? '–' : pm_h($s);
 
 <?= pm_sx_goal_strip($vb) ?>
 
-<details class="card"<?= !array_filter([$g['followers_target'], $g['max_cost_per_conv_mwk'], $g['daily_token_budget']]) ? ' open' : '' ?>>
-  <summary>Goals and limits</summary>
+<details class="card">
+  <summary>Change the goals and limits</summary>
   <form method="post"><?= $sx('goals_save') ?>
     <div class="rs-grid">
       <div><label>Followers target (0 = none)</label><input type="number" min="0" name="followers_target" value="<?= (int)$g['followers_target'] ?>"></div>
@@ -58,12 +58,12 @@ $tz = fn($s) => $s === '' ? '–' : pm_h($s);
   </form>
 </details>
 
-<div class="card">
-  <div class="findrow" style="justify-content:space-between"><h2 class="m-0">This week</h2>
-    <button type="button" class="btn small" data-copy="<?= pm_h(pm_social_week_text($wr)) ?>">Copy report</button></div>
+<details class="card">
+  <summary>This week's report <span class="muted">· the Monday email to the owner</span></summary>
+  <div class="btns"><button type="button" class="btn small" data-copy="<?= pm_h(pm_social_week_text($wr)) ?>">Copy report</button></div>
   <pre class="rs-report"><?= pm_h(pm_social_week_text($wr)) ?></pre>
-  <p class="rs-note">Built from your stored numbers only. A copy is emailed to the owner on Mondays (once a week). Figures you typed in are marked as entered by you.</p>
-</div>
+  <p class="rs-note">Built from your stored numbers only. Figures you typed in are marked as entered by you.</p>
+</details>
 
 <h3>Scoreboard</h3>
 <?php if (!$sb['enough']): ?>

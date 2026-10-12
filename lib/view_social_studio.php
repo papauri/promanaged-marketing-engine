@@ -27,7 +27,7 @@ $how = ['ai' => 'AI idea', 'shuffle' => 'Surprise', 'you' => 'Edited', 'start' =
 
 <div class="card">
   <h2>Cover studio for <?= pm_h($bname) ?></h2>
-  <p class="hint mt-0">Not generated pictures: every cover and profile picture is <b>designed by code</b> from a style, four colours and your own words (a quiet name line, a headline, a supporting line and your contact details), then drawn at the exact size each platform wants, with the writing kept inside the part that is always shown. The look is deliberately <b>human</b>: earthy colours, paper grain, cut shapes and a serif headline, never the glowing purple-and-blue gradients that give generated art away. <b>Surprise me</b> re-rolls the look. <b>New idea from the AI</b> asks the AI to art-direct a design in one small call; code draws it, colours that look generated are softened, and any words that add a claim or a number are not used.</p>
+  <p class="hint mt-0">Covers and profile pictures are drawn by code from a style, colours and your own words, at the exact size each platform wants, with the writing kept inside the part that is always shown. <b>Surprise me</b> re-rolls the look; <b>New idea from the AI</b> asks for one art direction, which code then draws.</p>
   <p class="hint"><?= $saved ? 'In use everywhere now: <b>' . pm_h(PM_SD_STYLES[$saved['style']] ?? 'custom') . '</b> (' . pm_h($saved['by'] === 'ai' ? 'AI idea' : ($saved['by'] === 'shuffle' ? 'surprise' : 'your design')) . ($saved['at'] !== '' ? ', saved ' . pm_h($saved['at']) : '') . ').' : 'No design saved yet: the plain classic cover is in use. Choose one below and press <b>Use this design</b>.' ?>
     <?= $sameAsSaved ? ' You are looking at the saved design.' : ($saved ? ' You are looking at a new draft: it is not in use until you press Use.' : '') ?></p>
   <div class="btns">
@@ -87,8 +87,8 @@ $how = ['ai' => 'AI idea', 'shuffle' => 'Surprise', 'you' => 'Edited', 'start' =
   <form method="post"><?= $fx('studio', $hid('op', 'edit')) ?>
     <div class="cols">
       <div><label>Small line above (the name)</label><input type="text" name="eyebrow" value="<?= pm_h($spec['eyebrow']) ?>" maxlength="40"></div>
-      <div><label>Headline</label><input type="text" name="headline" value="<?= pm_h($spec['headline']) ?>" maxlength="70"></div>
-      <div><label>Supporting line</label><input type="text" name="subline" value="<?= pm_h($spec['subline']) ?>" maxlength="110"></div>
+      <div><label>Headline</label><textarea name="headline" rows="2" maxlength="70"><?= pm_h($spec['headline']) ?></textarea></div>
+      <div><label>Supporting line</label><textarea name="subline" rows="2" maxlength="110"><?= pm_h($spec['subline']) ?></textarea></div>
       <div><label>Contact strip (one item per line, up to three)</label><textarea name="whisper" rows="3"><?= pm_h(implode("\n", (array)$spec['whisper'])) ?></textarea></div>
       <div><label>Monogram (up to 3 letters, for the profile picture)</label><input type="text" name="monogram" value="<?= pm_h($spec['monogram']) ?>" maxlength="3"></div>
       <div><label>Texture</label><select name="texture"><?php foreach (PM_SD_TEXTURES as $k => $l): ?><option value="<?= $k ?>" <?= $spec['texture'] === $k ? 'selected' : '' ?>><?= pm_h($l) ?></option><?php endforeach; ?></select>

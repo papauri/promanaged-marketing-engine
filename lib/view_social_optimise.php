@@ -44,7 +44,7 @@ $item = fn(array $i): string => pm_opt_item_html($i, $vb, $csrf);
       <?php if (!empty($st['ai'])): ?><form method="post" class="inl"><?= $fx('opt_plain') ?><button class="btn small">Back to plain wording</button></form><?php endif; ?>
     </div>
   </div>
-  <p class="hint mt-2">Everything here is worked out from <?= pm_h($bname) ?>'s own details and facts, with no AI. Each suggestion is shown for you to read and edit before it is applied; nothing is posted or sent.</p>
+  <p class="hint mt-2">Worked out from the business's own details and facts, with no AI. Each suggestion is yours to read and edit; nothing is posted or sent.</p>
   <div class="opt-chans">
     <?php foreach ($run['channels'] as $k => $c): ?><a href="#c-<?= pm_h($k) ?>" class="sx-chip <?= $c['score'] === null ? '' : ($c['score'] >= 85 ? 'ok' : ($c['score'] >= 55 ? 'warn' : 'bad')) ?>"><?= pm_h($c['label']) ?><?= $c['score'] === null ? (empty($c['connected']) ? ' · not connected' : '') : ' ' . (int)$c['score'] . '%' ?></a><?php endforeach; ?>
   </div>
@@ -54,7 +54,7 @@ $item = fn(array $i): string => pm_opt_item_html($i, $vb, $csrf);
 <?php $copyStore = pm_copy_store($vb); $plainOf = fn(string $k) => pm_copy_plain($vb, $k); ?>
 <div class="card" id="words">
   <h2>Profile words</h2>
-  <p class="hint mt-0">The intro, description and bio for each channel, written like a person who does this for a living: three options each (plain and warm, specific and confident, short and memorable), in one AI call for the profiles you tick. They use only your facts, fit each platform's limit and are checked for the wording people now recognise as machine-written. Choose one and it becomes the suggestion on Optimise and the Audit; Facebook and WhatsApp can apply it straight away.</p>
+  <p class="hint mt-0">The intro, description and bio for each channel you tick: three options each (plain and warm, specific and confident, short and memorable), written from your facts only and checked for machine-sounding wording. Choose one and it becomes the suggestion on Profiles and the Audit.</p>
   <form method="post"><?= $fx('copy_write') ?>
     <div class="btns mt-0"><?php foreach (PM_COPY_GROUPS as $gk => $gl): ?><label class="check"><input type="checkbox" name="groups[]" value="<?= $gk ?>" <?= in_array($gk, ['business', 'facebook', 'instagram', 'whatsapp', 'google'], true) ? 'checked' : '' ?>> <?= pm_h($gl) ?></label><?php endforeach; ?></div>
     <div class="btns"><button class="btn primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?>>Write 3 options for each (AI)</button><?php if ($copyStore): ?><button class="btn small" name="do" value="copy_clear">Clear the options</button><?php endif; ?></div>

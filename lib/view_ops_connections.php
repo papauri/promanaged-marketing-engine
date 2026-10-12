@@ -109,13 +109,13 @@ $aiHid = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input ty
   <h3>Every platform</h3>
   <p class="hint mt-0">Where the business is on each platform, and how to connect it. What gets posted where is chosen under <a href="?tab=social">Social &gt; Plan</a>; the pictures are made in <a href="?tab=social&amp;view=kit">Brand &gt; Brand kit</a>.</p>
   <?php foreach (pm_platforms() as $k => $p): [$st, $cls] = $status($k); ?>
-  <details class="card plat" <?= $k === 'facebook' ? 'open' : '' ?>>
+  <details class="card plat">
     <summary><b><?= pm_h($p['name']) ?></b> <span class="pill <?= $cls ?>"><?= pm_h($st) ?></span></summary>
     <label>Profile link</label><input type="text" name="url[<?= $k ?>]" value="<?= pm_h((string)($cfg['urls'][$k] ?? '')) ?>" placeholder="https://...">
     <p class="hint"><b>What the app does here:</b> <?= pm_h($p['auto']) ?></p>
     <?php $envHint = $p['env'] ? '<p class="hint"><b>.env lines:</b> <code>' . pm_h(implode('=…  ', array_map(fn($x) => $pre . $x, $p['env']))) . '=…</code></p>' : ''; ?>
     <?php if (empty($p['manual'])) { echo $envHint; } ?>
-    <ol class="steps"><?php foreach ($p['steps'] as $stp): ?><li><?= $stepHtml($stp) ?></li><?php endforeach; ?></ol>
+    <details class="more"><summary>Set-up steps</summary><ol class="steps"><?php foreach ($p['steps'] as $stp): ?><li><?= $stepHtml($stp) ?></li><?php endforeach; ?></ol></details>
     <?php if (!empty($p['manual'])): ?><details class="more"><summary>Connecting by hand (only if the Connect box does not work)</summary>
       <ol class="steps"><?php foreach ($p['manual'] as $stp): ?><li><?= $stepHtml($stp) ?></li><?php endforeach; ?></ol><?= $envHint ?></details><?php endif; ?>
   </details>

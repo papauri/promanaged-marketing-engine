@@ -542,11 +542,6 @@ form.inline:has(input:not([type=hidden]):not([type=checkbox]):not([type=radio]),
 .layout .sticky .card:has(> .btn) > .btn { width:100%; margin:0; }
 .layout .sticky .card:has(> .btn) > label.check { margin:0; }
 .layout .sticky .card:has(> .btn) > .hint { margin:2px 0 0; }
-.crew-row { display:flex; flex-wrap:wrap; gap:4px; margin:8px 0 12px; }
-.crew-chip { display:inline-flex; align-items:center; gap:8px; padding:4px 12px; border:1px solid var(--line); border-radius:var(--r-pill); background:var(--surface); font-size:12px; font-weight:500; }
-.crew-chip i { width:8px; height:8px; border-radius:50%; background:#16a34a; }
-.crew-chip.off { color:var(--muted); background:var(--bg); }
-.crew-chip.off i { background:#d0d5dd; }
 .btkit { display:flex; flex-direction:column; gap:var(--s-2); padding:var(--s-3); }
 .btpics { position:relative; margin-bottom:34px }
 .btcover { display:block; width:100%; height:auto; aspect-ratio:820/312; object-fit:cover; border-radius:var(--r-ctl); background:#e9e4da; }

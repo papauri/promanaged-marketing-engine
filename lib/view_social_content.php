@@ -49,7 +49,6 @@ $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type
   <h2>Idea bank</h2>
   <p class="hint mt-0">Ideas the planner may turn into posts. Yours sit beside the built-in starters for <?= pm_h($bname) ?>. Ideas the Audit suggests are added here too.</p>
   <div class="ideaboom">
-    <div class="crew-row"><?php foreach (array_keys(PM_IR_SPECIALISTS) as $sp): ?><span class="crew-chip<?= pm_agents_ready() ? '' : ' off' ?>"><i></i><?= pm_h($sp) ?></span><?php endforeach; ?><span class="crew-chip"><i></i>Idea editor</span></div>
     <form method="post" class="findrow bt-run"><?= $sx('ir_run') ?><button class="btn"><?= $irOpts ? 'Ask the idea room again' : 'Ask the idea room for ideas' ?></button>
       <span class="hint m-0"><?= pm_agents_ready() ? 'Four specialists, one AI call; an editor scores every idea.' : 'No AI key: ideas are built from your own facts.' ?></span></form>
     <?php foreach ($irOpts as $o): ?>

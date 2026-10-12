@@ -78,7 +78,19 @@ function pm_setup_health_summary(array $rows): array
 /** The Settings panel: every channel's ready / not-ready state and what to add. */
 function pm_view_setup_health(): void
 {
-    $rows = pm_setup_health();
+    $mine = pm_brand();
+    $others = array_diff(pm_brand_ids(), [$mine]);
+    $rows = array_values(array_filter(pm_setup_health(), function ($r) use ($others) { // the business in use, and what every business shares (AI, scheduler, address)
+        foreach ($others as $o) {
+            if (str_ends_with((string)$r['key'], '_' . $o)) {
+                return false;
+            }
+        }
+        return true;
+    }));
+    foreach ($rows as $i => $r) {
+        $rows[$i]['label'] = preg_replace('/ · ' . preg_quote(pm_brand_name($mine), '/') . '$/u', '', (string)$r['label']); // the business is in the page title
+    }
     [$ok, $need, $okO, $needO] = pm_setup_health_summary($rows);
     echo '<details class="card"' . ($ok < $need ? ' open' : '') . '><summary><b>Setup health</b> <span class="pill ' . ($ok < $need ? 'warn' : 'hot') . '">' . $ok . ' of ' . $need . ' essentials ready</span> <span class="pill">' . $okO . ' of ' . $needO . ' optional channels on</span></summary>'
         . '<p class="hint">One glance at what is connected. Nothing here is checked over the network, so it is instant. Optional channels stay off until their keys exist.</p>'
