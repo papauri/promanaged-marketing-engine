@@ -206,6 +206,11 @@ function pm_social_action(string $vb, string $action): never
         pm_redirect($ret ?: 'social', $ok ? 'Reply posted.' : 'Facebook refused the reply: ' . $d, $ok ? 'ok' : 'err');
     }
 
+    if ($do === 'reword' || $do === 'reword_selected') { // lib/sx_regen.php: one small AI call per post
+        [$rm, $rk] = pm_regen_posts($vb, pm_social_post_ids($vb), (string)($_POST['reword_note'] ?? ''));
+        pm_redirect('social' . ($do === 'reword' && $id !== '' ? '#s' . $id : ''), $rm, $rk);
+    }
+
     $cur = null;
     foreach (pm_social_posts() as $p) {
         if ($p['id'] === $id && $p['brand'] === $vb) {
@@ -385,6 +390,12 @@ function pm_social_action(string $vb, string $action): never
             return $p;
         });
         $msg = 'Held back.';
+    } elseif ($do === 'reword_undo') {
+        $np = pm_social_patch($id, fn(array $p) => !empty($p['prev_words']) ? pm_regen_post_undo($p) : $p);
+        if ($np && in_array($np['format'] ?? '', ['image', 'carousel', 'story'], true)) {
+            pm_social_card($np);
+        }
+        $msg = 'The old words are back.';
     } elseif ($do === 'redraw') {
         $f = pm_social_card($cur);
         if ($f === '') {

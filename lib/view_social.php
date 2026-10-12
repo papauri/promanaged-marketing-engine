@@ -70,7 +70,7 @@ $isVideo = fn($f) => (bool)preg_match('/\.(mp4|mov|m4v)$/i', (string)$f);
   <span class="hint">Posts that break a rule (prices, repeats, no consented proof, missing video or picture) stay held with the reason shown.</span>
 </div>
 <?php endif; ?>
-<form id="bulk" method="post"><?= $sp('approve_selected') ?></form>
+<form id="bulk" method="post"><?= $sp('approve_selected') ?><input type="hidden" name="reword_note" value=""></form>
 <?php foreach ($byDay as $day => $dayPosts): $dn = strtotime($day); ?>
 <h4 class="sx-day"><?= pm_h(date('l j M', $dn)) ?> <?= $day === $today ? '<span class="sx-chip ok">today</span>' : ($day === date('Y-m-d', strtotime('+1 day')) ? '<span class="sx-chip">tomorrow</span>' : ($day < $today ? '<span class="sx-chip warn">past</span>' : '')) ?></h4>
 <?php foreach ($dayPosts as $p):
@@ -130,6 +130,8 @@ $isVideo = fn($f) => (bool)preg_match('/\.(mp4|mov|m4v)$/i', (string)$f);
         <?php if ($canApprove && in_array($p['status'], ['review', 'approved', 'draft'], true)): ?><button class="btn small" name="do" value="request_changes" data-ask="review_note" title="Send it back with a note">Request changes</button><?php endif; ?>
         <?php if ($canApprove && in_array($p['status'], ['draft', 'approved', 'failed'], true)): ?><button class="btn small" name="do" value="publish" data-confirm="Publish this post on the Facebook Page now?">Publish now</button><?php endif; ?>
         <?php if (in_array($p['format'], ['image', 'carousel', 'story'], true) && $unsent): ?><button class="btn small" name="do" value="redraw">Redraw picture</button><?php endif; ?>
+        <?php if (($unsent || $p['status'] === 'approved') && pm_agents_ready()): ?><button class="btn small" name="do" value="reword" data-ask-opt="reword_note" title="One small AI call writes the words again: same facts, prices and links, nothing added. The picture is redrawn.">New wording</button><?php endif; ?>
+        <?php if ($unsent && !empty($p['prev_words'])): ?><button class="btn small ghost" name="do" value="reword_undo">Undo new wording</button><?php endif; ?>
         <?php if ($panel === ''): ?>
           <button type="button" class="btn small" data-copy="<?= pm_h(pm_social_caption($p)) ?>" title="For Instagram, LinkedIn, TikTok, X, Google or WhatsApp Status">Copy caption</button>
           <?php if ($img !== '' && !$isVideo($img)): ?><a class="btn small" href="?simg=<?= pm_h($p['id']) ?>&dl=1">Download picture</a><?php endif; ?>
@@ -137,7 +139,7 @@ $isVideo = fn($f) => (bool)preg_match('/\.(mp4|mov|m4v)$/i', (string)$f);
         <?php endif; ?>
         <?php if ($canApprove): ?><button class="btn small danger" name="do" value="delete" data-confirm="Delete this post?">Delete</button><?php endif; ?>
       </div>
-      <input type="hidden" name="review_note" value="">
+      <input type="hidden" name="review_note" value=""><input type="hidden" name="reword_note" value="">
     </form>
     <?= $panel ?>
     <?php if ($p['status'] === 'needs_video'): ?>
@@ -152,6 +154,7 @@ $isVideo = fn($f) => (bool)preg_match('/\.(mp4|mov|m4v)$/i', (string)$f);
   <span class="sx-bulkn" data-pick-count=".sx-pick">0 selected</span>
   <?php if ($canApprove): ?><button class="btn small primary" form="bulk" name="do" value="approve_selected">Approve selected</button><?php endif; ?>
   <button class="btn small" form="bulk" name="do" value="hold">Hold</button>
+  <?php if (pm_agents_ready()): ?><button class="btn small" form="bulk" name="do" value="reword_selected" data-ask-opt="reword_note" title="New wording for the ticked posts (8 at a time, one small AI call each)">New wording</button><?php endif; ?>
   <?php if ($canApprove): ?><button class="btn small danger" form="bulk" name="do" value="delete" data-confirm="Delete the selected posts?">Delete</button><?php endif; ?>
 </div>
 <?php endif; ?>

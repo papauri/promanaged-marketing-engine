@@ -953,6 +953,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pm_leads_save($leads);
             $back($lead['name'] . ': ' . $what . '.');
         }
+        if ($do === 'reword' || $do === 'reword_undo') { // one small AI call writes the text on screen again (lib/sx_regen.php)
+            $slot = isset($_POST['which']) ? (($_POST['which'] ?? '') === 'followup' ? 'followup_draft' : 'drafts') : 'reply_draft';
+            if ($do === 'reword_undo') {
+                $leads[$id] = pm_regen_lead_undo($leads[$id]);
+                pm_leads_save($leads);
+                $back('The old words are back.');
+            }
+            $cur = (array)($lead[$slot] ?? []);
+            $fields = $slot === 'reply_draft'
+                ? ['subject' => $_POST['subject'] ?? $cur['subject'] ?? '', 'body' => $_POST['body'] ?? $cur['body'] ?? '', 'whatsapp' => $_POST['whatsapp'] ?? $cur['whatsapp'] ?? '']
+                : ['email_subject' => $_POST['email_subject'] ?? $cur['email_subject'] ?? '', 'email_body' => $_POST['email_body'] ?? $cur['email_body'] ?? '', 'whatsapp' => $_POST['whatsapp'] ?? $cur['whatsapp'] ?? ''];
+            @set_time_limit(90);
+            try {
+                $leads[$id] = pm_regen_lead($leads[$id], $slot, $fields, (string)($_POST['reword_note'] ?? ''));
+            } catch (Throwable $e) {
+                $back('No new wording: ' . $e->getMessage(), 'err');
+            }
+            pm_leads_save($leads);
+            $back('New wording for ' . $lead['name'] . '. Read it before it goes out' . ($slot === 'drafts' && !empty($lead['approved_at']) ? ' (it left the send queue: approve it again)' : '') . '.');
+        }
         if ($do === 'save_reply') {
             $leads[$id]['reply_draft'] = array_merge((array)($lead['reply_draft'] ?? []), ['subject' => trim((string)($_POST['subject'] ?? ($lead['reply_draft']['subject'] ?? ''))), 'body' => trim((string)($_POST['body'] ?? ($lead['reply_draft']['body'] ?? ''))),
                 'whatsapp' => trim((string)($_POST['whatsapp'] ?? ($lead['reply_draft']['whatsapp'] ?? ''))),

@@ -102,6 +102,15 @@
     if (h) h.value = note.trim();
   }, true);
 
+  document.addEventListener('click', function (e) {          // "New wording": an optional note (empty = just a fresh version; Cancel = do nothing)
+    var b = e.target.closest('[data-ask-opt]');
+    if (!b || !b.form) return;
+    var note = prompt('Anything to change? Leave it empty for a fresh version.', '');
+    if (note === null) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+    var h = b.form.querySelector('input[name=' + b.getAttribute('data-ask-opt') + ']');
+    if (h) h.value = note.trim();
+  }, true);
+
   document.addEventListener('change', function (e) {         // post selection: "select all" and the live count in the action bar
     var all = e.target.closest('[data-pick-all]');
     var sel = all ? all.getAttribute('data-pick-all') : (e.target.matches('.sx-pick') ? '.sx-pick' : '');
