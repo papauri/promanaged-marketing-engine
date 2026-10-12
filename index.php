@@ -1672,6 +1672,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         pm_redirect('settings&section=business&brand=' . $b, $m['url'] === '' ? 'Add a link first.' : ($m['ok'] ? 'Preview updated from ' . $m['url'] . '.' : 'Could not read ' . $m['url'] . '. Check the address.'), $m['ok'] ? 'ok' : 'err');
     }
 
+    if ($action === 'page_reset') { // "Reset this page to defaults" and its Undo (lib/sx_reset.php)
+        [$rsMsg, $rsKind, $rsTo] = pm_rs_run((string)($_POST['key'] ?? ''), $vb, !empty($_POST['undo']));
+        pm_redirect($rsTo, $rsMsg, $rsKind);
+    }
     if ($action === 'sendschedule') { // the days, hours and spacing of sending emails (lib/sendschedule.php)
         $b = pm_brand_norm($_POST['brand'] ?? '');
         [$ssMsg, $ssKind] = pm_ss_save($b);
@@ -1888,10 +1892,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         pm_redirect($sr['to'], $sr['msg'], $sr['kind']);
     }
 
-    if ($action === 'reset_template') {
-        pm_save('template', pm_default_template());
-        pm_redirect('template', 'Template reset to the original wording and prices.');
-    }
 }
 
 $d = $_SESSION['draft'] ?? [];
@@ -2258,10 +2258,6 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
     </div>
     <button class="btn primary" style="max-width:260px">Save template</button>
   </form>
-  <form class="mt-3" method="post" onsubmit="return confirm('Put every price and word back to the original template?')">
-    <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="reset_template">
-    <button class="btn small">Reset to original</button>
-  </form>
 
   <h1 class="mt-6"><?= $vb === 'travel' ? 'Stay onboarding wording' : 'Business lines' ?></h1>
   <p class="sub">The wording above is for the industry management system. Packages for our other lines (software, websites, hardware, IT support) use their own wording below. Review every commitment, timeline and clause before you send one.</p>
@@ -2320,6 +2316,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
   <?php endif; ?>
   </div>
 <?php endif; ?>
+<?= pm_rs_bar((string)$tab, $vb, $csrf) ?>
 </main>
 <div id="busy" role="status" aria-live="polite"><div class="bcard"><div class="spin"></div><b id="busyMsg">Working…</b><span id="busyTime"></span><span>Please wait. Other buttons are paused so two tasks cannot clash.</span></div></div>
 <script src="assets/app.js?v=<?= @filemtime(PM_ROOT . '/assets/app.js') ?>"></script>

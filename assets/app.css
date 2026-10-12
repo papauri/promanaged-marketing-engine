@@ -201,6 +201,8 @@ table.grid tbody tr:hover, .sx-table tbody tr:hover, .hist tbody tr:hover { back
 .filters a.on { background:var(--ink); color:#fff; border-color:var(--ink) }
 .filters a.on small { color:#c9ccd1; }
 .card.empty { color:var(--muted); text-align:center; padding:28px }
+.resetbar { margin-top:var(--s-6) }
+.resetbar form { margin:0 }
 .typesel { margin-left:auto; }
 .typesel select { height:var(--ctl-sm); font-size:var(--fs-2); width:auto; max-width:230px; }
 table.compact th, table.compact td { padding:var(--s-1) var(--s-2); font-size:var(--fs-1); }

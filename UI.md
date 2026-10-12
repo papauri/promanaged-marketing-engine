@@ -71,4 +71,5 @@ Dark glass top bar 58px with a 2px `--accent` stripe; each department is a pill 
 - **Empty states are one line, not a card.** A section with nothing in it is left out (Content: suggested mix, bring back what worked) until it has something to show.
 - **The page head is title, then one line of help.** Page-level buttons go in `.headacts`; none of them may repeat a tab or the top bar.
 - **Text boxes show what is typed.** `textarea` grows to its content (assets/app.js, up to 70% of the window), a list of words or towns is a `textarea` and not a one-line field, and long help text sits under the field, never in the label.
+- **Every page that holds settings can be reset.** The "Defaults" bar at the bottom of the page (lib/sx_reset.php, registered by page link in `pm_rs_pages()`) removes only that page's settings, never data, identity or logins, and keeps one Undo. A new settings page adds one entry there.
 - **Business-specific pages show only that business.** Template and prices shows the packages and wording of the business in use (the other business's rows stay in the form, hidden, so saving keeps them).
