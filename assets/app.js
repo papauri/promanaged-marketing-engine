@@ -275,6 +275,8 @@
     fetch('index.php', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
       if (!j.ok) { msg.textContent = j.error || 'Could not write it.'; return; }
       var scope = card || box.closest('form') || document;
+      var fm = scope.querySelector('input[name=fmt]'), tsel = box.querySelector('select[data-k=tone]');
+      if (fm && tsel) fm.value = tsel.value; // the format goes with the draft when it is saved
       if (b.dataset.channel === 'email') {
         var sj = scope.querySelector('[name=email_subject]'), bd = scope.querySelector('[name=email_body]');
         if (sj) sj.value = j.subject; if (bd) bd.value = j.body;

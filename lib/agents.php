@@ -472,7 +472,8 @@ function pm_ai_cache_count(int $tok): void
 require_once __DIR__ . '/sx_learn.php';
 require_once __DIR__ . '/sx_harvest.php';
 require_once __DIR__ . '/tm_email.php';
-require_once __DIR__ . '/localcur.php'; // the currency of the business we write to; never US dollars
+require_once __DIR__ . '/localcur.php';
+require_once __DIR__ . '/firm.php'; // one goal, what wins, one contact timeline per lead // the currency of the business we write to; never US dollars
 require_once __DIR__ . '/followups.php';
 require_once __DIR__ . '/subjects.php';
 require_once __DIR__ . '/contacts.php';
@@ -1116,7 +1117,7 @@ function pm_agent_write(array $leads): array
         : "";
     $sender = pm_sender_name();
     $subjectLine = function_exists('pm_email_exp_example') ? pm_email_exp_example(pm_brand()) : '';
-    $system = pm_agents_company_brief('tiny') . "\nYou are writing outreach for {$s['company_name']} as " . ($sender !== '' ? "$sender (use this first name: " . explode(' ', $sender)[0] . ")" : "a member of the team (no personal name: introduce the company instead)") . ". $ask" . PM_EMAIL_CRAFT . ' ' . ($subjectLine !== '' ? $subjectLine . ' ' : '')
+    $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou are writing outreach for {$s['company_name']} as " . ($sender !== '' ? "$sender (use this first name: " . explode(' ', $sender)[0] . ")" : "a member of the team (no personal name: introduce the company instead)") . ". $ask" . PM_EMAIL_CRAFT . ' ' . ($subjectLine !== '' ? $subjectLine . ' ' : '')
         . "Each item has subject_style: write that item's email subject in that style. " . PM_AGENT_RULES;
     $brand = pm_brand();
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'city' => $l['city'], 'currency' => pm_local_currency($l)['word'], 'contact' => $l['contact'] ?? '',
@@ -1131,7 +1132,7 @@ function pm_agent_followup(array $leads): array
 {
     $s = pm_settings();
     $subjectRule = 'written like a normal subject line: a capital letter first and a capital letter on every town, area, road, person and business name (for example \'Rooms near the Shire River barrage?\'), every other word in ordinary lowercase, no full stop, no exclamation marks, no word in ALL CAPS except an acronym such as VAT';
-    $system = pm_agents_company_brief('tiny') . "\nYou are the Follow-up agent for {$s['company_name']}. Write a 40-word follow-up email and 25-word WhatsApp that add ONE new angle (a different gain, or a one-page plan offer).  Read their_last_message and our_last_message: never repeat our last message, never quote words they did not write, and if their_last_message is empty never say they said anything. followups_already_sent tells you how many nudges came before: each one must add a different reason."
+    $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou are the Follow-up agent for {$s['company_name']}. Write a 40-word follow-up email and 25-word WhatsApp that add ONE new angle (a different gain, or a one-page plan offer).  Read their_last_message and our_last_message: never repeat our last message, never quote words they did not write, and if their_last_message is empty never say they said anything. followups_already_sent tells you how many nudges came before: each one must add a different reason."
         . "Match the state: for \"opened\" (they opened our proposal or email but stayed quiet) gently reference what they saw and add one new, true reason; for \"silent\" (never engaged) be shorter and lead with one specific fact about their business; for \"replied\" pick up their last words, never repeat a whole earlier message. "
         . "No prices, no guilt, no pressure, no urgency. Plain text, no sign-off. Each item has subject_style: write that item's email subject in that style, $subjectRule. "
         . pm_email_exp_followup_example(pm_brand()) . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
@@ -2198,7 +2199,7 @@ function pm_agent_compose(array $lead, string $channel, string $tone, string $le
     ][$angle] ?? '';
     $langTxt = $lang === 'chichewa' ? 'Open with a short, correct Chichewa greeting (for example "Moni") then continue in clear English.' : 'English.';
     $sender = pm_sender_name();
-    $system = pm_agents_company_brief('tiny') . "\nYou write one " . ($wa ? 'WhatsApp message' : 'email') . " for {$s['company_name']}, as " . ($sender !== '' ? $sender . ' (first name ' . explode(' ', $sender)[0] . ')' : 'a member of the team (no personal name: introduce the company)') . ".\n"
+    $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou write one " . ($wa ? 'WhatsApp message' : 'email') . " for {$s['company_name']}, as " . ($sender !== '' ? $sender . ' (first name ' . explode(' ', $sender)[0] . ')' : 'a member of the team (no personal name: introduce the company)') . ".\n"
         . "Tone: $toneTxt\nAngle: $angleTxt\nLength: about $words words (never more than " . (int)($words * 1.25) . ").\nLanguage: $langTxt\n"
         . PM_EMAIL_CRAFT . ' ' . ($wa ? 'This is the WhatsApp version.' : 'This is the email version.') . ' ' . pm_local_currency_rule($lead) . ' Reply JSON only.';
     $user = json_encode([
@@ -2217,8 +2218,9 @@ function pm_agent_compose(array $lead, string $channel, string $tone, string $le
 }
 
 /** The picker shown above a message box. $target tells the script which fields to fill. */
-function pm_compose_controls(string $leadId, string $csrf, bool $both = true, string $tone = 'found'): string
+function pm_compose_controls(string $leadId, string $csrf, bool $both = true, string $tone = ''): string
 {
+    $tone = $tone !== '' ? $tone : (pm_win_best_fmt(pm_brand()) ?: 'found'); // the format that has won the most replies, once there is enough to say
     $opt = fn(array $a, string $sel) => implode('', array_map(fn($k, $v) => '<option value="' . $k . '"' . ($k === $sel ? ' selected' : '') . '>' . pm_h($v) . '</option>', array_keys($a), $a));
     return '<div class="composer" data-id="' . pm_h($leadId) . '" data-csrf="' . pm_h($csrf) . '"><b>Write with AI</b>'
         . '<div class="cgrid"><select data-k="tone" aria-label="Format and tone">' . $opt(PM_COMPOSE_TONES, isset(PM_COMPOSE_TONES[$tone]) ? $tone : 'found') . '</select>'

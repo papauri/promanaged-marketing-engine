@@ -88,8 +88,13 @@ function pm_approach(array $l): array
         }
     }
     [$win, $why] = pm_approach_time($l);
+    $used = array_column(pm_touches($l), 'ch');
+    $key = fn(string $label) => str_starts_with($label, 'Comment on their Facebook') ? 'comment_on_their_page' : (str_starts_with($label, 'Comment on their Instagram') ? 'instagram_dm' : strtolower($label));
+    foreach ($steps as $i => $st) { // a step any department already did is marked done
+        $steps[$i][3] = in_array($key($st[1]), $used, true);
+    }
     return ['checks' => $checks, 'ready' => $tot ? (int)round(100 * $got / $tot) : 0, 'missing' => $missing, 'next' => $next,
-        'plan' => ['steps' => $steps, 'time' => $win, 'time_why' => $why, 'angle' => $hooks ? (string)$hooks[0] : '']];
+        'plan' => ['steps' => $steps, 'time' => $win, 'time_why' => $why, 'angle' => $hooks ? (string)$hooks[0] : '', 'touches' => array_slice(pm_touches($l), 0, 4)]];
 }
 
 /** The Approach block on a lead card: readiness, what is missing (with the button that fixes it), and the plan. */
@@ -118,10 +123,15 @@ function pm_approach_html(array $l, callable $post, callable $hid): string
     $h .= '</ul><div class="ap-plan">';
     if ($a['plan']['steps']) {
         $h .= '<ol class="ap-steps">';
-        foreach ($a['plan']['steps'] as [$when, $ch, $what]) {
-            $h .= '<li><b>' . pm_h($when) . ' · ' . pm_h($ch) . '</b><small>' . pm_h($what) . '</small></li>';
+        foreach ($a['plan']['steps'] as $st) {
+            [$when, $ch, $what] = $st;
+            $h .= '<li' . (!empty($st[3]) ? ' class="done"' : '') . '><b>' . pm_h($when) . ' · ' . pm_h($ch) . (!empty($st[3]) ? ' ✓' : '') . '</b><small>' . pm_h($what) . '</small></li>';
         }
-        $h .= '</ol><p class="hint">Best time: <b>' . pm_h($a['plan']['time']) . '</b>, ' . pm_h($a['plan']['time_why']) . '.</p>';
+        $h .= '</ol>';
+        if ($a['plan']['touches']) {
+            $h .= '<p class="hint">So far: ' . pm_h(implode(' · ', array_map(fn($x) => date('j M', strtotime($x['at'])) . ' ' . pm_touch_label($x['ch']) . ' (' . $x['by'] . ')', $a['plan']['touches']))) . '</p>';
+        }
+        $h .= '<p class="hint">Best time: <b>' . pm_h($a['plan']['time']) . '</b>, ' . pm_h($a['plan']['time_why']) . '.</p>';
         if ($a['plan']['angle'] !== '') {
             $h .= '<p class="hint">Open on: “' . pm_h(mb_substr($a['plan']['angle'], 0, 160)) . '”</p>';
         }

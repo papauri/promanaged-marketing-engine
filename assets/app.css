@@ -219,6 +219,8 @@ table.grid tbody tr:hover, .sx-table tbody tr:hover, .hist tbody tr:hover { back
 .ap-steps { margin:0 0 var(--s-2); padding:0; list-style:none; counter-reset:ap; display:grid; gap:var(--s-2) }
 .ap-steps li { counter-increment:ap; position:relative; padding-left:30px }
 .ap-steps li::before { content:counter(ap); position:absolute; left:0; top:1px; width:20px; height:20px; border-radius:50%; background:var(--dept); color:#fff; font-size:11px; font-weight:700; display:grid; place-items:center }
+.ap-steps li.done { opacity:.6 }
+.ap-steps li.done::before { background:var(--ok); content:'✓' }
 .ap-steps b { display:block; font-size:var(--fs-2) }
 .ap-steps small { display:block; color:var(--muted); font-size:var(--fs-1) }
 .resetbar { margin-top:var(--s-6) }

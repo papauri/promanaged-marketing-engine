@@ -254,7 +254,7 @@ function pm_director_brief(bool $force = false): array
     } else {
         $system .= '}';
     }
-    $user = json_encode(['brand' => $brand, 'today' => date('Y-m-d'), 'pipeline' => $ai, 'target_types' => $cfg['sectors'], 'daily_send_cap' => $cfg['send_cap']] + ($social ? ['social' => $social] : []), JSON_UNESCAPED_UNICODE);
+    $user = json_encode(['brand' => $brand, 'today' => date('Y-m-d'), 'firm_goal' => pm_firm_goal($brand)['line'], 'what_wins' => pm_win_line($brand), 'pipeline' => $ai, 'target_types' => $cfg['sectors'], 'daily_send_cap' => $cfg['send_cap']] + ($social ? ['social' => $social] : []), JSON_UNESCAPED_UNICODE);
     $out = null;
     $err = '';
     try {

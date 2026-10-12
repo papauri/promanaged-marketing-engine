@@ -478,6 +478,22 @@ function pm_playbook_send(string $brand, int $n, string $text): array
 /** Ticks a playbook task done (or not), keeping the words as they were last edited. */
 function pm_playbook_tick(string $brand, int $n, ?bool $done = null, ?string $text = null): void
 {
+    $task = null;
+    foreach ((array)(pm_load('engage_playbook', fn() => [])[$brand]['tasks'] ?? []) as $x) {
+        if ((int)$x['n'] === $n) {
+            $task = $x;
+        }
+    }
+    $willBeDone = $done ?? !($task['done'] ?? false);
+    $lid = (string)($task['lead_id'] ?? '');
+    if ($task && $willBeDone && empty($task['done']) && $lid !== '') { // Sales sees what Social did: one timeline per lead
+        $L = pm_leads();
+        if (isset($L[$lid])) {
+            pm_touch($L[$lid], (string)$task['channel'], 'Social', mb_substr((string)($text ?? $task['message']), 0, 120));
+            pm_lead_note($L[$lid], 'Social playbook: ' . pm_touch_label((string)$task['channel']));
+            pm_leads_save($L);
+        }
+    }
     pm_update('engage_playbook', function (array $all) use ($brand, $n, $done, $text) {
         foreach ($all[$brand]['tasks'] ?? [] as $k => $t) {
             if ((int)$t['n'] === $n) {
@@ -516,7 +532,7 @@ function pm_playbook_pick(string $brand, int $max = 8, array $skip = []): array
     $later = [];
     foreach ($all as $l) {
         $hot = in_array($l['status'], ['replied', 'proposal'], true);
-        if (!$hot && (isset($recent[$l['id']]) || in_array($l['id'], $skip, true))) {
+        if (!$hot && (isset($recent[$l['id']]) || in_array($l['id'], $skip, true) || pm_touched_recently($l, 2))) { // Sales or Social reached them lately: their turn comes later
             $later[] = $l;
         } else {
             $fresh[] = $l;
@@ -637,7 +653,8 @@ function pm_agent_engage_playbook(string $brand, bool $force = false, bool $rese
         $can = pm_playbook_lead_channels($l);
         $hot[] = ['ref' => 'l:' . $l['id'], 'name' => $l['name'], 'contact' => (string)($l['contact'] ?? ''), 'status' => $l['status'],
             'stage' => ['qualified' => 'first contact', 'drafted' => 'first contact', 'contacted' => 'follow-up: we wrote before and had no answer', 'replied' => 'they answered us: move to a call or meeting', 'proposal' => 'proposal sent: help them decide'][$l['status']] ?? $l['status'],
-            'can' => $can, 'suggested' => pm_playbook_suggest($l, $can, (string)($history[$l['id']]['ch'] ?? '')), 'profile' => pm_playbook_profile($l)];
+            'can' => $can, 'suggested' => pm_playbook_suggest($l, $can, (string)(pm_touches($l)[0]['ch'] ?? ($history[$l['id']]['ch'] ?? ''))), 'profile' => pm_playbook_profile($l),
+            'contact_so_far' => array_map(fn($x) => substr($x['at'], 0, 10) . ' ' . pm_touch_label($x['ch']) . ' (' . $x['by'] . ')', array_slice(pm_touches($l), 0, 3))];
     }
     $times = pm_fb_best_times($brand);
     $posts = pm_fb_posts($brand, 5)['posts'];
@@ -665,7 +682,8 @@ function pm_agent_engage_playbook(string $brand, bool $force = false, bool $rese
         . "WhatsApp, Messenger and Instagram messages 25 to 50 words, signed '" . pm_sender_name() . "'. A public comment or reply 10 to 30 words, adds value (praise something real, a useful tip), never sells and never asks for private details. "
         . "Match the 'stage': a follow-up refers lightly to our earlier message; after a proposal, offer to answer questions or walk them through it. "
         . "Order by money: buyers and unanswered people first, then replied and proposal-stage leads, then follow-ups, then first contacts. One task per person, max 10 tasks. Messenger is only possible if 'window' is true. "
-        . "Also give up to 3 'page_moves' for today (which post type to publish at which time, pin a post, a story, a live) and one line of 'focus'. Reply JSON only.";
+        . "Also give up to 3 'page_moves' for today (which post type to publish at which time, pin a post, a story, a live) and one line of 'focus'. "
+        . "'contact_so_far' is what any of our departments already did with that person: build on it, never repeat the same step. " . pm_firm_goal($brand)['line'] . ' ' . pm_win_line($brand) . ' Reply JSON only.';
     $user = json_encode(['best_times' => $times, 'our_last_posts' => array_map(fn($p) => ['when' => $p['at'], 'text' => mb_substr($p['message'], 0, 100), 'engagement' => $p['reactions'] + $p['comments'] + $p['shares']], $posts),
             'people_on_our_page' => array_map(fn($p) => ['ref' => 'p:' . $p['id'], 'name' => $p['name'], 'where' => ($p['platform'] ?? 'fb') === 'ig' ? 'Instagram' : 'Facebook', 'can' => pm_playbook_person_channels($p), 'reacted' => $p['reacted'], 'commented' => $p['commented'], 'messaged' => $p['messaged'], 'buying_words' => $p['buyer'],
                 'waiting_for_our_answer' => $p['unanswered'], 'window' => $p['window'] ?? false, 'said' => $p['said'], 'last' => $p['last']], $crowd),

@@ -46,6 +46,8 @@ $tz = fn($s) => $s === '' ? '–' : pm_h($s);
   <summary>Change the goals and limits</summary>
   <form method="post"><?= $sx('goals_save') ?>
     <div class="rs-grid">
+      <div><label>Firm goal: signed clients a month</label><input type="number" min="0" name="signed_per_month" value="<?= (int)$g['signed_per_month'] ?>"></div>
+      <div><label>Firm goal: replies a month</label><input type="number" min="0" name="replies_per_month" value="<?= (int)$g['replies_per_month'] ?>"></div>
       <div><label>Followers target (0 = none)</label><input type="number" min="0" name="followers_target" value="<?= (int)$g['followers_target'] ?>"></div>
       <div><label>…by this date</label><input type="date" name="followers_date" value="<?= pm_h($g['followers_date']) ?>"></div>
       <div><label>Enquiries a week from social</label><input type="number" min="0" name="enquiries_per_week" value="<?= (int)$g['enquiries_per_week'] ?>"></div>

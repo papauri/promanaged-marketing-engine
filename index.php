@@ -922,6 +922,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $key = ($_POST['which'] ?? '') === 'followup' ? 'followup_draft' : 'drafts';
             $oldBody = trim((string)($lead[$key]['email_body'] ?? ''));
             $leads[$id][$key] = array_replace((array)($lead[$key] ?? []), ['email_subject' => trim((string)$_POST['email_subject']), 'email_body' => trim((string)$_POST['email_body']), 'whatsapp' => trim((string)$_POST['whatsapp'])]); // other draft details (source, checks) are kept
+            if (isset(PM_COMPOSE_TONES[(string)($_POST['fmt'] ?? '')])) {
+                $leads[$id][$key]['fmt'] = (string)$_POST['fmt']; // written with Write with AI in this format: the firm learns which formats win replies
+            }
             if ($key === 'drafts' && $oldBody !== '' && ($oldBody !== $leads[$id][$key]['email_body'] || !empty($lead[$key]['edited_at']))) {
                 $leads[$id][$key]['edited_at'] = (string)($lead[$key]['edited_at'] ?? '') ?: date('Y-m-d H:i'); // written by hand: a bulk redraft never overwrites it
             }

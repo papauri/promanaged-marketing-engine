@@ -15,7 +15,7 @@ const PM_SX_SOCIAL_AGENTS = '/^(social|plan_posts|plan_offline|junk_judge|engage
 
 function pm_social_goals_default(): array
 {
-    return ['followers_target' => 0, 'followers_date' => '', 'enquiries_per_week' => 2, 'leads_per_month' => 6, 'posts_per_week' => 5,
+    return ['signed_per_month' => 2, 'replies_per_month' => 10, 'followers_target' => 0, 'followers_date' => '', 'enquiries_per_week' => 2, 'leads_per_month' => 6, 'posts_per_week' => 5,
         'max_cost_per_conv_mwk' => 0, 'daily_token_budget' => 0, 'mwk_per_1k_tokens' => 8];
 }
 

@@ -39,6 +39,7 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
 </div>
 
 <section class="card hq-today" aria-label="Today">
+  <?php $fg = $td['goal']; ?><?= $tile('Firm goal this month', $fg['signed'][0] . ' of ' . $fg['signed'][1] . ' signed', $fg['replies'][0] . ' of ' . $fg['replies'][1] . ' replies · ' . $fg['pace'], '?tab=social&view=results') ?>
   <?= $tile('Emails today', $td['sent'] . ($td['cap'] ? ' of ' . $td['cap'] : ''), $td['queue'] ? $td['queue'] . ' in the queue' . ($td['next'] === 'paused' ? ', sending paused' : ($td['next'] !== '' ? ', next ' . $td['next'] : '')) : 'nothing queued', '?tab=agents') ?>
   <?= $tile('WhatsApp today', $td['wa'] . ($td['wa_cap'] ? ' of ' . $td['wa_cap'] : ''), 'first messages and follow-ups', '?tab=whatsapp') ?>
   <?= $tile('Posts going out today', (string)$td['posts'], $so['ready'] ? $so['planned'] . ' lined up in all' : 'Facebook not connected', '?tab=social') ?>

@@ -140,7 +140,7 @@ function pm_home_data(string $brand): array
             'today' => ['sent' => (int)$ps['sent_today'], 'cap' => function_exists('pm_effective_send_cap') ? pm_effective_send_cap($cfg) : (int)($cfg['send_cap'] ?? 0), 'queue' => $queue,
                 'next' => $next ? pm_ss_fmt($next) : ($queue ? 'paused' : ''), 'wa' => pm_wa_sent_today($mine), 'wa_cap' => (int)($cfg['wa_cap'] ?? 0), 'posts' => $postsToday,
                 'pb_done' => ($pb['day'] ?? '') === $today ? count(array_filter((array)$pb['tasks'], fn($t) => !empty($t['done']))) : 0, 'pb_total' => ($pb['day'] ?? '') === $today ? count((array)$pb['tasks']) : 0,
-                'people' => $waitingPeople, 'ai' => pm_usage_brand_today($brand), 'ai_budget' => pm_budget(), 'memory' => $cacheHits],
+                'people' => $waitingPeople, 'goal' => pm_firm_goal($brand), 'ai' => pm_usage_brand_today($brand), 'ai_budget' => pm_budget(), 'memory' => $cacheHits],
         ];
     } finally {
         pm_brand_set($was);

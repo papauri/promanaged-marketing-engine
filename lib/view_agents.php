@@ -263,7 +263,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
         </form>
         <?php endif; ?>
         <?php if ($dr || $l['status'] !== 'new' || !empty($l['research']['starters'])): ?>
-        <form method="post" class="msg msgpanel"><?= $post($id, 'save_draft', $hid('which', $which)) ?>
+        <form method="post" class="msg msgpanel"><?= $post($id, 'save_draft', $hid('which', $which) . $hid('fmt', '')) ?>
           <div class="mp-head"><h4 class="lc-h"><?= $which === 'followup' ? 'The follow-up' : 'The first message' ?></h4></div>
           <details class="mp-to"><summary>To: <?= pm_h(implode(' · ', array_filter([(string)($l['contact'] ?? ''), (string)($l['email'] ?? '') ?: 'no email', (string)($l['phone'] ?? '')]))) ?></summary>
             <div class="two"><input type="text" name="email" value="<?= pm_h($l['email'] ?? '') ?>" placeholder="Email"><input type="text" name="contact" value="<?= pm_h($l['contact'] ?? '') ?>" placeholder="Contact name"></div>
