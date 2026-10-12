@@ -30,6 +30,8 @@ $tz = fn($s) => $s === '' ? '–' : pm_h($s);
   <div class="card empty">Connect the <?= pm_h($bname) ?> Facebook Page first (<a href="?tab=settings&amp;section=connections">Operations &gt; Connections</a>) so numbers can be read. Anything you type in below still counts.</div>
 <?php endif; ?>
 
+<?= pm_ins_sales_html($vb) ?>
+
 <div class="kpis">
   <div><b><?= $num($fol['now']) ?><?php if ($fol['d7'] !== null): ?> <small style="font-weight:500"><?= $sgn($fol['d7']) ?> in 7 days</small><?php endif; ?></b>
     <span>Facebook followers <?= pm_sx_spark(array_values($fol['series'])) ?><?= $fol['d7'] === null ? ' · the weekly change shows after a week of readings' : '' ?><?= $fol['ig'] !== null ? ' · Instagram ' . $num($fol['ig']) : '' ?><?= $fol['li'] !== null ? ' · LinkedIn ' . $num($fol['li']) . ' (entered by you)' : '' ?><?= $fol['tt'] !== null ? ' · TikTok ' . $num($fol['tt']) . ' (entered by you)' : '' ?></span></div>
@@ -193,5 +195,7 @@ if ($sb['n']): ?>
   </div>
   <p class="rs-note">The AI is only used to write short posts and replies and to read comments; this page, the scoreboard, the times and the report cost no tokens.</p>
 </div>
+
+<div id="ai"><?= pm_ins_ai_html($vb) ?></div>
 
 <?= pm_social_panels('results', $vb) ?>

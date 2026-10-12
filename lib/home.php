@@ -111,6 +111,15 @@ function pm_home_data(string $brand): array
             return false;
         };
         [$hOk, $hNeed] = function_exists('pm_setup_health_summary') ? pm_setup_health_summary($health) : [0, 0, 0, 0];
+        // today, as it happens
+        $mine = array_filter(pm_leads_read(), fn($l) => ($l['brand'] ?? 'promanaged') === $brand);
+        $queue = (int)$ps['approved_waiting'];
+        $next = $queue && function_exists('pm_ss_next_open') ? pm_ss_next_open($brand, time()) : 0;
+        $today = date('Y-m-d');
+        $postsToday = count(array_filter($posts, fn($p) => in_array($p['status'] ?? '', ['approved', 'scheduled'], true) && substr((string)($p['when'] ?? ''), 0, 10) === $today));
+        $waitingPeople = count(array_filter((array)(pm_load('fb_judged', fn() => [])[$brand] ?? []), fn($r) => in_array($r['verdict'] ?? '', ['buyer', 'question', 'complaint'], true)
+            && ($r['state'] ?? '') === '' && empty($r['answered']) && empty($r['private_reply_at']) && strtotime((string)($r['at'] ?? '')) > $now - 14 * 86400));
+        $cacheHits = (int)(pm_load('ai_cache_stats', fn() => [])[$today]['hits'] ?? 0);
         return [
             'brand' => $brand,
             'sales' => ['leads' => (int)$ps['leads'], 'new' => (int)($st['new'] ?? 0), 'contacted' => (int)$ps['contacted'], 'replies' => (int)$ps['awaiting_reply'], 'drafts' => (int)$ps['drafts_unsent'],
@@ -128,10 +137,49 @@ function pm_home_data(string $brand): array
             'ops' => ['ai' => pm_agents_ready(), 'scheduler_age' => function_exists('pm_social_heartbeat_age') ? pm_social_heartbeat_age() : null, 'mail' => $okOf('smtp_' . $brand), 'imap' => $okOf('imap_' . $brand),
                 'essentials_ok' => $hOk, 'essentials' => $hNeed, 'businesses' => count(pm_brand_ids())],
             'activity' => pm_home_activity($brand),
+            'today' => ['sent' => (int)$ps['sent_today'], 'cap' => function_exists('pm_effective_send_cap') ? pm_effective_send_cap($cfg) : (int)($cfg['send_cap'] ?? 0), 'queue' => $queue,
+                'next' => $next ? pm_ss_fmt($next) : ($queue ? 'paused' : ''), 'wa' => pm_wa_sent_today($mine), 'wa_cap' => (int)($cfg['wa_cap'] ?? 0), 'posts' => $postsToday,
+                'pb_done' => ($pb['day'] ?? '') === $today ? count(array_filter((array)$pb['tasks'], fn($t) => !empty($t['done']))) : 0, 'pb_total' => ($pb['day'] ?? '') === $today ? count((array)$pb['tasks']) : 0,
+                'people' => $waitingPeople, 'ai' => pm_usage_brand_today($brand), 'ai_budget' => pm_budget(), 'memory' => $cacheHits],
         ];
     } finally {
         pm_brand_set($was);
     }
+}
+
+/**
+ * Everything that waits on the owner, by department: dept => list of [what, link, urgent]. An empty list means the department needs nothing from you.
+ * Read from stored data only, like the rest of the overview.
+ */
+function pm_home_needs(string $brand, array $d): array
+{
+    $s = $d['sales'];
+    $so = $d['social'];
+    $br = $d['brand'];
+    $op = $d['ops'];
+    $t = $d['today'];
+    $n = fn(int $x, string $one, string $many) => $x . ' ' . ($x === 1 ? $one : $many);
+    $need = ['sales' => [], 'social' => [], 'brand' => [], 'insights' => [], 'ops' => []];
+    $s['replies'] && $need['sales'][] = [$n($s['replies'], 'reply waits', 'replies wait') . ' for an answer', '?tab=agents&status=awaiting', true];
+    $s['drafts'] && $need['sales'][] = [$n($s['drafts'], 'first message is', 'first messages are') . ' ready to read and approve', '?tab=agents&status=drafted', false];
+    $s['followups_to_draft'] && $need['sales'][] = [$n($s['followups_to_draft'], 'follow-up', 'follow-ups') . ' to draft', '?tab=agents#strategy', false];
+    if (!$so['ready']) {
+        $need['social'][] = ['Connect the Facebook Page', '?tab=settings&section=connections', true];
+    } else {
+        $t['people'] && $need['social'][] = [$n($t['people'], 'person waits', 'people wait') . ' for an answer on Facebook or Instagram', '?tab=social&view=inbox', true];
+        $so['waiting'] && $need['social'][] = [$n($so['waiting'], 'post waits', 'posts wait') . ' for your approval', '?tab=social', false];
+        $t['pb_total'] > $t['pb_done'] && $need['social'][] = [($t['pb_total'] - $t['pb_done']) . ' of ' . $n($t['pb_total'], 'playbook task', 'playbook tasks') . ' still to do today', '?tab=social&view=growth', false];
+        !$so['planned'] && !$so['waiting'] && $need['social'][] = ['Nothing is scheduled to post: plan the week', '?tab=social', false];
+    }
+    $br['kits'] && $need['brand'][] = [$n($br['kits'], 'new kit waits', 'new kits wait') . ' for your choice', '?tab=social&view=kit', false];
+    $br['score'] === null && $need['brand'][] = ['Check how the profiles stand', '?tab=social&view=optimise', false];
+    $br['score'] !== null && $br['fixable'] && $br['score'] < 80 && $need['brand'][] = [$n($br['fixable'], 'profile fix is', 'profile fixes are') . ' ready (Page health ' . $br['score'] . '%)', '?tab=social&view=optimise', false];
+    !$op['ai'] && $need['ops'][] = ['Add an AI key: the agents cannot write without one', '?tab=settings&section=connections', true];
+    $op['scheduler_age'] === null && $need['ops'][] = ['Set up the scheduler, so posts, emails and the morning playbook go out on their own', '?tab=settings&section=health', false];
+    $op['scheduler_age'] !== null && $op['scheduler_age'] >= 7200 && $need['ops'][] = ['The scheduler last ran ' . max(1, intdiv((int)$op['scheduler_age'], 3600)) . ' h ago', '?tab=settings&section=health', true];
+    !$op['mail'] && $need['ops'][] = ['Set up the mailbox so emails can be sent', '?tab=settings&section=email', true];
+    $op['essentials_ok'] < $op['essentials'] && $op['mail'] && $op['ai'] && $need['ops'][] = [$op['essentials_ok'] . ' of ' . $op['essentials'] . ' essentials ready', '?tab=settings&section=health', false];
+    return $need;
 }
 
 /** The department cards. state: ok | warn | todo; stats are label => value; next steps are [label, href, primary]. */

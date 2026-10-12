@@ -16,6 +16,10 @@ $s = $hd['sales'];
 $so = $hd['social'];
 $br = $hd['brand'];
 $kpi = fn(string $label, string $value, string $href, string $tone = '') => '<a class="hq-kpi ' . $tone . '" href="' . pm_h($href) . '"><span>' . pm_h($label) . '</span><b>' . pm_h($value) . '</b></a>';
+$td = $hd['today'];
+$needs = pm_home_needs($vb, $hd);
+$nNeed = array_sum(array_map('count', $needs));
+$tile = fn(string $label, string $value, string $note, string $href) => '<a class="hq-today-i" href="' . pm_h($href) . '"><span>' . pm_h($label) . '</span><b>' . pm_h($value) . '</b><small>' . pm_h($note) . '</small></a>';
 ?>
 <section class="hq-hero">
   <div>
@@ -34,6 +38,14 @@ $kpi = fn(string $label, string $value, string $href, string $tone = '') => '<a 
   <?= $kpi('Won', (string)$s['won'], '?tab=history') ?>
 </div>
 
+<section class="card hq-today" aria-label="Today">
+  <?= $tile('Emails today', $td['sent'] . ($td['cap'] ? ' of ' . $td['cap'] : ''), $td['queue'] ? $td['queue'] . ' in the queue' . ($td['next'] === 'paused' ? ', sending paused' : ($td['next'] !== '' ? ', next ' . $td['next'] : '')) : 'nothing queued', '?tab=agents') ?>
+  <?= $tile('WhatsApp today', $td['wa'] . ($td['wa_cap'] ? ' of ' . $td['wa_cap'] : ''), 'first messages and follow-ups', '?tab=whatsapp') ?>
+  <?= $tile('Posts going out today', (string)$td['posts'], $so['ready'] ? $so['planned'] . ' lined up in all' : 'Facebook not connected', '?tab=social') ?>
+  <?= $tile('Playbook', $td['pb_total'] ? $td['pb_done'] . ' of ' . $td['pb_total'] : '–', $td['pb_total'] ? 'tasks done today' : 'no playbook today', '?tab=social&view=growth') ?>
+  <?= $tile('AI today', number_format($td['ai']) . ' tokens', ($td['ai_budget'] ? 'budget ' . number_format($td['ai_budget']) . ' (all businesses)' : 'no daily limit') . ($td['memory'] ? ' · ' . $td['memory'] . ' from memory' : ''), '?tab=social&view=results#ai') ?>
+</section>
+
 <div class="hq-top">
   <section class="card hq-brief" id="brief">
     <h2>Today's brief from the Director</h2>
@@ -51,9 +63,12 @@ $kpi = fn(string $label, string $value, string $href, string $tone = '') => '<a 
       <button class="btn small<?= $brief['headline'] === '' ? ' primary' : '' ?>"><?= $brief['headline'] === '' ? "Write today's strategy" : 'Refresh strategy' ?></button></form>
   </section>
   <section class="card hq-need">
-    <h2>The departments</h2>
-    <?php foreach ($cards as $k => $c): ?>
-      <a class="hq-needrow <?= pm_h($c['state']) ?>" href="<?= pm_h($c['next'][0][1] ?? $reg[$k]['href']) ?>" style="<?= pm_h(pm_ui_dept_style($k)) ?>"><span class="dico"><?= pm_ui_icon($k, 16) ?></span><span><b><?= pm_h($reg[$k]['name']) ?></b><small><i class="sdot <?= pm_h($c['state']) ?>"></i><?= pm_h($c['text']) ?></small></span><i class="go">&rsaquo;</i></a>
+    <h2>What needs you <span class="muted t-sm"><?= $nNeed ? '· ' . $nNeed . ' thing' . ($nNeed === 1 ? '' : 's') : '· nothing right now' ?></span></h2>
+    <?php foreach ($cards as $k => $c): $items = $needs[$k] ?? []; ?>
+      <div class="hq-needdept" style="<?= pm_h(pm_ui_dept_style($k)) ?>">
+        <a class="hq-needrow <?= $items ? ($items[0][2] ? 'warn' : 'todo') : 'ok' ?>" href="<?= pm_h($items[0][1] ?? $reg[$k]['href']) ?>"><span class="dico"><?= pm_ui_icon($k, 16) ?></span><span><b><?= pm_h($reg[$k]['name']) ?></b><small><i class="sdot <?= $items ? 'warn' : 'ok' ?>"></i><?= pm_h($items ? $items[0][0] : ($k === 'insights' ? $c['text'] : 'All clear')) ?></small></span><i class="go">&rsaquo;</i></a>
+        <?php foreach (array_slice($items, 1) as $it): ?><a class="hq-needsub" href="<?= pm_h($it[1]) ?>"><i class="sdot <?= $it[2] ? 'warn' : '' ?>"></i><?= pm_h($it[0]) ?></a><?php endforeach; ?>
+      </div>
     <?php endforeach; ?>
   </section>
 </div>
