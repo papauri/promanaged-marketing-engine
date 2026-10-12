@@ -5,7 +5,7 @@ $view = (string)($_GET['view'] ?? 'growth');
 $bname = pm_brand_title($settings, $vb);
 $sc = pm_social_cfg($vb);
 $fg = fn($do, $extra = '') => '<input type="hidden" name="csrf" value="' . $csrf . '"><input type="hidden" name="action" value="fbg"><input type="hidden" name="do" value="' . $do . '"><input type="hidden" name="view" value="' . pm_h($view) . '">' . $extra;
-$chan = ['reply_comment' => 'Reply to their comment', 'messenger' => 'Messenger', 'whatsapp' => 'WhatsApp', 'call' => 'Call', 'comment_on_their_page' => 'Comment on their Page', 'email' => 'Email'];
+$chan = ['reply_comment' => 'Reply on Facebook', 'messenger' => 'Messenger', 'instagram_reply' => 'Reply on Instagram', 'instagram_dm' => 'Instagram message', 'whatsapp' => 'WhatsApp', 'call' => 'Call', 'comment_on_their_page' => 'Comment on their Facebook Page', 'email' => 'Email'];
 ?>
 <?= pm_social_nav($view) ?>
 
@@ -21,7 +21,8 @@ $chan = ['reply_comment' => 'Reply to their comment', 'messenger' => 'Messenger'
     } catch (Throwable) {
     }
     $pb = pm_load('engage_playbook', fn() => [])[$vb] ?? null;
-    $people = isset($_GET['people']) ? pm_fb_people($vb) : null; ?>
+    $people = isset($_GET['people']) ? pm_fb_people($vb) : null;
+    $pbLeads = pm_leads_read(); ?>
   <div class="card">
     <div class="findrow" style="justify-content:space-between">
       <h2 class="m-0" id="playbook">Today's playbook <?= $pb ? '<span class="muted t-sm" style="font-weight:400">· made ' . pm_h($pb['at']) . '</span>' : '' ?></h2>
@@ -33,21 +34,40 @@ $chan = ['reply_comment' => 'Reply to their comment', 'messenger' => 'Messenger'
       <?php if (!$pb['tasks']): ?><p class="hint">No tasks today.</p><?php endif; ?>
       <?php if ($pb['focus']): ?><p class="lead"><?= pm_h($pb['focus']) ?></p><?php endif; ?>
       <p class="hint">Best times: <?= $pb['times']['hours'] ? pm_h(implode(', ', array_map(fn($h) => sprintf('%02d:00', $h), $pb['times']['hours']))) . ' · ' : '' ?><?= pm_h($pb['times']['note']) ?></p>
-      <?php foreach ($pb['tasks'] as $t): ?>
-      <div class="ptask <?= $t['done'] ? 'done' : '' ?>">
+      <?php foreach ($pb['tasks'] as $t):
+          $ch = (string)$t['channel'];
+          $lead = isset($t['lead_id']) ? ($pbLeads[$t['lead_id']] ?? null) : (str_starts_with((string)($t['ref'] ?? ''), 'l:') ? ($pbLeads[substr((string)$t['ref'], 2)] ?? null) : null);
+          $waUrl = $lead ? preg_replace('/\?text=.*$/', '', pm_wa_link($lead, '')) : '';
+          $fbUrl = $lead && preg_match('~facebook\.com/~i', (string)($lead['facebook'] ?? '')) ? (string)$lead['facebook'] : '';
+          $igUrl = $lead && preg_match('~instagram\.com/~i', (string)($lead['instagram'] ?? '')) ? (string)$lead['instagram'] : '';
+          $canSend = (in_array($ch, ['reply_comment', 'instagram_reply'], true) && !empty($t['cid'])) || ($ch === 'messenger' && !empty($t['psid']) && !empty($t['window']));
+          $postLink = str_starts_with((string)$t['link'], 'http') ? (string)$t['link'] : ''; ?>
+      <form method="post" class="ptask <?= $t['done'] ? 'done' : '' ?>" id="pt<?= (int)$t['n'] ?>"><?= $fg('task_done', '<input type="hidden" name="n" value="' . (int)$t['n'] . '">') ?>
         <div class="pwhen"><?= pm_h($t['when']) ?></div>
         <div>
-          <p><b><?= pm_h($t['who']) ?></b> · <?= pm_h($chan[$t['channel']] ?? $t['channel']) ?> <span class="muted">· <?= pm_h($t['why']) ?></span></p>
-          <div class="msgbox"><span class="copytext"><?= pm_h($t['message']) ?></span></div>
+          <p><b><?= pm_h($t['who']) ?></b> · <?= pm_h($chan[$ch] ?? $ch) ?> <span class="muted">· <?= pm_h($t['why']) ?></span></p>
+          <textarea name="text" rows="3" aria-label="Words for <?= pm_h($t['who']) ?>"><?= pm_h($t['message']) ?></textarea>
           <p class="hint">Goal: <?= pm_h($t['goal']) ?></p>
           <div class="btns">
-            <button type="button" class="btn small" data-copy="<?= pm_h($t['message']) ?>">Copy words</button>
-            <?php if ($t['link'] !== ''): ?><a class="btn small" href="<?= pm_h($t['link']) ?>" <?= str_starts_with($t['link'], 'http') ? 'target="_blank" rel="noopener noreferrer"' : '' ?>>Open</a><?php endif; ?>
-            <?php if ($t['channel'] === 'messenger'): ?><a class="btn small" href="?tab=social&view=inbox">Inbox</a><?php endif; ?>
-            <form method="post" style="display:inline"><?= $fg('task_done', '<input type="hidden" name="n" value="' . (int)$t['n'] . '">') ?><button class="btn small <?= $t['done'] ? '' : 'primary' ?>"><?= $t['done'] ? 'Undo' : 'Done' ?></button></form>
+            <?php if ($canSend): ?><button class="btn small primary" name="do" value="pb_send" data-confirm="<?= pm_h('Send this to ' . $t['who'] . ' now' . ($ch === 'messenger' ? ' on Messenger' : ' as a public reply under their comment') . '?') ?>"><?= $ch === 'messenger' ? 'Send on Messenger' : ($ch === 'instagram_reply' ? 'Reply on Instagram' : 'Reply on Facebook') ?></button>
+            <?php elseif ($ch === 'whatsapp' && $waUrl !== ''): ?><a class="btn small primary" data-wa-open="<?= pm_h($waUrl) ?>" href="<?= pm_h($waUrl) ?>" target="_blank" rel="noopener noreferrer">Open WhatsApp</a>
+            <?php elseif ($ch === 'call' && $lead && trim((string)($lead['phone'] ?? '')) !== ''): ?><a class="btn small primary" href="tel:<?= pm_h(preg_replace('/[^\d+]/', '', (string)$lead['phone'])) ?>">Call <?= pm_h((string)$lead['phone']) ?></a>
+            <?php elseif ($ch === 'email' && $lead && filter_var($lead['email'] ?? '', FILTER_VALIDATE_EMAIL)): ?><a class="btn small primary" data-mail-open="<?= pm_h((string)$lead['email']) ?>" data-subject="<?= pm_h(pm_brand_name($vb)) ?>" href="mailto:<?= pm_h((string)$lead['email']) ?>">Open email</a>
+            <?php elseif ($ch === 'comment_on_their_page' && $fbUrl !== ''): ?><a class="btn small primary" href="<?= pm_h($fbUrl) ?>" target="_blank" rel="noopener noreferrer" data-copy-from="textarea[name=text]" data-copy="" title="Copies the words and opens their Page in a new tab">Copy and open their Page</a>
+            <?php elseif ($ch === 'instagram_dm' && $igUrl !== ''): ?><a class="btn small primary" href="<?= pm_h($igUrl) ?>" target="_blank" rel="noopener noreferrer" data-copy-from="textarea[name=text]" data-copy="" title="Copies the words and opens their Instagram in a new tab">Copy and open their Instagram</a>
+            <?php elseif ($ch === 'messenger'): ?><span class="hint">More than 24 hours since they wrote: Facebook only lets you answer from the Facebook app now.</span><?php endif; ?>
+            <button type="button" class="btn small" data-copy-from="textarea[name=text]" data-copy="">Copy words</button>
+            <?php if (pm_agents_ready()): ?><button type="button" class="btn small" data-reword="textarea[name=text]" data-kind="<?= $ch === 'email' ? 'email' : 'message' ?>" title="One small AI call: same facts, fresh words">New wording</button><?php endif; ?>
+            <?php if ($postLink !== ''): ?><a class="btn small ghost" href="<?= pm_h($postLink) ?>" target="_blank" rel="noopener noreferrer">See the post ↗</a><?php endif; ?>
+            <button class="btn small"><?= $t['done'] ? 'Undo' : 'Done' ?></button>
           </div>
+          <?php if ($lead): ?><details class="sx-more"><summary>About <?= pm_h($lead['name']) ?></summary>
+            <p class="hint"><?= pm_h(implode(' · ', array_filter([(string)($lead['type'] ?? ''), (string)($lead['city'] ?? ''), (string)(PM_LEAD_STATUSES[$lead['status']] ?? $lead['status']), (string)($lead['contact'] ?? ''), (string)($lead['phone'] ?? ''), (string)($lead['email'] ?? '')]))) ?></p>
+            <?php foreach (array_slice(array_reverse((array)($lead['notes'] ?? [])), 0, 2) as $ln): ?><p class="hint"><?= pm_h((string)$ln['at']) ?> · <?= pm_h((string)$ln['text']) ?></p><?php endforeach; ?>
+            <a class="btn small ghost" href="?tab=agents&amp;rl=<?= pm_h($lead['id']) ?>#l<?= pm_h($lead['id']) ?>" target="_blank" rel="noopener">Lead card in a new tab ↗</a>
+          </details><?php endif; ?>
         </div>
-      </div>
+      </form>
       <?php endforeach; ?>
       <?php if (!empty($pb['moves'])): ?><h3>Page moves today</h3><ul><?php foreach ($pb['moves'] as $m): ?><li><b><?= pm_h((string)($m['when'] ?? '')) ?></b> <?= pm_h((string)($m['what'] ?? (is_string($m) ? $m : ''))) ?></li><?php endforeach; ?></ul><?php endif; ?>
     <?php endif; ?>

@@ -102,6 +102,35 @@
     if (h) h.value = note.trim();
   }, true);
 
+  document.addEventListener('click', function (e) {          // "New wording" on any text box: data-reword="<the box>" data-kind="post|message|email"; a second press puts the old words back
+    var b = e.target.closest('[data-reword]');
+    if (!b) return;
+    e.preventDefault();
+    var scope = b.closest('form, .card'), ta = scope && scope.querySelector(b.getAttribute('data-reword'));
+    if (!ta) return;
+    b.dataset.label = b.dataset.label || b.textContent;
+    if (b.dataset.undo === '1') { ta.value = b.dataset.prev; b.dataset.undo = ''; b.textContent = b.dataset.label; return; }
+    var note = prompt('Anything to change? Leave it empty for a fresh version.', '');
+    if (note === null) return;
+    var c = scope.querySelector('input[name=csrf]') || document.querySelector('input[name=csrf]');
+    var fd = new FormData();
+    fd.append('csrf', c ? c.value : ''); fd.append('action', 'reword_text'); fd.append('text', ta.value); fd.append('kind', b.getAttribute('data-kind') || 'message'); fd.append('note', note.trim());
+    b.disabled = true; b.textContent = 'Writing…';
+    fetch('index.php', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) { toast(j.error || 'Could not reword it.'); b.textContent = b.dataset.label; return; }
+      b.dataset.prev = ta.value; ta.value = j.text; ta.dispatchEvent(new Event('input', { bubbles: true }));
+      b.dataset.undo = '1'; b.textContent = 'Undo new wording';
+    }).catch(function () { toast('Network problem. Try again.'); b.textContent = b.dataset.label; }).then(function () { b.disabled = false; });
+  });
+
+  document.addEventListener('click', function (e) {          // WhatsApp and email links that take the words from the box next to them (as edited)
+    var a = e.target.closest('[data-wa-open],[data-mail-open]');
+    if (!a) return;
+    var ta = a.closest('form, .card') && a.closest('form, .card').querySelector('textarea[name=text]'), t = ta ? ta.value : '';
+    if (a.hasAttribute('data-wa-open')) { a.href = a.getAttribute('data-wa-open') + '?text=' + encodeURIComponent(t); }
+    else { a.href = 'mailto:' + a.getAttribute('data-mail-open') + '?subject=' + encodeURIComponent(a.getAttribute('data-subject') || '') + '&body=' + encodeURIComponent(t); }
+  }, true);
+
   document.addEventListener('click', function (e) {          // "New wording": an optional note (empty = just a fresh version; Cancel = do nothing)
     var b = e.target.closest('[data-ask-opt]');
     if (!b || !b.form) return;

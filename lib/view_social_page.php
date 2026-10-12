@@ -48,6 +48,7 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
     <form method="post" class="fbedit"><?= $fp('edit', $hid('id', $p['id'])) ?>
       <textarea name="text" rows="4"><?= pm_h($p['message']) ?></textarea>
       <div class="btns"><button class="btn small">Save the new text</button>
+        <?php if (pm_agents_ready() && trim((string)$p['message']) !== ''): ?><button type="button" class="btn small" data-reword="textarea[name=text]" data-kind="post" title="One small AI call writes it again: same facts, prices and links. Read it, then Save the new text">New wording</button><?php endif; ?>
         <a class="btn small" href="<?= pm_h($p['url']) ?>" target="_blank" rel="noopener noreferrer">Open on Facebook</a>
         <button class="btn small danger" name="do" value="delete" onclick="return confirm('Delete this post from the Facebook Page? This cannot be undone.')">Delete post</button></div>
     </form>
@@ -65,7 +66,7 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
         <form method="post"><?= $fp('reply', $hid('id', $cm['id']) . $hid('post', $p['id']) . $hid('post_text', mb_substr($p['message'], 0, 200)) . $hid('from', $cm['from']) . $hid('comment', $cm['message'])) ?>
           <?php if (!$cm['ours']): ?><textarea name="text" rows="2" placeholder="Your reply"><?= pm_h($_SESSION['fbdraft'][$cm['id']] ?? $autoDrafts[$cm['id']] ?? '') ?></textarea><?php endif; ?>
           <div class="btns">
-            <?php if (!$cm['ours']): ?><button class="btn small" name="do" value="draft_reply">Draft with AI</button><button class="btn small primary" name="do" value="reply">Reply</button><?php endif; ?>
+            <?php if (!$cm['ours']): ?><button class="btn small" name="do" value="draft_reply">Draft with AI</button><button type="button" class="btn small" data-reword="textarea[name=text]">New wording</button><button class="btn small primary" name="do" value="reply">Reply</button><?php endif; ?>
             <button class="btn small" name="do" value="<?= $cm['liked'] ? 'unlike' : 'like' ?>"><?= $cm['liked'] ? 'Unlike' : 'Like' ?></button>
             <?php if (!$cm['ours']): ?><button class="btn small" name="do" value="<?= $cm['hidden'] ? 'unhide' : 'hide' ?>"><?= $cm['hidden'] ? 'Unhide' : 'Hide' ?></button><?php endif; ?>
             <button class="btn small danger" name="do" value="delete_comment" onclick="return confirm('Delete this comment?')">Delete</button>
@@ -114,7 +115,7 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
           <?php if ($k['link']): ?><a class="muted" href="<?= pm_h($k['link']) ?>" target="_blank" rel="noopener noreferrer">view</a><?php endif; ?></p>
         <p class="said"><?= pm_h(mb_substr($k['text'], 0, 300)) ?></p>
         <?php if ($act === 'reply'): ?><textarea name="text" rows="2"><?= pm_h($k['reply']) ?></textarea><?php endif; ?>
-        <div class="btns"><button class="btn small primary" name="how" value="<?= $act ?>"><?= $aBtn[$act] ?></button>
+        <div class="btns"><button class="btn small primary" name="how" value="<?= $act ?>"><?= $aBtn[$act] ?></button><?php if ($act === 'reply'): ?><button type="button" class="btn small" data-reword="textarea[name=text]">New wording</button><?php endif; ?>
           <?php if ($act !== 'hide' && $act !== 'delete' && $k['verdict'] !== 'fan'): ?><button class="btn small" name="how" value="hide">Hide</button><?php endif; ?>
           <?php if ($act === 'hide'): ?><button class="btn small" name="how" value="delete" onclick="return confirm('Delete this from the Page?')">Delete instead</button><?php endif; ?>
           <button class="btn small" name="how" value="skip">Leave it</button></div>
@@ -132,7 +133,7 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
       <?= $hid('cid', $cm['id']) . $hid('post', $cm['post']) . $hid('from', $cm['from']) . $hid('message', $cm['message']) ?>
       <p><b><?= pm_h($cm['from']) ?></b> <span class="muted">on "<?= pm_h(mb_substr($cm['post'], 0, 60)) ?>…"</span><br><?= pm_h($cm['message']) ?></p>
       <textarea name="reply" rows="2" placeholder="Your reply"><?= pm_h($_SESSION['sreply'][$cm['id']] ?? '') ?></textarea>
-      <div class="btns"><button class="btn small" name="do" value="draft_reply">Draft with AI</button><button class="btn small primary" name="do" value="reply" data-confirm="Post this reply on Facebook?">Post reply</button></div>
+      <div class="btns"><button class="btn small" name="do" value="draft_reply">Draft with AI</button><button type="button" class="btn small" data-reword="textarea[name=reply]">New wording</button><button class="btn small primary" name="do" value="reply" data-confirm="Post this reply on Facebook?">Post reply</button></div>
     </form>
     <?php endforeach; ?>
   </div>
@@ -146,7 +147,7 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
     <?php foreach ($t['messages'] as $m): ?><p class="<?= $m['ours'] ? 'us' : 'them' ?>"><?= pm_h($m['text']) ?> <span class="muted"><?= pm_h(date('j M H:i', strtotime($m['at']))) ?></span></p><?php endforeach; ?>
     <form method="post"><?= $fp('message', $hid('psid', $t['psid']) . $hid('tid', $t['id']) . $hid('last', (string)(end($t['messages'])['text'] ?? '')) . $hid('from', $t['who'])) ?>
       <textarea name="text" rows="2" placeholder="Your answer"><?= pm_h($_SESSION['fbdraft'][$t['id']] ?? '') ?></textarea>
-      <div class="btns"><button class="btn small" name="do" value="draft_message">Draft with AI</button><button class="btn small primary" <?= $t['window'] ? '' : 'disabled title="Facebook allows replies only within 24 hours of their last message"' ?>>Send</button></div>
+      <div class="btns"><button class="btn small" name="do" value="draft_message">Draft with AI</button><button type="button" class="btn small" data-reword="textarea[name=text]">New wording</button><button class="btn small primary" <?= $t['window'] ? '' : 'disabled title="Facebook allows replies only within 24 hours of their last message"' ?>>Send</button></div>
       <?php if (!$t['window']): ?><p class="hint">More than 24 hours since their last message: Facebook does not allow a reply from apps now. Answer them from the Facebook app.</p><?php endif; ?>
     </form>
   </div>

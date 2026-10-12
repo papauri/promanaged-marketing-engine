@@ -410,6 +410,87 @@ function pm_job_playbook(string $brand): string
     return in_array($r, ['current', 'no Page connected', 'tried recently'], true) ? '' : 'playbook ' . $r;
 }
 
+/** Where a person on our Page or Instagram can be answered, best first. */
+function pm_playbook_person_channels(array $p): array
+{
+    $ig = ($p['platform'] ?? 'fb') === 'ig';
+    $c = [];
+    if (!empty($p['window']) && ($p['thread'] ?? '') !== '' && !$ig) {
+        $c[] = 'messenger';
+    }
+    if (!empty($p['comment_ids'])) {
+        $c[] = $ig ? 'instagram_reply' : 'reply_comment';
+    }
+    return $c ?: [$ig ? 'instagram_reply' : 'reply_comment'];
+}
+
+/** Every channel a lead can be reached on, best first: WhatsApp, a call, email, their Facebook Page, their Instagram. */
+function pm_playbook_lead_channels(array $l): array
+{
+    $c = [];
+    if (pm_wa_best($l)[0] !== '') {
+        $c[] = 'whatsapp';
+    }
+    if (trim((string)($l['phone'] ?? '')) !== '') {
+        $c[] = 'call';
+    }
+    if (filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) && !pm_lead_email_dead($l)) {
+        $c[] = 'email';
+    }
+    if (preg_match('~facebook\.com/~i', (string)($l['facebook'] ?? ''))) {
+        $c[] = 'comment_on_their_page';
+    }
+    if (preg_match('~instagram\.com/~i', (string)($l['instagram'] ?? ''))) {
+        $c[] = 'instagram_dm';
+    }
+    return $c;
+}
+
+/** Sends a playbook task's words right from the playbook (a reply under their comment on Facebook or Instagram, or a Messenger answer) and ticks it done. Returns [ok, message]. */
+function pm_playbook_send(string $brand, int $n, string $text): array
+{
+    $text = trim($text);
+    $pb = (array)(pm_load('engage_playbook', fn() => [])[$brand] ?? []);
+    $t = null;
+    foreach ((array)($pb['tasks'] ?? []) as $x) {
+        if ((int)$x['n'] === $n) {
+            $t = $x;
+        }
+    }
+    if (!$t || $text === '') {
+        return [false, $t ? 'Write the words first.' : 'That task is not in today\'s playbook.'];
+    }
+    $ch = (string)$t['channel'];
+    if (in_array($ch, ['reply_comment', 'instagram_reply'], true) && ($t['cid'] ?? '') !== '') {
+        [$ok, $m] = $ch === 'instagram_reply' ? pm_ig_reply($brand, (string)$t['cid'], $text) : pm_fb_action($brand, 'reply', (string)$t['cid'], $text);
+    } elseif ($ch === 'messenger' && ($t['psid'] ?? '') !== '') {
+        [$ok, $m] = pm_fb_message($brand, (string)$t['psid'], $text);
+    } else {
+        return [false, 'This one is sent from your phone or their profile: copy the words, open it, then press Done.'];
+    }
+    if ($ok) {
+        pm_playbook_tick($brand, $n, true, $text);
+        pm_agent_log('Social', 'Playbook: ' . ($ch === 'messenger' ? 'Messenger answer' : 'reply') . ' sent to ' . $t['who']);
+    }
+    return [$ok, $ok ? 'Sent to ' . $t['who'] . ' and ticked done.' : $m];
+}
+
+/** Ticks a playbook task done (or not), keeping the words as they were last edited. */
+function pm_playbook_tick(string $brand, int $n, ?bool $done = null, ?string $text = null): void
+{
+    pm_update('engage_playbook', function (array $all) use ($brand, $n, $done, $text) {
+        foreach ($all[$brand]['tasks'] ?? [] as $k => $t) {
+            if ((int)$t['n'] === $n) {
+                $all[$brand]['tasks'][$k]['done'] = $done ?? !$t['done'];
+                if ($text !== null && trim($text) !== '') {
+                    $all[$brand]['tasks'][$k]['message'] = trim($text);
+                }
+            }
+        }
+        return $all;
+    }, fn() => []);
+}
+
 function pm_agent_engage_playbook(string $brand, bool $force = false): array
 {
     pm_brand_set($brand);
@@ -423,6 +504,7 @@ function pm_agent_engage_playbook(string $brand, bool $force = false): array
             continue;
         }
         $hot[] = ['lead_id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'city' => $l['city'], 'status' => $l['status'], 'facebook' => $l['facebook'] ?? '', 'whatsapp' => ($l['whatsapp'] ?? '') ?: ($l['phone'] ?? ''),
+            'can' => pm_playbook_lead_channels($l),
             'contact' => $l['contact'] ?? '', 'last' => $l['updated'] ?? '',
             'known_about_them' => array_slice(array_values(array_filter(array_merge((array)($l['research']['hooks'] ?? []), array_slice((array)($l['evidence'] ?? []), 0, 2), array_slice((array)($l['social_gaps'] ?? []), 0, 1)))), 0, 3),
             'stage' => ['qualified' => 'first contact', 'drafted' => 'first contact', 'contacted' => 'follow-up: we wrote before and had no answer', 'replied' => 'they answered us: move to a call or meeting', 'proposal' => 'proposal sent: help them decide'][$l['status']] ?? $l['status']];
@@ -449,15 +531,16 @@ function pm_agent_engage_playbook(string $brand, bool $force = false): array
     }
     $system = pm_agents_company_brief('tiny') . "\nYou are the business's sales-focused community manager. Today is " . date('l j F Y') . ". Build TODAY's engagement playbook that moves people closer to buying, "
         . "using only the people and leads given. For each task decide: who, why them now (their signal), when today (a clock time in Malawi time), channel "
-        . "(reply_comment, messenger, whatsapp, call, comment_on_their_page, email), the exact words to use (short, human, specific to what they said or do, one easy question, no prices, no pressure, never promise times or results), and the goal of the step. "
+        . "(one of that person's 'can' list only: reply_comment and messenger on our Facebook Page, instagram_reply on our Instagram, comment_on_their_page or instagram_dm on their own profiles, whatsapp, call, email), "
+        . "picking where that person is most likely to answer: someone who wrote on our Page or Instagram is answered there first; use every channel that fits across the day, not only WhatsApp. The exact words to use (short, human, specific to what they said or do, one easy question, no prices, no pressure, never promise times or results), and the goal of the step. "
         . "How the words must read: like a real person from a small local business, not an advert. Greet by first name when 'contact' is a person's name, otherwise 'Hello'. English unless the person wrote to us in Chichewa. "
         . "The first sentence is about THEM, built on one item from 'known_about_them' (or what they said on our Page); never open with what we do. At most one sentence about how we could help, phrased as a question or an offer to show, never a feature list. "
         . "End with one easy question. WhatsApp and Messenger 25 to 50 words; sign off with '" . pm_sender_name() . "'. Match the 'stage': a follow-up refers lightly to our earlier message; after a proposal, offer to answer questions or walk them through it. "
         . "Order by money: buyers and unanswered people first, then replied and proposal-stage leads, then follow-ups, then first contacts. Max 10 tasks. "
-        . "Messenger is only possible if 'window' is true. Commenting on a lead's own Facebook page must add value (praise something real, a useful tip) and never sell. "
+        . "Messenger is only possible if 'window' is true. Commenting on a lead's own Facebook page or Instagram must add value (praise something real, a useful tip) and never sell. A public reply is shorter (10 to 30 words) and never asks for private details. "
         . "Also give up to 3 'page_moves' for today (e.g. which post type to publish at which time, pin a post, a story, a live) and one line of 'focus'. Reply JSON only.";
     $user = json_encode(['best_times' => $times, 'our_last_posts' => array_map(fn($p) => ['when' => $p['at'], 'text' => mb_substr($p['message'], 0, 100), 'engagement' => $p['reactions'] + $p['comments'] + $p['shares']], $posts),
-            'people_on_our_page' => array_map(fn($p) => ['ref' => 'p:' . $p['id'], 'name' => $p['name'], 'reacted' => $p['reacted'], 'commented' => $p['commented'], 'messaged' => $p['messaged'], 'buying_words' => $p['buyer'],
+            'people_on_our_page' => array_map(fn($p) => ['ref' => 'p:' . $p['id'], 'name' => $p['name'], 'where' => ($p['platform'] ?? 'fb') === 'ig' ? 'Instagram' : 'Facebook', 'can' => pm_playbook_person_channels($p), 'reacted' => $p['reacted'], 'commented' => $p['commented'], 'messaged' => $p['messaged'], 'buying_words' => $p['buyer'],
                 'waiting_for_our_answer' => $p['unanswered'], 'window' => $p['window'] ?? false, 'said' => $p['said'], 'last' => $p['last']], $crowd),
             'warm_leads' => array_map(fn($h) => ['ref' => 'l:' . $h['lead_id']] + $h, $hot)], JSON_UNESCAPED_UNICODE)
         . "\nJSON: {\"focus\":\"\",\"tasks\":[{\"ref\":\"p:.. or l:..\",\"who\":\"\",\"why\":\"\",\"when\":\"HH:MM\",\"channel\":\"\",\"message\":\"\",\"goal\":\"\"}],\"page_moves\":[{\"when\":\"\",\"what\":\"\"}]}";
@@ -469,13 +552,26 @@ function pm_agent_engage_playbook(string $brand, bool $force = false): array
     foreach (array_slice((array)$out['tasks'], 0, 10) as $i => $t) {
         $ref = (string)($t['ref'] ?? '');
         $link = '';
+        $act = [];
+        $can = [];
         if (str_starts_with($ref, 'p:') && isset($people[substr($ref, 2)])) {
-            $link = $people[substr($ref, 2)]['links'][0] ?? '';
+            $pp = $people[substr($ref, 2)];
+            $link = $pp['links'][0] ?? '';
+            $can = pm_playbook_person_channels($pp);
+            $act = ['platform' => $pp['platform'] ?? 'fb', 'cid' => (string)(end($pp['comment_ids']) ?: ''), 'psid' => $pp['thread'] !== '' ? (string)$pp['id'] : '', 'window' => (bool)($pp['window'] ?? false)];
         } elseif (str_starts_with($ref, 'l:')) {
-            $link = '?tab=agents&rl=' . substr($ref, 2) . '#lead-' . substr($ref, 2);
+            $lid = substr($ref, 2);
+            $link = '?tab=agents&rl=' . $lid . '#lead-' . $lid;
+            $lr = pm_leads_read()[$lid] ?? [];
+            $can = $lr ? pm_playbook_lead_channels($lr) : [];
+            $act = ['lead_id' => $lid];
         }
-        $tasks[] = ['n' => $i, 'ref' => $ref, 'who' => (string)($t['who'] ?? ''), 'why' => (string)($t['why'] ?? ''), 'when' => (string)($t['when'] ?? ''), 'channel' => (string)($t['channel'] ?? ''),
-            'message' => pm_human_polish((string)($t['message'] ?? ''), in_array((string)($t['channel'] ?? ''), ['email'], true) ? 'email' : 'whatsapp'), 'goal' => (string)($t['goal'] ?? ''), 'link' => $link, 'done' => false];
+        $ch = (string)($t['channel'] ?? '');
+        if ($can && !in_array($ch, $can, true)) { // a channel this person cannot be reached on: the best one they can
+            $ch = $can[0];
+        }
+        $tasks[] = ['n' => $i, 'ref' => $ref, 'who' => (string)($t['who'] ?? ''), 'why' => (string)($t['why'] ?? ''), 'when' => (string)($t['when'] ?? ''), 'channel' => $ch,
+            'message' => pm_human_polish((string)($t['message'] ?? ''), $ch === 'email' ? 'email' : 'whatsapp'), 'goal' => (string)($t['goal'] ?? ''), 'link' => $link, 'done' => false] + $act;
     }
     usort($tasks, fn($a, $b) => strcmp($a['when'], $b['when']));
     $pb = ['at' => date('Y-m-d H:i'), 'day' => date('Y-m-d'), 'sig' => $sig, 'focus' => (string)($out['focus'] ?? ''), 'tasks' => $tasks, 'moves' => array_slice((array)($out['page_moves'] ?? []), 0, 3), 'times' => $times];

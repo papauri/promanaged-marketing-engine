@@ -1307,6 +1307,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         pm_redirect('template', 'Template saved. New PDFs use it straight away.');
     }
 
+    if ($action === 'reword_text') { // "New wording" on any text box (fetch): one small AI call, returns JSON, saves nothing (lib/sx_regen.php)
+        header('Content-Type: application/json');
+        @set_time_limit(60);
+        pm_brand_set($vb);
+        $rtKind = in_array($_POST['kind'] ?? '', ['post', 'email', 'message'], true) ? $_POST['kind'] : 'message';
+        $rtField = ['post' => 'caption', 'email' => 'email_body', 'message' => 'whatsapp'][$rtKind];
+        $rtText = trim((string)($_POST['text'] ?? ''));
+        if ($rtText === '' || !pm_agents_ready()) {
+            echo json_encode(['ok' => false, 'error' => $rtText === '' ? 'There is no text to reword yet.' : 'The AI needs a key first (Operations > Connections).']);
+            exit;
+        }
+        try {
+            $rtNew = (string)(pm_regen_words([$rtField => $rtText], $rtKind === 'message' ? 'whatsapp' : $rtKind, (string)($_POST['note'] ?? ''))[$rtField] ?? $rtText);
+            echo json_encode($rtNew === $rtText ? ['ok' => false, 'error' => 'The AI kept the same words (a new number or link would have been added). Try again or add a note.'] : ['ok' => true, 'text' => $rtNew]);
+        } catch (Throwable $e) {
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
     if ($action === 'compose') { // AI message composer (fetch): returns JSON, saves nothing
         header('Content-Type: application/json');
         @set_time_limit(90);
@@ -1596,14 +1615,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 pm_redirect($to, count($pb['tasks']) . ' engagement task(s) for today.');
             }
             if ($do === 'task_done') {
-                $all = pm_load('engage_playbook', fn() => []);
-                foreach ($all[$vb]['tasks'] ?? [] as $k => $t) {
-                    if ($t['n'] === (int)($_POST['n'] ?? -1)) {
-                        $all[$vb]['tasks'][$k]['done'] = !$t['done'];
-                    }
-                }
-                pm_save('engage_playbook', $all);
-                pm_redirect($to);
+                pm_playbook_tick($vb, (int)($_POST['n'] ?? -1), null, isset($_POST['text']) ? (string)$_POST['text'] : null);
+                pm_redirect($to . '#pt' . (int)($_POST['n'] ?? 0));
+            }
+            if ($do === 'pb_send') { // a playbook task sent from the playbook itself: reply under their comment, or a Messenger answer
+                [$pbOk, $pbMsg] = pm_playbook_send($vb, (int)($_POST['n'] ?? -1), (string)($_POST['text'] ?? ''));
+                pm_redirect($to . '#pt' . (int)($_POST['n'] ?? 0), $pbMsg, $pbOk ? 'ok' : 'err');
             }
             if ($do === 'capture') {
                 $n = pm_fb_capture_buyers($vb);
