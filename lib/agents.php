@@ -919,7 +919,7 @@ function pm_agents_company_brief(string $level = 'short'): string
     $s = pm_settings();
     $br = pm_brain();
     $facts = implode('; ', array_filter(array_map('trim', preg_split('/\R/', (string)$br['facts']))));
-    $core = "{$s['company_name']}: {$br['about']} Facts you may use, nothing beyond them: $facts. {$br['never']} Voice: {$br['voice']} Audience: {$br['audience']} " . pm_markets_line() . ' ' . pm_local_currency_rule();
+    $core = "{$s['company_name']}: {$br['about']} Facts you may use, nothing beyond them: $facts. {$br['never']} Voice: {$br['voice']} Audience: {$br['audience']} " . pm_markets_line() . ' ' . pm_local_currency_rule() . (pm_our_wa_number($s) === '' ? ' We have no WhatsApp number to give: in emails never ask them to message us on WhatsApp; ask them to reply to the email.' : '');
     if (pm_brand() === 'travel') {
         return $core . ' Package for every lead: #' . pm_onboarding_index() . ' Stay Onboarding.';
     }

@@ -46,7 +46,8 @@ function pm_dm_seed(string $brand): array
             'signature' => $sig, 'wa_signature' => '— {sender}, {company}'];
     }
     return ['email_subject' => 'A short note for {name}',
-        'email_body' => "Hello {first_name},\n\n{intro}.\n\nI came across {name} in {city} and thought we might be able to help. If it would be useful, I can send you a short plan for your business.\n\nReply to this email, or message us on WhatsApp, and I will come back to you.",
+        'email_body' => "Hello {first_name},\n\n{intro}.\n\nI came across {name} in {city} and thought we might be able to help. If it would be useful, I can send you a short plan for your business.\n\n"
+            . (pm_our_wa_number(pm_settings()) !== '' ? 'Reply to this email, or message us on WhatsApp on {phone}, and I will come back to you.' : 'Reply to this email and I will come back to you.'), // WhatsApp only with a number to reach us on
         'whatsapp' => 'Hello {first_name}, {intro}. I came across {name} and thought we could help. May I send you a short plan for your business?',
         'signature' => $sig, 'wa_signature' => '— {sender}, {company}'];
 }
@@ -143,6 +144,7 @@ function pm_dm_render(array $lead, string $opening = ''): array
     $v = pm_dm_vars($lead, $opening);
     $subject = pm_dm_fill($c['email_subject'], $v);
     $body = pm_dm_fill($c['email_body'], $v);
+    $body = pm_no_wa_invite($body, pm_settings(), (string)(pm_dm_signature() ?? '')); // no "message us on WhatsApp" without a number (in the details or the signature)
     return ['email_subject' => function_exists('pm_subject_tidy') ? pm_subject_tidy($subject, $lead) : $subject, 'email_body' => pm_brand() === 'travel' ? pm_tm_pack_swap($body) : $body, 'whatsapp' => pm_dm_fill($c['whatsapp'], $v)];
 }
 

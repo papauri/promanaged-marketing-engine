@@ -672,3 +672,35 @@ function pm_daily(float $monthly, array $curRow): float
 {
     return round($monthly / 30, (float)($curRow['round'] ?? 1) >= 10 ? 0 : 2);
 }
+
+/* ---------------- Our WhatsApp number, and emails that only offer WhatsApp when there is one ---------------- */
+
+/** The business's own WhatsApp number (its WhatsApp field, else its phone), or '' when it has none. $s is the business's settings. */
+function pm_our_wa_number(array $s): string
+{
+    return trim((string)($s['whatsapp'] ?? '')) !== '' ? trim((string)$s['whatsapp']) : trim((string)($s['phone'] ?? ''));
+}
+
+/**
+ * An email without invitations to WhatsApp us when there is no number to reach us on: none in the business details and none in the email
+ * itself (a signature with a phone number counts). "Reply to this email, or message us on WhatsApp, and I will..." becomes "Reply to this email and I will...",
+ * "by email or WhatsApp" becomes "by email", and a sentence whose only point is "message us on WhatsApp" goes. Talk about WhatsApp as a product is left alone.
+ */
+function pm_no_wa_invite(string $body, array $s, string $also = ''): string
+{
+    if ($body === '' || stripos($body, 'whatsapp') === false || pm_our_wa_number($s) !== '' || preg_match('/(?:\+|\b0)\d[\d \-]{7,}\d/', $body . ' ' . $also)) {
+        return $body;
+    }
+    $verbs = 'message|text|contact|reach|chat with|write to|ping|call';
+    $body = (string)preg_replace([
+        '/,?\s+or\s+(?:' . $verbs . ')\s+(?:us|me)\s+(?:on|via|by|over|through)\s+WhatsApp\b,?/i', // ", or message us on WhatsApp,"
+        '/,?\s+or\s+(?:WhatsApp|send|drop)\s+(?:us|me)(?:\s+an?\s+WhatsApp(?:\s+message)?)?\b,?/i', // ", or WhatsApp us," ", or send us a WhatsApp"
+        '/\b(by|via|on|over)\s+(email|e-mail)\s+or\s+WhatsApp\b/i', // "by email or WhatsApp"
+        '/\b(by|via|on|over)\s+WhatsApp\s+or\s+(email|e-mail)\b/i', // "by WhatsApp or email"
+    ], ['', '', '$1 $2', '$1 $2'], $body);
+    $body = (string)preg_replace([
+        '/[^.!?\n]*\b(?:' . $verbs . '|send|drop)\b[^.!?\n]*\b(?:us|me)\b[^.!?\n]*\bWhatsApp\b[^.!?\n]*[.!?]/i', // "You can also message us on WhatsApp."
+        '/[^.!?\n]*\bWhatsApp\s+(?:us|me)\b[^.!?\n]*[.!?]/i', // "WhatsApp us any time."
+    ], '', $body);
+    return trim((string)preg_replace(["/\n{3,}/", '/ +([,.])/', '/^[ \t]+/m'], ["\n\n", '$1', ''], $body));
+}

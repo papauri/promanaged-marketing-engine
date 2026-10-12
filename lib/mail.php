@@ -11,6 +11,7 @@ use PHPMailer\PHPMailer\Exception as MailException;
  */
 function pm_mail(array $s, array $m): array
 {
+    $m['body'] = pm_no_wa_invite((string)($m['body'] ?? ''), $s); // never "message us on WhatsApp" when we have no number to give
     if (isset($GLOBALS['PM_MAIL_STUB']) && is_callable($GLOBALS['PM_MAIL_STUB'])) { // tests: no network
         return (array)$GLOBALS['PM_MAIL_STUB']($s, $m);
     }
