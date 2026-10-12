@@ -173,6 +173,12 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
   <button class="btn primary">Approve selected</button>
   <span class="hint">They go out one at a time in the <a href="?tab=targeting#sendschedule">sending hours</a>.</span></form>
 <?php endif; ?>
+<?php if ($shown && pm_user_is_admin()): $adBack = 'agents&status=' . preg_replace('/[^a-z_]/', '', (string)$filter); ?>
+<form method="post" id="delform" class="approvebar admbar"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="admin_delete"><input type="hidden" name="what" value="leads"><input type="hidden" name="back" value="<?= pm_h($adBack) ?>">
+  <label class="tick"><input type="checkbox" onclick="document.querySelectorAll('input[form=delform][name='ids[]']').forEach(function (c) { c.checked = this.checked; }, this)"> Select all <?= count($shown) ?> shown</label>
+  <span class="hint">Admin: tick leads on the list to delete them (junk, tests, duplicates). A STOP is still remembered.</span>
+  <button class="btn small danger" data-confirm="Delete the ticked leads? This cannot be undone.">Delete ticked</button></form>
+<?php endif; ?>
 <?php if ($hasApprove && function_exists('pm_view_send_queue') && count(array_filter($leadsAll, fn($x) => !empty($x['approved_at'])))) { pm_view_send_queue(pm_leads()); } ?>
 <?php if (!$shown && ($ftype !== '' || $fq !== '')): ?><div class="card empty">No <?= pm_h($ftype ?: 'leads') ?><?= $fq !== '' ? ' matching "' . pm_h($fq) . '"' : '' ?> in this list. <a href="?tab=agents&status=all<?= $ftype !== '' ? '&type=' . urlencode($ftype) : '' ?><?= $fq !== '' ? '&q=' . urlencode($fq) : '' ?>">Look in All</a></div>
 <?php elseif (!$shown): ?><div class="card empty">No leads here yet. <?= $filter === 'active' ? 'Press <b>Run the agents</b> or find a business by name.' : '' ?></div><?php endif; ?>
@@ -196,6 +202,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <?php if ($gapOpen): ?><span class="pill <?= $apx['ready'] >= 80 ? 'ok' : ($apx['ready'] < 50 ? 'warn' : '') ?>" title="<?= pm_h($apx['missing'] ? 'Missing: ' . implode(', ', $apx['missing']) : 'Everything a good approach needs is there') ?>"><?= $apx['ready'] ?>% ready</span><?php endif; ?>
       <?php if (!empty($l['view_count'])): ?><span class="pill hot" title="They opened the proposal page">opened proposal</span><?php endif; ?>
       <?php if (!empty($l['approved_at'])): ?><span class="pill hot"><?= pm_h(function_exists('pm_approved_eta') ? (pm_approved_eta($l) ?: 'approved') : 'approved') ?></span><?php endif; ?>
+      <?php if (pm_user_is_admin()): ?><label class="pick delpick" onclick="event.stopPropagation()" title="Admin: tick to delete"><input type="checkbox" form="delform" name="ids[]" value="<?= pm_h($id) ?>" aria-label="Select <?= pm_h($l['name']) ?> to delete"></label><?php endif; ?>
       <?php if ($approvable($l)): ?><label class="pick" onclick="event.stopPropagation()"><input type="checkbox" form="approveform" name="ids[]" value="<?= pm_h($id) ?>"> Approve for sending</label><?php endif; ?>
       <?php if ($l['status'] === 'lost' && !empty($l['lost_reason'])): ?><span class="pill"><?= pm_h(pm_lost_reasons()[$l['lost_reason']] ?? $l['lost_reason']) ?></span><?php endif; ?>
       <?php if (!empty($l['proposal_ai'])): ?><span class="pill hot">proposal ready</span><?php endif; ?>
@@ -236,9 +243,9 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
         </div></section>
         <?php endif; ?>
         <?php if (!empty($l['thread'])): ?><section class="lc"><h4 class="lc-h">Conversation</h4><div class="thread">
-          <?php foreach (array_slice($l['thread'], -4) as $tm): ?><p class="<?= $tm['dir'] === 'in' ? 'in' : 'out' ?>"><b><?= $tm['dir'] === 'in' ? 'Them' : 'Us' ?></b> · <?= pm_h($tm['at']) ?><?= ($tm['ch'] ?? '') === 'wa' ? ' · WhatsApp' : '' ?><br><?= nl2br(pm_h(mb_substr($tm['text'], 0, 400))) ?></p><?php endforeach; ?></div></section><?php endif; ?>
+          <?php foreach (array_slice($l['thread'], -4, null, true) as $ti => $tm): ?><div class="tm <?= $tm['dir'] === 'in' ? 'in' : 'out' ?>"><?= pm_adm_btn($csrf, 'msg', ['id' => $id, 'i' => $ti, 'back' => 'agents&lead=' . $id], 'Delete this message' . ($tm['dir'] === 'in' ? ' from them? If it is their only answer, the lead goes back to contacted.' : '?'), '×', 'icon admx') ?><b><?= $tm['dir'] === 'in' ? 'Them' : 'Us' ?></b> · <?= pm_h($tm['at']) ?><?= ($tm['ch'] ?? '') === 'wa' ? ' · WhatsApp' : '' ?><br><?= nl2br(pm_h(mb_substr($tm['text'], 0, 400))) ?></div><?php endforeach; ?></div></section><?php endif; ?>
         <section class="lc"><h4 class="lc-h">Notes</h4>
-        <?php foreach (array_slice(array_reverse((array)($l['notes'] ?? [])), 0, 3) as $n): ?><p class="hint note"><?= pm_h($n['at']) ?> · <?= pm_h($n['text']) ?><?= !empty($n['by']) ? ' · ' . pm_h($n['by']) : '' ?></p><?php endforeach; ?>
+        <?php foreach (array_slice(array_reverse((array)($l['notes'] ?? []), true), 0, 3, true) as $ni => $n): ?><div class="hint note"><?= pm_adm_btn($csrf, 'note', ['id' => $id, 'i' => $ni, 'back' => 'agents&lead=' . $id], 'Delete this note?', '×', 'icon admx') ?><?= pm_h($n['at']) ?> · <?= pm_h($n['text']) ?><?= !empty($n['by']) ? ' · ' . pm_h($n['by']) : '' ?></div><?php endforeach; ?>
         <?= pm_social_panels('lead_card', $vb, ['lead' => $l]) ?>
         <form method="post" class="inline"><?= $post($id, 'note') ?><input type="text" name="text" placeholder="Add a note"><button class="btn small">Add</button></form>
         </section>
@@ -333,8 +340,8 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
           <details class="more"><summary class="btn small">Paste their reply</summary>
             <form method="post"><?= $post($id, 'paste_reply') ?><textarea name="text" rows="3" placeholder="Paste what they wrote (WhatsApp or another inbox)"></textarea>
               <select name="ch" aria-label="Where they wrote"><option value="wa">They wrote on WhatsApp</option><option value="email">They wrote by email</option></select><button class="btn small">Draft my answer</button></form></details>
-          <form method="post" onsubmit="return confirm('Remove this lead?')"><?= $post($id, 'delete') ?><button class="btn small danger">Remove lead</button></form>
-          <form method="post" onsubmit="return confirm('Forget this lead everywhere (privacy)? Their data is removed; signed history is anonymised.')"><?= $post($id, 'lead_forget') ?><button class="btn small danger">Forget lead (privacy)</button></form>
+          <?php if (pm_user_is_admin()): // deleting is the admin's ?><form method="post" onsubmit="return confirm('Remove this lead?')"><?= $post($id, 'delete') ?><button class="btn small danger">Remove lead</button></form>
+          <form method="post" onsubmit="return confirm('Forget this lead everywhere (privacy)? Their data is removed; signed history is anonymised.')"><?= $post($id, 'lead_forget') ?><button class="btn small danger">Forget lead (privacy)</button></form><?php endif; ?>
         </div>
       </details>
     </div>
@@ -373,7 +380,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     <?php foreach ($found as $aid => $al): ?>
       <label class="task" style="cursor:pointer"><input type="checkbox" name="ids[]" value="<?= pm_h((string)$aid) ?>"><span><b><?= pm_h((string)$al['name']) ?></b> <span class="muted">· <?= pm_h((string)($al['city'] ?? '')) ?> · <?= pm_h((string)($al['type'] ?? '')) ?> · <?= pm_h(PM_LEAD_STATUSES[$al['status'] ?? ''] ?? (string)($al['status'] ?? '')) ?> · archived <?= pm_h(substr((string)($al['archived_at'] ?? ''), 0, 10)) ?></span></span></label>
     <?php endforeach; ?>
-    <div class="btns"><button class="btn small primary">Restore the ticked leads</button><span class="hint"><?= count($found) ?> shown<?= count($arch) > count($found) && $aq . $ac . $at === '' ? ' of ' . count($arch) . ': search to find the others' : '' ?></span></div>
+    <div class="btns"><button class="btn small primary">Restore the ticked leads</button><?php if (pm_user_is_admin()): ?><button class="btn small danger" name="action" value="admin_delete" data-confirm="Delete the ticked archived leads for good? This cannot be undone.">Delete the ticked for good</button><input type="hidden" name="what" value="archived"><input type="hidden" name="back" value="agents#archive"><?php endif; ?><span class="hint"><?= count($found) ?> shown<?= count($arch) > count($found) && $aq . $ac . $at === '' ? ' of ' . count($arch) . ': search to find the others' : '' ?></span></div>
   </form>
   <?php endif; ?>
   <?php endif; ?>

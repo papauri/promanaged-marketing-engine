@@ -135,6 +135,7 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
       <textarea name="reply" rows="2" placeholder="Your reply"><?= pm_h($_SESSION['sreply'][$cm['id']] ?? '') ?></textarea>
       <div class="btns"><button class="btn small" name="do" value="draft_reply">Draft with AI</button><button type="button" class="btn small" data-reword="textarea[name=reply]">New wording</button><button class="btn small primary" name="do" value="reply" data-confirm="Post this reply on Facebook?">Post reply</button></div>
     </form>
+    <?php if (pm_user_is_admin()): ?><form method="post" class="admdel"><?= $fp('delete_comment', $hid('id', $cm['id'])) ?><button class="btn small danger" data-confirm="Delete this comment from the Facebook Page? It cannot be brought back.">Delete comment</button></form><?php endif; ?>
     <?php endforeach; ?>
   </div>
   <?php endif; ?>

@@ -855,3 +855,12 @@ label.tick input { width:auto; margin:0 }
 .avbtn { padding:3px }
 .avbtn .caret { display:none }
 }
+
+/* ===== admin deletes ===== */
+.lead .thread .tm { margin:4px 0; padding:4px 8px; border-radius:8px; font-size:12px; background:var(--bg); }
+.lead .thread .tm.in { background:var(--ok-bg); }
+.admdel { display:inline; margin:0; }
+.admx { float:right; width:22px; height:22px; min-height:0; padding:0; border:0; background:none; color:var(--muted); font-size:15px; line-height:1; border-radius:6px; cursor:pointer; }
+.admx:hover { color:var(--bad); background:var(--bad-bg); }
+.delpick { padding:1px 4px; background:var(--bad-bg); border-color:var(--bad-line); }
+.admbar { background:#fff; border-color:var(--bad-line); }

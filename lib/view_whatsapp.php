@@ -24,7 +24,8 @@ usort($wrote, fn($a, $b) => strcmp((string)($a['awaiting_reply_since'] ?? $a['la
 <h2 class="repttl">They replied <span class="pill warn"><?= count($wrote) ?></span></h2>
 <?php foreach (array_slice($wrote, 0, 15) as $l):
     $lastIn = '';
-    foreach (array_reverse((array)($l['thread'] ?? [])) as $tm) { if (($tm['dir'] ?? '') === 'in') { $lastIn = (string)$tm['text']; break; } }
+    $lastInI = -1;
+    foreach (array_reverse((array)($l['thread'] ?? []), true) as $tmi => $tm) { if (($tm['dir'] ?? '') === 'in') { $lastIn = (string)$tm['text']; $lastInI = (int)$tmi; break; } }
     $rp = (array)($l['reply_draft'] ?? []);
     $waDraft = (string)($rp['whatsapp'] ?? '');
     $waUrl = pm_wa_link($l, '');
@@ -32,7 +33,7 @@ usort($wrote, fn($a, $b) => strcmp((string)($a['awaiting_reply_since'] ?? $a['la
 ?>
   <div class="card repcard" id="r<?= pm_h($l['id']) ?>">
     <div class="wahead"><div><b><?= pm_h($l['name']) ?></b> <span class="muted">· <?= pm_h($l['city']) ?> · <?= pm_h(PM_LEAD_STATUSES[$l['status']] ?? $l['status']) ?><?= !empty($l['awaiting_reply_since']) ? ' · waiting since ' . pm_h(date('j M, H:i', strtotime((string)$l['awaiting_reply_since']))) : '' ?></span></div>
-      <a class="btn small" href="?tab=agents&lead=<?= pm_h($l['id']) ?>">Open lead</a></div>
+      <a class="btn small" href="?tab=agents&lead=<?= pm_h($l['id']) ?>">Open lead</a><?= $lastInI >= 0 ? pm_adm_btn($csrf, 'msg', ['id' => $l['id'], 'i' => $lastInI, 'back' => 'whatsapp'], 'Delete this reply from ' . $l['name'] . '? If it is their only answer, the lead goes back to contacted.', 'Delete reply') : '' ?></div>
     <?php if ($lastIn !== ''): ?><p class="hint in"><b>They wrote:</b> <?= nl2br(pm_h(mb_substr($lastIn, 0, 400))) ?></p><?php endif; ?>
     <?php if (!empty($rp['next_step'])): ?><p class="hint">Next: <?= pm_h($rp['next_step']) ?></p><?php endif; ?>
     <?php if (!empty($rp['needs_human'])): ?><p class="hint warnt">Needs your judgement before you answer.</p><?php endif; ?>

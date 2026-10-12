@@ -367,12 +367,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         pm_redirect($tab, 'Your session expired. Please try again.', 'err');
     }
     $action = $_POST['action'] ?? '';
-    if (in_array($action, ['access', 'brand_create', 'brand_archive', 'brand_unhide', 'brand_delete', 'archive_restore'], true) && !pm_user_is_admin()) {
+    if (($action === 'agents' && in_array($_POST['do'] ?? '', ['delete', 'lead_forget'], true)) || in_array($action, ['admin_delete', 'access', 'brand_create', 'brand_archive', 'brand_unhide', 'brand_delete', 'archive_restore'], true) && !pm_user_is_admin()) {
         pm_redirect('home', 'Only an admin can do that.', 'err'); // accounts, adding or removing a business, restoring data
     }
     if ($action === 'access') { // Team access: add, turn on or off, delete, set a password, choose businesses (lib/auth.php)
         [$acMsg, $acOk] = pm_auth_action($_POST);
         pm_redirect('settings&section=team#access', $acMsg, $acOk ? 'ok' : 'err');
+    }
+    if ($action === 'admin_delete') { // the admin deletes leads, archived leads, a message, a note or a proposal row (lib/sx_admin.php)
+        $adW = (string)($_POST['what'] ?? '');
+        $adId = (string)($_POST['id'] ?? '');
+        $adI = (int)($_POST['i'] ?? -1);
+        $adBack = (string)($_POST['back'] ?? '');
+        $adTo = preg_match('/^[a-z]+(&[a-z_]+=[A-Za-z0-9_.\-]*)*(#[A-Za-z0-9_-]+)?$/', $adBack) ? $adBack : 'agents';
+        $adIds = (array)($_POST['ids'] ?? []);
+        [$adOk, $adMsg] = match ($adW) {
+            'lead', 'leads' => ($n = pm_adm_delete_leads($adW === 'lead' ? [$adId] : $adIds)) ? [true, $n === 1 ? 'Lead deleted.' : "$n leads deleted."] : [false, 'Tick the leads to delete first.'],
+            'archived' => ($n = pm_adm_delete_archived($adIds)) ? [true, "$n archived lead" . ($n === 1 ? '' : 's') . ' deleted for good.'] : [false, 'Tick the archived leads to delete first.'],
+            'msg' => pm_adm_delete_msg($adId, $adI),
+            'note' => pm_adm_delete_note($adId, $adI),
+            'proposal' => pm_adm_delete_proposal($adI),
+            default => [false, 'Nothing to delete.'],
+        };
+        pm_agent_log('Admin', 'Deleted ' . $adW . ($adId !== '' ? ' ' . $adId : '') . ($adOk ? '' : ' (failed)'));
+        pm_redirect($adTo, $adMsg, $adOk ? 'ok' : 'err');
     }
 
     if ($action === 'proposal') {
@@ -2349,6 +2367,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
           <?php if (!empty($h['signed_file']) && is_file(PM_OUT . '/' . $h['signed_file'])): ?><a class="btn small signed" href="?file=<?= urlencode($h['signed_file']) ?>" target="_blank">Signed copy</a><?php endif; ?>
           <?php if (is_file(PM_OUT . '/' . $h['file'])): ?><a class="btn small" href="?file=<?= urlencode($h['file']) ?>" target="_blank">Open</a><?php endif; ?>
           <form method="post" style="display:inline"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="reuse"><input type="hidden" name="i" value="<?= $i ?>"><button class="btn small">Use again</button></form>
+          <?= pm_adm_btn($csrf, 'proposal', ['i' => $i, 'back' => 'history'], 'Remove proposal ' . $h['ref'] . ' from the history? The PDF files are kept.') ?>
         </td></tr>
     <?php endforeach; ?>
     </tbody></table>
