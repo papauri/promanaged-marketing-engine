@@ -201,6 +201,7 @@ function pm_brand_agent_defaults(string $b): array
     return [
         'offerings' => (array)($stored['offerings'] ?? []), 'sectors' => (array)($stored['sectors'] ?? []), 'cities' => (array)($stored['cities'] ?? []),
         'existing_clients' => (array)($stored['existing_clients'] ?? []),
+        'markets' => array_values(array_filter(array_map('trim', preg_split('/,|;| and /i', (string)($p['market'] ?? 'Malawi')) ?: []))) ?: ['Malawi'], // what it said when it was added
         'new_per_day' => 6, 'scouts_per_day' => 3, 'send_cap' => 6, 'wa_cap' => 20, 'followup_days' => 4, 'max_followups' => 2, 'proposals_per_day' => 0,
         // Proposals use ProManaged's own wording and terms, so they stay off for other businesses. A business that sells mainly to the public
         // is reached by social media, enquiries and partners, not by cold email.

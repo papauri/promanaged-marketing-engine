@@ -284,7 +284,7 @@ try {
                         continue; // already our client
                     }
                     $leads[$id] = [
-                        'id' => $id, 'brand' => $brand, 'name' => trim((string)$b['name']), 'type' => $sector, 'city' => $c,
+                        'id' => $id, 'brand' => $brand, 'name' => trim((string)$b['name']), 'type' => $sector, 'city' => $c, 'country' => pm_country_of($c) ?: pm_city_country($city, $brand),
                         'address' => (string)($b['address'] ?? ''), 'website' => (string)($b['website'] ?? ''),
                         'phone' => (string)($b['phone'] ?? ''), 'email' => (string)($b['email'] ?? ''), 'whatsapp' => '',
                         'contact' => '', 'contact_title' => '', 'evidence' => array_values((array)($b['evidence'] ?? [])),

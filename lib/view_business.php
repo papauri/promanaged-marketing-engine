@@ -47,6 +47,8 @@ if ($step === 1) {
       <label class="check"><input type="radio" name="sell_to" value="<?= $k ?>" <?= ($ans['sell_to'] ?? 'business') === $k ? 'checked' : '' ?>> <?= pm_h($l) ?></label>
     <?php endforeach; ?>
   </div>
+  <label>Where do you sell? <span class="muted">(countries, home first; add "Worldwide" if you sell anywhere)</span></label>
+  <input type="text" name="market" maxlength="120" value="<?= $av('market') ?: 'Malawi' ?>" placeholder="Malawi, Zambia, Worldwide">
   <label>Website <span class="muted">(the AI reads it, up to five pages, to learn the business and who to target)</span></label>
   <input type="text" name="website" value="<?= $av('website') ?>" placeholder="www.example.mw">
   <details class="more mt-3" <?= array_filter([$ans['cities'] ?? '', $ans['targets'] ?? '', $ans['facts'] ?? '', $ans['email'] ?? '', $ans['notes'] ?? '']) ? 'open' : '' ?>><summary>More, if you like (the agents work better with it)</summary>

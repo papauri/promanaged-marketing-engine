@@ -617,6 +617,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $grp = ($_POST['cfg']['_group'] ?? 'targeting') === 'ai' ? 'ai' : 'targeting'; // the Sales form saves who to look for, limits and replies; Operations saves the AI settings
             $c = $acfg;
             if ($grp === 'targeting') { $c['cities'] = $list('cities'); }
+            if ($grp === 'targeting' && isset($_POST['cfg']['markets'])) { $c['markets'] = $list('markets') ?: ['Malawi']; }
             if ($grp === 'targeting') { $c['sectors'] = $list('sectors'); }
             if ($grp === 'targeting') { $c['offerings'] = array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($_POST['cfg']['offerings'] ?? ''))))); }
             if ($grp === 'ai') { $c['daily_token_budget'] = max(0, (int)($_POST['cfg']['daily_token_budget'] ?? 400000)); }
@@ -639,7 +640,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $raw['parallel'] = $c['parallel'];
                 $raw['daily_token_budget'] = $c['daily_token_budget'];
                 $raw['quality'] = $c['quality'];
-                $own = ['sectors', 'cities', 'new_per_day', 'scouts_per_day', 'send_cap', 'wa_cap', 'followup_days', 'max_followups', 'proposals_per_day', 'enabled'];
+                $own = ['sectors', 'cities', 'markets', 'new_per_day', 'scouts_per_day', 'send_cap', 'wa_cap', 'followup_days', 'max_followups', 'proposals_per_day', 'enabled'];
                 if (pm_brand_is_custom(pm_brand())) {
                     $own = array_merge($own, ['offerings', 'existing_clients']);
                     if ($grp === 'targeting') { $c['existing_clients'] = array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($_POST['cfg']['existing_clients'] ?? ''))))); }
@@ -1790,7 +1791,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($action === 'brand_draft') {
         $answers = [];
-        foreach (['name', 'sells', 'customers', 'sell_to', 'cities', 'targets', 'facts', 'magnet', 'voice', 'email', 'phone', 'website', 'never', 'notes'] as $k) {
+        foreach (['name', 'sells', 'customers', 'sell_to', 'market', 'cities', 'targets', 'facts', 'magnet', 'voice', 'email', 'phone', 'website', 'never', 'notes'] as $k) {
             $answers[$k] = trim((string)($_POST[$k] ?? ''));
         }
         $answers['notes'] = mb_substr($answers['notes'], 0, 6000);

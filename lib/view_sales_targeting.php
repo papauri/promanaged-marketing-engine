@@ -24,7 +24,9 @@ echo pm_ui_head('Targeting and messages · ' . $bname, 'Who to look for, the dai
     <textarea name="cfg[offerings]" rows="4"><?= pm_h(implode("\n", (array)$acfg['offerings'])) ?></textarea><?php endif; ?>
     <label>Types of business to look for <span class="muted">(comma separated)</span></label>
     <textarea name="cfg[sectors]" rows="2"><?= pm_h(implode(', ', (array)$acfg['sectors'])) ?></textarea>
-    <label>Cities to search <span class="muted">(comma separated)</span></label>
+    <label>Where we sell <span class="muted">(countries, home first; add "Worldwide" to look and write beyond them)</span></label>
+    <input type="text" name="cfg[markets]" value="<?= pm_h(implode(', ', (array)($acfg['markets'] ?? ['Malawi']))) ?>" placeholder="Malawi, Zambia, Worldwide">
+    <label>Cities to search <span class="muted">(comma separated; a town abroad as "Lusaka Zambia" or "Nairobi Kenya")</span></label>
     <textarea name="cfg[cities]" rows="2"><?= pm_h(implode(', ', (array)$acfg['cities'])) ?></textarea>
     <?php if ($custom): ?><label>Existing clients <span class="muted">(one per line; they are never cold-pitched)</span></label>
     <textarea name="cfg[existing_clients]" rows="3"><?= pm_h(implode("\n", (array)($acfg['existing_clients'] ?? []))) ?></textarea><?php endif; ?>

@@ -35,7 +35,7 @@ function pm_rs_pages(): array
             'what' => 'who to look for, the daily limits, the replies and the agents switched on, the sending days and hours, and the default first message and signatures',
             'keep' => 'your existing clients list, leads and drafts',
             'ops' => fn(string $b) => array_merge(
-                array_map(fn($k) => ['agents_config', array_merge(pm_rs_abase($b), [$k]), null], ['offerings', 'sectors', 'cities', 'new_per_day', 'scouts_per_day', 'send_cap', 'wa_cap', 'followup_days', 'max_followups', 'enabled']),
+                array_map(fn($k) => ['agents_config', array_merge(pm_rs_abase($b), [$k]), null], ['offerings', 'sectors', 'cities', 'markets', 'new_per_day', 'scouts_per_day', 'send_cap', 'wa_cap', 'followup_days', 'max_followups', 'enabled']),
                 [['agents_config', ['reply_mode'], null], ['agents_config', ['wa_reply_mode'], null], ['send_schedule', [$b], null], ['message_defaults', [$b], null]],
                 $b === 'travel' ? [['settings', ['travel', 'host_email'], null]] : [])],
         'template' => ['href' => ['?tab=template'], 'name' => 'Template and prices', 'global' => true,

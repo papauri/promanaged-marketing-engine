@@ -32,6 +32,7 @@ function pm_agents_default_config(): array
         'wa_reply_mode'   => 'auto',   // WhatsApp Business answers: auto = simple, safe answers by themselves (ones that need a person stop); draft = you approve every answer
         'gemini_model'    => 'economy', // economy = cheapest model that works; auto = spread across the newest 3; or a model id
         'cities'          => ['Lilongwe', 'Blantyre', 'Mzuzu', 'Mangochi', 'Zomba', 'Salima', 'Nkhata Bay', 'Kasungu'],
+        'markets'         => ['Malawi', 'Worldwide'], // where we sell: the first country is home; "Worldwide" lets the agents look and write beyond it (lib/localcur.php)
         'new_per_day'     => 10,   // new leads the Scouts try to add each day
         'scouts_per_day'  => 4,    // sector x city searches per day (rotates through all combinations)
         'send_cap'        => 10,   // most emails you can send in one day
@@ -55,6 +56,7 @@ function pm_travel_agent_defaults(): array
     return [
         'sectors' => ['lodges and guest houses', 'bed and breakfasts and cottages', 'safari camps and eco-lodges', 'lakeshore resorts and beach lodges', 'boutique and city hotels', 'backpackers and hostels'],
         'cities' => ['Cape Maclear', 'Nkhata Bay', 'Mangochi', 'Salima', 'Nkhotakota', 'Livingstonia', 'Karonga', 'Liwonde', 'Zomba', 'Mulanje', 'Blantyre', 'Lilongwe', 'Mzuzu', 'Chintheche'],
+        'markets' => ['Malawi'],
         'new_per_day' => 10, 'scouts_per_day' => 4, 'send_cap' => 10, 'wa_cap' => 40, 'followup_days' => 4, 'max_followups' => 2, 'proposals_per_day' => 2,
         'enabled' => ['scout' => true, 'contact' => true, 'qualifier' => true, 'research' => true, 'writer' => true, 'proposals' => true, 'followup' => true],
     ];
@@ -893,7 +895,7 @@ function pm_brain_defaults(string $brand): array
     return [
         'about' => 'Builds software and websites (including a management system for hotels, restaurants, gyms, venues and shops), sources computer equipment, and provides IT support, working from Malawi.',
         'facts' => "The management system runs in a web browser, with Kwacha pricing, VAT and tourism levy built in\nIt already runs at hotels in Malawi\nWe source laptops, desktops and equipment, including items not sold locally, with local-friendly payment\nIT support by WhatsApp, email, phone and remote session during working hours",
-        'audience' => 'Owners and managers of small and medium businesses in Malawi.',
+        'audience' => 'Owners and managers of small and medium businesses, most of them in Malawi, and businesses anywhere else that need us.',
         'voice' => 'Friendly, practical, honest, plain words.',
         'never' => 'Never promise results, deadlines or out-of-hours support.',
     ];
@@ -916,7 +918,7 @@ function pm_agents_company_brief(string $level = 'short'): string
     $s = pm_settings();
     $br = pm_brain();
     $facts = implode('; ', array_filter(array_map('trim', preg_split('/\R/', (string)$br['facts']))));
-    $core = "{$s['company_name']}: {$br['about']} Facts you may use, nothing beyond them: $facts. {$br['never']} Voice: {$br['voice']} Audience: {$br['audience']} " . pm_local_currency_rule();
+    $core = "{$s['company_name']}: {$br['about']} Facts you may use, nothing beyond them: $facts. {$br['never']} Voice: {$br['voice']} Audience: {$br['audience']} " . pm_markets_line() . ' ' . pm_local_currency_rule();
     if (pm_brand() === 'travel') {
         return $core . ' Package for every lead: #' . pm_onboarding_index() . ' Stay Onboarding.';
     }
@@ -973,14 +975,17 @@ function pm_agent_scout(string $sector, string $city, int $want, array $knownNam
 {
     $label = pm_sector_label($sector);
     if (pm_brand() === 'travel') {
-        $system = pm_agents_company_brief('short') . "\nYou are the Scout. Web-search for real, trading independent stays in {$city}, Malawi: {$label}. Prefer ones that gain from direct bookings "
+        $place = pm_city_place($city);
+        $system = pm_agents_company_brief('short') . "\nYou are the Scout. Web-search for real, trading independent stays in {$place}: {$label}. Prefer ones that gain from direct bookings "
             . "(mostly on third-party sites, phone/WhatsApp-only, no or outdated website). Exclude chains and non-stays. Only include stays that publish enquiry contacts. " . PM_AGENT_RULES;
     } elseif (pm_brand_is_custom(pm_brand())) {
-        $system = pm_agents_company_brief('short') . "\nYou are the Scout. Web-search for real, trading {$label} in {$city}, Malawi, that could genuinely use what we offer. "
-            . "Look for something published that shows a real fit or need (their website or social pages, news, hiring or expansion). Skip chains and anyone outside Malawi. "
+        $place = pm_city_place($city);
+        $system = pm_agents_company_brief('short') . "\nYou are the Scout. Web-search for real, trading {$label} in {$place}, that could genuinely use what we offer. "
+            . "Look for something published that shows a real fit or need (their website or social pages, news, hiring or expansion). Skip chains and anyone outside " . pm_city_country($city) . '. '
             . 'Note which of our offerings fits best. ' . ltrim(pm_target_scout_line(pm_brand(), $sector)) . 'Only include those that publish business contacts. ' . PM_AGENT_RULES;
     } else {
-        $system = pm_agents_company_brief('short') . "\nYou are the Scout. Web-search for real, trading organisations in {$city}, Malawi: {$label}, that show a genuine need for something we do "
+        $place = pm_city_place($city);
+        $system = pm_agents_company_brief('short') . "\nYou are the Scout. Web-search for real, trading organisations in {$place}: {$label}, that show a genuine need for something we do "
             . "(paper/WhatsApp/spreadsheet operations, no or outdated website, agent-only bookings, no booking/POS/stock system, ageing IT, hiring IT/admin, expanding). "
             . "Note the best-fit offering. Only include those that publish business contacts. " . PM_AGENT_RULES;
     }
@@ -1160,16 +1165,18 @@ function pm_lead_engagement(array $l): string
  */
 function pm_agent_lookup(string $name, string $city = ''): ?array
 {
+    $mk = pm_markets();
+    $where = $city !== '' ? pm_city_country($city) : implode(' or ', $mk['countries']) . ($mk['worldwide'] ? ' (or anywhere else)' : '');
     if (pm_brand() === 'travel') {
-        $system = pm_agents_company_brief('tiny') . "\nYou are the Researcher. Web-search for one specific place to stay in Malawi and report what is publicly known. "
+        $system = pm_agents_company_brief('tiny') . "\nYou are the Researcher. Web-search for one specific place to stay in {$where} and report what is publicly known. "
             . "If it is not a place to stay, or you cannot find it, return {\"found\":false}. Score 0-100 how likely it wants a free direct-booking listing. Package index is given above. " . PM_AGENT_RULES;
         $pk = pm_onboarding_index();
     } elseif (pm_brand_is_custom(pm_brand())) {
-        $system = pm_agents_company_brief('short') . "\nYou are the Researcher. Web-search for one specific organisation in Malawi and report what is publicly known. "
+        $system = pm_agents_company_brief('short') . "\nYou are the Researcher. Web-search for one specific organisation in {$where} and report what is publicly known. "
             . "If you cannot find it, return {\"found\":false}. Pick the offering that fits what they do, the need to lead with, and score 0-100 how likely they need what we offer. " . PM_AGENT_RULES;
         $pk = '';
     } else {
-        $system = pm_agents_company_brief('full') . "\nYou are the Researcher. Web-search for one specific organisation in Malawi and report what is publicly known. "
+        $system = pm_agents_company_brief('full') . "\nYou are the Researcher. Web-search for one specific organisation in {$where} and report what is publicly known. "
             . "If you cannot find it, return {\"found\":false}. Choose the package that fits what they do, the pain point to lead with, and score 0-100 how likely they need and can afford us. " . PM_AGENT_RULES;
         $pk = '';
     }
@@ -1357,8 +1364,19 @@ function pm_lead_is_client(array $l): bool
 }
 
 /** Malawi numbers in any common spelling -> ['265881234567' (digits), 'mobile'|'landline'|'unknown'], from the first usable number in the text. */
-function pm_wa_number(string $raw): array
+function pm_wa_number(string $raw, string $dial = '265'): array
 {
+    if ($dial !== '265') { // a number in another country: its code instead of Malawi's, and any length a phone can have
+        foreach (preg_split('/[\/,;]| or | and /i', $raw) as $part) {
+            $n = preg_replace('/\D+/', '', (string)preg_replace('/\b(ext|extension|x)\.?\s*\d.*$/i', '', $part));
+            $n = str_starts_with($n, '00') ? substr($n, 2) : $n;
+            $n = str_starts_with($n, '0') ? $dial . substr($n, 1) : $n;
+            if (strlen($n) >= 10 && strlen($n) <= 15) {
+                return [$n, 'unknown'];
+            }
+        }
+        return ['', 'landline'];
+    }
     $landline = null; // a landline is kept only if no part of the field is a mobile ("01 234 567 / 0888 123 456" gives the mobile)
     foreach (preg_split('/[\/,;]| or | and /i', $raw) as $part) {
         $part = (string)preg_replace('/\b(ext|extension|x)\.?\s*\d.*$/i', '', $part); // "0888 123 456 ext 2": the extension is not part of the number
@@ -1394,8 +1412,9 @@ function pm_wa_number(string $raw): array
 /** The best number for WhatsApp: the WhatsApp field first, then the phone. Returns [digits, kind]. */
 function pm_wa_best(array $lead): array
 {
+    $dial = function_exists('pm_lead_dial') ? pm_lead_dial($lead) : '265';
     foreach ([(string)($lead['whatsapp'] ?? ''), (string)($lead['phone'] ?? '')] as $raw) {
-        [$n, $k] = pm_wa_number($raw);
+        [$n, $k] = pm_wa_number($raw, $dial);
         if ($n !== '' && $k !== 'landline') {
             return [$n, $k];
         }
@@ -1569,7 +1588,7 @@ function pm_wa_quick_replies(): array
         ? 'Travel Malawi is a direct booking site for independent stays in Malawi. Guests book you directly, you keep your rate, and requests reach you on WhatsApp. Listing is free for now.'
         : (pm_brand_is_custom(pm_brand())
             ? trim((string)(pm_brain()['about'] ?? '')) . ' I can send a short note on how we could help your business.'
-            : 'We build software and websites, source computers and equipment, and provide IT support for Malawian businesses. I can send a one-page plan for your business.');
+            : 'We build software and websites, source computers and equipment, and provide IT support for businesses in ' . pm_markets()['home'] . (pm_markets()['worldwide'] ? ' and abroad' : '') . '. I can send a one-page plan for your business.');
     $replies = [
         'What is this?' => "Thanks for asking. $what",
         'How much?' => 'Fair question. It depends on what you need, so I would rather give you an exact figure than a guess. Can I send you a short plan for your business? ' . (pm_brand() === 'travel' ? 'Listing is free for now.' : ''),
@@ -1577,7 +1596,7 @@ function pm_wa_quick_replies(): array
         'Send details' => 'Of course. I will send a one-page plan for your business here and by email. Which email should I use?',
         'Not now' => 'No problem at all. May I check back in a few weeks? If you would rather not, just say so and I will not message again.',
         'Not interested' => "Understood, thank you for replying. I won't message again. All the best with the business.",
-        'Who are you?' => "I'm part of the team at $b, based in Malawi. I messaged because I thought we could help your business. Happy to share more or leave you be.",
+        'Who are you?' => "I'm part of the team at $b, based in " . pm_markets()['home'] . ". I messaged because I thought we could help your business. Happy to share more or leave you be.",
     ];
     return $replies + (function_exists('pm_share_quick_replies') ? pm_share_quick_replies(pm_brand()) : []); // plus one per document or page in the share kit
 }
@@ -2439,14 +2458,14 @@ function pm_agent_research(array $lead): array
     $first = preg_match('/^\p{Lu}\p{L}+$/u', $first) ? $first : '';
     $system = pm_agents_company_brief('short') . "\nYou are the Researcher, and precision is your job. Use web search to study ONE business. "
         . "Step 1, identity: make sure every source is about THIS business in THIS town (same name, same place). Similar names elsewhere, directories that only list the name, and other branches do not count. If you cannot confirm it, say so. "
-        . "Step 2, facts: from its own website, its Facebook and Instagram pages, Google reviews, and Malawian or business/finance news from the last 18 months (expansion, new rooms or branch, awards, funding, tenders won, hiring, events). "
+        . "Step 2, facts: from its own website, its Facebook and Instagram pages, Google reviews, and local or business/finance news from the last 18 months (expansion, new rooms or branch, awards, funding, tenders won, hiring, events). "
         . "Only facts you actually read, each with its exact source URL and the date shown on the source; mark confidence high (read it yourself on an official page or reputable news) or medium (a review site or directory). Never guess, infer or fill gaps. "
         . "The 'checked_by_code' list was verified by our own system: treat it as true, do not contradict it, and never claim a website, certificate or security problem that is not in it. "
         . "Step 3, through our eyes: what is weak or missing online and where we could genuinely help (for our team only). "
         . "Step 4, write 2 or 3 hooks: one real observation plus a curious question that makes the owner want to reply, WITHOUT handing over the solution or offering to fix it. Friendly, never critical or creepy, business information only. "
         . "Step 5, write 3 conversation starters, each built on a different hook, ready to send: an email (subject of max 7 words, then a body of 45 to 80 words: a greeting line" . ($first !== '' ? " to $first" : '') . ", one line saying who we are"
         . ", the observation, one easy question about how they handle it today; ONE question only, no offer to fix it, no prices, no feature list, no sign-off) and a WhatsApp version of 25 to 40 words. " . PM_AGENT_RULES;
-    $user = "Business: {$lead['name']} ({$lead['type']}), {$lead['city']}, Malawi. Known website: " . ($lead['website'] ?? '') . '. Known Facebook: ' . ($lead['facebook'] ?? '') . '. Contact: ' . ($lead['contact'] ?? '') . ".\n"
+    $user = "Business: {$lead['name']} ({$lead['type']}), " . pm_lead_place($lead) . ". Known website: " . ($lead['website'] ?? '') . '. Known Facebook: ' . ($lead['facebook'] ?? '') . '. Contact: ' . ($lead['contact'] ?? '') . ".\n"
         . 'checked_by_code: ' . json_encode($site['facts'] ?? ['no website known'], JSON_UNESCAPED_UNICODE) . ($site['social'] ?? [] ? ' social links on their site: ' . json_encode($site['social']) : '') . "\n"
         . 'JSON: {"identity":{"confirmed":true,"how":"what proves it is this business"},"discoveries":[{"fact":"","source":"URL","date":"","confidence":"high|medium"}],"website":{"url":"","verdict":"one short line","issues":[""]},'
         . '"social":{"facebook":"URL","instagram":"URL","verdict":"one short line: last post date, followers, reviews"},"news":[{"headline":"","source":"URL","date":""}],"opportunities":[""],"hooks":[""],'

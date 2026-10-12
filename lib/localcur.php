@@ -20,27 +20,117 @@ const PM_LOCAL_CURRENCIES = [
     'malawi|lilongwe|blantyre|zomba|mzuzu|mangochi|salima|karonga|nkhata bay|nkhotakota|liwonde|mulanje|kasungu|dedza|balaka|chikwawa|cape maclear|monkey bay|likoma|chintheche|livingstonia' => ['MWK', 'kwacha', 'Malawi'],
 ];
 
-/** The currency of the business we write to (its address, town or country), else of our own business. */
-function pm_local_currency(array $lead = []): array
+/** Telephone country codes, for numbers written the local way (a leading 0). */
+const PM_COUNTRY_DIAL = ['Malawi' => '265', 'Zambia' => '260', 'Tanzania' => '255', 'Mozambique' => '258', 'South Africa' => '27', 'Zimbabwe' => '263', 'Kenya' => '254',
+    'Uganda' => '256', 'Botswana' => '267', 'Rwanda' => '250', 'Ghana' => '233', 'Nigeria' => '234', 'United Kingdom' => '44', 'United States' => '1', 'Canada' => '1',
+    'Australia' => '61', 'Ireland' => '353', 'Germany' => '49', 'Netherlands' => '31', 'United Arab Emirates' => '971', 'India' => '91'];
+
+/* ---------------- where a business works ---------------- */
+
+/** The country a place names ("Lusaka", "Cape Town, South Africa", "Accra, Ghana"), or '' when it does not say. */
+function pm_country_of(string $text): string
 {
-    $where = mb_strtolower(implode(' ', array_map('strval', [$lead['country'] ?? '', $lead['address'] ?? '', $lead['city'] ?? ''])));
-    if (trim($where) === '') {
-        $s = pm_settings();
-        $where = mb_strtolower((string)($s['address'] ?? '') . ' malawi');
+    $t = mb_strtolower(trim($text));
+    if ($t === '') {
+        return '';
     }
-    foreach (PM_LOCAL_CURRENCIES as $re => [$code, $word, $country]) {
-        if (preg_match('/\b(' . $re . ')\b/u', $where)) {
-            return ['code' => $code, 'word' => $word, 'country' => $country];
+    foreach (PM_LOCAL_CURRENCIES as $re => [, , $country]) {
+        if (preg_match('/\b(' . $re . ')\b/u', $t)) {
+            return $country;
         }
     }
-    return ['code' => 'MWK', 'word' => 'kwacha', 'country' => 'Malawi'];
+    foreach (array_keys(PM_COUNTRY_DIAL) as $country) {
+        if (preg_match('/\b' . preg_quote(mb_strtolower($country), '/') . '\b/u', $t)) {
+            return $country;
+        }
+    }
+    if (preg_match('/,\s*([\p{L} .\'-]{3,40})$/u', trim($text), $m)) { // "Town, Country" with a country we do not list
+        return trim($m[1]);
+    }
+    return '';
+}
+
+/**
+ * Where a business sells, from Sales > Targeting ("Where we sell"): ['home' => the first country, 'countries' => [...], 'worldwide' => bool].
+ * ProManaged IT: Malawi first, and worldwide. Travel Malawi: Malawi. An added business: the market it gave when it was added.
+ */
+function pm_markets(string $brand = ''): array
+{
+    $brand = $brand !== '' ? $brand : pm_brand();
+    $m = array_values(array_filter(array_map('trim', (array)(pm_agents_config($brand)['markets'] ?? ['Malawi'])), fn($x) => $x !== ''));
+    $isWorld = fn($x) => (bool)preg_match('/world|global|international|anywhere|everywhere/i', $x);
+    $countries = array_values(array_filter($m, fn($x) => !$isWorld($x)));
+    return ['home' => $countries[0] ?? 'Malawi', 'countries' => $countries ?: ['Malawi'], 'worldwide' => (bool)array_filter($m, $isWorld)];
+}
+
+/** One line for every prompt: where we are and whom we serve, so no agent writes as if we only served one country. */
+function pm_markets_line(string $brand = ''): string
+{
+    $mk = pm_markets($brand);
+    $list = implode(', ', $mk['countries']);
+    return "Where we work: based in {$mk['home']}; we serve businesses in $list" . ($mk['worldwide'] ? ', and anywhere in the world' : '') . '. Never say we only serve one country unless that is all we serve.';
+}
+
+/** A search place for the scout: "Lusaka, Zambia" as written, a known town with its country, any other town in the home country. */
+function pm_city_place(string $city, string $brand = ''): string
+{
+    $city = trim($city);
+    if (str_contains($city, ',')) {
+        return $city;
+    }
+    $c = pm_country_of($city);
+    if ($c !== '' && stripos($city, $c) !== false) { // "Lusaka Zambia": the country is already in it
+        return $city;
+    }
+    return $city . ', ' . ($c !== '' ? $c : pm_markets($brand)['home']);
+}
+
+/** The country of a place to search (see pm_city_place). */
+function pm_city_country(string $city, string $brand = ''): string
+{
+    return pm_country_of(pm_city_place($city, $brand)) ?: pm_markets($brand)['home'];
+}
+
+/** The country a lead is in: saved on it, else read from its address or town, else the home country of the business that found it. */
+function pm_lead_country(array $l): string
+{
+    if (trim((string)($l['country'] ?? '')) !== '') {
+        return trim((string)$l['country']);
+    }
+    return pm_country_of((string)($l['address'] ?? '')) ?: (pm_country_of((string)($l['city'] ?? '')) ?: pm_markets((string)($l['brand'] ?? ''))['home']);
+}
+
+/** "Lilongwe, Malawi": the lead's town and country, for the researchers. */
+function pm_lead_place(array $l): string
+{
+    $city = trim((string)($l['city'] ?? ''));
+    $country = pm_lead_country($l);
+    return $city === '' ? $country : (stripos($city, $country) !== false ? $city : "$city, $country");
+}
+
+/** The country code for a lead's phone numbers written the local way. */
+function pm_lead_dial(array $l): string
+{
+    return PM_COUNTRY_DIAL[pm_lead_country($l)] ?? '265';
+}
+
+/** The currency of the business we write to (its country), else of our own business. A country we do not list: "their local currency". */
+function pm_local_currency(array $lead = []): array
+{
+    $country = $lead ? pm_lead_country($lead) : pm_markets()['home'];
+    foreach (PM_LOCAL_CURRENCIES as [$code, $word, $c]) {
+        if (strcasecmp($c, $country) === 0) {
+            return ['code' => $code, 'word' => $word, 'country' => $c];
+        }
+    }
+    return ['code' => '', 'word' => 'their local currency', 'country' => $country !== '' ? $country : 'their country'];
 }
 
 /** One line for the writers: which currency to name, if any, and never dollars. */
 function pm_local_currency_rule(array $lead = []): string
 {
     $c = pm_local_currency($lead);
-    return "Money: never mention US dollars, USD or the \$ sign. If a currency must be named, it is {$c['word']} ({$c['code']}), the currency of {$c['country']}; a lead given with its own 'currency' uses that one.";
+    return "Money: never mention US dollars, USD or the \$ sign. If a currency must be named, it is {$c['word']}" . ($c['code'] !== '' ? " ({$c['code']})" : '') . ", the currency of {$c['country']}; a lead given with its own 'currency' uses that one.";
 }
 
 /**
