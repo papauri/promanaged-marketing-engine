@@ -6,16 +6,18 @@ Every screen of the firm uses one stylesheet, `assets/app.css`, in seven ordered
 
 | Group | Tokens |
 |---|---|
-| Surface and line | `--bg #f5f6f8`, `--surface #fff`, `--surface-2 #f9fafb`, `--line #e4e7ec`, `--line-strong #cdd2d9` |
-| Text | `--ink #111827`, `--ink-2 #374151`, `--muted #667085` (also for placeholders) |
+| Surface and line | `--bg #f5f4f0` (warm paper, with a soft glow of the department colour at the top), `--surface #fff`, `--surface-2 #faf9f7`, `--field #f8f7f4` (inside of fields), `--line #e9e7e1`, `--line-strong #d6d3cb`, `--bar #0f1013` (the top bar) |
+| Text | `--ink #15161a`, `--ink-2 #3a3b42` (labels), `--muted #6e6d73` (also for placeholders) |
+| Fonts | `--font` Inter (assets/fonts/sans*.ttf) for everything; `--display` Source Serif (serif-bold.ttf) for `h1` page titles only. Big numbers stay Inter (tabular) |
 | Status (text / bg / line) | `--ok`, `--warn`, `--bad`, each with `-bg` and `-line`. "Info" is `--dept` mixed into white |
 | Accents | `--accent` = the business (set in `<head>`: top stripe, business switcher, brand previews only). `--dept` = the department (set on `<body>`): primary buttons, active tab, links, focus ring, selected state |
 | Type | `--fs-1 12` caption, chip, hint, table head - `--fs-2 13` dense body, small buttons, table cells - `--fs-3 14` body, buttons, fields - `--fs-4 16` feature titles - `--fs-5 20` page title - `--fs-6 24` big numbers. Weights 400, 500, 600 only |
 | Space | `--s-1 4`, `--s-2 8`, `--s-3 12`, `--s-4 16`, `--s-5 24`, `--s-6 32`. Nothing else for margin, padding, gap |
-| Radius | `--r-ctl 8` (things you click or type in), `--r-card 12` (cards, menus), `--r-pill`, `50%` for circles |
+| Radius | `--r-ctl 10` (fields), 12 for text areas, `--r-card 18` (cards), `--r-pill` (buttons, tabs, chips, the save bar), `50%` for circles |
 | Shadow | `--sh-card`, `--sh-pop`, `--sh-bar` |
-| Controls | `--ctl 36px`, `--ctl-sm 28px`; both become 44px on touch or under 860px, and fields go to 16px |
-| Layout | `--page-w 1180px`; pages with `.withpage` use 1560px |
+| Controls | `--ctl 40px`, `--ctl-sm 30px`; both become 44px on touch or under 860px, and fields go to 16px |
+| Motion | `--ease`; cards, the page head and flashes rise in once (`@keyframes rise`), primary buttons lift 1px on hover. All off under reduced motion |
+| Layout | `--page-w 1200px`; pages with `.withpage` use 1560px |
 
 Department colours live only in `pm_ui_nav()` (`lib/ui.php`); each passes 4.5:1 with white text (checked by the guard test).
 
@@ -30,7 +32,7 @@ Department colours live only in `pm_ui_nav()` (`lib/ui.php`); each passes 4.5:1 
 | Danger | `.btn.danger` | Delete, Remove, Reject (outlined, never filled; keep `data-confirm`) |
 | Icon | `button.icon` | Remove x, close. Always with `aria-label` |
 
-Two heights only: 36 and `.small` 28. In a `.btns` group: primary first, outline, ghost, danger last.
+Two heights only: 40 and `.small` 30. Buttons are pills; the filled one has a soft gradient and a shadow in the department colour. In a `.btns` group: primary first, outline, ghost, danger last.
 
 ## Chips, cards, fields, tables
 
@@ -46,7 +48,7 @@ Every screen is one of: **A Dashboard** (`view_home.php`), **B Queue** (toolbar,
 
 ## Shell
 
-Top bar 48px with the 3px `--accent` stripe; page head (department eyebrow, `h1`, one-line `p.sub`, actions) about 60px; tab strip 36px with a 2px `--dept` underline. The first card starts about 184px from the top of the window. Under 860px the bar wraps, tabs scroll, grids collapse.
+Dark glass top bar 58px with a 2px `--accent` stripe; each department is a pill (the open one white, its icon in the department colour). Page head: the department as a tinted pill, a serif `h1`, one-line `p.sub`, actions. The department's pages are a segmented pill strip (the open page filled in `--dept`). Fields are filled (`--field`) and turn white with a `--dept` ring on focus. The first card starts about 184px from the top of the window. Under 860px the bar wraps, tabs scroll, grids collapse.
 
 ## Utilities (use these instead of `style=`)
 
