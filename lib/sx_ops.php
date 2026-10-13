@@ -69,6 +69,8 @@ function pm_setup_health(): array
     $row('https', 'HTTPS', 'optional', pm_app_url() === '' || str_starts_with(pm_app_url(), 'https://'), pm_app_url() === '' ? 'Not online yet.' : (str_starts_with(pm_app_url(), 'https://') ? 'The public address uses HTTPS.' : 'APP_URL is not https: sign-in and signing links travel unprotected.'), 'Turn on SSL for the domain (cPanel > SSL/TLS Status) and use https:// in APP_URL');
     $url = pm_app_url() !== '';
     $row('app_url', 'Public address', 'required', $url, $url ? pm_app_url() : 'Instagram cannot fetch pictures and clients cannot open links until the app is online.', 'APP_URL=https://your-site in .env');
+    $temp = $url && function_exists('pm_temp_host') && pm_temp_host(pm_app_url());
+    $row('app_domain', 'Own domain for links', 'optional', !$temp, $temp ? 'APP_URL is the host\'s temporary address. Mail filters refuse emails that link to it ("poor reputation"), so proposal, signing and document links can get emails blocked.' : 'Links in emails use your own domain.', 'Point a subdomain you own (for example app.yourdomain.com) at this folder in cPanel > Domains, then set APP_URL to it in .env');
     foreach ($rows as $i => $r) { // C3-G02: rows with a check behind them get a Test button and show the last result
         $rows[$i]['testable'] = pm_health_testable($r);
         $rows[$i]['last'] = $last[$r['key']] ?? null;
@@ -384,6 +386,7 @@ function pm_smtp_login_check(array $sm): array
         $mm->Password = (string)$sm['password'];
         $mm->SMTPSecure = ($sm['encryption'] ?? '') === 'ssl' ? PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS : (($sm['encryption'] ?? '') === 'tls' ? PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS : '');
         $mm->Timeout = 20;
+        $mm->Hostname = function_exists('pm_mail_domain') ? pm_mail_domain((string)(($sm['from_email'] ?? '') ?: $sm['username'])) : '';
         $ok = $mm->smtpConnect();
         $mm->smtpClose();
         return $ok ? [true, 'logged in to ' . $sm['host'] . ':' . (int)$sm['port'] . ' as ' . $sm['username'] . '; nothing was sent'] : [false, function_exists('pm_smtp_explain') ? pm_smtp_explain($sm, 'The server did not accept the login.') : 'the server did not accept the login'];

@@ -44,6 +44,7 @@ function pm_mail(array $s, array $m): array
 
         $from = $smtp['from_email'] ?: $smtp['username'];
         $fromName = $smtp['from_name'] ?: $s['company_name'];
+        $mail->Hostname = pm_mail_domain($from); // Message-ID and HELO carry the mailbox's domain, not the web host's (a temporary host name gets mail refused for "poor reputation")
         $mail->setFrom($from, $fromName);
         $mail->addReplyTo($from, $fromName);
         $mail->addAddress($m['to']);
@@ -193,6 +194,20 @@ function pm_smtp_dns_ok(string $host): bool
  * What went wrong, in plain words, and what to do about it. $err is what the mail library said. When the connection itself failed, it also tries the other
  * usual ports (465, 587, 25) from THIS server, because the commonest cause on a website host is that outgoing mail connections to other servers are blocked.
  */
+/** The domain of a mailbox address ('' when it has none), used as the name the app gives itself to the mail server. */
+function pm_mail_domain(string $email): string
+{
+    $d = strtolower(trim((string)substr(strrchr($email, '@') ?: '', 1)));
+    return preg_match('/^[a-z0-9-]+(\.[a-z0-9-]+)+$/', $d) ? $d : '';
+}
+
+/** True when an address is a host's temporary or IP-based name (for example a cPanel "*.cpanel.site" address): mail filters distrust links to these. */
+function pm_temp_host(string $url): bool
+{
+    $h = strtolower((string)parse_url($url, PHP_URL_HOST));
+    return $h !== '' && (bool)preg_match('/\.(cpanel\.site|cpanel\.host|temporary\.site|nip\.io|sslip\.io)$|^\d+\.\d+\.\d+\.\d+$|\d{1,3}-\d{1,3}-\d{1,3}-\d{1,3}/', $h);
+}
+
 function pm_smtp_explain(array $sm, string $err): string
 {
     $host = trim((string)($sm['host'] ?? ''));
