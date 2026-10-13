@@ -30,7 +30,9 @@ $aiHid = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input ty
 <h3><?= pm_h($bname) ?></h3>
 <form method="post" class="card" id="ai"><?= $aiHid ?>
   <h2>The AI that writes and searches</h2>
-  <p class="hint mt-0">Shared by every business. <b>Today:</b> <?= number_format($us['total']) ?> tokens in <?= (int)$us['calls'] ?> calls<?= pm_budget() ? ' of a ' . number_format(pm_budget()) . ' budget' : '' ?><?= $us['agents'] ? ' (' . pm_h(implode(', ', array_map(fn($k, $v) => str_replace('_', ' ', $k) . ' ' . number_format($v), array_keys(array_slice($us['agents'], 0, 6, true)), array_slice($us['agents'], 0, 6, true)))) . ')' : '' ?>.
+  <?php $usd1 = pm_usage_usd(1); $usd30 = pm_usage_usd(30); ?>
+  <p class="hint mt-0">Shared by every business. <b>Spent:</b> about <?= pm_usd_fmt($usd1['total']) ?> today, <?= pm_usd_fmt($usd30['total']) ?> in 30 days<?= $usd30['by_brand'] && count($usd30['by_brand']) > 1 ? ' (' . pm_h(implode(', ', array_map(fn($b, $v) => pm_brand_name((string)$b) . ' ' . pm_usd_fmt($v), array_keys($usd30['by_brand']), $usd30['by_brand']))) . ')' : '' ?>; estimates from list prices.
+    <b>Today:</b> <?= number_format($us['total']) ?> tokens in <?= (int)$us['calls'] ?> calls<?= pm_budget() ? ' of a ' . number_format(pm_budget()) . ' budget' : '' ?><?= $us['agents'] ? ' (' . pm_h(implode(', ', array_map(fn($k, $v) => str_replace('_', ' ', $k) . ' ' . number_format($v), array_keys(array_slice($us['agents'], 0, 6, true)), array_slice($us['agents'], 0, 6, true)))) . ')' : '' ?>.
     Searching with <?= pm_provider(true) === 'gemini' ? 'Gemini' : 'Claude' ?>, writing with <?= pm_provider(false) === 'gemini' ? 'Gemini' : 'Claude' ?>.
     <?php $cst = pm_load('ai_cache_stats', fn() => []); $cHit = (int)($cst[date('Y-m-d')]['hits'] ?? 0); $cWeek = array_sum(array_map(fn($r) => (int)($r['tokens'] ?? 0), array_slice($cst, -7, null, true))); ?>
     <?php if ($cHit || $cWeek): ?><b>Answered from memory:</b> <?= $cHit ?> repeat question<?= $cHit === 1 ? '' : 's' ?> today, about <?= number_format($cWeek) ?> tokens saved in 7 days.<?php endif; ?></p>
@@ -39,6 +41,7 @@ $aiHid = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input ty
     <div><label>Gemini model</label><select name="cfg[gemini_model]"><option value="economy" <?= $acfg['gemini_model'] === 'economy' ? 'selected' : '' ?>>Economy (recommended)</option><option value="auto" <?= $acfg['gemini_model'] === 'auto' ? 'selected' : '' ?>>Spread across the newest three</option>
       <?php foreach (pm_gemini_top_models() as $gm): ?><option value="<?= pm_h($gm) ?>" <?= $acfg['gemini_model'] === $gm ? 'selected' : '' ?>><?= pm_h($gm) ?></option><?php endforeach; ?></select></div>
     <div><label>Daily budget (tokens; 0 = no limit)</label><input type="number" name="cfg[daily_token_budget]" value="<?= (int)$acfg['daily_token_budget'] ?>"></div>
+    <div><label>Daily spend limit (US$; 0 = no limit)</label><input type="number" step="0.05" min="0" name="cfg[daily_usd_budget]" value="<?= pm_h((string)($acfg['daily_usd_budget'] ?? 1)) ?>"></div>
     <div><label>Agents at once</label><input type="number" name="cfg[parallel]" value="<?= (int)$acfg['parallel'] ?>" min="1" max="6"></div>
   </div>
   <div class="btns"><button class="btn primary">Save the AI settings</button>

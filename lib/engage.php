@@ -119,7 +119,7 @@ function pm_agent_reply(array $lead, string $incoming, string $ch = 'email'): ar
     $user = "Business: {$lead['name']} ({$lead['city']}), contact: " . ($lead['contact'] ?? '') . ", package we suggested: $pk, their likely need: " . ($lead['pain'] ?? '') . ".\n"
         . "Conversation so far:\n" . implode("\n", $thread) . "\n\nTheir new message" . ($ch === 'wa' ? ' (on WhatsApp)' : '') . ":\n" . mb_substr($incoming, 0, 4000)
         . "\n\nReturn JSON: {\"intent\",\"summary\":\"one sentence\",\"needs_human\":bool,\"reply_subject\",\"reply_body\",\"whatsapp\",\"resume_on\",\"next_step\":\"what the owner should do next\"}";
-    $out = pm_agent_json(pm_claude($system, $user, false, 4000));
+    $out = pm_agent_json(pm_claude($system, $user, false, 1200)); // a reply under 120 words + a WhatsApp line + a few short fields: about 400 tokens; 1200 leaves room, never a runaway
     if (!is_array($out)) {
         return pm_reply_fallback('Could not be classified.');
     }

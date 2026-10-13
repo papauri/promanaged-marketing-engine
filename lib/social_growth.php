@@ -662,7 +662,7 @@ function pm_agent_engage_playbook(string $brand, bool $force = false, bool $rese
     $times = pm_fb_best_times($brand);
     $posts = pm_fb_posts($brand, 5)['posts'];
     // same people, same businesses, same stage and nothing newly researched: reuse the playbook (no AI call)
-    $sig = md5(json_encode([array_map(fn($p) => [$p['id'], $p['commented'], $p['messaged'], $p['unanswered']], $crowd), array_map(fn($l) => [$l['id'], $l['status'], (string)($l['updated'] ?? ''), (string)($l['research']['at'] ?? '')], $picked)]));
+    $sig = md5(json_encode([array_map(fn($p) => [$p['id'], $p['commented'], $p['messaged'], $p['unanswered']], $crowd), array_map(fn($l) => [$l['id'], $l['status'], (string)($l['research']['at'] ?? ''), count((array)($l['thread'] ?? [])), (string)($l['contact'] ?? ''), (string)($l['followup_draft']['at'] ?? '')], $picked)])); // what changes the advice: stage, research, messages, the person; not every small edit (a lead's 'updated' time)
     if (!$force && $prev && ($prev['sig'] ?? '') === $sig && strtotime((string)$prev['at']) > time() - 3 * 86400) {
         $prev = pm_playbook_carry($prev, date('Y-m-d'));
         pm_update('engage_playbook', function (array $all) use ($brand, $prev) {

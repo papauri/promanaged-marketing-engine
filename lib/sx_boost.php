@@ -240,17 +240,23 @@ function pm_proactive(string $brand): array
     return [];
 }
 
-/** Weekly job: 3 genuine, helpful comment drafts for peer pages and local groups. Linted; nothing is posted. */
+/** Weekly job: 3 genuine, helpful comment drafts for peer pages and local groups. Linted; nothing is posted. One AI call per business a week, attempted at most once a day. */
 function pm_jobg_proactive(): string
 {
     $made = 0;
+    $was = pm_brand();
     foreach (pm_brand_ids() as $b) {
         $d = pm_load('proactive', fn() => []);
-        if (($d[$b]['day'] ?? '') === date('Y-m-d')) {
-            continue;
+        if (strtotime((string)($d[$b]['day'] ?? '1970-01-01')) > time() - 7 * 86400 || ($d[$b]['tried'] ?? '') === date('Y-m-d')) {
+            continue; // made this week, or already tried today (a failed or empty answer is not asked again every scheduler pass)
         }
-        $s = pm_settings();
+        pm_update('proactive', function (array $all) use ($b) {
+            $all[$b] = (array)($all[$b] ?? []) + ['rows' => []];
+            $all[$b]['tried'] = date('Y-m-d');
+            return $all;
+        }, fn() => []);
         pm_brand_set($b);
+        $s = pm_settings(); // read after switching, so each business is called by its own name
         $system = pm_agents_company_brief('tiny') . "\nYou help {$s['company_name']} join local conversations. Write 3 engagement suggestions: each is a kind of Malawian Facebook page or group to comment on, and a one-to-two sentence comment that is genuinely helpful, specific and warm. No links, no prices, no selling, no flattery of our own business, no controversy. Reply with JSON only.";
         try {
             $out = pm_agent_json(pm_claude($system, 'Return JSON: {"items":[{"where":"kind of page or group","comment":"short comment"}]}', false, 900));
@@ -271,13 +277,14 @@ function pm_jobg_proactive(): string
         }
         if ($rows) {
             pm_update('proactive', function (array $d) use ($b, $rows) {
-                $d[$b] = ['day' => date('Y-m-d'), 'rows' => array_slice($rows, 0, 3)];
+                $d[$b] = ['day' => date('Y-m-d'), 'tried' => date('Y-m-d'), 'rows' => array_slice($rows, 0, 3)];
                 return $d;
             }, fn() => []);
             $made += count($rows);
         }
     }
-    return $made ? "$made engagement suggestion(s) ready in Social > Plan" : 'no engagement suggestions this week';
+    pm_brand_set($was);
+    return $made ? "$made engagement suggestion(s) ready in Social > Plan" : '';
 }
 
 /** A 'today' item so the owner sees fresh suggestions (rendered by the plan screen's today list). */

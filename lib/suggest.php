@@ -166,13 +166,30 @@ function pm_suggest_web(string $q, string $brand): array
     if (mb_strlen($q) < 4 || mb_strlen($q) > 60 || !function_exists('pm_claude') || (!pm_agents_ready() && !isset($GLOBALS['PM_AI_STUB']))) {
         return [];
     }
-    $key = $brand . '|' . pm_suggest_norm($q);
+    $qn = pm_suggest_norm($q);
+    $key = $brand . '|' . $qn;
     $cache = (array)pm_load('suggest_cache', fn() => []);
     $hit = $cache[$key] ?? null;
-    if (is_array($hit) && (int)($hit['at'] ?? 0) > time() - 7 * 86400) {
+    $fresh = fn($h) => is_array($h) && (int)($h['at'] ?? 0) > time() - 7 * 86400;
+    if (!$fresh($hit)) { // a shorter text searched before ("sunb" for "sunbird") whose answers still match: reuse them, no new search
+        for ($n = mb_strlen($qn) - 1; $n >= 4; $n--) {
+            $p = $cache[$brand . '|' . rtrim(mb_substr($qn, 0, $n))] ?? null;
+            if ($fresh($p) && array_filter((array)$p['rows'], fn($x) => pm_suggest_rank($q, (string)($x['name'] ?? '')) !== null)) {
+                $hit = $p;
+                break;
+            }
+        }
+    }
+    if ($fresh($hit)) {
         $raw = (array)$hit['rows'];
     } else {
+        $who = (string)($GLOBALS['PM_SUGGEST_WHO'] ?? (session_id() ?: ($_SERVER['REMOTE_ADDR'] ?? 'cli')));
+        if (!pm_rate_hit('suggestwebme', $who, 20, 3600)) { // one person: 20 web look-ups an hour; Find still searches the web
+            $GLOBALS['PM_SUGGEST_NOTE'] = 'Web suggestions are paused for a while (20 an hour). Press Find to search the web for this name.';
+            return [];
+        }
         if (!pm_rate_hit('suggestweb', 'all', 60, 3600)) {
+            $GLOBALS['PM_SUGGEST_NOTE'] = 'Web suggestions are paused for a while. Press Find to search the web for this name.';
             return [];
         }
         $kind = $brand === 'travel' ? 'real, trading places to stay in Malawi (lodges, guest houses, B&Bs, cottages, camps, resorts, hostels)' : 'real, trading businesses and organisations in Malawi';

@@ -55,7 +55,7 @@ $post = fn($id, $do, $extra = '') => '<input type="hidden" name="csrf" value="' 
 require_once __DIR__ . '/view_drafts.php';
 $waBiz = pm_wa_biz_cfg()['ready'];
 @set_time_limit(120);
-$dir = pm_director_brief() + ['headline' => '', 'priorities' => [], 'focus' => [], 'drop' => [], 'experiment' => '']; // a new business has no advice yet
+$dir = pm_director_brief(false, false) + ['headline' => '', 'priorities' => [], 'focus' => [], 'drop' => [], 'experiment' => '']; // a new business has no advice yet
 $ds = $dir['stats'];
 $ndone = count(array_filter($plan, fn($t) => $t['done']));
 ?>

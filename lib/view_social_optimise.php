@@ -2,7 +2,7 @@
 /** Brand > Profiles: the profile words for every channel, and a checklist per channel, a ready suggestion for every gap, applied with one press where the channel allows it. No AI unless "Polish wording" is pressed. */
 pm_brand_set($vb);
 $bname = pm_brand_title($settings, $vb);
-$run = pm_opt_run($vb);
+$run = pm_opt_run_cached($vb); // the last full check (up to 6 hours old, while nothing changed); "Check again" reads every channel now
 $st = pm_opt_store($vb);
 $cfg = pm_channels_cfg($vb);
 $fx = fn(string $do, string $extra = '') => '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="' . pm_h($do) . '">' . $extra;

@@ -420,6 +420,18 @@ function pm_adv_moves(string $brand, bool $force = false): array
                 'true_facts' => array_values(array_filter(array_map('trim', preg_split('/\R/', (string)$brain['facts']) ?: []))), 'free_first_step' => (string)$p['magnet'], 'sells_to' => (string)$p['sell_to'],
                 'leads_worked' => $m['overall']['n'], 'answered' => $m['overall']['replied'], 'won' => $m['overall']['won'], 'results' => pm_adv_ai_table($m), 'why_deals_were_lost' => $m['lost'],
                 'kinds_of_buyer_studied' => array_map(fn($s) => ['kind' => $s['name'], 'why' => $s['why'] ?? ''], array_slice($tg['segments'], 0, 6)), 'offers_so_far' => pm_adv_offer_context($brand)['offers_so_far']];
+            $sig = sha1(json_encode($input, JSON_UNESCAPED_UNICODE));
+            $prev = (array)($store[$brand] ?? []);
+            if (($prev['sig'] ?? '') === $sig && !empty($prev['ai']) && !empty($prev['moves'])) { // nothing new to learn from: the same advice, no AI call
+                $prev['week'] = $week;
+                $prev['note'] = trim(preg_replace('/\s*Nothing new since .*$/', '', (string)($prev['note'] ?? '')) . ' Nothing new since ' . (string)($prev['at'] ?? 'last time') . ', so this is the same advice.');
+                pm_update('advisor_moves', function (array $all) use ($brand, $prev) {
+                    $all[$brand] = $prev;
+                    return $all;
+                }, fn() => []);
+                return $prev;
+            }
+            $res['sig'] = $sig;
             $system = 'You are the growth advisor of a small business. From its real results, say what to do next to sell more: 3 to 5 moves, best first. '
                 . 'Types: double_down (more of what answers or buys), drop (less of what does not), try_next (a kind of buyer, town or channel not tried yet), new_offer (a small free or low-risk offer that starts conversations), fix (something that loses deals). '
                 . 'Every reason quotes the numbers you were given; never invent a number, a result, a price or a claim. With few leads worked (under 15), say so in "note" and lean on try_next and new_offer, using the studied kinds of buyer and what does well for our other businesses. '

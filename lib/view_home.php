@@ -50,7 +50,7 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
 <div class="hq-top">
   <section class="card hq-brief" id="brief">
     <h2>Today's brief from the Director</h2>
-    <?php $dir = pm_dm_as($vb, fn() => pm_director_brief()) + ['focus' => [], 'drop' => [], 'experiment' => '']; ?>
+    <?php $dir = pm_dm_as($vb, fn() => pm_director_brief(false, false)) + ['focus' => [], 'drop' => [], 'experiment' => '']; ?>
     <?php if ($brief['headline'] !== ''): ?>
       <p class="hq-headline"><?= pm_h($brief['headline']) ?></p>
       <?php if ($brief['priorities']): ?><ol class="hq-prio"><?php foreach (array_slice($brief['priorities'], 0, 5) as $p): ?><li><?= pm_h($p) ?></li><?php endforeach; ?></ol><?php endif; ?>

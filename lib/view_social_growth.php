@@ -16,10 +16,7 @@ $chan = ['reply_comment' => 'Reply on Facebook', 'messenger' => 'Messenger', 'in
 <?php endif; ?>
 <?php if (!$sc['ready']): ?>
 <?php elseif ($view === 'growth'):
-    try {
-        pm_playbook_ensure($vb, false); // no Researchers on a page view (they run with the scheduler and "Make it again"); a playbook from a past day is brought up to date now (carried over, or written again if the people changed)
-    } catch (Throwable) {
-    }
+    // No AI and no Facebook call while the page opens: the morning job (pm_job_playbook) or the button below makes today's playbook; a past day's is shown as it is, labelled with its date
     $pb = pm_load('engage_playbook', fn() => [])[$vb] ?? null;
     $people = isset($_GET['people']) ? pm_fb_people($vb) : null;
     $pbLeads = pm_leads_read(); ?>

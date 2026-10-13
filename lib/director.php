@@ -220,11 +220,13 @@ function pm_director_social(string $brand): array
 }
 
 /**
- * Today's strategy for a brand: written once a day (the morning run, or the first page opened if the run did not happen), one cheap AI call. $force re-asks.
+ * Today's strategy for a brand: written once a day by the morning run, one AI call. $force ("Refresh") asks again, unless the pipeline is exactly as it was
+ * when the last brief was written today. $ask=false (a page opening) never calls the AI: it shows the last brief, even from an earlier day, with live numbers.
+ * When the pipeline has not changed since a brief of the last 3 days, that brief is carried to today without asking (no tokens, no wait).
  * If the AI call fails, today's date and headline are NOT saved: the previous brief is kept and returned with an 'error'
  * (and the call is not repeated for 30 minutes).
  */
-function pm_director_brief(bool $force = false): array
+function pm_director_brief(bool $force = false, bool $ask = true): array
 {
     $brand = pm_brand();
     if (function_exists('pm_experiment_autostart')) { // next test from the fixed menu when none is running (no AI)
@@ -240,6 +242,26 @@ function pm_director_brief(bool $force = false): array
     // the day is studied once, in advance (the morning run): opening a page or doing the work never asks again; "Refresh" ($force) does
     if (!$force && ($mine['date'] ?? '') === date('Y-m-d') && !empty($mine['headline'])) {
         $mine['stats'] = $stats;
+        return $mine;
+    }
+    if (!$ask) { // a page is opening: never wait on the AI; the morning run or Refresh writes the next brief
+        $mine['stats'] = $stats;
+        if (!empty($mine['headline']) && ($mine['date'] ?? '') !== date('Y-m-d')) {
+            $mine['stale'] = (string)($mine['date'] ?? '');
+        }
+        return $mine;
+    }
+    $same = !empty($mine['headline']) && empty($mine['error']) && ($mine['sig'] ?? '') === $sig;
+    if ($same && (($force && ($mine['date'] ?? '') === date('Y-m-d')) || (!$force && strtotime((string)($mine['date'] ?? '1970-01-01')) >= strtotime('-3 days')))) {
+        // nothing in the pipeline moved: the advice still holds, so it is reused instead of paid for again
+        $mine['unchanged_since'] = (string)($mine['unchanged_since'] ?? date('Y-m-d H:i', (int)($mine['at'] ?? time())));
+        if (($mine['date'] ?? '') !== date('Y-m-d')) {
+            $mine['carried_from'] = (string)$mine['date'];
+            $mine['date'] = date('Y-m-d');
+            pm_update('director', fn(array $d) => array_replace($d, [$brand => $mine]), fn() => []);
+        }
+        $mine['stats'] = $stats;
+        $mine['note'] = 'Nothing changed in the pipeline since ' . $mine['unchanged_since'] . ', so this advice still holds (no new AI call).';
         return $mine;
     }
     $show = function (array $b, string $err) use ($stats) { // what callers see when there is no fresh advice

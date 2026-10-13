@@ -1289,10 +1289,42 @@ function pm_do_opt_use(string $vb): array
     return ['msg' => 'Saved. The checklist now covers the channels you ticked.', 'kind' => 'ok', 'to' => 'social&view=optimise'];
 }
 
+/**
+ * The checklist for the Profiles page without reading every channel on every visit: the last full check is reused for 6 hours while nothing it depends on
+ * changed (the saved answers, applied fixes, the business details, which channels are on). "Check again" and the daily job read the channels afresh.
+ */
+function pm_opt_run_cached(string $brand, int $ttl = 21600): array
+{
+    $brand = pm_brand_norm($brand);
+    $st = pm_opt_store($brand);
+    unset($st['last'], $st['history']);
+    $sig = md5(json_encode([$st, pm_brand_block(pm_load('settings', 'pm_default_settings'), $brand), function_exists('pm_channels_cfg') ? pm_channels_cfg($brand) : [], pm_social_cfg($brand)['ready']]));
+    $c = (array)(pm_load('opt_run_cache', fn() => [])[$brand] ?? []);
+    if (($c['sig'] ?? '') === $sig && time() - (int)($c['at'] ?? 0) < $ttl && is_array($c['run'] ?? null)) {
+        return $c['run'] + ['cached_at' => (int)$c['at']];
+    }
+    $run = pm_opt_run($brand);
+    pm_opt_run_remember($brand, $run);
+    return $run;
+}
+
+/** Keeps a fresh full check for pm_opt_run_cached (the signature is taken after the run, which may have saved the Page's hours). */
+function pm_opt_run_remember(string $brand, array $run): void
+{
+    $st = pm_opt_store($brand);
+    unset($st['last'], $st['history']);
+    $sig = md5(json_encode([$st, pm_brand_block(pm_load('settings', 'pm_default_settings'), $brand), function_exists('pm_channels_cfg') ? pm_channels_cfg($brand) : [], pm_social_cfg($brand)['ready']]));
+    pm_update('opt_run_cache', function (array $all) use ($brand, $run, $sig) {
+        $all[$brand] = ['at' => time(), 'sig' => $sig, 'run' => $run];
+        return $all;
+    }, fn() => []);
+}
+
 function pm_do_opt_refresh(string $vb): array
 {
     array_map('unlink', glob(pm_graph_cache_dir() . '/*.json') ?: []);
     $r = pm_opt_run($vb);
+    pm_opt_run_remember($vb, $r);
     return ['msg' => 'Checked again: ' . $r['score'] . '% (' . $r['fixable'] . ' suggestion' . ($r['fixable'] === 1 ? '' : 's') . ' ready to apply).', 'kind' => 'ok', 'to' => 'social&view=optimise'];
 }
 
@@ -1329,6 +1361,7 @@ function pm_job_pageopt(string $brand): string
     }
     $was = (int)($st['last']['score'] ?? -1);
     $r = pm_opt_run($brand);
+    pm_opt_run_remember($brand, $r);
     return 'Page health ' . $r['score'] . '%' . ($was >= 0 ? ' (' . ($r['score'] >= $was ? '+' : '') . ($r['score'] - $was) . ')' : '') . ', ' . $r['fixable'] . ' suggestion' . ($r['fixable'] === 1 ? '' : 's') . ' ready to apply';
 }
 

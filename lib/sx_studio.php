@@ -1471,7 +1471,7 @@ function pm_studio_ai(string $brand, array $base): array
             'website' => $f['site'], 'phone' => $f['phone'], 'brand_colour' => $acc, 'styles' => PM_SD_STYLES, 'profile_styles' => PM_SD_PSTYLES, 'textures' => array_keys(PM_SD_TEXTURES),
             'current_style' => $base['style'], 'avoid' => 'repeating the current style'], JSON_UNESCAPED_UNICODE)
         . "\nJSON: {\"style\":\"\",\"pstyle\":\"\",\"palette\":{\"bg1\":\"#\",\"bg2\":\"#\",\"accent\":\"#\",\"ink\":\"#\"},\"texture\":\"\",\"align\":\"left|center|right\",\"eyebrow\":\"\",\"headline\":\"\",\"subline\":\"\",\"whisper\":[],\"monogram\":\"\",\"why\":\"one sentence\"}";
-    $out = pm_agent_json(pm_claude($system, $user, false, 700, 'write'));
+    $out = pm_agent_json(pm_claude($system, $user, false, 700, 'cheap')); // picks from fixed menus (style, colours, texture) and a few words that the facts guard checks: no need for a stronger model
     if (!is_array($out) || empty($out['style'])) {
         throw new RuntimeException('The AI did not return a design. Try again.');
     }

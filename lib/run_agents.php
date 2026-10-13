@@ -55,7 +55,7 @@ $tmp = PM_DATA . '/agent_jobs';
 @mkdir($tmp, 0775, true);
 $run = ['state' => 'running', 'started' => date('Y-m-d H:i:s'), 'phase' => 'starting', 'beat' => time()];
 $progress = function (string $phase) use (&$run) {
-    foreach (['Reading' => 1, 'Scouts' => 2, 'Contact' => 3, 'Qualifiers' => 4, 'Researchers' => 5, 'Writers' => 6, 'Proposal' => 7, 'Follow' => 8] as $k => $n) {
+    foreach (['Reading' => 1, 'Scouts' => 2, 'Qualifiers' => 3, 'Researchers' => 4, 'Contact' => 5, 'Writers' => 6, 'Proposal' => 7, 'Follow' => 8] as $k => $n) {
         if (str_starts_with($phase, $k)) {
             $run['step'] = $n;
         }
@@ -308,7 +308,7 @@ try {
         if (($ws[$brand] ?? '') !== date('Y-m-d')) {
             $progress('Watcher looking for fresh signals');
             try {
-                $known = array_slice(array_map(fn($l) => (string)$l['name'], $leads), -200);
+                $known = pm_known_recent($leads, '', 40);
                 foreach (array_slice(pm_agent_watch($brand, $known), 0, 4) as $b) {
                     if ($stats['added'] >= $bs['room']) {
                         break;
@@ -360,7 +360,7 @@ try {
         try {
             $cities = array_values($cfg['cities']);
             $dcity = $cities ? $cities[(int)date('W') % count($cities)] : 'Lilongwe';
-            $known = array_slice(array_map(fn($l) => (string)$l['name'], $leads), -200);
+            $known = pm_known_recent($leads, (string)$dcity, 40); // the directory's own town only; a lead found again anywhere is caught in code
             $rows = pm_directory_clean(pm_agent_directory($brand, $dcity, (array)$cfg['sectors'], $known));
             $pool = array_replace(function_exists('pm_leads_archive') ? pm_leads_archive() : [], $all, $leads);
             foreach (pm_directory_leads($rows, $pool, $brand, $cfg, $dcity, $bs['room'] - $stats['added']) as $nid => $nl) {
@@ -373,104 +373,6 @@ try {
             pm_directory_mark($brand);
         } catch (Throwable $e) {
             pm_agent_log('Directory', 'failed: ' . $e->getMessage(), true);
-        }
-    }
-
-    // ---- 2. Contact finders (new leads) ----
-    // A search is only paid for when the lead still lacks an email or a named owner/manager (a name makes the message far more likely to be read). Capped for cost.
-    // "names" mode skips leads already searched in the last 30 days.
-    $newIds = $only === 'names'
-        ? array_slice(array_keys(array_filter($leads, fn($l) => !in_array($l['status'], ['won', 'lost', 'optout'], true) && empty($l['contact']) && empty($l['contact_hint'])
-            && (($c = strtotime((string)($l['contact_checked'] ?? ''))) === false || $c < strtotime('-30 days')))), 0, 12)
-        : array_slice(array_keys(array_filter($leads, fn($l) => $l['status'] === 'new' && (empty($l['email']) || empty($l['contact']))
-            && (($c = strtotime((string)($l['contact_checked'] ?? ''))) === false || $c < strtotime('-30 days')))), 0, 10); // a lead searched lately is not paid for again
-    if ($cfg['enabled']['contact'] && $newIds) {
-        $progress('Contact Finders on ' . count($newIds) . ' leads');
-        $jobs = array_map(fn($id) => ['agent' => 'contact', 'lead' => $leads[$id]], $newIds);
-        foreach (pm_swarm($jobs, $cfg['parallel'], $tmp, $beat) as $i => $r) {
-            $id = $newIds[$i];
-            $leads[$id]['contact_checked'] = $today; // looked once: not searched again for 30 days in "names" mode
-            if (!$r['ok']) {
-                $stats['errors']++;
-                pm_agent_log('Contact Finder', $leads[$id]['name'] . ' failed: ' . $r['error'], true);
-                continue;
-            }
-            $d = $r['data'];
-            foreach (['email', 'phone', 'whatsapp', 'website'] as $f) {
-                if (!empty($d[$f]) && empty($leads[$id][$f])) {
-                    $leads[$id][$f] = trim((string)$d[$f]);
-                }
-            }
-            pm_apply_contact($leads[$id], $d);
-            if ($leads[$id]['email'] !== '' && !filter_var($leads[$id]['email'], FILTER_VALIDATE_EMAIL)) {
-                $leads[$id]['email'] = '';
-            }
-            $stats['contacts'] += (!empty($leads[$id]['email']) || !empty($leads[$id]['phone'])) ? 1 : 0;
-        }
-        $save();
-    }
-    // Check the emails of new leads (outbound engine, when present): a bad address is dropped, the lead stays for WhatsApp.
-    if ($only === '' && function_exists('pm_verify_email')) {
-        $n = 0;
-        foreach ($leads as $id => $l) {
-            if ($n >= 15 || ($l['status'] ?? '') !== 'new' || empty($l['email']) || !empty($l['email_src'])) {
-                continue;
-            }
-            $n++;
-            $beat();
-            try {
-                $v = pm_verify_email((string)$l['email'], (string)($l['website'] ?? ''));
-            } catch (Throwable $e) {
-                continue;
-            }
-            if (!is_array($v)) {
-                continue;
-            }
-            $leads[$id]['email_src'] = (string)($v['src'] ?? 'unverified');
-            if (($v['ok'] ?? true) === false) {
-                $leads[$id]['email_rejected'] = $l['email'];
-                $leads[$id]['email'] = '';
-                pm_lead_note($leads[$id], 'Email ' . $l['email'] . ' rejected: ' . (string)($v['why'] ?? 'failed the check'));
-                $stats['rejected'] = ($stats['rejected'] ?? 0) + 1;
-            }
-        }
-        $save();
-    }
-
-    // ---- 2b. Contact re-verification: old leads whose published details may have changed ----
-    if ($cfg['enabled']['contact']) {
-        $stale = pm_reverify_due($leads, 3);
-        if ($stale) {
-            $progress('Re-checking ' . count($stale) . ' old contact details');
-            $jobs = array_map(fn($b) => ['agent' => 'reverify', 'leads' => $b], array_chunk($stale, 3));
-            foreach (pm_swarm_retry($jobs, $cfg['parallel'], $tmp, $beat, 'leads') as $r) {
-                if (!$jobFailed($r, 'Contact re-check', '') || empty($r['data'])) {
-                    continue;
-                }
-                foreach ($r['data'] as $d) {
-                    $id = (string)($d['id'] ?? '');
-                    if (!isset($leads[$id])) {
-                        continue;
-                    }
-                    $leads[$id]['contact_checked_at'] = date('Y-m-d H:i');
-                    $before = [(string)($leads[$id]['email'] ?? ''), (string)($leads[$id]['phone'] ?? ''), (string)($leads[$id]['contact'] ?? '')];
-                    $newEmail = strtolower(trim((string)($d['email'] ?? '')));
-                    if ($newEmail !== '' && filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
-                        $cur = strtolower((string)($leads[$id]['email'] ?? ''));
-                        if ($cur === '' || (!empty($leads[$id]['email_bad']) && $cur !== $newEmail)) {
-                            $leads[$id]['email'] = $newEmail;
-                            unset($leads[$id]['email_bad']);
-                            pm_lead_note($leads[$id], 'Contact re-verified: new address ' . $newEmail);
-                            $stats['reverified'] = ($stats['reverified'] ?? 0) + 1;
-                        }
-                    }
-                    pm_apply_contact($leads[$id], $d);
-                    if (function_exists('pm_reverify_result')) { // C2-A01: the owner sees what the re-check found (or that nothing changed)
-                        pm_reverify_result($leads[$id], $before);
-                    }
-                }
-            }
-            $save();
         }
     }
 
@@ -546,8 +448,12 @@ try {
                 pm_agent_log('Researcher', $leads[$id]['name'] . ' failed: ' . $r['error'], true);
                 continue;
             }
-            pm_apply_research($leads[$id], $r['data']);
+            $was = (string)($leads[$id]['requalified_at'] ?? '');
+            pm_apply_research($leads[$id], $r['data']); // also applies the re-score the study returned, so step 3c does not ask again
             $stats['researched'] = ($stats['researched'] ?? 0) + 1;
+            if ((string)($leads[$id]['requalified_at'] ?? '') !== $was) {
+                $stats['requalified'] = ($stats['requalified'] ?? 0) + 1;
+            }
         }
         $save();
     }
@@ -589,6 +495,107 @@ try {
         $save();
     }
 
+    // ---- 3d2. Contact finders (leads worth writing to that the study did not cover) ----
+    // A search is only paid for when the lead still lacks an email or a named owner/manager (a name makes the message far more likely to be read). Capped for cost.
+    // "names" mode skips leads already searched in the last 30 days.
+    // Runs after the Qualifiers and the day's study: only leads good enough to write to (score 60 or more, the Writers' bar) are searched, and a lead the study just
+    // looked at is skipped (the study searched its people and contacts, and pm_contact_apply marked it checked). With the Qualifier switched off, new leads as before.
+    $worth = fn($l) => $cfg['enabled']['qualifier'] ? ($l['status'] === 'qualified' && ($l['score'] ?? 0) >= 60 && empty($l['drafts'])) : $l['status'] === 'new';
+    $newIds = $only === 'names'
+        ? array_slice(array_keys(array_filter($leads, fn($l) => !in_array($l['status'], ['won', 'lost', 'optout'], true) && empty($l['contact']) && empty($l['contact_hint'])
+            && (($c = strtotime((string)($l['contact_checked'] ?? ''))) === false || $c < strtotime('-30 days')))), 0, 12)
+        : array_slice(array_keys(array_filter($leads, fn($l) => $worth($l) && (empty($l['email']) || empty($l['contact']))
+            && (($c = strtotime((string)($l['contact_checked'] ?? ''))) === false || $c < strtotime('-30 days')))), 0, 10); // a lead searched lately is not paid for again
+    if ($cfg['enabled']['contact'] && $newIds) {
+        $progress('Contact Finders on ' . count($newIds) . ' leads');
+        $jobs = array_map(fn($id) => ['agent' => 'contact', 'lead' => $leads[$id]], $newIds);
+        foreach (pm_swarm($jobs, $cfg['parallel'], $tmp, $beat) as $i => $r) {
+            $id = $newIds[$i];
+            $leads[$id]['contact_checked'] = $today; // looked once: not searched again for 30 days in "names" mode
+            if (!$r['ok']) {
+                $stats['errors']++;
+                pm_agent_log('Contact Finder', $leads[$id]['name'] . ' failed: ' . $r['error'], true);
+                continue;
+            }
+            $d = $r['data'];
+            foreach (['email', 'phone', 'whatsapp', 'website'] as $f) {
+                if (!empty($d[$f]) && empty($leads[$id][$f])) {
+                    $leads[$id][$f] = trim((string)$d[$f]);
+                }
+            }
+            pm_apply_contact($leads[$id], $d);
+            if ($leads[$id]['email'] !== '' && !filter_var($leads[$id]['email'], FILTER_VALIDATE_EMAIL)) {
+                $leads[$id]['email'] = '';
+            }
+            $stats['contacts'] += (!empty($leads[$id]['email']) || !empty($leads[$id]['phone'])) ? 1 : 0;
+        }
+        $save();
+    }
+    // Check the emails of new leads (outbound engine, when present): a bad address is dropped, the lead stays for WhatsApp.
+    if ($only === '' && function_exists('pm_verify_email')) {
+        $n = 0;
+        foreach ($leads as $id => $l) {
+            if ($n >= 15 || !in_array($l['status'] ?? '', ['new', 'qualified'], true) || !empty($l['drafts']) || empty($l['email']) || !empty($l['email_src'])) {
+                continue;
+            }
+            $n++;
+            $beat();
+            try {
+                $v = pm_verify_email((string)$l['email'], (string)($l['website'] ?? ''));
+            } catch (Throwable $e) {
+                continue;
+            }
+            if (!is_array($v)) {
+                continue;
+            }
+            $leads[$id]['email_src'] = (string)($v['src'] ?? 'unverified');
+            if (($v['ok'] ?? true) === false) {
+                $leads[$id]['email_rejected'] = $l['email'];
+                $leads[$id]['email'] = '';
+                pm_lead_note($leads[$id], 'Email ' . $l['email'] . ' rejected: ' . (string)($v['why'] ?? 'failed the check'));
+                $stats['rejected'] = ($stats['rejected'] ?? 0) + 1;
+            }
+        }
+        $save();
+    }
+
+    // ---- 2b. Contact re-verification: old leads whose published details may have changed ----
+    if ($cfg['enabled']['contact']) {
+        $stale = pm_reverify_due($leads, 3);
+        if ($stale) {
+            $progress('Re-checking ' . count($stale) . ' old contact details');
+            $jobs = array_map(fn($b) => ['agent' => 'reverify', 'leads' => $b], array_chunk($stale, 3));
+            foreach (pm_swarm_retry($jobs, $cfg['parallel'], $tmp, $beat, 'leads') as $r) {
+                if (!$jobFailed($r, 'Contact re-check', '') || empty($r['data'])) {
+                    continue;
+                }
+                foreach ($r['data'] as $d) {
+                    $id = (string)($d['id'] ?? '');
+                    if (!isset($leads[$id])) {
+                        continue;
+                    }
+                    $leads[$id]['contact_checked_at'] = date('Y-m-d H:i');
+                    $before = [(string)($leads[$id]['email'] ?? ''), (string)($leads[$id]['phone'] ?? ''), (string)($leads[$id]['contact'] ?? '')];
+                    $newEmail = strtolower(trim((string)($d['email'] ?? '')));
+                    if ($newEmail !== '' && filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
+                        $cur = strtolower((string)($leads[$id]['email'] ?? ''));
+                        if ($cur === '' || (!empty($leads[$id]['email_bad']) && $cur !== $newEmail)) {
+                            $leads[$id]['email'] = $newEmail;
+                            unset($leads[$id]['email_bad']);
+                            pm_lead_note($leads[$id], 'Contact re-verified: new address ' . $newEmail);
+                            $stats['reverified'] = ($stats['reverified'] ?? 0) + 1;
+                        }
+                    }
+                    pm_apply_contact($leads[$id], $d);
+                    if (function_exists('pm_reverify_result')) { // C2-A01: the owner sees what the re-check found (or that nothing changed)
+                        pm_reverify_result($leads[$id], $before);
+                    }
+                }
+            }
+            $save();
+        }
+    }
+
     // ---- 4. Writers ----
     $todo = array_values(array_filter($leads, fn($l) => $l['status'] === 'qualified' && ($l['score'] ?? 0) >= 60
         && (!empty($l['email']) || !empty($l['phone'])) && empty($l['drafts']) && !pm_lead_is_client($l))); // a client is messaged personally, never with a cold draft
@@ -599,9 +606,22 @@ try {
         $stats['paused'] = true;
     } elseif ($cfg['enabled']['writer'] && $todo) {
         $progress('Writers drafting ' . count($todo) . ' messages');
-        $jobs = array_map(fn($b) => ['agent' => 'write', 'leads' => $b], array_chunk($todo, 6));
         $byAi = !(function_exists('pm_dm_use_default') && pm_dm_use_default($brand)); // the default message has one subject for all: not part of the subject experiment
-        $results = pm_swarm_retry($jobs, $cfg['parallel'], $tmp, $beat, 'leads');
+        $results = [];
+        $ready = []; // the day's study already wrote ready starters: the best one that passes the checks is the draft, and the Writer is not paid to write it again
+        foreach ($todo as $l0) {
+            if (($row = pm_starter_draft($l0)) !== null) {
+                $ready[] = $row;
+            }
+        }
+        if ($ready) {
+            $results[] = ['ok' => true, 'data' => $ready, 'error' => ''];
+            $todo = array_values(array_filter($todo, fn($l) => !in_array((string)$l['id'], array_column($ready, 'id'), true)));
+        }
+        if ($todo) {
+            $jobs = array_map(fn($b) => ['agent' => 'write', 'leads' => $b], array_chunk($todo, 6));
+            $results = array_merge($results, pm_swarm_retry($jobs, $cfg['parallel'], $tmp, $beat, 'leads'));
+        }
         $fresh = pm_leads_read(); // what the owner did while the writers worked (a draft applied by hand, a reply) is not written over
         foreach ($results as $r) {
             if (!$jobFailed($r, 'Writer', '')) {
@@ -615,11 +635,11 @@ try {
                 if (isset($leads[$id]) && !empty($w['email_body'])) {
                     $L = $leads[$id];
                     $leads[$id]['drafts'] = ['email_subject' => (string)$w['email_subject'], 'email_body' => (string)$w['email_body'], 'whatsapp' => (string)($w['whatsapp'] ?? '')];
-                    if ($byAi) {
+                    if ($byAi && empty($w['starter'])) { // a starter's subject was not written in an arm's style: it stays out of the subject experiment
                         $leads[$id]['email_arm'] = function_exists('pm_email_exp_arm') ? pm_email_exp_arm((string)$id, $brand) : 'A'; // subject experiment arm
                     }
                     $leads[$id]['variant'] = ['angle' => mb_substr((string)($L['pain'] ?? ''), 0, 60), 'research' => !empty($L['research']), 'named' => !empty($L['contact']),
-                        'channel_first' => !empty($L['email']) ? 'email' : 'whatsapp']; // what was tried, so the Director can learn what gets replies
+                        'channel_first' => !empty($L['email']) ? 'email' : 'whatsapp'] + (!empty($w['starter']) ? ['from' => 'starter'] : []); // what was tried, so the Director can learn what gets replies
                     $leads[$id]['status'] = 'drafted';
                     $stats['drafted']++;
                 }

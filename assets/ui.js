@@ -51,7 +51,7 @@
     inp.setAttribute('aria-controls', list.id);
     inp.setAttribute('aria-expanded', 'false');
     inp.setAttribute('autocomplete', 'off');
-    var local = [], web = [], status = '', active = -1, tL = 0, tW = 0, cL = null, cW = null, shown = [];
+    var local = [], web = [], status = '', active = -1, tL = 0, tW = 0, cL = null, cW = null, shown = [], webSeen = {}; // webSeen: text searched -> its web answers, so typing on reuses them
     function brand() {
       var b = form && form.querySelector('[name=brand]');
       return b && b.value ? b.value : (new URLSearchParams(location.search).get('brand') || '');
@@ -139,7 +139,7 @@
           if (!r.ok) { var h = new Error('http'); h.kind = 'http'; throw h; }
           return r.json();
         })
-        .then(function (j) { if (inp.value.trim() === q) done((j && j.rows) || [], ''); })
+        .then(function (j) { if (inp.value.trim() === q) done((j && j.rows) || [], '', (j && j.note) || ''); })
         .catch(function (e) { if (inp.value.trim() === q) done(null, e && e.kind ? e.kind : 'net'); });
     }
     inp.addEventListener('input', function () {
@@ -155,17 +155,26 @@
         cL = window.AbortController ? new AbortController() : { abort: function () {}, signal: undefined };
         ask(q, 'local', cL, function (rows, err) { local = rows || []; if (err) status = problem(err); render(); });
       }, 120);
-      if (inp.dataset.web && q.length >= 3) {
+      if (inp.dataset.web && q.length >= 4) { // a web search costs money: only after 4 letters and a real pause, and never again for text already covered
+        var ql = q.toLowerCase(), reuse = null;
+        for (var k in webSeen) {
+          if (ql.indexOf(k) === 0) {
+            var still = webSeen[k].filter(function (r) { return (r.name || '').toLowerCase().indexOf(ql) !== -1; });
+            if (still.length) { reuse = still; break; }
+          }
+        }
+        if (reuse) { web = reuse; render(); return; }
         tW = setTimeout(function () {
           cW = window.AbortController ? new AbortController() : { abort: function () {}, signal: undefined };
           status = 'Searching the web…';
           render();
-          ask(q, 'web', cW, function (rows, err) {
+          ask(q, 'web', cW, function (rows, err, note) {
             web = rows || [];
-            status = err ? problem(err) : (web.length ? '' : (local.length ? 'Nothing more found on the web.' : 'Nothing found yet. Press Find to search the web for this exact name.'));
+            if (!err) webSeen[ql] = web;
+            status = err ? problem(err) : (note || (web.length ? '' : (local.length ? 'Nothing more found on the web.' : 'Nothing found yet. Press Find to search the web for this exact name.')));
             render();
           });
-        }, 500);
+        }, 1200);
       }
     });
     inp.addEventListener('keydown', function (e) {

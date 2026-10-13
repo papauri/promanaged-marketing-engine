@@ -253,7 +253,7 @@ if (is_string($sgText)) {
     @set_time_limit(90);
     $sgRows = ($_GET['mode'] ?? '') === 'web' ? pm_suggest_web($sgText, $sgBrand) : pm_suggest_local($sgText, $sgBrand);
     $sgRows = array_values(array_filter($sgRows, fn($r) => pm_user_can_brand(pm_brand_norm($r['brand'] ?? $sgBrand)))); // only businesses this person may open
-    echo json_encode(['rows' => $sgRows], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    echo json_encode(['rows' => $sgRows] + (!empty($GLOBALS['PM_SUGGEST_NOTE']) ? ['note' => (string)$GLOBALS['PM_SUGGEST_NOTE']] : []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
 
@@ -626,6 +626,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($grp === 'targeting') { $c['sectors'] = $list('sectors'); }
             if ($grp === 'targeting') { $c['offerings'] = array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($_POST['cfg']['offerings'] ?? ''))))); }
             if ($grp === 'ai') { $c['daily_token_budget'] = max(0, (int)($_POST['cfg']['daily_token_budget'] ?? 400000)); }
+            if ($grp === 'ai') { $c['daily_usd_budget'] = max(0, round((float)($_POST['cfg']['daily_usd_budget'] ?? 1), 2)); }
             if ($grp === 'ai') { $c['quality'] = ($_POST['cfg']['quality'] ?? '') === 'balanced' ? 'balanced' : 'economy'; }
             $gm = (string)($_POST['cfg']['gemini_model'] ?? 'economy');
             if ($grp === 'targeting') { $c['reply_mode'] = ($_POST['cfg']['reply_mode'] ?? '') === 'auto' ? 'auto' : 'draft'; }
@@ -644,6 +645,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $raw['gemini_model'] = $c['gemini_model'];
                 $raw['parallel'] = $c['parallel'];
                 $raw['daily_token_budget'] = $c['daily_token_budget'];
+                $raw['daily_usd_budget'] = $c['daily_usd_budget'];
                 $raw['quality'] = $c['quality'];
                 $own = ['sectors', 'cities', 'markets', 'new_per_day', 'scouts_per_day', 'send_cap', 'wa_cap', 'followup_days', 'max_followups', 'proposals_per_day', 'enabled'];
                 if (pm_brand_is_custom(pm_brand())) {
@@ -748,8 +750,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($do === 'director') {
             @set_time_limit(120);
-            pm_director_brief(true);
-            $back("Today's strategy refreshed.");
+            $dbr = pm_director_brief(true);
+            $back(trim((string)($dbr['note'] ?? '')) !== '' ? (string)$dbr['note'] : "Today's strategy refreshed.");
         }
         if ($do === 'check_replies') {
             try {

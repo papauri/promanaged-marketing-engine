@@ -368,7 +368,7 @@ function pm_agent_watch(string $brand, array $knownNames): array
             : 'Malawi businesses with a fresh signal: a new website, a hiring advert for admin or IT, a reopening, or a shop moving its operations online');
     $system = pm_agents_company_brief('short') . "\nYou are the Watcher. Web-search for $who. Report only NEW signals a normal sweep may have missed; skip anything already known. "
         . "Each result needs a factual observation with its source URL. " . PM_AGENT_RULES;
-    $user = "Skip these (already known): " . implode('; ', array_slice(array_map(fn($n) => preg_replace('/ \(.*$/', '', $n), $knownNames), -80)) . "\n"
+    $user = "Skip these (already known): " . implode('; ', array_slice(array_map(fn($n) => preg_replace('/ \(.*$/', '', $n), $knownNames), -40)) . "\n"
         . 'JSON array of {"name","type":"kind of business in 2-3 words","city","website","phone","email","facebook","social_gaps":["what is missing or weak online"],'
         . '"evidence":["one factual observation + source URL"],"need_signals":["why they may need us"],"offering":"' . ($travel || pm_brand_is_custom($brand) ? 'the offering that fits, or empty' : 'build, source or support') . '"} — at most 4 items.';
     $out = pm_agent_list(pm_agent_json(pm_claude($system, $user, true, 2000)));
@@ -833,7 +833,7 @@ function pm_agent_directory(string $brand, string $city, array $sectors, array $
     $system = pm_agents_company_brief('short') . "\nYou are the Directory Scout. Web-search PUBLIC business directories, chamber of commerce pages and association member lists for organisations in {$city}, Malawi, that fit "
         . 'what we offer (' . implode(', ', array_slice($sectors, 0, 6)) . '). Report only organisations you actually saw listed on such a page, with the exact https address of the page that lists them, and only the contact details that page publishes. '
         . 'Never guess an address, a phone number or a person, and never use a private person\'s personal contact. Skip chains and anything outside Malawi. ' . PM_AGENT_RULES;
-    $user = 'Skip these (already known): ' . implode('; ', array_slice(array_map(fn($n) => preg_replace('/ \(.*$/', '', $n), $knownNames), -80)) . "\n"
+    $user = 'Skip these (already known): ' . implode('; ', array_slice(array_map(fn($n) => preg_replace('/ \(.*$/', '', $n), $knownNames), -40)) . "\n"
         . 'JSON array of {"name","type":"kind of organisation in 2-3 words","city","address","website","phone","email","source":"https address of the directory or member-list page that lists it","evidence":["what the listing says about it"]} - at most 6 items.';
     return pm_agent_list(pm_agent_json(pm_claude($system, $user, true, 2200)));
 }
