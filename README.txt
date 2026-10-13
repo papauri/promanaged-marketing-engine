@@ -56,17 +56,17 @@ PUT IT ONLINE (for online signing)
   cPanel > File Manager > public_html (or a sub-folder) > Upload the zip > Extract, then do steps 2-4 and the cron lines below.
   After signing in, Operations > Health and backups checks the server: PHP version, extensions, writable folders, vendor,
   background work and HTTPS.
-  1. Upload the whole folder to your hosting, e.g. public_html/proposals
+  1. Upload the whole folder to your hosting, e.g. public_html/promanaged_proposals
      (PHP 8.1 or newer). The .htaccess files keep .env, data/, lib/, vendor/
      and output/ private.
   2. In .env on the server, set:
-        APP_URL=https://promanaged-it.com/proposals
+        APP_URL=https://promanaged-it.com/promanaged_proposals
      and copy the USER_... lines (the sign-in accounts) from your own .env.
-  3. Open https://promanaged-it.com/proposals and sign in with your username and password.
+  3. Open https://promanaged-it.com/promanaged_proposals and sign in with your username and password.
      Accounts are managed in the app by an admin: Operations > Team and currencies > Team access
      (add, turn off or on, delete, set a password, choose the businesses each person can open).
      Clients only ever see sign.php with their own private link.
-  4. Check that https://promanaged-it.com/proposals/.env shows "Forbidden" (and /data/settings.json too: a host that ignores .htaccess,
+  4. Check that https://promanaged-it.com/promanaged_proposals/.env shows "Forbidden" (and /data/settings.json too: a host that ignores .htaccess,
      such as nginx, needs the same folders blocked in its own config).
 
   GITIGNORED, SO NOT IN GIT: upload these by hand the first time (the rest of the folder comes from git)
@@ -80,13 +80,13 @@ PUT IT ONLINE (for online signing)
   Run the app from ONE place: once the server has your data/, stop using the local copy, or the two drift apart.
 
   SCHEDULING ON A SERVER (replaces schedule_agents.bat, which is for a Windows PC). cPanel > Cron Jobs, with your own paths:
-     */15 * * * *   curl -s "https://promanaged-it.com/proposals/cron.php?key=THE_CRON_KEY" >/dev/null
+     */15 * * * *   curl -s "https://promanaged-it.com/promanaged_proposals/cron.php?key=THE_CRON_KEY" >/dev/null
                     (publishes approved posts, runs campaigns and every social job, starts added businesses' daily runs)
-     30 7 * * 1-5   php /home/USER/public_html/proposals/lib/run_agents.php; php /home/USER/public_html/proposals/lib/run_agents.php travel
-     */15 * * * *   php /home/USER/public_html/proposals/lib/send_due.php       (sends owner-approved emails, one per run, in working hours)
-     */15 * * * *   php /home/USER/public_html/proposals/lib/poll_run.php       (reads replies and bounces)
+     30 7 * * 1-5   php /home/USER/public_html/promanaged_proposals/lib/run_agents.php; php /home/USER/public_html/promanaged_proposals/lib/run_agents.php travel
+     */15 * * * *   php /home/USER/public_html/promanaged_proposals/lib/send_due.php       (sends owner-approved emails, one per run, in working hours)
+     */15 * * * *   php /home/USER/public_html/promanaged_proposals/lib/poll_run.php       (reads replies and bounces)
   CRON_KEY=a-long-random-text goes in .env. If the host blocks exec(), also add one line per added business:  php .../lib/run_agents.php <id>
-  The WhatsApp webhook is https://promanaged-it.com/proposals/wa.php. Settings > Setup health shows "Scheduler" turning green once cron runs.
+  The WhatsApp webhook is https://promanaged-it.com/promanaged_proposals/wa.php. Settings > Setup health shows "Scheduler" turning green once cron runs.
 
 FILES
   .env                 mail server, APP_URL, sign-in accounts USER_* (never shared, gitignored)
