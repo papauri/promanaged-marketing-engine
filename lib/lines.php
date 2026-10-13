@@ -484,7 +484,7 @@ function pm_onboarding_line(): array
         'pain_points' => [
             ['type' => 'all', 'pain' => 'Commission on every booking', 'cost' => 'When guests book through an agent, a share of every stay goes to the agent, on guests you may have found yourself.', 'fix' => 'Guests book you directly. You keep the rate you set, with no commission taken off the top.'],
             ['type' => 'all', 'pain' => 'Travellers who cannot find you', 'cost' => 'A stay that is easy to miss online is rarely considered, however good it is.', 'fix' => 'A reviewed listing on a platform built for independent stays across Malawi.'],
-            ['type' => 'all', 'pain' => 'Guests who are not sure they can trust you', 'cost' => 'Travellers book where they can see what other guests said. A handful of hand-picked comments, or none at all, makes them look elsewhere.', 'fix' => 'Your listing shows reviews from different sources side by side, so guests see the honest picture and book with confidence.'],
+            ['type' => 'all', 'pain' => 'Guests who are not sure they can trust you', 'cost' => 'Travellers book where they can see what other guests said. A handful of hand-picked comments, or none at all, makes them look elsewhere.', 'fix' => 'Guests can chat and video call you in the app before they book, and your listing shows reviews from different sources side by side. They meet you and see the honest picture, so they book with confidence.'],
             ['type' => 'all', 'pain' => 'Enquiries scattered across phone, WhatsApp and email', 'cost' => 'Requests get missed or answered late when they arrive in four places.', 'fix' => 'Requests land in your dashboard and confirmations go out over WhatsApp.'],
             ['type' => 'all', 'pain' => 'Availability that is out of date', 'cost' => 'Rooms promised twice, or shown as free when they are not, cost you goodwill and income.', 'fix' => 'Manage rooms, rates and blocked dates yourself in one place.'],
             ['type' => 'all', 'pain' => 'Paying before you earn', 'cost' => 'Listing fees and monthly charges are paid whether or not bookings come.', 'fix' => 'No listing fee and no monthly charge while onboarding is free.'],
@@ -493,9 +493,10 @@ function pm_onboarding_line(): array
         'benefits_title' => 'What you get',
         'benefits' => [
             ['You keep your rate', 'No commission taken off the top, no listing fee, no monthly charge while onboarding is free.'],
+            ['Guests meet you before they come', 'Guests chat with you in the app and can voice or video call you, so they see your place and ask you directly before they book.'],
+            ['Reviews from more than one source', 'Your listing brings together what guests said in different places, not just on our site. Showing the full picture is open and honest, and that is what makes a new guest trust you enough to book.'],
             ['Guests deal with you directly', 'Guests pay you at the property, in kwacha or dollars.'],
             ['Requests straight to you', 'They arrive in your dashboard, and confirmations go out over WhatsApp.'],
-            ['Reviews from more than one source', 'Your listing brings together what guests said in different places, not just on our site. Showing the full picture is open and honest, and that is what makes a new guest trust you enough to book.'],
             ['Checked before it goes live', 'We review every listing, so guests can trust what they find.'],
             ['You stay in control', 'Manage your rooms, rates and blocked dates yourself.'],
             ['A guide for new hosts', 'A host onboarding starter pack and guide to get your listing right.'],
@@ -504,6 +505,7 @@ function pm_onboarding_line(): array
             ['Your property listing', 'Photos, rooms, rates, amenities and location.'],
             ['Availability and blocked dates', 'You decide what is open and at what rate.'],
             ['Direct guest requests', 'Delivered to your dashboard, with confirmations over WhatsApp.'],
+            ['Chat and video calls with guests', 'In the app, so guests can talk to you before they book.'],
             ['Guest reviews from several sources', 'Shown together on your listing, so travellers see what others said.'],
             ['Review before going live', 'Every listing is checked before it goes live.'],
             ['Host onboarding guide', 'A starter pack for getting your listing right.'],
@@ -542,7 +544,7 @@ function pm_onboarding_line(): array
         'emails' => [
             'pitch' => [
                 'subject' => 'Listing {business} on Travel Malawi',
-                'body' => "Hello {contact},\n\nTravel Malawi is a direct booking platform for independent lodges, B&Bs, cottages, guest houses and safari camps across Malawi. Guests book you directly, you keep the rate you set, and requests reach you in your dashboard and over WhatsApp. Your listing also shows your reviews from different sources together, so guests can see the honest picture and trust you.\n\n{fee_line}\n\nI have attached a short proposal for {business} explaining how onboarding works. If it is of interest, just reply to this email{or_call} and we will help you get listed.\n\n$sig",
+                'body' => "Hello {contact},\n\nTravel Malawi is a direct booking platform for independent lodges, B&Bs, cottages, guest houses and safari camps across Malawi. Guests book you directly, you keep the rate you set, and requests reach you in your dashboard and over WhatsApp. Guests can chat and video call you in the app before they book, and your listing shows your reviews from different sources together, so they can see the honest picture and trust you.\n\n{fee_line}\n\nI have attached a short proposal for {business} explaining how onboarding works. If it is of interest, just reply to this email{or_call} and we will help you get listed.\n\n$sig",
             ],
             'contract' => [
                 'subject' => '{business}: your Travel Malawi agreement ({reference})',
