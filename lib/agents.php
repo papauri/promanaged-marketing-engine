@@ -43,7 +43,7 @@ function pm_agents_default_config(): array
         // Businesses we already serve (named on our website): never pitched as new ProManaged IT leads.
         'existing_clients' => ["Rosalyn's Beach Hotel", 'Liwonde Sun Hotel'],
         'proposals_per_day' => 2, // best leads get a tailored proposal prepared ahead of time (each costs an AI call)
-        'research_per_day' => 5,  // best leads get their website, socials and news studied before the first message
+        'research_per_day' => 12, // the day's leads (replies, follow-ups due, today's first messages) are studied in advance: business, news, owner's name, contacts; one web call each
         'daily_token_budget' => 400000, // hard stop for all AI use in a day, all brands together (0 = no limit)
         'quality' => 'economy',   // economy = cheapest models everywhere; balanced = a stronger model for web research and proposals
         'enabled'         => ['scout' => true, 'contact' => true, 'qualifier' => true, 'research' => true, 'writer' => true, 'proposals' => true, 'followup' => true],
@@ -57,7 +57,7 @@ function pm_travel_agent_defaults(): array
         'sectors' => ['lodges and guest houses', 'bed and breakfasts and cottages', 'safari camps and eco-lodges', 'lakeshore resorts and beach lodges', 'boutique and city hotels', 'backpackers and hostels'],
         'cities' => ['Cape Maclear', 'Nkhata Bay', 'Mangochi', 'Salima', 'Nkhotakota', 'Livingstonia', 'Karonga', 'Liwonde', 'Zomba', 'Mulanje', 'Blantyre', 'Lilongwe', 'Mzuzu', 'Chintheche'],
         'markets' => ['Malawi'],
-        'new_per_day' => 10, 'scouts_per_day' => 4, 'send_cap' => 10, 'wa_cap' => 40, 'followup_days' => 4, 'max_followups' => 2, 'proposals_per_day' => 2,
+        'new_per_day' => 10, 'scouts_per_day' => 4, 'send_cap' => 10, 'wa_cap' => 40, 'followup_days' => 4, 'max_followups' => 2, 'proposals_per_day' => 2, 'research_per_day' => 12,
         'enabled' => ['scout' => true, 'contact' => true, 'qualifier' => true, 'research' => true, 'writer' => true, 'proposals' => true, 'followup' => true],
     ];
 }
@@ -1140,7 +1140,7 @@ function pm_agent_followup(array $leads): array
     $s = pm_settings();
     $subjectRule = 'written like a normal subject line: a capital letter first and a capital letter on every town, area, road, person and business name (for example \'Rooms near the Shire River barrage?\'), every other word in ordinary lowercase, no full stop, no exclamation marks, no word in ALL CAPS except an acronym such as VAT';
     $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou are the Follow-up agent for {$s['company_name']}. Write a 40-word follow-up email and 25-word WhatsApp that add ONE new angle (a different gain, or a one-page plan offer).  Read their_last_message and our_last_message: never repeat our last message, never quote words they did not write, and if their_last_message is empty never say they said anything. followups_already_sent tells you how many nudges came before: each one must add a different reason."
-        . "Match the state: for \"opened\" (they opened our proposal or email but stayed quiet) gently reference what they saw and add one new, true reason; for \"silent\" (never engaged) be shorter and lead with one specific fact about their business; for \"replied\" pick up their last words, never repeat a whole earlier message. "
+        . "Match the state: for \"opened\" (they opened our proposal or email but stayed quiet) gently reference what they saw and add one new, true reason; for \"silent\" (never engaged) be shorter and lead with one specific fact about their business (from what_we_know when given: our research's facts, news and hooks; never invent one);for \"replied\" pick up their last words, never repeat a whole earlier message. "
         . "No prices, no guilt, no pressure, no urgency. Plain text, no sign-off. Each item has subject_style: write that item's email subject in that style, $subjectRule. "
         . pm_email_exp_followup_example(pm_brand()) . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $last = function (array $l, string $dir): string { // the latest message each way, so "pick up their last words" has their words to pick up
@@ -1154,7 +1154,7 @@ function pm_agent_followup(array $leads): array
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'contact' => $l['contact'] ?? '', 'used' => mb_substr($l['drafts']['email_body'] ?? '', 0, 220),
         'their_last_message' => $last($l, 'in'), 'our_last_message' => $last($l, 'out'), 'followups_already_sent' => (int)($l['followups'] ?? 0),
         'state' => pm_lead_engagement((array)$l), 'views' => (int)($l['view_count'] ?? 0), 'last_seen' => (string)($l['last_viewed_at'] ?? ''),
-        'subject_style' => pm_subject_style(pm_followup_arm((array)$l))], $leads);
+        'subject_style' => pm_subject_style(pm_followup_arm((array)$l))] + (!empty($l['research']) ? ['what_we_know' => pm_research_brief($l)] : []), $leads); // the morning study: real facts and news to build the new angle on
     return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}", false, 1800))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);
 }
 
@@ -2473,6 +2473,7 @@ function pm_agent_research(array $lead): array
         . "Step 2, facts: from its own website, its Facebook and Instagram pages, Google reviews, and local or business/finance news from the last 18 months (expansion, new rooms or branch, awards, funding, tenders won, hiring, events). "
         . "Only facts you actually read, each with its exact source URL and the date shown on the source; mark confidence high (read it yourself on an official page or reputable news) or medium (a review site or directory). Never guess, infer or fill gaps. "
         . "The 'checked_by_code' list was verified by our own system: treat it as true, do not contradict it, and never claim a website, certificate or security problem that is not in it. "
+        . "Step 2b, people and contacts: who owns or runs it (owner, founder, director, general manager, manager or host; never kitchen, restaurant, front-desk or housekeeping staff, guests or reviewers), each with the exact source URL that names them; and its public email, phone and WhatsApp, with the source URL. Only what a source states; leave empty what you did not find. "
         . "Step 3, through our eyes: what is weak or missing online and where we could genuinely help (for our team only). "
         . "Step 4, write 2 or 3 hooks: one real observation plus a curious question that makes the owner want to reply, WITHOUT handing over the solution or offering to fix it. Friendly, never critical or creepy, business information only. "
         . "Step 5, write 3 conversation starters, each built on a different hook, ready to send: an email (subject of max 7 words, then a body of 45 to 80 words: a greeting line" . ($first !== '' ? " to $first" : '') . ", one line saying who we are"
@@ -2480,7 +2481,8 @@ function pm_agent_research(array $lead): array
     $user = "Business: {$lead['name']} ({$lead['type']}), " . pm_lead_place($lead) . ". Known website: " . ($lead['website'] ?? '') . '. Known Facebook: ' . ($lead['facebook'] ?? '') . '. Contact: ' . ($lead['contact'] ?? '') . ".\n"
         . 'checked_by_code: ' . json_encode($site['facts'] ?? ['no website known'], JSON_UNESCAPED_UNICODE) . ($site['social'] ?? [] ? ' social links on their site: ' . json_encode($site['social']) : '') . "\n"
         . 'JSON: {"identity":{"confirmed":true,"how":"what proves it is this business"},"discoveries":[{"fact":"","source":"URL","date":"","confidence":"high|medium"}],"website":{"url":"","verdict":"one short line","issues":[""]},'
-        . '"social":{"facebook":"URL","instagram":"URL","verdict":"one short line: last post date, followers, reviews"},"news":[{"headline":"","source":"URL","date":""}],"opportunities":[""],"hooks":[""],'
+        . '"social":{"facebook":"URL","instagram":"URL","verdict":"one short line: last post date, followers, reviews"},"news":[{"headline":"","source":"URL","date":""}],'
+        . '"people":[{"name":"full name","role":"as the source states it","source":"URL"}],"reach":{"email":"","phone":"","whatsapp":"","source":"URL"},"opportunities":[""],"hooks":[""],'
         . '"starters":[{"angle":"2-4 words","subject":"","email":"","whatsapp":""}]}';
     $out = pm_agent_json(pm_claude($system, $user, true, 3000, 'write'));
     if (!is_array($out)) {
@@ -2502,6 +2504,19 @@ function pm_agent_research(array $lead): array
         }
         $starters[] = ['angle' => mb_substr((string)($st['angle'] ?? ''), 0, 40), 'subject' => pm_subject_tidy(mb_substr(trim((string)($st['subject'] ?? '')), 0, 80), $lead), 'email' => $body, 'whatsapp' => trim((string)($st['whatsapp'] ?? ''))];
     }
+    $people = [];
+    foreach ($sure ? (array)($out['people'] ?? []) : [] as $p) { // the names it found, each with the page that states it
+        $n = is_array($p) && is_scalar($p['name'] ?? null) ? trim(strip_tags((string)$p['name'])) : '';
+        if ($n !== '' && $src($p['source'] ?? '') && pm_contact_name_ok($n)) {
+            $people[] = ['name' => mb_substr($n, 0, 80), 'role' => mb_substr(trim(strip_tags((string)($p['role'] ?? ''))), 0, 60), 'source' => (string)$p['source']];
+        }
+    }
+    $reach = [];
+    if ($sure && is_array($out['reach'] ?? null) && $src($out['reach']['source'] ?? '')) {
+        foreach (['email', 'phone', 'whatsapp', 'source'] as $k) {
+            $reach[$k] = is_scalar($out['reach'][$k] ?? null) ? trim((string)$out['reach'][$k]) : '';
+        }
+    }
     $social = (array)($out['social'] ?? []);
     foreach (['facebook', 'instagram'] as $k) { // a link on their own website beats a search result
         if (!empty($site['social'][$k])) {
@@ -2517,6 +2532,8 @@ function pm_agent_research(array $lead): array
         'website' => (array)($out['website'] ?? []),
         'social' => $sure ? $social : array_intersect_key($social, array_flip(array_keys($site['social'] ?? []))),
         'news' => $sure ? array_values(array_filter((array)($out['news'] ?? []), fn($d) => is_array($d) && trim((string)($d['headline'] ?? '')) !== '' && $src($d['source'] ?? '') && $fresh($d['date'] ?? ''))) : [],
+        'people' => $people,
+        'reach' => $reach,
         'opportunities' => array_values(array_filter(array_map('strval', (array)($out['opportunities'] ?? [])))),
         'hooks' => $sure || $site ? array_values(array_filter(array_map('strval', (array)($out['hooks'] ?? [])))) : [],
         'starters' => $sure || $site ? $starters : [],
@@ -2544,6 +2561,16 @@ function pm_apply_research(array &$lead, array $r): void
         if (!in_array($e, (array)($lead['evidence'] ?? []), true)) {
             $lead['evidence'][] = $e;
         }
+    }
+    if (array_key_exists('people', $r) && function_exists('pm_contact_apply')) { // the same study looked for the owner's name and the contact details: the Contact Finder is not paid for again
+        $rank = fn(string $role) => preg_match('/owner|founder|proprietor/i', $role) ? 1 : (preg_match('/managing|director|ceo|chairman/i', $role) ? 2 : (preg_match('/general manager/i', $role) ? 3 : 4));
+        $people = array_values(array_filter((array)$r['people'], fn($p) => !preg_match('/restaurant|kitchen|chef|waiter|housekeep|front desk|receptionist|barman|bartender|driver|guard/i', (string)($p['role'] ?? ''))));
+        usort($people, fn($a, $b) => $rank((string)$a['role']) <=> $rank((string)$b['role']));
+        $p = $people[0] ?? [];
+        $reach = (array)($r['reach'] ?? []);
+        $added = pm_contact_apply($lead, ['contact' => (string)($p['name'] ?? ''), 'contact_title' => (string)($p['role'] ?? ''), 'source' => (string)($p['source'] ?? ''),
+            'email' => (string)($reach['email'] ?? ''), 'phone' => (string)($reach['phone'] ?? ''), 'whatsapp' => (string)($reach['whatsapp'] ?? '')]);
+        $added && pm_lead_note($lead, 'The study found ' . implode(', ', $added));
     }
 }
 

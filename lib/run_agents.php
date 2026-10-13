@@ -511,17 +511,33 @@ try {
     // With a pile of unsent drafts, new cold leads wait: no research, drafting or proposals for them until the owner clears some.
     $hold = $bs['hold_new'];
 
-    // ---- 3b. Researchers: website, socials and news for the best leads (web search, so capped) ----
-    $rs = array_values(array_filter($leads, fn($l) => in_array($l['status'], ['qualified', 'new'], true) && ($l['score'] ?? 0) >= 65 && empty($l['research'])));
-    usort($rs, fn($a, $b) => $b['score'] <=> $a['score']);
-    $rsRoom = max(0, (int)($cfg['research_per_day'] ?? 5) - count(array_filter($leads, fn($l) => str_starts_with((string)($l['research']['at'] ?? ''), $today)))); // a day's allowance, not a run's
-    $rs = array_slice($rs, 0, $rsRoom);
-    if (function_exists('pm_research_queue') && $rsRoom > count($rs)) { // follow-up-bound and proposal-bound leads get a fresh research pass too, inside the same allowance
-        $extra = array_slice(array_filter(pm_research_queue($leads, 2), fn($l) => !in_array((string)($l['id'] ?? ''), array_column($rs, 'id'), true)), 0, $rsRoom - count($rs));
-        $rs = array_merge($rs, array_values($extra));
+    // ---- 3b. The day's study: the leads we will work today are studied in advance, once, in one web call each: the business, its news, the owner's name and its contacts.
+    // The Writers, the Follow-up agent and the Proposal agent then read the study instead of asking again, and a studied lead is not searched by the Contact Finder for 30 days.
+    // Order: replies asking for a proposal, follow-ups due today, today's first messages, leads still missing an email and a phone, then the best new leads. Web search, so inside the day's allowance.
+    $unstudied = fn($l) => empty($l['research']['at']) || (strtotime((string)$l['research']['at']) ?: 0) < strtotime('-60 days');
+    $best = function (array $a): array {
+        usort($a, fn($x, $y) => ($y['score'] ?? 0) <=> ($x['score'] ?? 0));
+        return array_values($a);
+    };
+    $cold = fn($l) => !pm_lead_is_client($l) && ($l['score'] ?? 0) >= 60 && $l['status'] === 'qualified';
+    $dayList = array_merge(
+        array_values(array_filter($leads, fn($l) => $l['status'] === 'replied' && !empty($l['want_proposal']) && empty($l['proposal_ai']))),
+        $best(array_values(pm_followup_due($leads, $cfg, false))),
+        $hold ? [] : array_slice($best(array_filter($leads, fn($l) => $cold($l) && (!empty($l['email']) || !empty($l['phone'])) && empty($l['drafts']))), 0, max(1, (int)($cfg['send_cap'] ?? 10))), // as many first messages as go out today
+        $hold ? [] : $best(array_filter($leads, fn($l) => $cold($l) && empty($l['email']) && empty($l['phone']))),
+        $hold ? [] : $best(array_filter($leads, fn($l) => $l['status'] === 'new' && ($l['score'] ?? 0) >= 65)),
+        function_exists('pm_research_queue') ? pm_research_queue($leads, 2) : []
+    );
+    $rsRoom = max(0, (int)($cfg['research_per_day'] ?? 12) - count(array_filter($leads, fn($l) => str_starts_with((string)($l['research']['at'] ?? ''), $today)))); // a day's allowance, not a run's
+    $rs = [];
+    foreach ($dayList as $l) {
+        if (count($rs) < $rsRoom && $unstudied($l) && !isset($rs[(string)$l['id']])) {
+            $rs[(string)$l['id']] = $l;
+        }
     }
-    if (($cfg['enabled']['research'] ?? true) && $rs && !$hold) {
-        $progress('Researchers studying ' . count($rs) . ' businesses');
+    $rs = array_values($rs);
+    if (($cfg['enabled']['research'] ?? true) && $rs) {
+        $progress("Studying today's " . count($rs) . ' leads: business, news, names and contacts');
         $jobs = array_map(fn($l) => ['agent' => 'research', 'lead' => $l], $rs);
         foreach (pm_swarm($jobs, $cfg['parallel'], $tmp, $beat) as $i => $r) {
             $id = $rs[$i]['id'];
