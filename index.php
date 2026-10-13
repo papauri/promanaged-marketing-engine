@@ -41,6 +41,9 @@ if (isset($_GET['brand'])) {
 }
 $vb = pm_auth_brand_gate(pm_brand_norm($_SESSION['abrand'] ?? 'promanaged')); // which brand's screens to show: only a business the signed-in person may open
 $GLOBALS['PM_WHO'] = pm_user() ? pm_user()['name'] : (string)($_SESSION['who'] ?? ''); // which team member is working (for notes and ownership): the signed-in person
+if ($tab === 'audit' && !pm_user_is_admin()) { // the Audit department watches the team: the admin's only (lib/sx_teamaudit.php)
+    pm_auth_deny('Only an admin can open the Audit department.');
+}
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
@@ -274,6 +277,7 @@ if (isset($_GET['archive']) && is_string($_GET['archive'])) {
         http_response_code(404);
         exit('Not found');
     }
+    pm_ta_log('action', 'download the data archive — ' . basename($af), '', ['area' => 'Operations', 'ok' => true, 'flag' => 'risk']);
     header('Content-Type: ' . (str_ends_with($af, '.zip') ? 'application/zip' : 'application/gzip'));
     header('Content-Disposition: attachment; filename="' . basename($af) . '"');
     header('Content-Length: ' . filesize($af));
@@ -367,8 +371,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         pm_redirect($tab, 'Your session expired. Please try again.', 'err');
     }
     $action = $_POST['action'] ?? '';
-    if (($action === 'agents' && in_array($_POST['do'] ?? '', ['delete', 'lead_forget'], true)) || in_array($action, ['admin_delete', 'access', 'brand_create', 'brand_archive', 'brand_unhide', 'brand_delete', 'archive_restore'], true) && !pm_user_is_admin()) {
-        pm_redirect('home', 'Only an admin can do that.', 'err'); // accounts, adding or removing a business, restoring data
+    register_shutdown_function(fn() => pm_ta_post_done((string)$action, $_POST, $vb)); // the activity log: who did what, and what the app said back (Audit department)
+    if (($action === 'agents' && in_array($_POST['do'] ?? '', ['delete', 'lead_forget'], true)) || in_array($action, ['admin_delete', 'access', 'brand_create', 'brand_archive', 'brand_unhide', 'brand_delete', 'archive_restore', 'audit'], true) && !pm_user_is_admin()) {
+        pm_redirect('home', 'Only an admin can do that.', 'err'); // accounts, adding or removing a business, restoring data, the audit
+    }
+    if ($action === 'audit') { // Audit department: run the AI audit now, the weekly audit on or off (lib/sx_teamaudit.php)
+        [$auMsg, $auOk, $auTo] = pm_ta_action($_POST);
+        pm_redirect($auTo, $auMsg, $auOk ? 'ok' : 'err');
     }
     if ($action === 'access') { // Team access: add, turn on or off, delete, set a password, choose businesses (lib/auth.php)
         [$acMsg, $acOk] = pm_auth_action($_POST);
@@ -2011,6 +2020,20 @@ function pm_rows_editor(string $name, array $cols, array $rows, string $addLabel
     return '<table class="grid" data-next="' . count($rows) . '"><thead>' . $head . '</thead><tbody>' . $body . '</tbody></table>'
         . '<template>' . $blank . '</template><button type="button" class="link" onclick="addRow(this)">+ ' . pm_h($addLabel) . '</button>';
 }
+if ($tab === 'audit' && ($_GET['export'] ?? '') === 'csv') { // Audit > Activity log as a spreadsheet (the admin's only: checked at the top)
+    $auR = pm_ta_range($_GET);
+    pm_ta_log('action', 'audit · download the activity log', $auR['label'], ['area' => 'Audit', 'ok' => true]);
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="activity-log-' . $auR['from'] . '-to-' . $auR['to'] . '.csv"');
+    $auOut = fopen('php://output', 'w');
+    fputcsv($auOut, ['When', 'Kind', 'Username', 'Name', 'Role', 'Business', 'Area', 'What', 'Result', 'OK', 'Flag', 'IP']);
+    foreach (pm_ta_read($auR['from'], $auR['to']) as $auX) {
+        fputcsv($auOut, [$auX['at'] ?? '', PM_TA_KINDS[$auX['kind'] ?? ''] ?? ($auX['kind'] ?? ''), $auX['user'] ?? '', $auX['name'] ?? '', $auX['role'] ?? '', $auX['brand'] ?? '', $auX['area'] ?? '',
+            $auX['what'] ?? '', $auX['detail'] ?? '', isset($auX['ok']) ? ($auX['ok'] ? 'yes' : 'no') : '', $auX['flag'] ?? '', $auX['ip'] ?? '']);
+    }
+    exit;
+}
+pm_ta_view((string)$tab, (string)($_GET['view'] ?? ''), $section, $vb); // the activity log: which page each person opened
 $GLOBALS['PM_DEPT'] = pm_ui_dept_of($tab, (string)($_GET['view'] ?? ''), $section); // which department's screen this is: colours, label and tabs follow it
 ?><!doctype html>
 <html lang="en">
@@ -2347,6 +2370,8 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
 <?php elseif ($tab === 'settings'): require __DIR__ . '/lib/view_settings.php'; ?>
 
 <?php elseif ($tab === 'business'): require __DIR__ . '/lib/view_business.php'; ?>
+
+<?php elseif ($tab === 'audit'): require __DIR__ . '/lib/view_audit.php'; ?>
 
 <?php else: ?>
   <?= pm_ui_head('Proposals', 'Every proposal you downloaded or emailed. Open the PDF, or load it back into the form to send an updated version.') ?>

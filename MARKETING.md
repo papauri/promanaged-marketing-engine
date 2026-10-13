@@ -121,6 +121,13 @@ accepted by being made; they are logged in the Done log below, not in the regist
 
 ## 6 · Done log
 
+### Owner request in chat, 2026-10-13 — "full logs visible to admin only for oversight of the marketing team; follow-ups over different times; AI makes it an auditing department"
+
+- **Audit department** (admin only; `lib/sx_teamaudit.php`, `lib/view_audit.php`, registered in `pm_ui_nav()`): Activity log, Follow-ups, AI auditor. Insights' "Audit" is now "Page audit".
+- **Activity log**: sign-ins (and failed ones, with the username tried), sign-outs, refusals, every POST with its result message and lead, pages opened, every agent line; data/audit/YYYY-MM.jsonl, 24 months, CSV download. No passwords or message texts.
+- **Follow-ups**: read from the leads (sent, wa_sent, thread, notes' "by"), any period grouped by day/week/month, per person, on-time rate, answer speed, late right now.
+- **AI auditor**: one call over the counts only (`std` tier), score, findings with evidence and action, verdict per person; weekly by the scheduler (`pm_jobg_ta_weekly`), on/off on the page.
+
 ### Owner request in chat, 2026-10-11 — "things like wording and photo also need agent swarms for different suggestions; remember you are a multi-agent marketing firm"
 
 - **One loop for every desk** (`lib/sx_swarm.php`): propose, score in code, send weak ones back once, owner chooses. New desks on it: **Copy desk** (cover wording: four writers, one call, facts-only guard before scoring), **Photo desk** (photo scout and critic read every candidate with GD for free, plus AI shot briefs), **Idea room** (four specialists, post ideas into the bank). The manual boxes stay, folded.

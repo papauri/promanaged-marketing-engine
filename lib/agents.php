@@ -293,6 +293,9 @@ function pm_agent_log(string $agent, string $msg, ?bool $error = null): void
     $row = ['at' => date('Y-m-d H:i:s'), 'agent' => $agent, 'msg' => (pm_brand() !== 'promanaged' ? '[' . pm_brand_name(pm_brand()) . '] ' : '') . $msg];
     $error ??= (bool)preg_match('/\b(fail(ed|ure)?|could not|error|time[sd]? ?out|crash(ed)?|stalled|unparseable|exception|stopped)\b/i', $msg) && !preg_match('/\b0 errors\b/i', $msg);
     pm_log_push('agent_log', $row, 300);
+    if (function_exists('pm_ta_log')) { // the activity log keeps every line for good (Audit department); agent_log keeps the last 300
+        pm_ta_log('agent', $agent, $row['msg'], ['ok' => !$error, 'area' => 'Agents', 'user' => 'system', 'name' => $agent, 'role' => 'agent']);
+    }
     if ($error) {
         pm_log_push('agent_errors', $row + ['brand' => pm_brand()], 500, 60);
     }

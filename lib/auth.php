@@ -106,6 +106,9 @@ function pm_user_can_brand(string $b): bool
 function pm_auth_deny(string $why = 'You do not have access to that.'): never
 {
     http_response_code(403);
+    if (function_exists('pm_ta_log')) {
+        pm_ta_log('denied', 'Refused: ' . mb_substr((string)($_SERVER['REQUEST_URI'] ?? ''), 0, 120), $why, ['ok' => false]);
+    }
     if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) || str_contains((string)($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json')) {
         header('Content-Type: application/json; charset=utf-8');
         exit(json_encode(['ok' => false, 'error' => $why]));
@@ -138,6 +141,10 @@ function pm_auth_gate(): void
     $users = pm_users();
     $isLocal = in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true);
     if (isset($_GET['logout'])) {
+        $outName = (string)($_SESSION['pm_user'] ?? '');
+        if ($outName !== '' && isset($users[$outName])) {
+            pm_auth_audit('signout', 'Signed out', '', $outName, $users[$outName]);
+        }
         $_SESSION = [];
         session_regenerate_id(true);
         header('Location: index.php');
@@ -193,8 +200,10 @@ function pm_auth_gate(): void
         $acc = $users[$try] ?? null;
         if ($acc && password_verify((string)$_POST['login_password'], $acc['hash'])) {
             if (!$acc['on']) {
+                pm_auth_audit('signin_fail', 'Sign-in refused', 'The account is turned off', $try, $acc);
                 pm_auth_page('This account is turned off. Ask the admin to turn it back on.', $try);
             }
+            pm_auth_audit('signin', 'Signed in', '', $try, $acc);
             session_regenerate_id(true);
             $_SESSION['pm_user'] = $try;
             $_SESSION['pm_user_ver'] = substr(hash('sha256', $acc['hash']), 0, 16);
@@ -203,9 +212,19 @@ function pm_auth_gate(): void
             header('Location: index.php' . (preg_match('/^\?tab=[a-z]+[A-Za-z0-9_=&%.\-]*$/', $back) ? $back : ''));
             exit;
         }
+        pm_auth_audit('signin_fail', 'Wrong ' . ($acc ? 'password' : 'username'), 'Tried the username "' . mb_substr((string)($_POST['login_user'] ?? ''), 0, 40) . '"', $acc ? $try : '', $acc);
         pm_auth_page('That username or password is not right.', (string)($_POST['login_user'] ?? ''));
     }
     pm_auth_page();
+}
+
+/** A sign-in, sign-out or failed sign-in in the activity log (Audit department), with the browser it came from. */
+function pm_auth_audit(string $kind, string $what, string $detail, string $username, ?array $acc): void
+{
+    if (function_exists('pm_ta_log')) {
+        pm_ta_log($kind, $what, $detail, ['user' => $username, 'name' => $acc['name'] ?? ($username !== '' ? $username : 'Unknown'), 'role' => $acc['role'] ?? '', 'brand' => '',
+            'ok' => $kind !== 'signin_fail', 'ua' => mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 160)]);
+    }
 }
 
 /** After the business is chosen: a business the person may not open is refused, and the screens fall back to one they may. Returns the business to show. */

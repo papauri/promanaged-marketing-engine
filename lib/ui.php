@@ -19,6 +19,7 @@ const PM_UI_ICONS = [
     'brand' => '<path d="M12 3a9 9 0 100 18c1.5 0 2.1-1.1 1.6-2.2-.6-1.3.2-2.6 1.7-2.6H18a3 3 0 003-3c0-5-4-10.2-9-10.2z"/><circle cx="7.6" cy="11.2" r="1"/><circle cx="10.6" cy="7.2" r="1"/><circle cx="15.2" cy="7.6" r="1"/>',
     'insights' => '<path d="M4 20V11M10 20V4M16 20v-7M22 20H2"/>',
     'ops' => '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+    'audit' => '<path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
 ];
 
 function pm_ui_icon(string $k, int $size = 18): string
@@ -46,12 +47,21 @@ function pm_ui_nav(): array
             'Words and profiles' => ['?tab=social&view=optimise' => 'Profiles', '?tab=social&view=voice' => 'Voice'],
             'Upkeep' => ['?tab=social&view=cleanup' => 'Page clean-up']]],
         'insights' => ['label' => 'Insights', 'name' => 'Insights department', 'job' => 'Measure what works and advise', 'color' => '#46607a', 'href' => '?tab=social&view=results', 'groups' => [
-            'Reports' => ['?tab=social&view=results' => 'Results', '?tab=social&view=audit' => 'Audit', '?tab=social&view=numbers' => 'Enter numbers']]],
+            'Reports' => ['?tab=social&view=results' => 'Results', '?tab=social&view=audit' => 'Page audit', '?tab=social&view=numbers' => 'Enter numbers']]],
         'ops' => ['label' => 'Operations', 'name' => 'Operations', 'job' => 'Keep the machinery running', 'color' => '#5e5a52', 'href' => '?tab=settings', 'groups' => [
             'Run the firm' => ['?tab=settings&section=business' => 'Business details', '?tab=settings&section=email' => 'Email', '?tab=settings&section=connections' => 'Connections',
                 '?tab=settings&section=health' => 'Health and backups', '?tab=settings&section=team' => 'Team and currencies'],
             'Businesses' => ['?tab=business&new=1' => '+ Add a business']]],
-    ];
+    ] + (pm_ui_admin() ? [ // oversight of the team: only an admin sees this department (lib/view_audit.php)
+        'audit' => ['label' => 'Audit', 'name' => 'Audit department', 'job' => 'Oversee the team and the work', 'color' => '#6b3a5c', 'href' => '?tab=audit', 'groups' => [
+            'Oversight' => ['?tab=audit' => 'Activity log', '?tab=audit&section=followups' => 'Follow-ups', '?tab=audit&section=ai' => 'AI auditor']]],
+    ] : []);
+}
+
+/** Is the person using the screens an admin? (No sign-in loaded, as in the scheduler: yes.) */
+function pm_ui_admin(): bool
+{
+    return !function_exists('pm_user_is_admin') || pm_user_is_admin();
 }
 
 /** The section shown when a Settings link names none. */
@@ -87,6 +97,9 @@ function pm_ui_href_on(string $href, string $tab, string $view = '', string $sec
     if ($tab === 'settings') {
         return ($q['section'] ?? PM_UI_DEFAULT_SECTION) === ($section !== '' ? $section : PM_UI_DEFAULT_SECTION);
     }
+    if ($tab === 'audit') {
+        return ($q['section'] ?? '') === $section;
+    }
     return true;
 }
 
@@ -102,7 +115,7 @@ function pm_ui_dept_of(string $tab, string $view = '', string $section = ''): st
             }
         }
     }
-    return ['home' => 'hq', 'social' => 'social', 'settings' => 'ops', 'business' => 'ops', 'agents' => 'sales', 'whatsapp' => 'sales', 'targeting' => 'sales', 'proposal' => 'sales', 'history' => 'sales', 'template' => 'sales'][$tab] ?? '';
+    return ['home' => 'hq', 'social' => 'social', 'settings' => 'ops', 'business' => 'ops', 'agents' => 'sales', 'whatsapp' => 'sales', 'targeting' => 'sales', 'proposal' => 'sales', 'history' => 'sales', 'template' => 'sales', 'audit' => 'audit'][$tab] ?? '';
 }
 
 /** A department's pages in order, as href => label (the "+ Add" links are buttons, not pages). */

@@ -272,8 +272,15 @@ THE FIRM AS DEPARTMENTS: EVERY DEPARTMENT HAS ONE JOB, EVERY SETTING ONE OWNER (
     Sales (win customers)             Leads, WhatsApp (and "Log an enquiry"), Targeting and messages, New proposal, History, Template and prices
     Social (publish, answer people)   Plan (and its Publishing rules: auto-publish, where posts go, when), Lead posts, Content, Channels (hand-posting), Inbox, Page posts, Playbook, Ads
     Brand (look and sound right)      Studio, Brand kit, Profiles (the fixes per channel and the profile words), Voice (what the AI knows), Page clean-up
-    Insights (measure and advise)     Results, Audit, Enter numbers
+    Insights (measure and advise)     Results, Page audit, Enter numbers
     Operations (keep it running)      Business details, Email, Connections, Health and backups, Team and currencies; "+ Add a business"
+    Audit (oversee the team; admins)  Activity log, Follow-ups, AI auditor (lib/sx_teamaudit.php, lib/view_audit.php)
+  The Audit department is shown to admins only (a team member who opens it is refused, and the refusal is logged). Activity log: every sign-in, failed sign-in, sign-out,
+  action (with what the app said back, and the lead it was about), page opened and agent line, kept for 24 months in data/audit/YYYY-MM.jsonl; passwords and message texts
+  are never written. Filter by period, person, business, kind and words; a summary per person (active time, actions by area, deletes and account changes, out of hours);
+  Download CSV. Follow-ups: first messages, follow-ups, leads followed up, on-time rate, replies, answers, proposals and wins per day, week or month and per person, and
+  the follow-ups that are late right now. AI auditor: one AI call reads only those numbers and writes a score, findings with evidence and an action each, a verdict per
+  person and what to check next; it also runs by itself each Monday (switch on that page), and every audit is kept.
   Where things went: Sales > Targeting and messages is the one place for what we sell, who to look for, the daily limits, replies, which agents are on, the first-email wording (Travel Malawi) and,
   for a business you added, who buys and its one-page offer; its roster and diary are there too. Social > Content holds the pillars, the suggested mix, the idea bank, the proof bank, hashtags and
   "bring back what worked". Social > Inbox holds messages, comments, what to hide or delete, autopilot and how replies sound. Brand > Profiles holds every profile fix and the profile words
