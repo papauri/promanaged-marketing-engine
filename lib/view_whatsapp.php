@@ -70,7 +70,8 @@ usort($wrote, fn($a, $b) => strcmp((string)($a['awaiting_reply_since'] ?? $a['la
     <div class="wahead">
       <div><b><?= pm_h($l['name']) ?></b> <span class="muted">· <?= pm_h($l['city']) ?> · <?= $q['kind'] === 'followup' ? 'follow-up' : 'first message' ?></span>
         <div class="person"><?= !empty($l['contact']) ? pm_h($l['contact']) . (!empty($l['contact_title']) ? ' · ' . pm_h($l['contact_title']) : '') : '<span class="muted">no name found: message says "Hello"</span>' ?> · <span class="muted"><?= pm_h($q['display']) ?></span></div></div>
-      <span class="pill <?= ($l['score'] ?? 0) >= 70 ? 'hot' : '' ?>"><?= (int)($l['score'] ?? 0) ?></span>
+      <span class="cluster"><?= pm_lead_touch_chip($l) ?><?php if (!empty($l['owner']) && $l['owner'] !== ($GLOBALS['PM_WHO'] ?? '')): ?><span class="pill warn" title="Someone else owns this lead"><?= pm_h($l['owner']) ?>'s lead</span><?php endif; ?>
+      <span class="pill <?= ($l['score'] ?? 0) >= 70 ? 'hot' : '' ?>"><?= (int)($l['score'] ?? 0) ?></span></span>
     </div>
     <textarea rows="4" aria-label="Message"><?= pm_h($q['text']) ?></textarea>
     <details class="aibox"><summary>Rewrite with AI</summary><?= pm_compose_controls($l['id'], $csrf, false) ?></details>

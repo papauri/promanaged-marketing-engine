@@ -144,6 +144,60 @@ function pm_company_contacted_with(array $all, array $lead, int $days = 7): ?str
     return null;
 }
 
+/** Who sent the lead our last message: the person signed in, or "System" for the scheduler. Kept beside last_out so the team sees who is on a lead. */
+function pm_lead_mark_by(array &$L): void
+{
+    $L['last_by'] = function_exists('pm_ta_actor') ? pm_ta_actor()[1] : (string)($GLOBALS['PM_WHO'] ?? '');
+}
+
+/** Someone else wrote to this lead in the last $hours: [who, when, "an email" / "a WhatsApp"], else null. Stops two people sending the same lead a message on the same day. */
+function pm_lead_other_touch(array $L, int $hours = 20): ?array
+{
+    $at = (string)($L['last_out'] ?? '');
+    if ($at === '' || strtotime($at) < time() - $hours * 3600) {
+        return null;
+    }
+    $by = (string)($L['last_by'] ?? '');
+    $me = function_exists('pm_ta_actor') ? pm_ta_actor()[1] : (string)($GLOBALS['PM_WHO'] ?? '');
+    if ($by !== '' && $by === $me) {
+        return null;
+    }
+    $ch = 'a message';
+    foreach (array_reverse((array)($L['thread'] ?? [])) as $t) {
+        if (($t['dir'] ?? '') === 'out') {
+            $ch = ($t['ch'] ?? '') === 'wa' ? 'a WhatsApp' : 'an email';
+            break;
+        }
+    }
+    return [$by !== '' ? $by : 'Someone', substr($at, 0, 10) === date('Y-m-d') ? 'at ' . substr($at, 11, 5) . ' today' : date('j M \a\t H:i', strtotime($at)), $ch];
+}
+
+/** A chip that says who last wrote to the lead and when ("Jayne · WhatsApp 2 h ago"), for the last 14 days; '' otherwise. The whole team sees who is on it. */
+function pm_lead_touch_chip(array $L): string
+{
+    $at = strtotime((string)($L['last_out'] ?? '')) ?: 0;
+    if (!$at || $at < time() - 14 * 86400) {
+        return '';
+    }
+    $ch = 'message';
+    foreach (array_reverse((array)($L['thread'] ?? [])) as $t) {
+        if (($t['dir'] ?? '') === 'out') {
+            $ch = ($t['ch'] ?? '') === 'wa' ? 'WhatsApp' : 'email';
+            break;
+        }
+    }
+    $s = time() - $at;
+    $ago = $s < 3600 ? max(1, intdiv($s, 60)) . ' min ago' : ($s < 86400 ? intdiv($s, 3600) . ' h ago' : intdiv($s, 86400) . ' d ago');
+    $by = trim((string)($L['last_by'] ?? '')) ?: trim((string)($L['owner'] ?? ''));
+    return '<span class="pill' . ($s < 86400 ? ' info' : '') . '" title="Our last message to them: ' . pm_h(date('j M H:i', $at)) . '">' . pm_h(($by !== '' ? $by . ' · ' : '') . $ch . ' ' . $ago) . '</span>';
+}
+
+/** The refusal shown when pm_lead_other_touch() found someone. */
+function pm_lead_other_touch_msg(array $L, array $t): string
+{
+    return $t[0] . ' sent ' . ($L['name'] ?? 'this lead') . ' ' . $t[2] . ' ' . $t[1] . '. Not sent, so they do not hear from us twice in a day.';
+}
+
 function pm_company_contacted_recently(array $leadsAllBrands, array $lead, int $days = 7): bool
 {
     return pm_company_contacted_with($leadsAllBrands, $lead, $days) !== null;
@@ -487,6 +541,9 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     if ($which === 'drafts' && !empty($lead['sent'])) {
         return $no('You have already sent this business a first email. Use a follow-up instead.');
     }
+    if ($which !== 'drafts' && ($t = pm_lead_other_touch(pm_load('leads', fn() => [])[$id] ?? $lead))) { // a teammate already wrote to them today
+        return $no(pm_lead_other_touch_msg($lead, $t));
+    }
     if (!($v = pm_verify_email($email, (string)($lead['website'] ?? ''), false))['ok']) {
         return $no('Not sent: ' . $v['why']);
     }
@@ -523,6 +580,7 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
         $L['msg_ids'] = array_slice(array_merge((array)($L['msg_ids'] ?? []), [(string)$mid]), -20);
     }
     $L['last_contacted'] = $L['last_out'] = $now;
+    pm_lead_mark_by($L);
     $L['status'] = 'contacted';
     unset($L['approved_at'], $L['send_fail_at'], $L['send_after']);
     if ($which === 'followup_draft') {

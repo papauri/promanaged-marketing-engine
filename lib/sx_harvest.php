@@ -245,6 +245,7 @@ function pm_send_postsign(array &$leads, string $id, string $which, ?callable $m
             $L['msg_ids'] = array_slice(array_merge((array)($L['msg_ids'] ?? []), [(string)$mid]), -20);
         }
         $L['last_out'] = $now;
+        function_exists('pm_lead_mark_by') && pm_lead_mark_by($L);
         $L['postsign_sent'][$which] = $now;
         pm_lead_note($L, 'Post-sign ' . $which . ' ask sent to ' . $email);
         unset($L);
@@ -389,6 +390,7 @@ function pm_send_wa_draft(array &$leads, string $id, string $kind): array
         $L['wa_sent'][] = $now;
         $L['thread'][] = ['dir' => 'out', 'at' => $now, 'text' => mb_substr($text, 0, 1500), 'ch' => 'wa'];
         $L['last_out'] = $now;
+        function_exists('pm_lead_mark_by') && pm_lead_mark_by($L);
         if ($kind === 'winback') {
             $L['last_contacted'] = $L['winback_sent_at'] = $now;
             $L['status'] = 'contacted';

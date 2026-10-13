@@ -1000,6 +1000,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $back('Reply saved.');
         }
         if ($do === 'send_reply') {
+            if (empty($lead['reply_draft']) && ($tr = pm_lead_other_touch($lead))) { // the answer went from another screen meanwhile
+                $back(pm_lead_other_touch_msg($lead, $tr), 'err');
+            }
             $rd = (array)($lead['reply_draft'] ?? []);
             $rd['subject'] = trim((string)($_POST['subject'] ?? $rd['subject'] ?? ''));
             $rd['body'] = trim((string)($_POST['body'] ?? $rd['body'] ?? '')); // what is on screen is what gets sent
@@ -1099,6 +1102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $leads[$id]['wa_sent'][] = $now;
                 $leads[$id]['thread'][] = ['dir' => 'out', 'at' => $now, 'text' => mb_substr((string)($wb['whatsapp'] ?? ''), 0, 1500), 'ch' => 'wa'];
                 $leads[$id]['last_contacted'] = $leads[$id]['last_out'] = $leads[$id]['winback_sent_at'] = $now;
+                pm_lead_mark_by($leads[$id]);
                 $leads[$id]['status'] = 'contacted';
                 $leads[$id]['followups'] = (int)$acfg['max_followups'];
                 unset($leads[$id]['winback_draft']);
@@ -1218,6 +1222,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $now = date('Y-m-d H:i');
             $leads[$id]['wa_sent'][] = $now;
             $leads[$id]['last_contacted'] = $leads[$id]['last_out'] = $now;
+            pm_lead_mark_by($leads[$id]);
             if (count($leads[$id]['wa_sent']) > 1) {
                 $leads[$id]['followups'] = (int)($lead['followups'] ?? 0) + 1;
                 unset($leads[$id]['followup_draft']);
@@ -1401,6 +1406,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         $lintW = pm_outreach_lint('WhatsApp message', pm_wa_own_words($textW), !$isReply && empty($lw['wa_sent'])); // the business's own links and sign-off are not counted against the message
+        if (($tw = pm_lead_other_touch($lw)) && (!$isReply || empty($lw['reply_draft']))) { // a teammate already wrote to them today (or already sent this answer)
+            echo json_encode(['ok' => false, 'error' => pm_lead_other_touch_msg($lw, $tw)]);
+            exit;
+        }
         if ($isReply) { // an answer to what they wrote: not a first message, not counted in the daily cap; the lint is advice only
             $lintW = array_values(array_filter($lintW, fn($x) => !str_starts_with($x, 'The message is')));
             pm_reply_sent($lw, $textW, 'wa');
@@ -1432,6 +1441,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $lw['wa_sent'][] = date('Y-m-d H:i');
         $lw['last_contacted'] = $lw['last_out'] = date('Y-m-d H:i');
+        pm_lead_mark_by($lw);
         if (in_array($lw['status'], ['new', 'qualified', 'drafted'], true)) {
             $lw['status'] = 'contacted';
         }

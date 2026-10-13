@@ -225,6 +225,9 @@ function pm_reply_sent(array &$lead, string $text, string $ch = 'email', string 
     $now = date('Y-m-d H:i');
     $lead['thread'][] = ['dir' => 'out', 'at' => $now, 'text' => mb_substr($text, 0, 3000), 'ch' => $ch === 'wa' ? 'wa' : 'email'];
     $lead['last_out'] = $now;
+    if (function_exists('pm_lead_mark_by')) {
+        pm_lead_mark_by($lead);
+    }
     unset($lead['awaiting_reply_since']);
     $lead['reply_draft'] = null;
     if (($lead['status'] ?? '') === 'replied') {

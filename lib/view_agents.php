@@ -206,7 +206,8 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <?php if ($approvable($l)): ?><label class="pick" onclick="event.stopPropagation()"><input type="checkbox" form="approveform" name="ids[]" value="<?= pm_h($id) ?>"> Approve for sending</label><?php endif; ?>
       <?php if ($l['status'] === 'lost' && !empty($l['lost_reason'])): ?><span class="pill"><?= pm_h(pm_lost_reasons()[$l['lost_reason']] ?? $l['lost_reason']) ?></span><?php endif; ?>
       <?php if (!empty($l['proposal_ai'])): ?><span class="pill hot">proposal ready</span><?php endif; ?>
-      <?php if (!empty($l['owner'])): ?><span class="pill"><?= pm_h($l['owner']) ?></span><?php endif; ?>
+      <?= pm_lead_touch_chip($l) ?>
+      <?php if (!empty($l['owner'])): ?><span class="pill" title="Owner of this lead"><?= pm_h($l['owner']) ?></span><?php endif; ?>
       <span class="pill <?= ($l['score'] ?? 0) >= 70 ? 'hot' : '' ?>"><?= (int)($l['score'] ?? 0) ?></span>
       <span class="pill"><?= pm_h(PM_LEAD_STATUSES[$l['status']] ?? $l['status']) ?></span>
     </span>
