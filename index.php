@@ -2373,6 +2373,8 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
 
 <?php elseif ($tab === 'audit'): require __DIR__ . '/lib/view_audit.php'; ?>
 
+<?php elseif ($tab === 'guide'): require __DIR__ . '/lib/view_guide.php'; ?>
+
 <?php else: ?>
   <?= pm_ui_head('Proposals', 'Every proposal you downloaded or emailed. Open the PDF, or load it back into the form to send an updated version.') ?>
   <?= pm_ui_strip('history') ?>

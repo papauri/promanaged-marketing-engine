@@ -115,7 +115,7 @@ function pm_ui_dept_of(string $tab, string $view = '', string $section = ''): st
             }
         }
     }
-    return ['home' => 'hq', 'social' => 'social', 'settings' => 'ops', 'business' => 'ops', 'agents' => 'sales', 'whatsapp' => 'sales', 'targeting' => 'sales', 'proposal' => 'sales', 'history' => 'sales', 'template' => 'sales', 'audit' => 'audit'][$tab] ?? '';
+    return ['home' => 'hq', 'social' => 'social', 'settings' => 'ops', 'business' => 'ops', 'agents' => 'sales', 'whatsapp' => 'sales', 'targeting' => 'sales', 'proposal' => 'sales', 'history' => 'sales', 'template' => 'sales', 'audit' => 'audit', 'guide' => 'hq'][$tab] ?? '';
 }
 
 /** A department's pages in order, as href => label (the "+ Add" links are buttons, not pages). */

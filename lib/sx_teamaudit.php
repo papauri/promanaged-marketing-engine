@@ -124,7 +124,7 @@ function pm_ta_view(string $tab, string $view, string $section, string $vb): voi
         return;
     }
     $_SESSION['ta_view'] = [$page . '|' . $vb, time()];
-    $label = $tab === 'home' ? 'Overview' : '';
+    $label = ['home' => 'Overview', 'guide' => 'Guide'][$tab] ?? '';
     foreach (function_exists('pm_ui_nav') ? pm_ui_nav() : [] as $d) { // the name the person sees: "Sales › Leads"
         foreach ($d['groups'] as $items) {
             foreach ($items as $href => $lab) {

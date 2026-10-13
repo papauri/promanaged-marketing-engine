@@ -25,7 +25,7 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
   <div>
     <div class="hq-date"><?= pm_h(date('l j F')) ?></div>
     <h1><?= pm_h($greet . ($who !== '' ? ', ' . $who : '')) ?></h1>
-    <p class="sub">How <b><?= pm_h($bname) ?></b> stands right now.</p>
+    <p class="sub">How <b><?= pm_h($bname) ?></b> stands right now. <a href="?tab=guide">How the app works</a></p>
   </div>
 </section>
 

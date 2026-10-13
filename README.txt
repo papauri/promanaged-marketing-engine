@@ -275,6 +275,8 @@ THE FIRM AS DEPARTMENTS: EVERY DEPARTMENT HAS ONE JOB, EVERY SETTING ONE OWNER (
     Insights (measure and advise)     Results, Page audit, Enter numbers
     Operations (keep it running)      Business details, Email, Connections, Health and backups, Team and currencies; "+ Add a business"
     Audit (oversee the team; admins)  Activity log, Follow-ups, AI auditor (lib/sx_teamaudit.php, lib/view_audit.php)
+  The Guide (?tab=guide, lib/view_guide.php; in the account menu and on the Overview) is the team's how-to in short steps; the admin's part shows to admins only.
+  Its links are relative, so it works on any address, and a link opened while signed out lands on that page after sign-in (pm_auth_back in lib/auth.php).
   The Audit department is shown to admins only (a team member who opens it is refused, and the refusal is logged). Activity log: every sign-in, failed sign-in, sign-out,
   action (with what the app said back, and the lead it was about), page opened and agent line, kept for 24 months in data/audit/YYYY-MM.jsonl; passwords and message texts
   are never written. Filter by period, person, business, kind and words; a summary per person (active time, actions by area, deletes and account changes, out of hours);

@@ -117,6 +117,13 @@ function pm_auth_deny(string $why = 'You do not have access to that.'): never
         . '<div style="text-align:center"><p>' . pm_h($why) . '</p><p><a href="index.php?tab=home">Back to the overview</a> · <a href="index.php?logout=1">Sign out</a></p></div></body>');
 }
 
+/** The page asked for while signed out ("?tab=guide#..." links shared with the team), carried through sign-in so the person lands on it. */
+function pm_auth_back(): string
+{
+    $q = (string)($_SERVER['QUERY_STRING'] ?? '');
+    return preg_match('/^tab=[a-z]+[A-Za-z0-9_=&%.\-]*$/', $q) ? '<input type="hidden" name="back" value="' . pm_h('?' . $q) . '">' : '';
+}
+
 /** The sign-in page. */
 function pm_auth_page(string $err = '', string $user = '', bool $withName = true): never
 {
@@ -128,7 +135,7 @@ function pm_auth_page(string $err = '', string $user = '', bool $withName = true
         . 'img{height:38px;margin-bottom:18px}h1{font-size:22px;margin:0 0 4px;letter-spacing:-.01em}p.s{margin:0 0 22px;color:#6b6a65;font-size:14px}label{font-size:13px;font-weight:600}'
         . 'input{width:100%;padding:11px 12px;border:1px solid #d9d6cc;border-radius:10px;font:inherit;margin:6px 0 14px;box-sizing:border-box}input:focus{outline:2px solid #17375E33;border-color:#17375E}'
         . 'button{width:100%;padding:12px;border:0;border-radius:10px;background:#16181d;color:#fff;font:inherit;font-weight:600;cursor:pointer}button:hover{background:#2b2f36}.e{color:#a33;font-size:13px;margin:-6px 0 12px}</style></head><body>'
-        . '<form method="post">' . $logo . '<h1>Sign in</h1><p class="s">The marketing firm, for the team only.</p>'
+        . '<form method="post">' . $logo . pm_auth_back() . '<h1>Sign in</h1><p class="s">The marketing firm, for the team only.</p>'
         . ($withName ? '<label for="u">Username</label><input id="u" name="login_user" value="' . pm_h($user) . '" autocomplete="username" autocapitalize="none" required' . ($user === '' ? ' autofocus' : '') . '>' : '')
         . '<label for="p">Password</label><input id="p" type="password" name="login_password" autocomplete="current-password" required' . ($user !== '' || !$withName ? ' autofocus' : '') . '>'
         . ($err !== '' ? '<p class="e">' . pm_h($err) . '</p>' : '') . '<button>Sign in</button></form></body></html>';
@@ -369,5 +376,6 @@ function pm_auth_avatar(): string
     if ($u['role'] === 'admin') {
         $h .= '<a role="menuitem" class="item" href="?tab=settings&amp;section=team#access"><span class="plus">⚿</span><span>Team access</span></a>';
     }
+    $h .= '<a role="menuitem" class="item" href="?tab=guide"><span class="plus">?</span><span>Guide</span></a>';
     return $h . '<a role="menuitem" class="item" href="?logout=1"><span class="plus">↩</span><span>Sign out</span></a></div></div>';
 }
