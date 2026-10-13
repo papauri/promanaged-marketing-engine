@@ -53,7 +53,8 @@ SIGNING — three ways
 PUT IT ONLINE (for online signing)
   QUICKEST: deploy/promanaged-upload-YYYYMMDD.zip is the whole app ready to upload (code, vendor, your data and .env with the
   sign-in accounts, APP_URL and CRON_KEY; no backups, caches or lock files). It holds secrets: never share it or put it in git.
-  cPanel > File Manager > public_html (or a sub-folder) > Upload the zip > Extract, then do steps 2-4 and the cron lines below.
+  cPanel > File Manager > public_html > Upload the zip > Extract, then do steps 2-4 and the cron lines below. The zip holds the app in promanaged_proposals/
+  and an index.php for public_html itself that sends the bare address and old links on to promanaged_proposals/.
   After signing in, Operations > Health and backups checks the server: PHP version, extensions, writable folders, vendor,
   background work and HTTPS.
   1. Upload the whole folder to your hosting, e.g. public_html/promanaged_proposals
