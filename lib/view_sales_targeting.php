@@ -13,7 +13,8 @@ $waBiz = pm_wa_biz_cfg()['ready'];
 $agentWhat = ['scout' => 'finds businesses', 'contact' => 'finds the owner and WhatsApp', 'qualifier' => 'scores who deserves a message', 'research' => 'reads their website', 'writer' => 'drafts the first message',
     'proposals' => 'tailors the quotation', 'followup' => 'nudges quiet leads'];
 $agent = fn(string $do, string $extra = '') => '<input type="hidden" name="csrf" value="' . $csrf . '"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="' . $do . '"><input type="hidden" name="bt" value="targeting">' . $extra;
-echo pm_ui_head('Targeting and messages · ' . $bname, 'Who to look for, the daily limits, when emails go out, and the wording of the first message. Nothing here sends anything.') . pm_ui_strip('targeting');
+echo pm_ui_head('Targeting and messages · ' . $bname, 'What is selling and what to do next, who to look for, the daily limits, when emails go out, and the wording of the first message. Nothing here sends anything.') . pm_ui_strip('targeting');
+echo function_exists('pm_adv_card') ? pm_adv_card($vb, $csrf) : '';
 ?>
 
 <form method="post">

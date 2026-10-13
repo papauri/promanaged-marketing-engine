@@ -13,7 +13,8 @@ if (!function_exists('pm_wa_biz_cfg')) {
     {
         $brand ??= pm_brand();
         $c = ['brand' => $brand, 'prefix' => pm_brand_env_prefix($brand), 'token' => pm_brand_env($brand, 'WA_BIZ_TOKEN'), 'phone_id' => pm_brand_env($brand, 'WA_BIZ_PHONE_ID'),
-            'verify' => pm_brand_env($brand, 'WA_BIZ_VERIFY'), 'template' => pm_brand_env($brand, 'WA_BIZ_TEMPLATE'), 'lang' => pm_brand_env($brand, 'WA_BIZ_TEMPLATE_LANG') ?: 'en'];
+            'verify' => pm_brand_env($brand, 'WA_BIZ_VERIFY'), 'template' => pm_brand_env($brand, 'WA_BIZ_TEMPLATE'), 'lang' => pm_brand_env($brand, 'WA_BIZ_TEMPLATE_LANG') ?: 'en',
+            'template_image' => in_array(strtolower(pm_brand_env($brand, 'WA_BIZ_TEMPLATE_IMAGE')), ['1', 'yes', 'true', 'on'], true)]; // the .env template has a picture header
         $c['ready'] = $c['token'] !== '' && $c['phone_id'] !== '' && $c['verify'] !== '';
         return $c;
     }
@@ -265,23 +266,103 @@ if (!function_exists('pm_wa_biz_cfg')) {
     }
 
     /** Sends an approved template message (needed to start a chat outside the 24-hour window). [ok, id|message]. PM_WA_STUB lets tests stub the network. */
-    function pm_wa_biz_send_template(string $to, string $template, string $lang, array $params, ?string $brand = null): array
+    function pm_wa_biz_send_template(string $to, string $template, string $lang, array $params, ?string $brand = null, string $image = ''): array
     {
         $c = pm_wa_biz_cfg($brand);
         if (!$c['ready'] || $template === '') {
             return [false, 'WhatsApp Business is not configured for ' . pm_brand_name($c['brand']) . ', or no approved template name is set (' . $c['prefix'] . 'WA_BIZ_TEMPLATE in .env).'];
         }
         if (isset($GLOBALS['PM_WA_STUB']) && is_callable($GLOBALS['PM_WA_STUB'])) {
-            return $GLOBALS['PM_WA_STUB']($to, '[template ' . $template . '] ' . implode(' | ', $params), $c['phone_id']);
+            return $GLOBALS['PM_WA_STUB']($to, '[template ' . $template . ($image !== '' ? ' + picture ' . basename($image) : '') . '] ' . implode(' | ', $params), $c['phone_id']);
         }
-        $tpl = ['name' => $template, 'language' => ['code' => $lang !== '' ? $lang : 'en']];
+        $tpl = ['name' => $template, 'language' => ['code' => $lang !== '' ? $lang : 'en'], 'components' => []];
+        if ($image !== '') { // a template made with a picture header needs the picture with every send
+            [$okM, $media] = pm_wa_biz_media($image, $c['brand']);
+            if (!$okM) {
+                return [false, $media];
+            }
+            $tpl['components'][] = ['type' => 'header', 'parameters' => [['type' => 'image', 'image' => ['id' => $media]]]];
+        }
         if ($params) {
-            $tpl['components'] = [['type' => 'body', 'parameters' => array_map(fn($p) => ['type' => 'text', 'text' => mb_substr((string)$p, 0, 60)], array_values($params))]];
+            $tpl['components'][] = ['type' => 'body', 'parameters' => array_map(fn($p) => ['type' => 'text', 'text' => mb_substr((string)$p, 0, 60)], array_values($params))];
+        }
+        if (!$tpl['components']) {
+            unset($tpl['components']);
         }
         $ch = curl_init('https://graph.facebook.com/v21.0/' . $c['phone_id'] . '/messages');
         curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => 15,
             CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $c['token'], 'Content-Type: application/json'],
             CURLOPT_POSTFIELDS => json_encode(['messaging_product' => 'whatsapp', 'to' => $to, 'type' => 'template', 'template' => $tpl])]);
+        pm_curl_native_ca($ch);
+        $raw = (string)curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        $j = json_decode($raw, true);
+        if ($code >= 200 && $code < 300 && !empty($j['messages'][0]['id'])) {
+            return [true, (string)$j['messages'][0]['id']];
+        }
+        return [false, 'WhatsApp said: ' . ($code ?: 'no answer') . ' ' . mb_substr($raw, 0, 120)];
+    }
+
+    /**
+     * Uploads a picture to WhatsApp's media store once and remembers its id for 25 days (WhatsApp keeps media 30 days), per business and file.
+     * [ok, media id | message]. PM_WA_STUB (tests) answers with a fake id.
+     */
+    function pm_wa_biz_media(string $file, ?string $brand = null): array
+    {
+        $c = pm_wa_biz_cfg($brand);
+        if (!$c['ready']) {
+            return [false, 'WhatsApp Business is not configured for ' . pm_brand_name($c['brand']) . '.'];
+        }
+        if (!is_file($file) || !preg_match('/\.(png|jpe?g)$/i', $file) || filesize($file) > 5 * 1048576) {
+            return [false, 'The picture is missing, not a PNG or JPEG, or over 5 MB.'];
+        }
+        if (isset($GLOBALS['PM_WA_STUB']) && is_callable($GLOBALS['PM_WA_STUB'])) {
+            return [true, 'stubmedia-' . substr(sha1($file), 0, 8)];
+        }
+        $key = $c['brand'] . '|' . sha1($file . '|' . filemtime($file));
+        $memo = (array)pm_load('wa_media', fn() => []);
+        if (!empty($memo[$key]['id']) && (int)($memo[$key]['at'] ?? 0) > time() - 25 * 86400) {
+            return [true, (string)$memo[$key]['id']];
+        }
+        $mime = preg_match('/\.png$/i', $file) ? 'image/png' : 'image/jpeg';
+        $ch = curl_init('https://graph.facebook.com/v21.0/' . $c['phone_id'] . '/media');
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => 60, CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $c['token']],
+            CURLOPT_POSTFIELDS => ['messaging_product' => 'whatsapp', 'type' => $mime, 'file' => new CURLFile($file, $mime, basename($file))]]);
+        pm_curl_native_ca($ch);
+        $raw = (string)curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        $j = json_decode($raw, true);
+        if ($code >= 200 && $code < 300 && !empty($j['id'])) {
+            pm_update('wa_media', function (array $m) use ($key, $j) {
+                $m = array_filter($m, fn($r) => (int)($r['at'] ?? 0) > time() - 25 * 86400);
+                $m[$key] = ['id' => (string)$j['id'], 'at' => time()];
+                return $m;
+            }, fn() => []);
+            return [true, (string)$j['id']];
+        }
+        return [false, 'WhatsApp did not take the picture: ' . ($code ?: 'no answer') . ' ' . mb_substr($raw, 0, 120)];
+    }
+
+    /** Sends a picture with a caption (inside the 24-hour window only, like any free-form message). [ok, message id | message]. */
+    function pm_wa_biz_send_image(string $to, string $file, string $caption, ?string $brand = null): array
+    {
+        $c = pm_wa_biz_cfg($brand);
+        if (!$c['ready']) {
+            return [false, 'WhatsApp Business is not configured for ' . pm_brand_name($c['brand']) . ' (' . $c['prefix'] . 'WA_BIZ_* in .env).'];
+        }
+        if (isset($GLOBALS['PM_WA_STUB']) && is_callable($GLOBALS['PM_WA_STUB'])) {
+            return $GLOBALS['PM_WA_STUB']($to, '[picture ' . basename($file) . '] ' . $caption, $c['phone_id']);
+        }
+        [$okM, $media] = pm_wa_biz_media($file, $c['brand']);
+        if (!$okM) {
+            return pm_wa_biz_send($to, $caption, $c['brand']); // the words still go, without the picture
+        }
+        $ch = curl_init('https://graph.facebook.com/v21.0/' . $c['phone_id'] . '/messages');
+        curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_TIMEOUT => 15,
+            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $c['token'], 'Content-Type: application/json'],
+            CURLOPT_POSTFIELDS => json_encode(['messaging_product' => 'whatsapp', 'to' => $to, 'type' => 'image', 'image' => ['id' => $media, 'caption' => mb_substr($caption, 0, 1000)]])]);
         pm_curl_native_ca($ch);
         $raw = (string)curl_exec($ch);
         $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);

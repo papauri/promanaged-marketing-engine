@@ -167,9 +167,33 @@ function pm_weighted_pick(array $items, array $weights, int $n, int $offset = 0)
 
 /* ---------------- MG-A05 · email subject experiments ---------------- */
 
+/**
+ * The subject experiment of one business (data/email_exp.json is {by: {brand: {...}}}). The file from before this split was one shared record:
+ * it is read as ProManaged IT's, which sent nearly all of those emails, and every other business starts its own test from nothing.
+ */
+function pm_email_exp_store(string $brand): array
+{
+    $d = pm_load('email_exp', fn() => []);
+    if (!isset($d['by'])) {
+        return $brand === 'promanaged' ? $d : [];
+    }
+    return (array)($d['by'][$brand] ?? []);
+}
+
+function pm_email_exp_store_save(string $brand, array $store): void
+{
+    pm_update('email_exp', function (array $d) use ($brand, $store) {
+        if (!isset($d['by'])) {
+            $d = ['by' => $d ? ['promanaged' => $d] : []];
+        }
+        $d['by'][$brand] = $store;
+        return $d;
+    }, fn() => []);
+}
+
 function pm_email_exp_arm(string $leadId, string $brand, bool $useStop = true): string
 {
-    $stop = $useStop ? (array)(pm_load('email_exp', fn() => [])['stopped'] ?? []) : []; // C3-A05: a style that lost clearly is not used until the pause ends
+    $stop = $useStop ? (array)(pm_email_exp_store($brand)['stopped'] ?? []) : []; // C3-A05: a style that lost clearly is not used until the pause ends
     if (in_array($stop['winner'] ?? '', ['A', 'B'], true) && strcmp((string)($stop['until'] ?? ''), date('Y-m-d')) >= 0) {
         return (string)$stop['winner'];
     }
@@ -263,17 +287,30 @@ function pm_exp_judge(array $n, array $ex, int $min = 20, bool $allowEarly = fal
     return ['status' => 'none', 'figures' => ['A' => $n['A'], 'B' => $n['B']]];
 }
 
-/** Weekly job: compare reply rates by subject arm for sent first emails AND follow-ups; keep each winning style example for the Writer and the Follow-up agent. */
+/** Weekly job: compare reply rates by subject arm for sent first emails AND follow-ups, per business; keep each winning style example for its Writer and Follow-up agent. */
 function pm_jobg_email_exp(): string
 {
-    $leads = pm_load('leads', fn() => []);
+    $all = pm_load('leads', fn() => []);
+    $out = [];
+    foreach (pm_brand_ids() as $b) {
+        $mine = array_filter($all, fn($l) => ($l['brand'] ?? 'promanaged') === $b);
+        if ($mine) {
+            $out[] = $b . ': ' . pm_email_exp_judge_brand($b, $mine);
+        }
+    }
+    return implode('; ', $out);
+}
+
+/** One business's subject experiment, judged from its own leads. */
+function pm_email_exp_judge_brand(string $brand, array $leads): string
+{
     $rows = [];
     foreach ($leads as $l) {
         if (!empty($l['email_arm']) && !empty($l['sent']) && !empty($l['drafts']['email_subject'])) {
             $rows[] = ['arm' => (string)$l['email_arm'], 'subject' => (string)$l['drafts']['email_subject'], 'replied' => pm_lead_replied($l)];
         }
     }
-    $store = pm_load('email_exp', fn() => []);
+    $store = pm_email_exp_store($brand);
     [$n, $ex] = pm_exp_tally($rows);
     $v = pm_exp_judge($n, $ex, 20, true);
     $msg = 'not enough sent emails for a subject verdict';
@@ -300,14 +337,14 @@ function pm_jobg_email_exp(): string
     } elseif ($fn['A'][0] + $fn['B'][0] > 0) {
         $msg .= '; follow-ups: ' . ($fn['A'][0] + $fn['B'][0]) . ' sent so far, not enough for a verdict';
     }
-    pm_save('email_exp', $store);
+    pm_email_exp_store_save($brand, $store);
     return $msg;
 }
 
 /** The winning subject style, as one line the Writer should mirror; '' when nothing learned yet. */
 function pm_email_exp_example(string $brand): string
 {
-    $d = pm_load('email_exp', fn() => []);
+    $d = pm_email_exp_store($brand);
     return empty($d['example']) ? '' : 'Subjects that get replies in ' . (pm_brand_name($brand)) . ' look like this: "' . $d['example'] . '". Mirror its shape and length for the next emails.';
 }
 
@@ -744,22 +781,26 @@ function pm_jobg_learnings_share(): string
     return $n ? "$n learning(s) shared across brands" : 'nothing new to share';
 }
 
-/** One prompt line telling the Qualifier which business types and cities have actually replied or signed. */
+/**
+ * One prompt line telling the Qualifier which kinds of business and towns have actually answered or bought, and which rarely do (the advisor's verdicts,
+ * which need enough leads and lean on our other businesses while there are few). Before the advisor has a verdict, the best kinds and towns by outcome weight.
+ */
 function pm_learn_qualifier_line(string $brand): string
 {
+    if (function_exists('pm_adv_qualifier_line') && ($l = pm_adv_qualifier_line($brand)) !== '') {
+        return $l;
+    }
     $w = pm_outcome_weights_fresh($brand);
-    $line = '';
-    foreach (['sector' => 'business types', 'city' => 'cities', 'offering' => 'offerings'] as $k => $label) {
+    $parts = [];
+    foreach (['sector' => 'business types', 'city' => 'cities'] as $k => $label) {
         $rows = (array)($w[$k] ?? []);
-        if (!$rows) {
+        if (count($rows) < 2) {
             continue;
         }
         arsort($rows);
-        $top = array_slice(array_keys($rows), 0, 3);
-        $line .= ' Past results: the best ' . $label . ' so far are ' . implode(', ', $top) . ' — weigh them slightly up when the evidence is equal.';
-        break; // one line is enough for scoring; the rest is for scouting
+        $parts[] = 'the best ' . $label . ' so far are ' . implode(', ', array_slice(array_keys($rows), 0, 3));
     }
-    return $line;
+    return $parts ? ' Past results: ' . implode('; ', $parts) . ' — weigh them slightly up when the evidence is equal.' : '';
 }
 
 

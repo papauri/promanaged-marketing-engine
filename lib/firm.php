@@ -30,8 +30,13 @@ function pm_firm_goal(string $brand): array
         }
     }
     $signed = 0;
+    if (pm_brand_is_custom($brand)) { // an added business has no proposals: a lead won this month is a signed client
+        foreach (pm_leads_read() as $l) {
+            $signed += ($l['brand'] ?? '') === $brand && ($l['status'] ?? '') === 'won' && substr((string)($l['won_at'] ?? $l['updated'] ?? ''), 0, 7) === $month ? 1 : 0;
+        }
+    }
     $tpl = pm_template();
-    foreach (pm_history() as $h) {
+    foreach (pm_brand_is_custom($brand) ? [] : pm_history() as $h) {
         if (!empty($h['signed_file']) && substr((string)($h['signed_at'] ?? $h['when'] ?? ''), 0, 7) === $month
             && pm_brand_of_type((string)($tpl['packages'][(int)($h['proposal']['package'] ?? 0)]['type'] ?? '')) === $brand) {
             $signed++;

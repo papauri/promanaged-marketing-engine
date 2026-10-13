@@ -816,7 +816,7 @@ function pm_social_lint(string $caption, string $brand, string $channel = 'faceb
     $why = [];
     $c = trim($caption);
     if (preg_match('/\bour team\b/i', $c)) {
-        $why[] = 'Says "our team": we are a small owner-run business, say "we".';
+        $why[] = 'Says "our team": say "we", it reads warmer.';
     }
     if (preg_match('/\bpackages?\s*#?\s*\d+|(?<![\w#])#\d+\b/i', $c)) {
         $why[] = 'Mentions an internal package number.';
@@ -886,7 +886,11 @@ function pm_social_ext_lint(array $p, string $channel = 'facebook'): array
 function pm_social_lint_post(array $p): array
 {
     $b = $p['brand'] ?? 'promanaged';
-    $why = pm_social_lint((string)($p['caption'] ?? ''), $b, 'facebook', pm_social_recent_from(pm_social_posts(), $b, (string)($p['id'] ?? ''), (string)($p['when'] ?? '')), $p);
+    $pool = pm_social_posts();
+    if (($p['campaign'] ?? '') !== '') { // the items of one campaign say the same thing on purpose: they are only compared with other posts
+        $pool = array_filter($pool, fn($q) => ($q['campaign'] ?? '') !== $p['campaign']);
+    }
+    $why = pm_social_lint((string)($p['caption'] ?? ''), $b, 'facebook', pm_social_recent_from($pool, $b, (string)($p['id'] ?? ''), (string)($p['when'] ?? '')), $p);
     [$block, $warn] = pm_social_ext_lint($p);
     $GLOBALS['PM_LINT_WARN'][(string)($p['id'] ?? '')] = $warn;
     return array_values(array_unique(array_merge($why, $block)));
@@ -2054,12 +2058,20 @@ function pm_social_due(bool $force = false): int
             }
         }
         $pick = [];
-        foreach ($posts as $p) {
+        $feed = [];
+        $stories = [];
+        foreach ($posts as $p) { // per business and pass: one feed post (at most 2 a day) and, so a campaign's story set goes out together, up to 3 stories, oldest first
             $b = $p['brand'] ?? 'promanaged';
             $exp = (string)($p['expires'] ?? '');
+            $story = ($p['format'] ?? '') === 'story';
             if (($p['status'] ?? '') === 'approved' && strtotime((string)$p['when']) <= $now && (empty($p['retry_at']) || strtotime($p['retry_at']) <= $now)
-                && empty($down[$b]) && ($exp === '' || $exp >= $today) && !isset($pick[$b]) && (($p['format'] ?? '') === 'story' || ($per[$b] ?? 0) < 2)) {
-                $pick[$b] = $p['id'];
+                && empty($down[$b]) && ($exp === '' || $exp >= $today) && ($story ? ($stories[$b] ?? 0) < 3 : !isset($feed[$b]) && ($per[$b] ?? 0) < 2)) {
+                $pick[] = $p['id'];
+                if ($story) {
+                    $stories[$b] = ($stories[$b] ?? 0) + 1;
+                } else {
+                    $feed[$b] = true;
+                }
             }
         }
         foreach ($pick as $id) {

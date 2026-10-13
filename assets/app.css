@@ -887,3 +887,6 @@ pre, code { white-space:pre-wrap; word-break:break-word; }
 .pager { display:flex; gap:var(--s-2); align-items:center; flex-wrap:wrap; margin:var(--s-2) 0 var(--s-3); }
 .pg-off { display:none !important }
 .pager [aria-disabled] { opacity:.45; pointer-events:none }
+.adv-moves { margin:var(--s-2) 0 var(--s-3); padding-left:var(--s-5) } .adv-moves li { margin:0 0 var(--s-3) } .adv-moves form { margin-top:var(--s-1) }
+.cppv { width:100%; height:auto; border-radius:var(--r-ctl); border:1px solid var(--line); background:var(--surface-2); object-fit:contain }
+.cppv.story { max-height:440px }

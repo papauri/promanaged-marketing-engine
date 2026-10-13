@@ -246,7 +246,7 @@ function pm_card_strip(array &$c): int
 {
     $h = (int)round(max(96, 140 * $c['s']));
     $y = $c['bottom'] - $h;
-    imagefilledrectangle($c['im'], 0, $y, $c['W'], $c['bottom'], pm_card_fill($c, $c['accent']));
+    imagefilledrectangle($c['im'], 0, $y, $c['W'], $c['story'] ? $c['H'] : $c['bottom'], pm_card_fill($c, $c['accent'])); // a story's strip runs to the bottom edge: the words stay above the app's buttons, no stray band of picture under it
     $x = $c['pad'];
     $logo = function_exists('pm_logo_path') ? pm_logo_path() : '';
     if ($logo !== '' && ($li = @imagecreatefrompng($logo))) {
@@ -663,12 +663,29 @@ function pm_card_l_slide(array &$c, int $top, int $bottom): void
     pm_card_swipe($c, $bottom + (int)(20 * $c['s']), $n + 1, $total);
 }
 
+/** A post's own background picture (post field bg: a .jpg or .png under the data folder), or ''. Anything outside the data folder is ignored. */
+function pm_card_bg_path(array $p): string
+{
+    $bg = (string)($p['bg'] ?? '');
+    if ($bg === '' || str_contains($bg, '..') || !preg_match('/\.(jpe?g|png)$/i', $bg)) {
+        return '';
+    }
+    $f = preg_match('#^([A-Za-z]:[\\\\/]|/)#', $bg) ? $bg : PM_DATA . '/' . ltrim($bg, '/');
+    $root = str_replace('\\', '/', rtrim((string)realpath(PM_DATA), '/\\')) . '/';
+    $real = str_replace('\\', '/', (string)realpath($f));
+    return $real !== '' && str_starts_with($real, $root) && is_file($real) ? $real : '';
+}
+
 /** Photo card: the owner's picture fills the card, a dark gradient carries the words. Returns false when the picture is missing. */
 function pm_card_l_photo_bg(array &$c): bool
 {
     $a = !empty($c['p']['asset_id']) && function_exists('pm_social_asset_find') ? pm_social_asset_find((string)$c['p']['asset_id']) : null;
     $path = $a ? pm_social_asset_path($a) : '';
     $src = $path !== '' ? @imagecreatefromjpeg($path) : false;
+    if (!$src && !$a && ($bg = pm_card_bg_path($c['p'])) !== '') { // a campaign's own picture: the owner's photo or an AI picture (labelled as one)
+        $src = preg_match('/\.png$/i', $bg) ? @imagecreatefrompng($bg) : @imagecreatefromjpeg($bg);
+        $a = ['credit' => !empty($c['p']['bg_ai']) ? 'AI picture' : ''];
+    }
     if (!$src) {
         return false;
     }

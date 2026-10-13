@@ -253,7 +253,8 @@ function pm_lint_ext(array $p, string $channel = 'facebook', ?array $pool = null
         $pool ??= function_exists('pm_social_posts') ? pm_social_posts() : [];
         $when = strtotime((string)($p['when'] ?? '')) ?: time();
         foreach ($pool as $q) {
-            if (($q['id'] ?? '') === ($p['id'] ?? '') || ($q['brand'] ?? 'promanaged') !== $brand || in_array($q['status'] ?? '', ['failed', 'expired'], true)) {
+            if (($q['id'] ?? '') === ($p['id'] ?? '') || ($q['brand'] ?? 'promanaged') !== $brand || in_array($q['status'] ?? '', ['failed', 'expired'], true)
+                || (($p['campaign'] ?? '') !== '' && ($q['campaign'] ?? '') === $p['campaign'])) { // one campaign's items share their opening on purpose
                 continue;
             }
             $qw = strtotime((string)($q['when'] ?? ''));

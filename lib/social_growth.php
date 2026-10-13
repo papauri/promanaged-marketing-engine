@@ -23,6 +23,7 @@ function pm_social_nav(string $on): string
     $dept = pm_ui_dept_of('social', $on);
     $GLOBALS['PM_DEPT'] = $GLOBALS['PM_DEPT'] ?? $dept;
     $sub = ['' => 'Plan posts, approve them and watch what goes out.', 'leadposts' => 'Bold posts with a button and a keyword that bring in client details. Free and unlimited.',
+        'campaign' => 'One message to every channel at once: feed, stories, carousel, WhatsApp and a flyer, with one approval.',
         'content' => 'What we post about: the mix, proof, ideas and photos, and which old posts to bring back.', 'channels' => 'Where else to post, and today\'s hand-post tasks.',
         'inbox' => 'Everyone waiting for an answer: messages and comments, and what to hide or delete.', 'page' => 'The Page\'s own posts with their comments: read, edit and reply.',
         'growth' => 'Who to engage today, with the words to use.', 'ads' => 'Small targeted ads, always created paused.',

@@ -112,10 +112,11 @@ function pm_lp_suggest(string $brand): array
     if (function_exists('pm_agents_ready') && (pm_agents_ready() || isset($GLOBALS['PM_AI_STUB']))) {
         try {
             $system = "You suggest free lead-capture offers for a small business's social media posts. An offer is something small and genuinely useful the business gives away or does to start a conversation, such as a free check, a free quote, a free visit or a checklist. "
-                . 'Use ONLY the facts, offerings and free first step you are given: never invent services, numbers, prices, results, deadlines or guarantees, and never use the words best, cheapest, fastest, guaranteed or 24/7. Plain words. Reply with JSON only.';
+                . 'Use ONLY the facts, offerings and free first step you are given: never invent services, numbers, prices, results, deadlines or guarantees, and never use the words best, cheapest, fastest, guaranteed or 24/7. '
+                . 'Learn from the results: build on the kind of offer that brought enquiries, aim at the kinds of buyer that answer, and let at least one offer remove the main reason deals were lost (for example a free first step against price or trust). The results are for you, never to quote. Plain words. Reply with JSON only.';
             $user = json_encode(['business' => pm_brand_name($brand), 'about' => (string)$brain['about'], 'offerings' => $offerings, 'true_facts' => $facts, 'free_first_step' => (string)$p['magnet'],
                     'who_buys' => (string)$brain['audience'], 'kinds_of_buyer' => array_map(fn($s) => ['kind' => $s['name'], 'why' => $s['why'] ?? '', 'signs' => $s['signals'] ?? []], array_slice($t['segments'], 0, 5)),
-                    'already_made' => array_values(array_column(pm_lp_for_brand($brand), 'title'))], JSON_UNESCAPED_UNICODE)
+                    'already_made' => array_values(array_column(pm_lp_for_brand($brand), 'title'))] + (function_exists('pm_adv_offer_context') ? ['results' => pm_adv_offer_context($brand)] : []), JSON_UNESCAPED_UNICODE)
                 . "\nJSON: {\"offers\":[{\"title\":\"what is offered, under 8 words\",\"problem\":\"the problem it fixes, in the customer's own words\",\"fix\":\"what the business does about it\","
                 . "\"keyword\":\"ONE capital word to comment\",\"button\":\"whatsapp or call or form\",\"signs\":[\"a sign the customer needs it (up to 3)\"],\"questions\":[{\"label\":\"a short question for the landing page form\",\"options\":[]}]}]} "
                 . '(3 offers, each a different angle or a different kind of buyer)';

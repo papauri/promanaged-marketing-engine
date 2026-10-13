@@ -2102,12 +2102,15 @@ function pm_scout_targets(array $cfg, ?array $weights = null): array
     $C = max(1, count($cfg['cities']));
     $n = min($cfg['scouts_per_day'], count($combos));
     $day = (int)floor(time() / 86400);
+    // Towns that answer get more of the searches, towns that do not get fewer (never none), untried towns a full share (the advisor's results; [] = plain rotation)
+    $tw = function_exists('pm_adv_town_weights') ? pm_adv_town_weights(pm_brand(), $cfg['cities']) : [];
+    $towns = $tw ? array_map(fn($c) => (int)array_search($c, $cfg['cities'], true), pm_weighted_pick($cfg['cities'], $tw, $n, $day * $n)) : [];
     if ($weights) { // the Director's numeric weights decide how many slots each type gets
         $sectors = pm_weighted_pick($cfg['sectors'], $weights, $n, $day * $n);
         $out = [];
         $used = [];
         for ($i = 0; $i < $n; $i++) {
-            $ci = ($day * $n + $i) % $C; // a different town on each of today's searches, moving on every day
+            $ci = $towns ? $towns[$i] : ($day * $n + $i) % $C; // a different town on each of today's searches, moving on every day
             for ($t = 0; $t < $C && isset($used[$sectors[$i] . '|' . $ci]); $t++) {
                 $ci = ($ci + 1) % $C; // never the same type in the same town twice in a day
             }
@@ -2120,13 +2123,13 @@ function pm_scout_targets(array $cfg, ?array $weights = null): array
     $out = [];
     for ($i = 0; $i < $n; $i++) {
         $k = $day * $n + $i;
-        $out[] = [$cfg['sectors'][$k % $S], $cfg['cities'][($day * 7 + $i * 3 + intdiv($k, $S)) % $C]];
+        $out[] = [$cfg['sectors'][$k % $S], $cfg['cities'][$towns ? $towns[$i] : ($day * 7 + $i * 3 + intdiv($k, $S)) % $C]];
     }
     // The Director's picks get half of today's searches: more of what brings replies.
     $focus = function_exists('pm_director_focus') ? pm_director_focus() : [];
     if ($focus && $n >= 2) {
         for ($i = intdiv($n, 2); $i < $n; $i++) {
-            $out[$i] = [$focus[$i % count($focus)], $cfg['cities'][($day * 5 + $i * 2) % $C]];
+            $out[$i] = [$focus[$i % count($focus)], $cfg['cities'][$towns ? $towns[$i] : ($day * 5 + $i * 2) % $C]];
         }
     }
     return $out;

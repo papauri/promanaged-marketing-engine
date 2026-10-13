@@ -211,24 +211,30 @@ function pm_do_wac_save(string $vb): array
 
 function pm_do_wac_approve(string $vb): array
 {
+    [$ok, $msg] = pm_wac_approve($vb, preg_replace('/[^a-z0-9]/', '', (string)($_POST['id'] ?? '')));
+    return pm_wac_back($msg, $ok ? 'ok' : 'err');
+}
+
+/** Approves a draft campaign (approvers only) with every check: connected, clean text, someone allowed to get it. [ok, message]. Also used by sx_campaign. */
+function pm_wac_approve(string $vb, string $id): array
+{
     pm_wac_boot();
-    $id = preg_replace('/[^a-z0-9]/', '', (string)($_POST['id'] ?? ''));
     $c = pm_wac_get($id);
     if (!$c || ($c['brand'] ?? '') !== $vb || ($c['status'] ?? '') !== 'draft') {
-        return pm_wac_back('Only a draft can be approved.', 'err');
+        return [false, 'Only a draft can be approved.'];
     }
     if (!pm_social_can_approve()) {
-        return pm_wac_back('You are an editor: an approver has to approve campaigns.', 'err');
+        return [false, 'You are an editor: an approver has to approve campaigns.'];
     }
     if (!pm_wa_biz_cfg($vb)['ready']) {
-        return pm_wac_back('WhatsApp Business is not connected for ' . pm_brand_name($vb) . ' (' . pm_brand_env_prefix($vb) . 'WA_BIZ_* in .env).', 'err');
+        return [false, 'WhatsApp Business is not connected for ' . pm_brand_name($vb) . ' (' . pm_brand_env_prefix($vb) . 'WA_BIZ_* in .env).'];
     }
     if ($bad = pm_wac_lint((string)$c['text'])) {
-        return pm_wac_back('Not approved. ' . implode(' ', $bad), 'err');
+        return [false, 'Not approved. ' . implode(' ', $bad)];
     }
     [$ok] = pm_wac_audience($vb, (array)$c['aud']);
     if (!$ok) {
-        return pm_wac_back('Nobody can get this campaign right now (no one matches, or everyone is held back by the safety rules).', 'err');
+        return [false, 'Nobody can get this campaign right now (no one matches, or everyone is held back by the safety rules).'];
     }
     $by = trim((string)($GLOBALS['PM_WHO'] ?? '')) ?: 'owner';
     pm_wac_patch($id, function (array $x) use ($ok, $by) {
@@ -238,7 +244,7 @@ function pm_do_wac_approve(string $vb): array
         $x['recipients'] = array_map(fn($l) => ['id' => (string)$l['id'], 'name' => (string)$l['name'], 'num' => pm_wa_best($l)[0], 'state' => 'pending', 'at' => '', 'note' => ''], $ok);
         return $x;
     });
-    return pm_wac_back('Approved: ' . count($ok) . ' people. It goes out a few at a time in working hours, inside your daily WhatsApp limit.');
+    return [true, 'Approved: ' . count($ok) . ' people. It goes out a few at a time in working hours, inside your daily WhatsApp limit.'];
 }
 
 /** pause | resume | cancel | delete. */
@@ -334,7 +340,7 @@ function pm_wac_send_pass(string $id, callable $sender, int $max = PM_WAC_PER_PA
         $lead = $leads[$r['id']] ?? null;
         $why = !$lead ? 'lead no longer exists' : pm_wac_skip_reason($lead + ['id' => $r['id']], $leads, $cfg, (bool)($c['aud']['optin_only'] ?? true));
         if ($why === '') {
-            [$ok, $m] = $sender((string)$r['num'], pm_wac_render((string)$c['text'], $lead), $lead);
+            [$ok, $m] = $sender((string)$r['num'], pm_wac_render((string)$c['text'], $lead), $lead, pm_wac_image($c));
             if ($ok) {
                 $now = date('Y-m-d H:i');
                 pm_update('leads', function (array $all) use ($r, $c, $now) {
@@ -396,7 +402,7 @@ function pm_wa_templates(?string $brand = null): array
     $out = [];
     $c = pm_wa_biz_cfg($brand);
     if ($c['template'] !== '') {
-        $out[$c['template']] = ['name' => $c['template'], 'lang' => $c['lang'], 'default' => true];
+        $out[$c['template']] = ['name' => $c['template'], 'lang' => $c['lang'], 'default' => true, 'image' => !empty($c['template_image'])];
     }
     foreach ((array)(pm_load('settings', 'pm_default_settings')['wa_templates'] ?? []) as $t) {
         $n = (string)($t['name'] ?? '');
@@ -404,7 +410,7 @@ function pm_wa_templates(?string $brand = null): array
             continue;
         }
         if (preg_match('/^[a-z0-9_]{1,60}$/', $n) && !isset($out[$n])) {
-            $out[$n] = ['name' => $n, 'lang' => preg_match('/^[a-z]{2}(_[A-Z]{2})?$/', (string)($t['lang'] ?? '')) ? $t['lang'] : 'en', 'default' => false];
+            $out[$n] = ['name' => $n, 'lang' => preg_match('/^[a-z]{2}(_[A-Z]{2})?$/', (string)($t['lang'] ?? '')) ? $t['lang'] : 'en', 'default' => false, 'image' => !empty($t['image'])];
         }
     }
     return $out;
@@ -439,7 +445,7 @@ function pm_do_wa_template_add(string $vb): array
         return pm_wac_back('That template is already in the list.', 'err');
     }
     pm_update('settings', function (array $s) use ($name, $lang, $vb) {
-        $s['wa_templates'] = array_values(array_merge((array)($s['wa_templates'] ?? []), [['name' => $name, 'lang' => $lang, 'brand' => $vb]]));
+        $s['wa_templates'] = array_values(array_merge((array)($s['wa_templates'] ?? []), [['name' => $name, 'lang' => $lang, 'brand' => $vb, 'image' => !empty($_POST['timage'])]]));
         return $s;
     }, 'pm_default_settings');
     return pm_wac_back('Template added. Check in Meta\'s template manager that it is approved and takes one variable (the first name).');
@@ -455,19 +461,33 @@ function pm_do_wa_template_remove(string $vb): array
     return pm_wac_back('Template removed from the list. Campaigns that used it fall back to the default template.');
 }
 
-/** The sender the scheduler uses: free text inside the 24-hour window, the campaign's approved template outside it. */
+/** The picture a campaign carries (a file under the data folder), or ''. */
+function pm_wac_image(array $c): string
+{
+    $rel = (string)($c['image'] ?? '');
+    if ($rel === '' || str_contains($rel, '..') || !preg_match('/\.(png|jpe?g)$/i', $rel)) {
+        return '';
+    }
+    $f = PM_DATA . '/' . ltrim($rel, '/');
+    return is_file($f) ? $f : '';
+}
+
+/**
+ * The sender the scheduler uses: free text inside the 24-hour window (with the picture when the campaign has one), the campaign's approved template outside it
+ * (the picture goes in the template's header when the template was added as one with a picture header; a template without one is sent as before).
+ */
 function pm_wac_api_sender(string $template = '', ?string $brand = null): callable
 {
-    return function (string $num, string $text, array $lead) use ($template, $brand): array {
+    return function (string $num, string $text, array $lead, string $image = '') use ($template, $brand): array {
         $b = $brand ?? (string)($lead['brand'] ?? pm_brand()); // always the number of the business the campaign belongs to
         if (pm_wa_biz_window_open($lead)) {
-            return pm_wa_biz_send($num, $text, $b);
+            return $image !== '' && function_exists('pm_wa_biz_send_image') ? pm_wa_biz_send_image($num, $image, $text, $b) : pm_wa_biz_send($num, $text, $b);
         }
         $t = pm_wa_template_for($template, $b);
         if (!$t) {
             return [false, 'outside the 24-hour window and no approved template is set (' . pm_brand_env_prefix($b) . 'WA_BIZ_TEMPLATE, or add one on the WhatsApp screen)'];
         }
-        return pm_wa_biz_send_template($num, $t['name'], $t['lang'], [pm_wac_first_name($lead) ?: 'there'], $b);
+        return pm_wa_biz_send_template($num, $t['name'], $t['lang'], [pm_wac_first_name($lead) ?: 'there'], $b, !empty($t['image']) ? $image : '');
     };
 }
 
@@ -558,10 +578,10 @@ function pm_view_wa_campaigns(string $vb, string $csrf): void
     echo '<h3>Templates</h3><p class="hint">WhatsApp only lets you start a chat with a template Meta has approved (made in Meta\'s template manager, one variable: the first name). Name the ones you have, then pick one for each campaign.</p>';
     foreach (pm_wa_templates($vb) as $t) {
         echo '<form method="post" class="task">' . $sx(empty($t['default']) ? 'wa_template_remove' : '', '<input type="hidden" name="tname" value="' . pm_h($t['name']) . '">')
-            . '<span><b>' . pm_h($t['name']) . '</b> <span class="muted">· ' . pm_h($t['lang']) . (!empty($t['default']) ? ' · default, set in .env' : '') . '</span></span>'
+            . '<span><b>' . pm_h($t['name']) . '</b> <span class="muted">· ' . pm_h($t['lang']) . (!empty($t['default']) ? ' · default, set in .env' : '') . (!empty($t['image']) ? ' · picture header' : '') . '</span></span>'
             . (empty($t['default']) ? '<button class="btn small">Remove</button>' : '') . '</form>';
     }
-    echo '<form method="post" class="findrow">' . $sx('wa_template_add') . '<input type="text" name="tname" placeholder="template_name" maxlength="60" aria-label="Template name" required><input type="text" name="tlang" placeholder="en" value="en" maxlength="5" aria-label="Language" class="narrow"><button class="btn small">Add template</button></form>';
+    echo '<form method="post" class="findrow">' . $sx('wa_template_add') . '<input type="text" name="tname" placeholder="template_name" maxlength="60" aria-label="Template name" required><input type="text" name="tlang" placeholder="en" value="en" maxlength="5" aria-label="Language" class="narrow"><label class="check"><input type="checkbox" name="timage" value="1"> It has a picture header</label><button class="btn small">Add template</button></form>';
     echo '<h3>New campaign</h3><form method="post">' . $sx('wac_create')
         . '<div class="row"><div><label>Name (for you)</label><input type="text" name="name" maxlength="60" required></div>'
         . '<div><label>Start from</label><input type="datetime-local" name="send_from" value="' . pm_h(date('Y-m-d\TH:i', strtotime('+1 hour'))) . '"></div>'

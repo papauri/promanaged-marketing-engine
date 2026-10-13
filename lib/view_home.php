@@ -60,6 +60,7 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
     <?php else: ?>
       <p class="muted">No strategy has been written yet. The Director reads the numbers once a day and says what to do first.</p>
     <?php endif; ?>
+    <?= function_exists('pm_adv_home_line') ? pm_adv_home_line($vb) : '' ?>
     <form method="post" class="btns"><input type="hidden" name="csrf" value="<?= pm_h((string)($_SESSION['csrf'] ?? '')) ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="director"><input type="hidden" name="bt" value="home">
       <button class="btn small<?= $brief['headline'] === '' ? ' primary' : '' ?>"><?= $brief['headline'] === '' ? "Write today's strategy" : 'Refresh strategy' ?></button></form>
   </section>

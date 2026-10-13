@@ -57,7 +57,7 @@ function pm_followup_exp_rows(array $leads): array
 /** One line for the Follow-up agent: the follow-up subject style that earned replies; '' while nothing is proven. */
 function pm_email_exp_followup_example(string $brand): string
 {
-    $f = (array)(pm_load('email_exp', fn() => [])['followup'] ?? []);
+    $f = (array)((function_exists('pm_email_exp_store') ? pm_email_exp_store($brand) : pm_load('email_exp', fn() => []))['followup'] ?? []); // each business its own test
     return empty($f['example']) ? '' : 'Follow-up subjects that get replies in ' . (pm_brand_name($brand)) . ' look like this: "' . $f['example'] . '". Mirror its shape.';
 }
 

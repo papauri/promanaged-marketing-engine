@@ -91,7 +91,7 @@ function pm_manual_channels(array $p): array
             'tiktok' => in_array($fmt, ['reel', 'carousel'], true),
             'youtube_short' => $fmt === 'reel',
             'google' => in_array($fmt, ['image', 'text', 'carousel'], true),
-            'whatsapp_status' => true,
+            'whatsapp_status' => empty($p['campaign']) || $fmt === 'story', // a campaign's Status is its story frames, not every item again
             'whatsapp_channel', 'x' => in_array($fmt, ['image', 'text', 'carousel'], true),
             'linkedin' => $li && pm_ch_mode($brand, 'linkedin') === 'manual' && in_array($fmt, ['image', 'text', 'carousel'], true),
             'linkedin_personal' => !empty($cfg['founder_voice']) && in_array($fmt, ['image', 'text', 'carousel'], true),

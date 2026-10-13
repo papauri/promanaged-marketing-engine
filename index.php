@@ -215,6 +215,9 @@ if (isset($_GET['simg']) && preg_match('/^[a-f0-9]{20}$/', (string)$_GET['simg']
     readfile($sf);
     exit;
 }
+if (isset($_GET['camp']) && function_exists('pm_camp_serve')) { // a campaign's flyer files or its zip pack (lib/sx_campaign.php)
+    pm_camp_serve();
+}
 if (isset($_GET['sslides']) && preg_match('/^[a-f0-9]{20}$/', (string)$_GET['sslides'])) { // all slides of a carousel as one zip
     $sz = array_values(array_filter(pm_social_posts(), fn($p) => $p['id'] === $_GET['sslides']))[0] ?? null;
     $spaths = $sz && function_exists('pm_card_slides') ? array_values(array_filter((array)pm_card_slides($sz, '4x5'), 'is_file')) : [];

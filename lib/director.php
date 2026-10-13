@@ -38,6 +38,23 @@ function pm_signed_deals(string $brand = ''): array
     $tpl = pm_template();
     $norm = fn($n) => preg_replace('/[^a-z0-9]+/', '', strtolower((string)$n));
     $r = ['sent' => 0, 'signed' => 0, 'value' => [], 'ids' => [], 'names' => [], 'mwk_by_id' => [], 'mwk_by_name' => []];
+    if ($brand !== '' && pm_brand_is_custom($brand)) { // an added business has no proposals: a lead marked won is a signed client, and an offer sent counts as sent
+        foreach (pm_leads_read() as $l) {
+            if (($l['brand'] ?? '') !== $brand) {
+                continue;
+            }
+            $st = (string)($l['status'] ?? '');
+            $r['sent'] += in_array($st, ['proposal', 'won'], true) || !empty($l['proposal_sent_at']) ? 1 : 0;
+            if ($st === 'won') {
+                $r['signed']++;
+                $r['ids'][(string)($l['id'] ?? '')] = 1;
+                if ($norm($l['name'] ?? '') !== '') {
+                    $r['names'][$norm($l['name'])] = 1;
+                }
+            }
+        }
+        return $r;
+    }
     foreach (pm_history() as $h) {
         $type = (string)($tpl['packages'][(int)($h['proposal']['package'] ?? 0)]['type'] ?? '');
         if ($brand !== '' && pm_brand_of_type($type) !== $brand) {
@@ -238,6 +255,7 @@ function pm_director_brief(bool $force = false): array
     $system = pm_agents_company_brief('tiny') . "\nYou are the Marketing Director. From the pipeline numbers, decide what will bring the most qualified replies and signed deals at the least effort and AI spend. "
         . "Be concrete and honest: if there is too little data to judge, say so and say what to collect. Never suggest spam, pressure or fake urgency. Think like a sales lead: in Malawi, small businesses usually answer a WhatsApp message or a phone call faster than an email, so recommend the channel mix and a daily rhythm for the marketing team (who to call first, when to follow up). Prefer leads with a named decision maker. "
         . "Replies from people who wrote to us first (inbound) are not outreach results. If backlog is high, say to send or clear drafts before finding more leads. "
+        . "'lessons' says which kinds of buyer, towns, sources, offers and channels to double down on or drop, from results pulled towards what our other businesses see, and why deals were lost: use them for focus, drop and the priorities, and answer the main loss reason. "
         . "The pipeline also says what is waiting right now: awaiting_reply (people who wrote to us: answer them first), followups_due (leads we already wrote to that went quiet, of which followups_to_draft still have no draft: the Follow-up agent drafts them with AI), drafts_unsent and approved_waiting. "
         . "If followups_due is above 0, one priority must say to review and send the follow-ups (and to draft the missing ones with AI); never tell the owner to send something that is not drafted yet. "
         . "Reply JSON only: {\"headline\":\"one sentence\",\"priorities\":[\"3 to 5 specific actions for today\"],\"focus\":[\"up to 3 business types from segments or target_types to search more of\"],\"drop\":[\"types to search less of, or empty\"],\"experiment\":\"one small thing to test this week\",\"focus_weights\":{\"type\":0 to 100, how many of today's searches each type deserves, only for types in target_types}";
@@ -252,7 +270,8 @@ function pm_director_brief(bool $force = false): array
     } else {
         $system .= '}';
     }
-    $user = json_encode(['brand' => $brand, 'today' => date('Y-m-d'), 'firm_goal' => pm_firm_goal($brand)['line'], 'what_wins' => pm_win_line($brand), 'pipeline' => $ai, 'target_types' => $cfg['sectors'], 'daily_send_cap' => $cfg['send_cap']] + ($social ? ['social' => $social] : []), JSON_UNESCAPED_UNICODE);
+    $user = json_encode(['brand' => $brand, 'today' => date('Y-m-d'), 'firm_goal' => pm_firm_goal($brand)['line'], 'what_wins' => pm_win_line($brand), 'pipeline' => $ai, 'target_types' => $cfg['sectors'], 'daily_send_cap' => $cfg['send_cap']] + ($social ? ['social' => $social] : [])
+        + (function_exists('pm_adv_director_lines') && ($lessons = pm_adv_director_lines($brand)) ? ['lessons' => $lessons] : []), JSON_UNESCAPED_UNICODE);
     $out = null;
     $err = '';
     try {

@@ -376,13 +376,27 @@ function pm_social_learnings(string $brand): string
 /** The Malawi prior: brand => [[dow, 'HH:MM'], ...] in the order they are offered when there is no data. */
 function pm_sx_prior_slots(string $brand): array
 {
-    return $brand === 'travel' ? [[5, '18:30'], [6, '12:00'], [4, '18:30'], [7, '12:00']] : [[2, '07:30'], [3, '12:30'], [4, '17:30']];
+    return match (pm_sx_audience($brand)) {
+        'public' => [[5, '18:30'], [6, '12:00'], [4, '18:30'], [7, '12:00']], // people at home: evenings and weekend lunch
+        'both' => [[3, '12:30'], [5, '17:30'], [6, '12:00']],
+        default => [[2, '07:30'], [3, '12:30'], [4, '17:30']], // other businesses: working days
+    };
+}
+
+/** Who a business's posts are read by: public (people at home), business (people at work) or both. An added business says so itself; it never borrows ProManaged IT's times. */
+function pm_sx_audience(string $brand): string
+{
+    if ($brand === 'travel') {
+        return 'public';
+    }
+    return pm_brand_is_custom($brand) ? (string)(pm_brand_profile($brand)['sell_to'] ?? 'business') : 'business';
 }
 
 /** Default clock time for a daypart in a brand. */
 function pm_sx_part_time(string $brand, string $part): string
 {
-    return ['early' => '07:30', 'lunch' => $brand === 'travel' ? '12:00' : '12:30', 'evening' => $brand === 'travel' ? '18:30' : '17:30', 'late' => '20:30'][$part] ?? '12:30';
+    $pub = pm_sx_audience($brand) === 'public';
+    return ['early' => '07:30', 'lunch' => $pub ? '12:00' : '12:30', 'evening' => $pub ? '18:30' : '17:30', 'late' => '20:30'][$part] ?? '12:30';
 }
 
 /** The prior as a set of cells: "dow|daypart" => 'HH:MM'. */
