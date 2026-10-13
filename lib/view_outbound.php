@@ -16,6 +16,10 @@ function pm_view_send_queue(array $leads): void
         <?= pm_send_window() ? '' : 'Sending is closed now.' ?> <a href="?tab=targeting#sendschedule">Change the schedule</a></p>
       <?php if ($br['blocked']): ?><p class="flash err"><?= pm_h($br['why']) ?></p><?php endif; ?>
       <?php if (!$q): ?><p class="hint">Nothing approved yet. Approve drafts to start the drip.</p><?php endif; ?>
+      <?php if (count($q) > 1): ?><form method="post" class="cluster mb-2"><input type="hidden" name="csrf" value="<?= pm_h((string)($_SESSION['csrf'] ?? '')) ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="set_send_after">
+          <?php foreach ($q as $l): ?><input type="hidden" name="ids[]" value="<?= pm_h((string)($l['id'] ?? '')) ?>"><?php endforeach; ?>
+          <input type="datetime-local" name="send_after" aria-label="Send all no earlier than">
+          <button class="btn small">All <?= count($q) ?>: send no earlier than</button><button class="btn small ghost" name="clear" value="1">Clear all</button></form><?php endif; ?>
       <?php $i = 0; foreach ($q as $l): ?>
         <div class="splitrow">
           <span><b><?= pm_h($l['name'] ?? '') ?></b> <span class="muted"><?= pm_h($l['email'] ?? '') ?></span></span>

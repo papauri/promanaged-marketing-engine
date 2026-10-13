@@ -169,13 +169,14 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <?php if ($nApprovable): ?>
 <form method="post" id="approveform" class="approvebar"><?= $post('', 'approve_send') ?>
   <span><b><?= $nApprovable ?></b> draft<?= $nApprovable === 1 ? '' : 's' ?> ready to approve. Tick <i>Approve for sending</i> on the ones you have read.</span>
+  <label class="tick"><input type="checkbox" data-pick-all=".appick"> Select all <?= $nApprovable ?></label>
   <label>Not before <input type="datetime-local" name="send_after" aria-label="Send no earlier than (optional)"></label>
   <button class="btn primary">Approve selected</button>
   <span class="hint">They go out one at a time in the <a href="?tab=targeting#sendschedule">sending hours</a>.</span></form>
 <?php endif; ?>
 <?php if ($shown && pm_user_is_admin()): $adBack = 'agents&status=' . preg_replace('/[^a-z_]/', '', (string)$filter); ?>
 <form method="post" id="delform" class="approvebar admbar"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="admin_delete"><input type="hidden" name="what" value="leads"><input type="hidden" name="back" value="<?= pm_h($adBack) ?>">
-  <label class="tick"><input type="checkbox" onclick="document.querySelectorAll('input[form=delform][name='ids[]']').forEach(function (c) { c.checked = this.checked; }, this)"> Select all <?= count($shown) ?> shown</label>
+  <label class="tick"><input type="checkbox" data-pick-all=".delpick input"> Select all <?= count($shown) ?> shown</label>
   <span class="hint">Admin: tick leads on the list to delete them (junk, tests, duplicates). A STOP is still remembered.</span>
   <button class="btn small danger" data-confirm="Delete the ticked leads? This cannot be undone.">Delete ticked</button></form>
 <?php endif; ?>
@@ -203,7 +204,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <?php if (!empty($l['view_count'])): ?><span class="pill hot" title="They opened the proposal page">opened proposal</span><?php endif; ?>
       <?php if (!empty($l['approved_at'])): ?><span class="pill hot"><?= pm_h(function_exists('pm_approved_eta') ? (pm_approved_eta($l) ?: 'approved') : 'approved') ?></span><?php endif; ?>
       <?php if (pm_user_is_admin()): ?><label class="pick delpick" onclick="event.stopPropagation()" title="Admin: tick to delete"><input type="checkbox" form="delform" name="ids[]" value="<?= pm_h($id) ?>" aria-label="Select <?= pm_h($l['name']) ?> to delete"></label><?php endif; ?>
-      <?php if ($approvable($l)): ?><label class="pick" onclick="event.stopPropagation()"><input type="checkbox" form="approveform" name="ids[]" value="<?= pm_h($id) ?>"> Approve for sending</label><?php endif; ?>
+      <?php if ($approvable($l)): ?><label class="pick" onclick="event.stopPropagation()"><input type="checkbox" class="appick" form="approveform" name="ids[]" value="<?= pm_h($id) ?>"> Approve for sending</label><?php endif; ?>
       <?php if ($l['status'] === 'lost' && !empty($l['lost_reason'])): ?><span class="pill"><?= pm_h(pm_lost_reasons()[$l['lost_reason']] ?? $l['lost_reason']) ?></span><?php endif; ?>
       <?php if (!empty($l['proposal_ai'])): ?><span class="pill hot">proposal ready</span><?php endif; ?>
       <?= pm_lead_touch_chip($l) ?>
