@@ -384,3 +384,10 @@
   var el = document.querySelector('[data-reload-every]');
   if (el) setTimeout(function () { location.reload(); }, Math.max(3, +el.getAttribute('data-reload-every') || 5) * 1000);
 })();
+
+/* Leads come 10 to a page from the server. A link to a lead (#l<id>) from elsewhere that is not on this page asks again with ?at=<id>, which opens its page. */
+(function () {
+  var m = location.hash.match(/^#l([^&#?\/]+)$/);
+  if (!m || document.getElementById('l' + m[1]) || !/[?&]tab=agents(&|$)/.test(location.search) || /[?&]at=/.test(location.search)) return;
+  location.replace(location.pathname + location.search + '&at=' + encodeURIComponent(decodeURIComponent(m[1])) + location.hash);
+})();

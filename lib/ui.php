@@ -180,6 +180,36 @@ function pm_ui_tabs(array $items, string $on, string $label = 'Sections'): strin
     return $h . '</nav>';
 }
 
+/**
+ * One page of a long list, cut on the server: [the rows of this page, the pager HTML ('' when everything fits on one page)].
+ * The page comes from ?$param= (1 = first), or from $page when it is above 0 (e.g. the page that holds a linked row). The pager's links keep every
+ * other GET parameter of the current address, except 'at' (a one-off "open the page of this row").
+ */
+function pm_ui_page(array $rows, int $per = 10, string $param = 'p', int $page = 0): array
+{
+    $rows = array_values($rows);
+    $n = count($rows);
+    $pages = max(1, (int)ceil($n / max(1, $per)));
+    $page = max(1, min($pages, $page > 0 ? $page : (int)($_GET[$param] ?? 1)));
+    $slice = array_slice($rows, ($page - 1) * $per, $per);
+    if ($pages === 1) {
+        return [$slice, ''];
+    }
+    $q = $_GET;
+    unset($q['at']);
+    $href = function (int $p) use ($q, $param) {
+        $q[$param] = $p;
+        return '?' . pm_h(http_build_query($q));
+    };
+    $from = ($page - 1) * $per + 1;
+    $h = '<nav class="pager" aria-label="Pages">'
+        . ($page > 1 ? '<a class="btn small" href="' . $href($page - 1) . '">‹ Previous</a>' : '<span class="btn small" aria-disabled="true">‹ Previous</span>')
+        . '<span class="muted t-sm">' . $from . '–' . min($n, $from + $per - 1) . ' of ' . $n . '</span>'
+        . ($page < $pages ? '<a class="btn small" href="' . $href($page + 1) . '">Next ›</a>' : '<span class="btn small" aria-disabled="true">Next ›</span>')
+        . '</nav>';
+    return [$slice, $h];
+}
+
 /** The page header: the department it belongs to, a title, one plain line under it, and the page's main actions on the right ($actions is trusted HTML). */
 function pm_ui_head(string $title, string $sub = '', string $actions = ''): string
 {

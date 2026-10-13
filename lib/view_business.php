@@ -246,7 +246,7 @@ $lbtn = fn(string $label, bool $missing, string $cls = 'btn') => '<form method="
   <?php foreach (pm_launch_steps() as $k => $label): $sx = $ls['steps'][$k] ?? null; $now = $busy && ($ls['current'] ?? '') === $k; ?>
     <li class="<?= $sx && $sx['ok'] ? 'ok' : '' ?>"><span class="mark"><?= $sx ? ($sx['ok'] ? '✓' : '!') : ($now ? '…' : '') ?></span><div><b><?= pm_h($label) ?></b><br>
       <span class="muted"><?= $sx ? pm_h((string)$sx['msg']) : ($now ? 'Working on it now.' : ($busy ? 'Waiting its turn.' : 'Not done.')) ?></span>
-      <?php if ($sx && $sx['ok'] && ($lk = pm_launch_link($id, $k)) !== ''): ?> <a href="<?= pm_h($lk) ?>">Open</a><?php endif; ?></div></li>
+      <?php if ($sx && $sx['ok'] && ($lk = pm_launch_link($id, $k)) !== ''): ?> <a href="<?= pm_h($lk) ?>">Open</a><?php elseif ($sx && !$sx['ok'] && !empty($sx['fix'])): ?> <a href="<?= pm_h((string)$sx['fix']) ?>">Fix it</a><?php endif; ?></div></li>
   <?php endforeach; ?>
   </ul>
   <?php if (!$busy): ?><div class="btns"><?php if (array_filter(pm_launch_steps(), fn($k) => empty($ls['steps'][$k]['ok']), ARRAY_FILTER_USE_KEY)): ?><?= $lbtn('Try the unfinished steps again', true, 'btn primary') ?><?php endif; ?><?= $lbtn('Build it all again', false) ?></div><?php endif; ?>

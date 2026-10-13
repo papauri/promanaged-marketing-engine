@@ -886,3 +886,4 @@ pre, code { white-space:pre-wrap; word-break:break-word; }
 }
 .pager { display:flex; gap:var(--s-2); align-items:center; flex-wrap:wrap; margin:var(--s-2) 0 var(--s-3); }
 .pg-off { display:none !important }
+.pager [aria-disabled] { opacity:.45; pointer-events:none }

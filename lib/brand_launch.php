@@ -40,14 +40,33 @@ function pm_launch_state(string $b, ?array $set = null): array
     return (array)(pm_load('launch', fn() => [])[$b] ?? []) + ['state' => '', 'steps' => []];
 }
 
-/** Is a launch busy right now (a heartbeat in the last three minutes)? A launch that died stops counting as busy, so it can be started again. */
+/** The lock a build-up holds for as long as it runs, so two never run at once. */
+function pm_launch_lock_file(string $b): string
+{
+    return PM_DATA . '/launch_' . preg_replace('/[^A-Za-z0-9_-]/', '', $b) . '.lock';
+}
+
+/**
+ * Is a build-up busy right now? Yes while one holds the lock (however long a step takes), or for the first minute after it was started (the background
+ * process has not taken the lock yet). Where the lock cannot be checked, a heartbeat in the last 15 minutes counts. A build-up that died stops counting.
+ */
 function pm_launch_busy(string $b): bool
 {
     $st = pm_launch_state($b);
-    return $st['state'] === 'running' && time() - (int)($st['beat'] ?? 0) < 180;
+    $age = time() - (int)($st['beat'] ?? 0);
+    $f = @fopen(pm_launch_lock_file($b), 'c');
+    if (!$f) {
+        return $st['state'] === 'running' && $age < 900;
+    }
+    $free = flock($f, LOCK_EX | LOCK_NB);
+    if ($free) {
+        flock($f, LOCK_UN);
+    }
+    fclose($f);
+    return !$free || ($st['state'] === 'running' && $age < 60);
 }
 
-/** One step. Returns [ok, what happened in words]. */
+/** One step. Returns [ok, what happened in words, optional link to fix it]. */
 function pm_launch_step(string $b, string $step): array
 {
     if ($step === 'links') {
@@ -109,6 +128,16 @@ function pm_launch_step(string $b, string $step): array
         if (!pm_agents_ready()) {
             return [false, 'Add an AI key to .env first (Operations > Health and backups).'];
         }
+        $on = (array)(pm_agents_config($b)['enabled'] ?? []);
+        $fix = '?tab=targeting&brand=' . rawurlencode($b);
+        if (!array_filter($on)) {
+            return [false, 'Every agent is switched off for this business, so nothing was started. Tick the agents you want on its Targeting page.', $fix];
+        }
+        if (empty($on['scout'])) {
+            return [false, pm_brand_profile($b)['sell_to'] === 'public'
+                ? 'It sells only to the public, so the agents do not look for leads: enquiries come in from its posts and offers. To also find the organisations that book or buy in bulk, set "Who do you mainly sell to?" to Both on its Targeting page and tick the Scout agent there.'
+                : 'The Scout agent is switched off for this business, so no new leads are looked for. Tick it on its Targeting page.', $fix];
+        }
         $was = pm_brand();
         pm_brand_set($b);
         try {
@@ -124,33 +153,50 @@ function pm_launch_step(string $b, string $step): array
     return [false, 'Unknown step.'];
 }
 
-/** Runs every step (or only the ones that did not work last time), saving progress after each. */
+/**
+ * Runs every step (or only the ones that did not work last time), saving progress after each. Holds the business's launch lock throughout:
+ * when another build-up already holds it, nothing runs and the current state is returned.
+ */
 function pm_launch_run(string $b, bool $onlyMissing = false): array
 {
-    $st = pm_launch_state($b);
-    $st = ['state' => 'running', 'started' => date('Y-m-d H:i:s'), 'beat' => time(), 'steps' => $onlyMissing ? (array)$st['steps'] : []];
-    pm_launch_state($b, $st);
-    $was = pm_brand();
-    foreach (array_keys(pm_launch_steps()) as $k) {
-        if ($onlyMissing && !empty($st['steps'][$k]['ok'])) {
-            continue;
+    $lock = @fopen(pm_launch_lock_file($b), 'c'); // a folder that cannot be written still gets its build-up; only the guard is lost
+    if ($lock && !flock($lock, LOCK_EX | LOCK_NB)) {
+        fclose($lock);
+        return pm_launch_state($b);
+    }
+    try {
+        $st = pm_launch_state($b);
+        $st = ['state' => 'running', 'started' => date('Y-m-d H:i:s'), 'beat' => time(), 'steps' => $onlyMissing ? (array)$st['steps'] : []];
+        pm_launch_state($b, $st);
+        $was = pm_brand();
+        foreach (array_keys(pm_launch_steps()) as $k) {
+            if ($onlyMissing && !empty($st['steps'][$k]['ok'])) {
+                continue;
+            }
+            $st['current'] = $k;
+            $st['beat'] = time();
+            pm_launch_state($b, $st);
+            pm_brand_set($b);
+            try {
+                $r = pm_launch_step($b, $k);
+            } catch (Throwable $e) {
+                $r = [false, 'Did not work: ' . mb_substr($e->getMessage(), 0, 160)];
+            }
+            $st['steps'][$k] = ['ok' => (bool)$r[0], 'msg' => (string)$r[1], 'at' => date('Y-m-d H:i')] + (!empty($r[2]) ? ['fix' => (string)$r[2]] : []);
+            $st['beat'] = time(); // a slow step (drawing pictures, an AI call) shows life again as soon as it ends
+            pm_launch_state($b, $st);
         }
-        $st['current'] = $k;
+        pm_brand_set($was);
+        unset($st['current']);
+        $st['state'] = 'done';
         $st['beat'] = time();
         pm_launch_state($b, $st);
-        pm_brand_set($b);
-        try {
-            [$ok, $msg] = pm_launch_step($b, $k);
-        } catch (Throwable $e) {
-            [$ok, $msg] = [false, 'Did not work: ' . mb_substr($e->getMessage(), 0, 160)];
+    } finally {
+        if ($lock) {
+            flock($lock, LOCK_UN);
+            fclose($lock);
         }
-        $st['steps'][$k] = ['ok' => $ok, 'msg' => $msg, 'at' => date('Y-m-d H:i')];
     }
-    pm_brand_set($was);
-    unset($st['current']);
-    $st['state'] = 'done';
-    $st['beat'] = time();
-    pm_launch_state($b, $st);
     if (function_exists('pm_agent_log')) {
         pm_agent_log('Launch', pm_brand_name($b) . ' built: ' . count(array_filter($st['steps'], fn($s) => $s['ok'])) . ' of ' . count(pm_launch_steps()) . ' steps done.');
     }

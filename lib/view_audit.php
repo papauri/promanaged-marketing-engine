@@ -102,7 +102,6 @@ if ($asec === ''):
         }
         return $keep;
     }));
-    $limit = max(200, min(5000, (int)($_GET['n'] ?? 200)));
     $count = fn(callable $f) => count(array_filter($rows, $f));
     $fails = $count(fn($x) => ($x['kind'] ?? '') === 'signin_fail');
     $risky = $count(fn($x) => ($x['flag'] ?? '') === 'risk');
@@ -140,8 +139,9 @@ if ($asec === ''):
 
     <div class="card"><h2>The log <span class="muted t-sm">· <?= count($list) ?> line<?= count($list) === 1 ? '' : 's' ?></span></h2>
       <?php if (!$list): ?><p class="muted">Nothing matches.</p><?php else: ?>
-      <table class="grid"><thead><tr><th>When</th><th>Who</th><th>What</th><th>Result</th><th>Business</th></tr></thead><tbody>
-      <?php foreach (array_slice($list, 0, $limit) as $x): $k = (string)($x['kind'] ?? '');
+      <?php [$logRows, $logPager] = pm_ui_page($list, 10, 'lp'); ?>
+      <table class="grid" data-nopage><thead><tr><th>When</th><th>Who</th><th>What</th><th>Result</th><th>Business</th></tr></thead><tbody>
+      <?php foreach ($logRows as $x): $k = (string)($x['kind'] ?? '');
           $bad = ($x['ok'] ?? true) === false || in_array($k, ['signin_fail', 'denied'], true);
           $chip = match (true) { $k === 'action' => ($x['flag'] ?? '') === 'risk' ? '<span class="chip warn">' . pm_h((string)($x['area'] ?? 'Action')) . '</span>' : '<span class="chip">' . pm_h((string)($x['area'] ?? 'Action')) . '</span>',
               $bad => '<span class="chip bad">' . pm_h(PM_TA_KINDS[$k] ?? $k) . '</span>', $k === 'signin' => '<span class="chip ok">Signed in</span>', default => '<span class="chip">' . pm_h(PM_TA_KINDS[$k] ?? $k) . '</span>' }; ?>
@@ -152,7 +152,7 @@ if ($asec === ''):
           <td class="nowrap t-sm muted"><?= ($x['brand'] ?? '') !== '' && in_array($x['brand'], pm_brand_ids(), true) ? pm_h(pm_brand_name((string)$x['brand'])) : '' ?></td></tr>
       <?php endforeach; ?>
       </tbody></table>
-      <?php if (count($list) > $limit): ?><div class="btns"><a class="btn small" href="<?= pm_h($aLink(['n' => $limit + 500, 'range' => $ar['preset'], 'from' => $ar['from'], 'to' => $ar['to']])) ?>">Show 500 more</a><span class="muted t-sm"><?= count($list) - $limit ?> older lines</span></div><?php endif; ?>
+      <?= $logPager ?>
       <?php endif; ?>
     </div>
 <?php

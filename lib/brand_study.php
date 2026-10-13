@@ -271,10 +271,81 @@ function pm_study_links(mixed $v, int $max = 8): array
     return array_slice($out, 0, $max);
 }
 
+/** Words in a business name that say nothing about which business it is. */
+const PM_STUDY_NAME_GENERIC = ['the', 'and', 'of', 'a', 'an', 'lodge', 'lodges', 'hotel', 'hotels', 'shop', 'shops', 'store', 'ltd', 'limited', 'company', 'co', 'enterprises', 'enterprise',
+    'group', 'services', 'service', 'inn', 'guest', 'house', 'restaurant', 'cafe', 'bar', 'school', 'clinic', 'mw', 'plc', 'inc', 'llc', 'trading', 'investments'];
+
+/** Does $text name the business? Its distinctive words (not lodge, hotel, ltd...) must be there: all of them up to two, at least two thirds of a longer name and always the first. */
+function pm_study_names_business(string $text, string $name): bool
+{
+    $hay = ' ' . pm_study_norm($text) . ' ';
+    $full = pm_study_norm($name);
+    if ($full === '') {
+        return false;
+    }
+    if (str_contains($hay, ' ' . $full . ' ')) {
+        return true;
+    }
+    $words = array_values(array_filter(explode(' ', $full), fn($w) => mb_strlen($w) >= 2 && !in_array($w, PM_STUDY_NAME_GENERIC, true)));
+    if (!$words) { // a name made only of generic words ("The Lodge") must be there in full
+        return false;
+    }
+    $hit = array_filter($words, fn($w) => str_contains($hay, ' ' . $w . ' '));
+    $need = count($words) <= 2 ? count($words) : (int)ceil(count($words) * 2 / 3);
+    return count($hit) >= $need && isset($hit[0]);
+}
+
+/**
+ * Is a page found online about THIS business? It must carry the name; a page the owner gave or the website links to needs nothing more, any other page also
+ * one more sign: the website's address, a phone number of the business (by its last nine digits), its email, or one of its towns (the cities the owner gave,
+ * its address, or a known town it names in its own words or on its own website; the country is not a sign, since any business there shares it). $text is the page's readable text, $html the page as fetched.
+ */
+function pm_study_same_business(string $text, string $html, array $a, array $bundle, bool $own): bool
+{
+    if (!pm_study_names_business($text, (string)($a['name'] ?? ''))) {
+        return false;
+    }
+    if ($own) {
+        return true;
+    }
+    $raw = mb_strtolower(html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+    $site = pm_study_host((string)($bundle['url'] ?? pm_study_url((string)($a['website'] ?? ''))));
+    if ($site !== '' && str_contains($raw, $site)) {
+        return true;
+    }
+    $email = mb_strtolower(trim((string)($a['email'] ?? '')));
+    foreach (array_filter(array_merge([$email], array_map('mb_strtolower', (array)($bundle['emails'] ?? [])))) as $em) {
+        if (str_contains($raw, $em)) {
+            return true;
+        }
+    }
+    $tail = fn(string $p) => substr(preg_replace('/\D/', '', $p), -9);
+    $phones = array_filter(array_map($tail, array_merge([(string)($a['phone'] ?? '')], array_map('strval', (array)($bundle['phones'] ?? [])))), fn($d) => strlen($d) === 9);
+    if ($phones && preg_match_all('/\+?\d[\d\s\-().]{7,17}\d/', $raw, $pm)) {
+        foreach ($pm[0] as $p) {
+            if (in_array($tail($p), $phones, true)) {
+                return true;
+            }
+        }
+    }
+    $hay = ' ' . pm_study_norm($text) . ' ';
+    $ownText = ' ' . pm_study_norm(implode("\n", array_merge([(string)($a['sells'] ?? ''), (string)($a['notes'] ?? '')],
+        array_column(array_filter((array)($bundle['pages'] ?? []), fn($p) => $site !== '' && pm_study_host((string)($p['url'] ?? '')) === $site), 'text')))) . ' ';
+    $named = array_filter(defined('PM_OPT_TOWNS') ? PM_OPT_TOWNS : [], fn($tw) => str_contains($ownText, ' ' . pm_study_norm($tw) . ' ')); // towns the business names itself, in its own words or on its own website
+    foreach (array_merge(pm_brand_list($a['cities'] ?? '', 12, 40), pm_brand_list($a['address'] ?? '', 6, 60), $named) as $town) {
+        $tn = pm_study_norm($town);
+        if (mb_strlen($tn) >= 3 && str_contains($hay, ' ' . $tn . ' ')) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /**
  * Finds the business online beyond its website: the social pages the owner gave or the website links to, and (with the AI) one web search for its other
- * profiles, listings, reviews and news. The pages that open are added to $bundle['pages'], so a fact from them must still carry a quote the code finds there.
- * Returns the bundle with 'presence' => [['url', 'platform' (a pm_platforms key or ''), 'what']] and, when something could not be read, a note.
+ * profiles, listings, reviews and news. The pages that open and are shown to be about this business (pm_study_same_business) are added to $bundle['pages'],
+ * so a fact from them must still carry a quote the code finds there; a page about a business with a similar name is never a source.
+ * Returns the bundle with 'presence' => [['url', 'platform' (a pm_platforms key or ''), 'what', 'read'?, 'why'?]] and, when something could not be read or confirmed, a note.
  */
 function pm_study_presence(array $a, array $bundle): array
 {
@@ -315,6 +386,7 @@ function pm_study_presence(array $a, array $bundle): array
     $total = array_sum(array_map(fn($p) => mb_strlen((string)($p['text'] ?? '')), (array)$bundle['pages']));
     $read = 0;
     $failed = [];
+    $other = [];
     foreach ($found as $k => $f) { // read up to four of them, so what they say can back a fact
         if ($read >= 4 || $total >= PM_STUDY_TOTAL_CHARS + 6000) {
             break;
@@ -325,6 +397,13 @@ function pm_study_presence(array $a, array $bundle): array
             $failed[] = pm_study_host($f['url']);
             continue;
         }
+        $own = in_array($f['what'], ['given by you', 'linked from your website'], true); // the owner's own pages need only carry the name
+        if (!pm_study_same_business($t['title'] . "\n" . $t['text'], $g['html'], $a, $bundle, $own)) {
+            $found[$k]['read'] = false;
+            $found[$k]['why'] = 'could not confirm it is this business';
+            $other[] = pm_study_host($f['url']);
+            continue;
+        }
         $t['text'] = mb_substr($t['text'], 0, 2500);
         $total += mb_strlen($t['text']);
         $bundle['pages'][] = ['url' => $g['url'], 'title' => $t['title'], 'text' => $t['text']];
@@ -333,6 +412,9 @@ function pm_study_presence(array $a, array $bundle): array
     }
     if ($failed) {
         $bundle['note'] = trim($bundle['note'] . ' Some pages only show their content to signed-in visitors (' . implode(', ', array_unique($failed)) . '), so they were listed but not read.');
+    }
+    if ($other) {
+        $bundle['note'] = trim($bundle['note'] . ' Some pages could not be confirmed as this business (' . implode(', ', array_unique($other)) . '), so nothing from them was used.');
     }
     $bundle['presence'] = array_values($found);
     return $bundle;

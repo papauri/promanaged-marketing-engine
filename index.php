@@ -568,7 +568,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // After any action, return to exactly where the user was: the same lead (focused or in the list) with the same filters.
         $ctxS = preg_match('/^[a-z]+$/', (string)($_POST['rs'] ?? '')) ? $_POST['rs'] : '';
         $ctxT = (string)($_POST['rt'] ?? '');
-        $keep = ($ctxS !== '' ? '&status=' . $ctxS : '') . ($ctxT !== '' ? '&type=' . urlencode($ctxT) : '');
+        $keep = ($ctxS !== '' ? '&status=' . $ctxS : '') . ($ctxT !== '' ? '&type=' . urlencode($ctxT) : '') . ((int)($_POST['rp'] ?? 0) > 1 ? '&p=' . (int)$_POST['rp'] : '');
         $back = function (string $m = '', string $k = 'ok') use (&$id, $do, $keep) {
             if (($_POST['bt'] ?? '') === 'whatsapp') {
                 pm_redirect('whatsapp', $m, $k);
@@ -578,9 +578,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'unapprove_send', 'set_send_after', 'dismiss_unmatched'], true);
             if ($id !== '' && !$noLead) {
-                pm_redirect(!empty($_POST['rl']) ? 'agents&lead=' . $id : 'agents' . $keep . '#l' . $id, $m, $k);
+                pm_redirect(!empty($_POST['rl']) ? 'agents&lead=' . $id : 'agents' . $keep . '&at=' . rawurlencode($id) . '#l' . $id, $m, $k); // at= opens the page of the list that holds the lead
             }
-            pm_redirect('agents' . ($do === 'delete' || $do === 'plan' ? $keep : ''), $m, $k);
+            pm_redirect('agents' . (in_array($do, ['delete', 'plan', 'approve_send', 'unapprove_send', 'set_send_after'], true) ? $keep : ''), $m, $k);
         };
 
         if ($do === 'run') {
@@ -605,7 +605,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($do === 'restore_lead' && $id !== '') { // MARKETING.md C2-G02: bring a lead back from the archive
             [$okR, $msgR] = function_exists('pm_lead_unarchive') ? pm_lead_unarchive($id) : [false, 'Not available.'];
-            pm_redirect('agents' . ($okR ? '&status=all#l' . $id : ''), $msgR, $okR ? 'ok' : 'err');
+            pm_redirect('agents' . ($okR ? '&status=all&at=' . rawurlencode($id) . '#l' . $id : ''), $msgR, $okR ? 'ok' : 'err');
         }
         if ($do === 'export') { // MARKETING.md MG-G03: JSON export (no secrets)
             $json = function_exists('pm_data_export') ? pm_data_export(pm_brand()) : '{}';

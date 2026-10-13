@@ -41,6 +41,8 @@ $counts['mine'] = $who === '' ? 0 : count(array_filter($base, fn($l) => $inStatu
 $shown = array_filter($base, fn($l) => $inStatus($l, $filter));
 if ($focusId !== '') { $shown = [$focusId => $leadsAll[$focusId]]; }
 usort($shown, fn($a, $b) => [$waiting($b), $b['score'] ?? 0] <=> [$waiting($a), $a['score'] ?? 0]);
+$atPos = array_search((string)($_GET['at'] ?? ''), array_column($shown, 'id'), true); // ?at=<id>: open the page that holds this lead
+[$shown, $pager] = pm_ui_page($shown, 10, 'p', $atPos === false ? 0 : intdiv((int)$atPos, 10) + 1);
 $unmatched = pm_inbox_unmatched_list();
 $hasApprove = function_exists('pm_approve_for_send');
 $approvable = fn($l) => $hasApprove && in_array($l['status'], ['drafted', 'qualified'], true) && empty($l['approved_at']) && empty($l['sent']) && !empty($l['drafts']['email_body']) && filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL);
@@ -49,7 +51,7 @@ $sentToday = pm_sent_today($leadsAll);
 $agentLog = pm_load('agent_log', fn() => []);
 $hid = fn($n, $v) => '<input type="hidden" name="' . $n . '" value="' . pm_h((string)$v) . '">';
 $post = fn($id, $do, $extra = '') => '<input type="hidden" name="csrf" value="' . $csrf . '"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="' . $do . '">'
-    . $hid('rs', $filter) . $hid('rt', $ftype) . ($focusId !== '' ? $hid('rl', '1') : '') . ($id !== '' ? $hid('id', $id) : '') . $extra;
+    . $hid('rs', $filter) . $hid('rt', $ftype) . ((int)($_GET['p'] ?? 0) > 1 ? $hid('rp', (int)$_GET['p']) : '') . ($focusId !== '' ? $hid('rl', '1') : '') . ($id !== '' ? $hid('id', $id) : '') . $extra;
 require_once __DIR__ . '/view_drafts.php';
 $waBiz = pm_wa_biz_cfg()['ready'];
 @set_time_limit(120);
@@ -140,7 +142,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     <div class="task <?= $t['done'] ? 'done' : '' ?>">
       <form method="post"><?= $post('', 'plan', $hid('task', $t['id']) . ($t['done'] ? '' : $hid('done', 1))) ?><button title="Mark done" aria-label="Mark done"><?= $t['done'] ? '✓' : '' ?></button></form>
       <span><?= pm_h($t['title']) ?></span><?= $taskExtra($t) ?>
-      <?php if ($t['lead'] && isset($leadsAll[$t['lead']])): ?><a class="muted open" href="?tab=agents&status=all#l<?= pm_h($t['lead']) ?>">open</a><?php endif; ?>
+      <?php if ($t['lead'] && isset($leadsAll[$t['lead']])): ?><a class="muted open" href="?tab=agents&status=all&at=<?= pm_h(rawurlencode($t['lead'])) ?>#l<?= pm_h($t['lead']) ?>">open</a><?php endif; ?>
     </div>
   <?php endforeach; ?>
   <?php if (count($plan) > 6): ?><details class="more"><summary>Show the other <?= count($plan) - 6 ?></summary>
@@ -153,7 +155,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 
 <!-- 5. Leads -->
 <?php if ($focusId !== ''): ?>
-<div class="focusbar"><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?><?= $ftype !== '' ? '&type=' . urlencode($ftype) : '' ?><?= $fq !== '' ? '&q=' . urlencode($fq) : '' ?>#l<?= pm_h($focusId) ?>">← All leads</a> <span class="muted">Focused on <b><?= pm_h($leadsAll[$focusId]['name']) ?></b></span></div>
+<div class="focusbar"><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?><?= $ftype !== '' ? '&type=' . urlencode($ftype) : '' ?><?= $fq !== '' ? '&q=' . urlencode($fq) : '' ?>&at=<?= pm_h(rawurlencode($focusId)) ?>#l<?= pm_h($focusId) ?>">← All leads</a> <span class="muted">Focused on <b><?= pm_h($leadsAll[$focusId]['name']) ?></b></span></div>
 <?php else: ?>
 <div class="filters">
   <?php foreach (($who !== '' ? ['mine' => 'Mine'] : []) + ['active' => 'Active', 'awaiting' => 'Needs reply', 'gaps' => 'Missing details', 'drafted' => 'Draft ready', 'contacted' => 'Contacted', 'replied' => 'Replied', 'proposal' => 'Proposal sent', 'won' => 'Won', 'all' => 'All'] as $k => $l): ?>
@@ -168,22 +170,23 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <?php endif; ?>
 <?php if ($nApprovable): ?>
 <form method="post" id="approveform" class="approvebar"><?= $post('', 'approve_send') ?>
-  <span><b><?= $nApprovable ?></b> draft<?= $nApprovable === 1 ? '' : 's' ?> ready to approve. Tick <i>Approve for sending</i> on the ones you have read.</span>
-  <label class="tick"><input type="checkbox" data-pick-all=".appick"> Select all <?= $nApprovable ?></label>
+  <span><b><?= $nApprovable ?></b> draft<?= $nApprovable === 1 ? '' : 's' ?> on this page ready to approve. Tick <i>Approve for sending</i> on the ones you have read.</span>
+  <label class="tick"><input type="checkbox" data-pick-all=".appick"> Select all <?= $nApprovable ?> on this page</label>
   <label>Not before <input type="datetime-local" name="send_after" aria-label="Send no earlier than (optional)"></label>
   <button class="btn primary">Approve selected</button>
   <span class="hint">They go out one at a time in the <a href="?tab=targeting#sendschedule">sending hours</a>.</span></form>
 <?php endif; ?>
 <?php if ($shown && pm_user_is_admin()): $adBack = 'agents&status=' . preg_replace('/[^a-z_]/', '', (string)$filter); ?>
 <form method="post" id="delform" class="approvebar admbar"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="admin_delete"><input type="hidden" name="what" value="leads"><input type="hidden" name="back" value="<?= pm_h($adBack) ?>">
-  <label class="tick"><input type="checkbox" data-pick-all=".delpick input"> Select all <?= count($shown) ?> shown</label>
+  <label class="tick"><input type="checkbox" data-pick-all=".delpick input"> Select all <?= count($shown) ?> on this page</label>
   <span class="hint">Admin: tick leads on the list to delete them (junk, tests, duplicates). A STOP is still remembered.</span>
   <button class="btn small danger" data-confirm="Delete the ticked leads? This cannot be undone.">Delete ticked</button></form>
 <?php endif; ?>
 <?php if ($hasApprove && function_exists('pm_view_send_queue') && count(array_filter($leadsAll, fn($x) => !empty($x['approved_at'])))) { pm_view_send_queue(pm_leads()); } ?>
 <?php if (!$shown && ($ftype !== '' || $fq !== '')): ?><div class="card empty">No <?= pm_h($ftype ?: 'leads') ?><?= $fq !== '' ? ' matching "' . pm_h($fq) . '"' : '' ?> in this list. <a href="?tab=agents&status=all<?= $ftype !== '' ? '&type=' . urlencode($ftype) : '' ?><?= $fq !== '' ? '&q=' . urlencode($fq) : '' ?>">Look in All</a></div>
 <?php elseif (!$shown): ?><div class="card empty">No leads here yet. <?= $filter === 'active' ? 'Press <b>Run the agents</b> or find a business by name.' : '' ?></div><?php endif; ?>
-<div class="leadlist" data-page-items="details.lead">
+<?= $pager ?>
+<div class="leadlist">
 <?php foreach ($shown as $l):
     $id = $l['id'];
     $which = ($l['status'] === 'contacted' && !empty($l['followup_draft'])) ? 'followup' : 'first';
@@ -352,6 +355,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 </details>
 <?php endforeach; ?>
 </div>
+<?= $pager ?>
 
 <!-- 6. More -->
 <details class="card morecard"><summary>More: add a lead yourself, the archive</summary>
