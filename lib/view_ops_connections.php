@@ -103,7 +103,7 @@ $aiHid = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input ty
   <form method="post" class="btns"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_x"><input type="hidden" name="do" value="ig_url_test">
     <button class="btn small"<?= pm_app_url() === '' ? ' disabled title="Set APP_URL in .env first"' : '' ?>>Test Instagram image URL</button>
     <span class="hint"><?= pm_app_url() === '' ? 'APP_URL is empty in .env: Instagram cannot fetch pictures until the app is online.' : (empty($igT) ? 'Instagram downloads each picture from ' . pm_h(pm_app_url()) . '/media.php. Press to check it can be reached from outside.' : (!empty($igT['ok']) ? 'OK: ' : 'Problem: ') . pm_h((string)$igT['msg']) . ' · tested ' . date('j M H:i', (int)$igT['at'])) ?></span></form>
-  <p class="hint">Scheduler: <?= $hb === null ? '<b>has not run yet</b>' : 'last ran ' . (intdiv($hb, 60) >= 120 ? intdiv($hb, 3600) . ' h' : intdiv($hb, 60) . ' min') . ' ago' ?>. Posts go out when it runs (every 15 to 30 minutes) or when the app is open. On a website: add a cPanel cron line, see README: SOCIAL.</p>
+  <p class="hint">Scheduler: <?= $hb === null ? '<b>has not run yet</b>' : 'last ran ' . (intdiv($hb, 60) >= 120 ? intdiv($hb, 3600) . ' h' : intdiv($hb, 60) . ' min') . ' ago' ?>. Posts go out when it runs (every 15 to 30 minutes) or when the app is open. On a website: add a cPanel cron line, see README: Scheduling on a server.</p>
 </div>
 
 <form method="post">

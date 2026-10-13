@@ -586,13 +586,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!pm_agents_ready()) {
                 $back('Add ' . pm_agents_missing_key() . ' to .env first (see the notice on this page).', 'err');
             }
-            $back(pm_agents_launch() ? 'The agents are out searching. This page shows progress; it takes a few minutes.' : (pm_can_spawn() ? 'The agents are already running.' : 'This server does not let the app start background work, so the agents run from the scheduled task (README: SCHEDULING ON A SERVER).'), pm_can_spawn() ? 'ok' : 'err');
+            $back(pm_agents_launch() ? 'The agents are out searching. This page shows progress; it takes a few minutes.' : (pm_can_spawn() ? 'The agents are already running.' : 'This server does not let the app start background work, so the agents run from the scheduled task (README: Scheduling on a server).'), pm_can_spawn() ? 'ok' : 'err');
         }
         if ($do === 'find_names') {
             if (!pm_agents_ready()) {
                 $back('Add ' . pm_agents_missing_key() . ' to .env first.', 'err');
             }
-            $back(pm_agents_launch('names') ? 'Looking for owner and manager names. This page shows progress.' : (pm_can_spawn() ? 'The agents are already running.' : 'This server does not let the app start background work, so the agents run from the scheduled task (README: SCHEDULING ON A SERVER).'), pm_can_spawn() ? 'ok' : 'err');
+            $back(pm_agents_launch('names') ? 'Looking for owner and manager names. This page shows progress.' : (pm_can_spawn() ? 'The agents are already running.' : 'This server does not let the app start background work, so the agents run from the scheduled task (README: Scheduling on a server).'), pm_can_spawn() ? 'ok' : 'err');
         }
         if ($do === 'lead_forget' && $id !== '') { // MARKETING.md MG-G03: privacy
             $r = function_exists('pm_lead_forget') ? pm_lead_forget($id) : ['ok' => false, 'msg' => 'Not available.'];

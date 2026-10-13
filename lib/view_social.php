@@ -60,7 +60,7 @@ $isVideo = fn($f) => (bool)preg_match('/\.(mp4|mov|m4v)$/i', (string)$f);
     <input type="date" name="start" value="<?= date('Y-m-d', strtotime('+1 day')) ?>" aria-label="Start date" class="narrow">
     <button class="btn primary">Plan posts</button>
   </form>
-  <p class="hint">One short AI call plans a week: branded pictures, carousels, a short status and phone-video scripts, from your Marketing brain and real facts only. <?= $auto ? '<b>Auto-publish is on:</b> planned posts go out at their time without approval.' : 'Each post waits for your approval.' ?> Publishing happens on schedule even when nobody has the app open, if the scheduler is set up (README: SOCIAL).<?= $canApprove ? '' : ' <b>You are an editor:</b> press "Request approval" and an approver will check the post.' ?></p>
+  <p class="hint">One short AI call plans a week: branded pictures, carousels, a short status and phone-video scripts, from your Marketing brain and real facts only. <?= $auto ? '<b>Auto-publish is on:</b> planned posts go out at their time without approval.' : 'Each post waits for your approval.' ?> Publishing happens on schedule even when nobody has the app open, if the scheduler is set up (README: Scheduling on a server).<?= $canApprove ? '' : ' <b>You are an editor:</b> press "Request approval" and an approver will check the post.' ?></p>
 </div>
 
 <?php if ($queue): ?><h3>Planned posts</h3>

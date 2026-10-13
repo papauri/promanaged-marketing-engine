@@ -52,7 +52,7 @@ function pm_setup_health(): array
     $age = function_exists('pm_social_heartbeat_age') ? pm_social_heartbeat_age() : null;
     $last = function_exists('pm_health_last') ? pm_health_last() : [];
     $row('scheduler', 'Scheduler', 'required', $age !== null && $age < 7200, $age === null ? 'It has never run: scheduled posts and sending only happen while the app is open.' : ($age < 7200 ? 'Last ran ' . max(1, intdiv($age, 60)) . ' minutes ago.' : 'Last ran ' . intdiv($age, 3600) . ' hours ago: check the scheduled task.'),
-        'Run schedule_agents.bat once (Windows), or add the cPanel cron line (README: SOCIAL)');
+        'Run schedule_agents.bat once (Windows), or add the cPanel cron line (README: Scheduling on a server)');
     $row('cron_key', 'Web scheduler key', 'optional', $cron, $cron ? 'CRON_KEY is set: cron.php can be called by the host.' : 'Only needed on a website host (cPanel cron).', 'CRON_KEY=a-long-random-text in .env');
     // the server itself: what a host must give the app
     $okPhp = PHP_VERSION_ID >= 80100;
@@ -65,7 +65,7 @@ function pm_setup_health(): array
     $row('writable', 'Folders PHP can write', 'required', !$notW, !$notW ? 'data, output and assets can be written.' : 'PHP cannot write: ' . implode(', ', $notW) . '.', 'Make them writable by PHP (cPanel File Manager > Permissions 755, owned by your account)');
     $row('vendor', 'Libraries (vendor)', 'required', is_file(PM_ROOT . '/vendor/autoload.php'), is_file(PM_ROOT . '/vendor/autoload.php') ? 'PDF and mail libraries are installed.' : 'vendor/ is missing: PDFs and emails cannot be made.', 'Run "composer install --no-dev" on the server, or upload the vendor folder');
     $spawn = pm_can_spawn();
-    $row('spawn', 'Background work', 'optional', $spawn, $spawn ? 'The agents can run in the background and in parallel.' : 'This host blocks exec or proc_open: the agents run one at a time from the scheduled task.', 'Ask the host to allow exec and proc_open, or keep the cron lines in README: SCHEDULING ON A SERVER');
+    $row('spawn', 'Background work', 'optional', $spawn, $spawn ? 'The agents can run in the background and in parallel.' : 'This host blocks exec or proc_open: the agents run one at a time from the scheduled task.', 'Ask the host to allow exec and proc_open, or keep the cron lines in README: Scheduling on a server');
     $row('https', 'HTTPS', 'optional', pm_app_url() === '' || str_starts_with(pm_app_url(), 'https://'), pm_app_url() === '' ? 'Not online yet.' : (str_starts_with(pm_app_url(), 'https://') ? 'The public address uses HTTPS.' : 'APP_URL is not https: sign-in and signing links travel unprotected.'), 'Turn on SSL for the domain (cPanel > SSL/TLS Status) and use https:// in APP_URL');
     $url = pm_app_url() !== '';
     $row('app_url', 'Public address', 'required', $url, $url ? pm_app_url() : 'Instagram cannot fetch pictures and clients cannot open links until the app is online.', 'APP_URL=https://your-site in .env');
