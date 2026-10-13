@@ -271,9 +271,23 @@ function pm_tm_fix_drafts(): int
 /** Runs pm_tm_fix_drafts once per data folder (the first page opened after the update), so a server copy is fixed without anyone pressing anything. */
 function pm_tm_fix_once(): void
 {
-    if (empty(pm_load('migrations', fn() => [])['tm_opening_v1'])) {
-        pm_update('migrations', fn(array $m) => $m + ['tm_opening_v1' => date('c') . ' (' . pm_tm_fix_drafts() . ' drafts)'], fn() => []);
+    if (!empty(pm_load('migrations', fn() => [])['tm_opening_v1'])) {
+        return;
     }
+    pm_update('message_defaults', function (array $all) { // the saved default message: the reviews line, and a WhatsApp that names the business, not the sender
+        if (empty($all['travel'])) {
+            return $all;
+        }
+        $b = (string)($all['travel']['email_body'] ?? '');
+        if ($b !== '' && !preg_match('/reviews? from different/i', $b)) {
+            $chat = '- Guests chat and video call with you in the app, so they see your place before booking.';
+            $all['travel']['email_body'] = str_replace("$chat\n", "$chat\n- " . PM_TM_REVIEWS . "\n", str_replace("\r", '', $b));
+        }
+        $w = str_replace('{first_name}, {intro}.', '{first_name}, this is {company}.', (string)($all['travel']['whatsapp'] ?? ''));
+        $all['travel']['whatsapp'] = str_replace(', and Ulendo, our AI concierge, helps you and your manager answer them.', ', and your reviews from different sources are shown together, so they trust you.', $w);
+        return $all;
+    }, fn() => []);
+    pm_update('migrations', fn(array $m) => $m + ['tm_opening_v1' => date('c') . ' (' . pm_tm_fix_drafts() . ' drafts)'], fn() => []);
 }
 
 /** When a host starter pack becomes ready, unsent first emails that still ask "shall I send you the guide?" say it is attached or linked instead. Approved and sent emails are not touched. Returns how many changed. */
