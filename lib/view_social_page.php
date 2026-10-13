@@ -57,7 +57,7 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
       <?php foreach ($cms['comments'] as $cm): ?>
       <div class="fbc <?= $cm['hidden'] ? 'hiddenc' : '' ?>">
         <?php $jv = $judged[$cm['id']] ?? null; ?>
-        <p><b><?= pm_h($cm['from']) ?></b> <span class="muted"><?= pm_h(date('j M H:i', strtotime($cm['at']))) ?><?= $cm['hidden'] ? ' · hidden' : '' ?><?= $cm['answered'] ? ' · answered' : '' ?></span>
+        <p><b><?= pm_h($cm['from']) ?></b> <span class="muted"><?= pm_h(date('j M H:i', strtotime($cm['at']))) ?><?= $cm['hidden'] ? ' · hidden' : '' ?><?= $cm['answered'] ? ' · answered' : '' ?></span><?= pm_sx_done_chip($vb, 'c:' . $cm['id']) ?>
           <?php if ($jv): ?><span class="pill <?= in_array($jv['verdict'], ['scam', 'abusive', 'off_topic'], true) ? 'warn' : ($jv['verdict'] === 'buyer' ? 'hot' : '') ?>" title="<?= pm_h($jv['reason']) ?>">AI: <?= pm_h(str_replace('_', '-', $jv['verdict'])) ?></span><?php endif; ?><br><?= pm_h($cm['message']) ?></p>
         <?php if ($jv && $jv['state'] === '' && $jv['action'] !== 'ignore'): ?><form method="post" class="inl"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="fbg"><input type="hidden" name="do" value="item"><input type="hidden" name="view" value="page"><input type="hidden" name="id" value="<?= pm_h($cm['id']) ?>">
           <button class="btn small primary" name="how" value="<?= pm_h($jv['action']) ?>" <?= $jv['action'] === 'delete' ? 'data-confirm="Delete this comment?"' : '' ?>>AI suggests: <?= pm_h($vb2[$jv['action']] ?? $jv['action']) ?></button>
@@ -111,7 +111,7 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
         <form method="post" class="inl"><?= $fg('group', '<input type="hidden" name="act" value="' . $act . '">') ?><?php $ask = $act === 'delete' ? 'Delete all ' . count($g['items']) . ' from the Page? Deleted comments cannot be brought back.' : ($act === 'reply' ? 'Post all ' . count($g['items']) . ' replies as they are? Open the list to read or change them first.' : ''); ?><button class="btn small primary" <?= $ask !== '' ? 'onclick="return confirm(' . pm_h(json_encode($ask)) . ')"' : '' ?>><?= $aBtn[$act] ?> all</button></form></summary>
       <?php foreach ($g['items'] as $k): ?>
       <form method="post" class="sitem"><?= $fg('item', '<input type="hidden" name="id" value="' . pm_h($k['id']) . '">') ?>
-        <p><b><?= pm_h($k['from']) ?></b> <span class="pill"><?= pm_h($vlabel[$k['verdict']] ?? $k['verdict']) ?></span> <span class="muted"><?= pm_h(date('j M H:i', strtotime($k['at']))) ?> · <?= $k['kind'] === 'visitor_post' ? 'post on our Page' : 'comment' ?> · <?= pm_h($k['reason']) ?></span>
+        <p><b><?= pm_h($k['from']) ?></b> <span class="pill"><?= pm_h($vlabel[$k['verdict']] ?? $k['verdict']) ?></span> <span class="muted"><?= pm_h(date('j M H:i', strtotime($k['at']))) ?> · <?= $k['kind'] === 'visitor_post' ? 'post on our Page' : 'comment' ?> · <?= pm_h($k['reason']) ?></span><?= pm_sx_done_chip($vb, 'c:' . $k['id']) ?>
           <?php if ($k['link']): ?><a class="muted" href="<?= pm_h($k['link']) ?>" target="_blank" rel="noopener noreferrer">view</a><?php endif; ?></p>
         <p class="said"><?= pm_h(mb_substr($k['text'], 0, 300)) ?></p>
         <?php if ($act === 'reply'): ?><textarea name="text" rows="2"><?= pm_h($k['reply']) ?></textarea><?php endif; ?>
@@ -131,7 +131,7 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
     <?php foreach (array_slice($recent['open_comments'], 0, 12) as $cm): ?>
     <form method="post" class="cmt"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social"><input type="hidden" name="back" value="social&amp;view=inbox">
       <?= $hid('cid', $cm['id']) . $hid('post', $cm['post']) . $hid('from', $cm['from']) . $hid('message', $cm['message']) ?>
-      <p><b><?= pm_h($cm['from']) ?></b> <span class="muted">on "<?= pm_h(mb_substr($cm['post'], 0, 60)) ?>…"</span><br><?= pm_h($cm['message']) ?></p>
+      <p><b><?= pm_h($cm['from']) ?></b> <span class="muted">on "<?= pm_h(mb_substr($cm['post'], 0, 60)) ?>…"</span><?= pm_sx_done_chip($vb, 'c:' . $cm['id']) ?><br><?= pm_h($cm['message']) ?></p>
       <textarea name="reply" rows="2" placeholder="Your reply"><?= pm_h($_SESSION['sreply'][$cm['id']] ?? '') ?></textarea>
       <div class="btns"><button class="btn small" name="do" value="draft_reply">Draft with AI</button><button type="button" class="btn small" data-reword="textarea[name=reply]">New wording</button><button class="btn small primary" name="do" value="reply" data-confirm="Post this reply on Facebook?">Post reply</button></div>
     </form>
@@ -144,7 +144,7 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
   <?php if (!$ib['threads'] && !$ib['error']): ?><div class="card empty">No Messenger conversations yet.</div><?php endif; ?>
   <?php foreach ($ib['threads'] as $t): ?>
   <div class="card fbthread">
-    <h2><?= pm_h($t['who']) ?> <?= $t['waiting'] ? '<span class="pill warn">waiting for us</span>' : '' ?></h2>
+    <h2><?= pm_h($t['who']) ?> <?= $t['waiting'] ? '<span class="pill warn">waiting for us</span>' : '' ?><?= pm_sx_done_chip($vb, 'm:' . $t['psid']) ?></h2>
     <?php foreach ($t['messages'] as $m): ?><p class="<?= $m['ours'] ? 'us' : 'them' ?>"><?= pm_h($m['text']) ?> <span class="muted"><?= pm_h(date('j M H:i', strtotime($m['at']))) ?></span></p><?php endforeach; ?>
     <form method="post"><?= $fp('message', $hid('psid', $t['psid']) . $hid('tid', $t['id']) . $hid('last', (string)(end($t['messages'])['text'] ?? '')) . $hid('from', $t['who'])) ?>
       <textarea name="text" rows="2" placeholder="Your answer"><?= pm_h($_SESSION['fbdraft'][$t['id']] ?? '') ?></textarea>

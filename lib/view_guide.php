@@ -57,8 +57,8 @@ $team = [
     'social' => ['Social', [
         $a('?tab=social', 'Plan') . ': Plan posts writes a week of posts. Read and edit them, add a photo, then press Approve. Approved posts go out at their set time.',
         $a('?tab=social&view=leadposts', 'Lead posts') . ': turn an offer into posts. People who comment the keyword become leads.',
-        $a('?tab=social&view=inbox', 'Inbox') . ': comments and messages, each with a draft answer for you to check.',
-        $a('?tab=social&view=channels', 'Channels') . ': posts for places the app cannot post to. Copy the post, publish it there, then press Mark posted.',
+        $a('?tab=social&view=inbox', 'Inbox') . ': comments and messages, each with a draft answer for you to check. "Answered by" shows who replied. A comment someone already answered, or a conversation answered in the last 30 minutes, is not answered twice.',
+        $a('?tab=social&view=channels', 'Channels') . ': posts for places the app cannot post to. Press "I\'ll post this" so nobody else does, publish it there, then press Mark posted.',
         $a('?tab=social&view=ads', 'Ads') . ': paid campaigns. They are created paused and cost nothing until you start them.',
     ]],
     'brand' => ['Brand', [

@@ -203,12 +203,61 @@ function pm_inb_lead_replied(string $brand, string $fromId): void
     }
 }
 
+/**
+ * Who answered what on the social channels (data/social_handled.json: brand => key => [by, at]), so two people never answer the same comment or conversation.
+ * Keys: "c:<comment id>" for a comment reply (Facebook or Instagram), "m:<psid>" for a Messenger answer. The person is the one signed in, "System" for the autopilot.
+ */
+function pm_sx_me(): string
+{
+    return function_exists('pm_ta_actor') ? pm_ta_actor()[1] : (string)($GLOBALS['PM_WHO'] ?? '');
+}
+
+/** Someone else did $key in the last $minutes: [who, "at 10:20 today"], else null. */
+function pm_sx_done_by(string $brand, string $key, int $minutes): ?array
+{
+    $h = pm_load('social_handled', fn() => [])[$brand][$key] ?? null;
+    if (!is_array($h) || strtotime((string)($h['at'] ?? '')) < time() - $minutes * 60 || ($h['by'] ?? '') === pm_sx_me()) {
+        return null;
+    }
+    $at = (string)$h['at'];
+    return [(string)($h['by'] ?: 'Someone'), substr($at, 0, 10) === date('Y-m-d') ? 'at ' . substr($at, 11, 5) . ' today' : date('j M \a\t H:i', strtotime($at))];
+}
+
+/** Any answer to $key in the last 14 days, by anyone: [who, at], else null (for the "answered by" chips). */
+function pm_sx_done_get(string $brand, string $key): ?array
+{
+    $h = pm_load('social_handled', fn() => [])[$brand][$key] ?? null;
+    return is_array($h) && strtotime((string)($h['at'] ?? '')) >= time() - 14 * 86400 ? [(string)$h['by'], (string)$h['at']] : null;
+}
+
+function pm_sx_done_mark(string $brand, string $key): void
+{
+    pm_update('social_handled', function (array $all) use ($brand, $key) {
+        $all[$brand][$key] = ['by' => pm_sx_me(), 'at' => date('Y-m-d H:i:s')];
+        $all[$brand] = array_filter((array)$all[$brand], fn($h) => strtotime((string)($h['at'] ?? '')) >= time() - 14 * 86400); // two weeks is enough
+        return $all;
+    }, fn() => []);
+}
+
+/** "Answered by Jayne · 2 h ago" for a comment or conversation key; '' when nobody has. */
+function pm_sx_done_chip(string $brand, string $key): string
+{
+    if (!($h = pm_sx_done_get($brand, $key))) {
+        return '';
+    }
+    $s = max(60, time() - strtotime($h[1]));
+    return ' <span class="pill info">Answered by ' . pm_h($h[0] ?: 'someone') . ' · ' . ($s < 3600 ? intdiv($s, 60) . ' min' : ($s < 86400 ? intdiv($s, 3600) . ' h' : intdiv($s, 86400) . ' d')) . ' ago</span>';
+}
+
 /** Page actions: edit/delete a post, reply/like/unlike/hide/unhide/delete a comment. Returns [ok, message]. Replies and edits pass pm_reply_lint first. */
 function pm_fb_action(string $brand, string $what, string $id, string $text = ''): array
 {
     $c = pm_social_cfg($brand);
     if (!$c['ready'] || !preg_match('/^[0-9_]+$/', $id)) {
         return [false, 'Not connected, or a bad id.'];
+    }
+    if ($what === 'reply' && ($by = pm_sx_done_by($brand, 'c:' . $id, 7 * 1440))) { // a teammate (or the autopilot) already answered it
+        return [false, $by[0] . ' already answered this comment ' . $by[1] . '. Not posted twice.'];
     }
     if (in_array($what, ['reply', 'edit'], true)) {
         $bad = pm_reply_lint($text, $brand, $what === 'edit' ? 'post' : 'reply');
@@ -228,6 +277,7 @@ function pm_fb_action(string $brand, string $what, string $id, string $text = ''
     };
     $labels = ['edit' => 'Post updated.', 'delete' => 'Post deleted from the Page.', 'delete_comment' => 'Comment deleted.', 'reply' => 'Reply posted.', 'like' => 'Liked.', 'unlike' => 'Like removed.', 'hide' => 'Comment hidden (the writer and their friends still see it).', 'unhide' => 'Comment visible again.'];
     if ($ok && $what === 'reply') {
+        pm_sx_done_mark($brand, 'c:' . $id);
         pm_inb_mark_answered($brand, $id);
         pm_inb_lead_replied($brand, (string)((array)(pm_load('fb_judged', fn() => [])[$brand][$id] ?? [])['from_id'] ?? ''));
     }
@@ -360,6 +410,9 @@ function pm_fb_message(string $brand, string $psid, string $text, bool $human = 
     if (!$c['ready'] || !preg_match('/^\d+$/', $psid)) {
         return [false, 'Not connected, or a bad recipient.'];
     }
+    if ($by = pm_sx_done_by($brand, 'm:' . $psid, 30)) { // a teammate (or the autopilot) answered this person a moment ago
+        return [false, $by[0] . ' answered this conversation ' . $by[1] . '. Read it again before you add anything.'];
+    }
     $bad = pm_reply_lint($text, $brand, 'dm');
     if ($bad) {
         return [false, 'Not sent: ' . implode(' ', $bad)];
@@ -386,6 +439,7 @@ function pm_fb_message(string $brand, string $psid, string $text, bool $human = 
     }
     [$ok, $d] = pm_graph('POST', $c['page_id'] . '/messages', $p, $c['token']);
     if ($ok) {
+        pm_sx_done_mark($brand, 'm:' . $psid);
         pm_inb_lead_replied($brand, $psid);
         return [true, 'Message sent.'];
     }
@@ -453,12 +507,16 @@ function pm_ig_reply(string $brand, string $commentId, string $text): array
     if (!$c['ready'] || $c['ig_id'] === '' || !preg_match('/^\d+$/', $commentId)) {
         return [false, 'Instagram is not linked, or a bad comment id.'];
     }
+    if ($by = pm_sx_done_by($brand, 'c:' . $commentId, 7 * 1440)) {
+        return [false, $by[0] . ' already answered this comment ' . $by[1] . '. Not posted twice.'];
+    }
     $bad = pm_reply_lint($text, $brand, 'reply');
     if ($bad) {
         return [false, 'Not posted: ' . implode(' ', $bad)];
     }
     [$ok, $d] = pm_graph('POST', $commentId . '/replies', ['message' => $text], $c['token']);
     if ($ok) {
+        pm_sx_done_mark($brand, 'c:' . $commentId);
         pm_inb_mark_answered($brand, $commentId);
         pm_inb_lead_replied($brand, (string)((array)(pm_load('fb_judged', fn() => [])[$brand][$commentId] ?? [])['from_id'] ?? ''));
     }

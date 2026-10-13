@@ -140,7 +140,8 @@ function pm_manual_tasks(string $brand, int $days = 7, bool $light = false): arr
             $hasPic = !in_array($p['format'] ?? 'image', ['text', 'reel'], true);
             $out[] = ['post_id' => (string)$p['id'], 'channel' => $ch, 'label' => $v['label'], 'when' => $due, 'overdue' => $dts < $now, 'text' => $v['text'], 'parts' => $v['parts'], 'chars' => $v['chars'], 'limit' => $v['limit'],
                 'size' => $v['size'], 'asset_url' => $hasPic ? '?simg=' . $p['id'] . '&size=' . $v['size'] . '&dl=1' : '', 'deep_link' => $v['open'], 'state' => 'todo',
-                'headline' => (string)($p['headline'] ?? ''), 'ref' => pm_ch_ref($p), 'format' => (string)($p['format'] ?? 'image'), 'warn' => $v['warn']];
+                'headline' => (string)($p['headline'] ?? ''), 'ref' => pm_ch_ref($p), 'format' => (string)($p['format'] ?? 'image'), 'warn' => $v['warn'],
+                'claim_by' => strtotime((string)($e['claim_at'] ?? '')) >= $now - 3 * 3600 ? (string)($e['claim_by'] ?? '') : '', 'claim_at' => (string)($e['claim_at'] ?? '')];
         }
     }
     usort($out, fn($a, $b) => strcmp($a['when'], $b['when']));
@@ -148,6 +149,33 @@ function pm_manual_tasks(string $brand, int $days = 7, bool $light = false): arr
 }
 
 /** Mark posted / skipped (optionally with the pasted link of the post). POST id, ch, url, how. */
+/** "I'll post this": one person takes a hand-posting task for 3 hours, so two people do not post the same thing on the same channel. */
+function pm_do_task_claim(string $vb): array
+{
+    $id = preg_replace('/[^a-f0-9]/', '', (string)($_POST['id'] ?? ''));
+    $ch = (string)($_POST['ch'] ?? '');
+    $to = 'social&view=channels';
+    if ($id === '' || !in_array($ch, array_merge(PM_CH_MANUAL, ['host_kit']), true)) {
+        return ['msg' => 'Unknown task.', 'kind' => 'err', 'to' => $to];
+    }
+    $me = (string)($GLOBALS['PM_WHO'] ?? '') ?: 'Someone';
+    $taken = '';
+    pm_social_patch($id, function (array $q) use ($vb, $ch, $me, &$taken) {
+        if (($q['brand'] ?? '') !== $vb) {
+            return $q;
+        }
+        $e = (array)($q['channels'][$ch] ?? []);
+        if (($e['claim_by'] ?? '') !== '' && $e['claim_by'] !== $me && strtotime((string)($e['claim_at'] ?? '')) >= time() - 3 * 3600) {
+            $taken = $e['claim_by'] . ' took it at ' . substr((string)$e['claim_at'], 11, 5) . '.';
+            return $q;
+        }
+        $q['channels'][$ch] = ['claim_by' => $me, 'claim_at' => date('Y-m-d H:i')] + $e + ['mode' => 'manual', 'state' => 'todo'];
+        return $q;
+    });
+    return $taken !== '' ? ['msg' => 'Already taken: ' . $taken, 'kind' => 'err', 'to' => $to]
+        : ['msg' => 'It is yours for the next 3 hours. Press Mark posted when it is up.', 'kind' => 'ok', 'to' => $to];
+}
+
 function pm_do_task_done(string $vb): array
 {
     $id = preg_replace('/[^a-f0-9]/', '', (string)($_POST['id'] ?? ''));
@@ -160,18 +188,26 @@ function pm_do_task_done(string $vb): array
         return ['msg' => 'Unknown task.', 'kind' => 'err', 'to' => $to];
     }
     $found = false;
-    $r = pm_social_patch($id, function (array $q) use ($vb, $ch, $how, $url, &$found) {
+    $already = '';
+    $r = pm_social_patch($id, function (array $q) use ($vb, $ch, $how, $url, &$found, &$already) {
         if (($q['brand'] ?? '') !== $vb) {
             return $q;
         }
         $found = true;
         $old = (array)($q['channels'][$ch] ?? []);
+        if ($how !== 'todo' && in_array($old['state'] ?? '', ['done', 'skipped'], true)) { // marked from another screen meanwhile
+            $already = trim(($old['by'] ?? '') ?: 'Someone') . ' already marked it ' . ($old['state'] === 'done' ? 'posted' : 'skipped') . ' at ' . substr((string)($old['at'] ?? ''), 11, 5) . '.';
+            return $q;
+        }
         $q['channels'][$ch] = ['mode' => 'manual', 'state' => $how, 'at' => $how === 'todo' ? ($old['at'] ?? '') : date('Y-m-d H:i'), 'url' => $url !== '' ? $url : (string)($old['url'] ?? ''),
             'due' => (string)($old['due'] ?? $old['at'] ?? ''), 'by' => (string)($GLOBALS['PM_WHO'] ?? '')] + $old;
         return $q;
     });
     if (!$r || !$found) {
         return ['msg' => 'That post is gone.', 'kind' => 'err', 'to' => $to];
+    }
+    if ($already !== '') {
+        return ['msg' => $already, 'kind' => 'err', 'to' => $to];
     }
     if (function_exists('pm_social_log')) {
         pm_social_log($id, 'hand_post_' . $how, $ch);

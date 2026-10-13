@@ -21,7 +21,8 @@ $cp = fn(string $text, string $label = 'Copy') => '<button type="button" class="
     <div class="sxh"><b><?= pm_h($t['label']) ?></b>
       <span class="sx-chip <?= $t['overdue'] ? 'bad' : '' ?>"><?= $t['overdue'] ? 'overdue · ' : '' ?><?= pm_h(date('D j M H:i', strtotime($t['when']))) ?></span>
       <span class="muted"><?= pm_h($t['headline']) ?></span> <span class="sx-chip">ref <?= pm_h($t['ref']) ?></span>
-      <span class="sx-chip <?= $t['chars'] > $t['limit'] ? 'bad' : 'ok' ?>"><?= (int)$t['chars'] ?>/<?= (int)$t['limit'] ?></span></div>
+      <span class="sx-chip <?= $t['chars'] > $t['limit'] ? 'bad' : 'ok' ?>"><?= (int)$t['chars'] ?>/<?= (int)$t['limit'] ?></span>
+      <?php if ($t['claim_by'] !== ''): ?><span class="sx-chip <?= $t['claim_by'] === ($GLOBALS['PM_WHO'] ?? '') ? 'ok' : 'warn' ?>"><?= pm_h($t['claim_by'] === ($GLOBALS['PM_WHO'] ?? '') ? 'Yours' : $t['claim_by'] . ' is posting this') ?> · since <?= pm_h(substr($t['claim_at'], 11, 5)) ?></span><?php endif; ?></div>
     <pre><?= pm_h($t['text']) ?></pre>
     <?php foreach ($t['warn'] as $w): ?><div class="warnt"><?= pm_h($w) ?></div><?php endforeach; ?>
     <div class="sxb"><?= $cp($t['text'], 'Copy text') ?>
@@ -32,6 +33,7 @@ $cp = fn(string $text, string $label = 'Copy') => '<button type="button" class="
     <form method="post" class="inl"><?= $fx('task_done', $hid('id', $t['post_id']) . $hid('ch', $t['channel'])) ?>
       <input type="text" name="url" placeholder="Link to your post (optional)" aria-label="Link to your post" style="min-width:220px">
       <button class="btn small primary">Mark posted</button><button class="btn small" name="how" value="skipped">Skip</button></form>
+    <?php if ($t['claim_by'] === ''): ?><form method="post" class="inl"><?= $fx('task_claim', $hid('id', $t['post_id']) . $hid('ch', $t['channel'])) ?><button class="btn small" title="Tells the team you are posting this one, so nobody else does">I'll post this</button></form><?php endif; ?>
   </div>
   <?php endforeach; ?>
   <details><summary class="hint" style="cursor:pointer">Channels I post by hand</summary>

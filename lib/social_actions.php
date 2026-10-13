@@ -201,9 +201,9 @@ function pm_social_action(string $vb, string $action): never
         if (function_exists('pm_reply_lint') && ($bad = (array)pm_reply_lint($txt, $vb))) {
             pm_redirect($ret ?: 'social', 'Reply not posted: ' . implode(' ', array_map('strval', $bad)), 'err');
         }
-        [$ok, $d] = pm_graph('POST', $cid . '/comments', ['message' => $txt], $c['token']);
+        [$ok, $d] = pm_fb_action($vb, 'reply', $cid, $txt); // the one path: refuses a comment a teammate already answered, and marks it answered for everyone
         unset($_SESSION['sreply'][$cid]);
-        pm_redirect($ret ?: 'social', $ok ? 'Reply posted.' : 'Facebook refused the reply: ' . $d, $ok ? 'ok' : 'err');
+        pm_redirect($ret ?: 'social', $d, $ok ? 'ok' : 'err');
     }
 
     if ($do === 'reword' || $do === 'reword_selected') { // lib/sx_regen.php: one small AI call per post
