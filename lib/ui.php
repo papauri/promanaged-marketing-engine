@@ -292,7 +292,8 @@ function pm_view_biz_grid(array $settings, string $vb, string $csrf): void
         }
         echo '</div><div class="muted t-sm">' . $n . ' lead' . ($n === 1 ? '' : 's') . '</div>'
             . '<div class="btns mt-0"><a class="btn small' . ($bid === $vb ? '' : ' primary') . '" href="?tab=agents&amp;brand=' . pm_h($bid) . '">' . ($bid === $vb ? 'Open leads' : 'Switch to it') . '</a>'
-            . '<a class="btn small" href="?tab=settings&amp;brand=' . pm_h($bid) . '">Settings</a></div></div>';
+            . '<a class="btn small" href="?tab=settings&amp;brand=' . pm_h($bid) . '">Settings</a>'
+            . (pm_brand_is_custom($bid) ? '<a class="btn small" href="?tab=business&amp;id=' . pm_h($bid) . '&amp;welcome=1" title="What the AI built for it, and build it up again">Build-up</a>' : '') . '</div></div>';
     }
-    echo (pm_user_is_admin() ? '<a class="bizcard add" href="?tab=business&amp;new=1"><span style="font-size:26px;line-height:1">+</span><b>Add a business</b><small>A few questions, then it is ready</small></a>' : '') . '</div>';
+    echo (pm_user_is_admin() ? '<a class="bizcard add" href="?tab=business&amp;new=1"><span style="font-size:26px;line-height:1">+</span><b>Add a business</b><small>Describe it, and the AI builds it up</small></a>' : '') . '</div>';
 }

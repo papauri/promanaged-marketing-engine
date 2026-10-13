@@ -15,6 +15,7 @@
 
 require_once __DIR__ . '/brand_study.php'; // reading a business's website and learning who to target
 require_once __DIR__ . '/onepager.php'; // the one-page offer that replaces a proposal for an added business
+require_once __DIR__ . '/brand_launch.php'; // building an added business up: social pages, pictures, offers, first posts and first leads
 require_once __DIR__ . '/sharekit.php'; // the PDFs and website links a business shares in its emails and WhatsApp messages
 require_once __DIR__ . '/msgdefaults.php'; // the default first email and WhatsApp message of a business, and its signature
 require_once __DIR__ . '/suggest.php'; // suggestions while typing in the "find a business" boxes
@@ -233,7 +234,7 @@ function pm_brand_list(mixed $v, int $max = 10, int $len = 120): array
 
 /* ---------------- The questionnaire ---------------- */
 
-/** Checks the owner's answers. Returns a list of problems (empty = fine). Three answers are required; the rest only make the start better. */
+/** Checks the owner's answers. Returns a list of problems (empty = fine). Two answers are required (the name and what it does); the rest only make the start better. */
 function pm_brand_check_answers(array $a): array
 {
     $bad = [];
@@ -245,9 +246,6 @@ function pm_brand_check_answers(array $a): array
     }
     if (mb_strlen(trim((string)($a['sells'] ?? ''))) < 12) {
         $bad[] = 'Say in a sentence what the business does or sells.';
-    }
-    if (mb_strlen(trim((string)($a['customers'] ?? ''))) < 4) {
-        $bad[] = 'Say who buys from you.';
     }
     foreach (['email' => FILTER_VALIDATE_EMAIL] as $k => $f) {
         if (trim((string)($a[$k] ?? '')) !== '' && !filter_var($a[$k], $f)) {
@@ -285,7 +283,7 @@ function pm_brand_draft(array $a, ?array $bundle = null): array
     $name = trim((string)($a['name'] ?? ''));
     $sells = trim((string)($a['sells'] ?? ''));
     $customers = trim((string)($a['customers'] ?? ''));
-    $sellTo = in_array($a['sell_to'] ?? '', ['business', 'public', 'both'], true) ? $a['sell_to'] : 'business';
+    $sellTo = in_array($a['sell_to'] ?? '', ['business', 'public', 'both'], true) ? $a['sell_to'] : ''; // '' = the owner let the AI decide
     $voiceKey = isset(PM_BRAND_VOICES[$a['voice'] ?? '']) ? $a['voice'] : 'friendly';
     $notes = mb_substr(trim((string)($a['notes'] ?? '')), 0, 6000);
     $qa = pm_study_qa($a['qa'] ?? []);
@@ -307,7 +305,7 @@ function pm_brand_draft(array $a, ?array $bundle = null): array
     if (count($own['offerings']) === 1 && mb_strlen($own['offerings'][0]) > 160) {
         $own['offerings'] = [mb_substr($own['offerings'][0], 0, 160)];
     }
-    $bundle ??= pm_study_pages((string)($a['website'] ?? ''));
+    $bundle ??= pm_study_presence($a, pm_study_pages((string)($a['website'] ?? '')));
     $pages = (array)($bundle['pages'] ?? []);
     $out = $own + ['targeting' => ['segments' => [], 'skip' => [], 'angles' => [], 'cities' => []], 'questions' => [], 'sources' => array_fill_keys($own['facts'], 'you'), 'found' => []];
     $found = [];
@@ -345,7 +343,10 @@ function pm_brand_draft(array $a, ?array $bundle = null): array
     if (!$out['pillars']) {
         $out['pillars'] = [['name' => 'Tip/How-to', 'weight' => 30], ['name' => 'Proof', 'weight' => 20], ['name' => 'Behind the scenes', 'weight' => 15], ['name' => 'Offer', 'weight' => 20], ['name' => 'Question', 'weight' => 15]];
     }
-    if (!$out['sectors'] && $sellTo !== 'public') {
+    $out['sell_to'] = $sellTo ?: (string)($out['sell_to_ai'] ?? 'business');
+    unset($out['sell_to_ai']);
+    $out['presence'] = array_values((array)($bundle['presence'] ?? []));
+    if (!$out['sectors'] && $out['sell_to'] !== 'public') {
         $note = trim($note . ' Add the kinds of business to look for, or the scouts have nothing to search for.');
     }
     return ['draft' => $out, 'ai' => $ai, 'note' => $note, 'pages' => $bundle];
@@ -363,7 +364,7 @@ function pm_brand_create(array $a, array $draft): array
     }
     $name = trim((string)$a['name']);
     $id = pm_brand_slug($name);
-    $sellTo = in_array($a['sell_to'] ?? '', ['business', 'public', 'both'], true) ? $a['sell_to'] : 'business';
+    $sellTo = in_array($draft['sell_to'] ?? '', ['business', 'public', 'both'], true) ? $draft['sell_to'] : (in_array($a['sell_to'] ?? '', ['business', 'public', 'both'], true) ? $a['sell_to'] : 'business');
     $market = trim((string)($a['market'] ?? '')) ?: 'Malawi';
     $dial = preg_match('/^\+\d{1,4}$/', trim((string)($a['dial'] ?? ''))) ? trim((string)$a['dial']) : '+265';
 
@@ -383,12 +384,13 @@ function pm_brand_create(array $a, array $draft): array
         'audience' => trim((string)($draft['audience'] ?? '')), 'voice' => trim((string)($draft['voice'] ?? '')), 'never' => trim((string)($draft['never'] ?? '')),
     ];
     $blk['profile'] = [
-        'market' => $market, 'dial' => $dial, 'sell_to' => $sellTo, 'customers' => trim((string)($a['customers'] ?? '')),
+        'market' => $market, 'dial' => $dial, 'sell_to' => $sellTo, 'customers' => trim((string)($a['customers'] ?? '')) ?: trim((string)($draft['audience'] ?? '')),
         'magnet' => trim((string)($draft['magnet'] ?? '')), 'cta_keyword' => strtoupper(preg_replace('/[^A-Za-z]/', '', (string)($draft['cta_keyword'] ?? ''))),
         'offerings' => pm_brand_list($draft['offerings'] ?? [], 4, 200), 'sectors' => pm_brand_list($draft['sectors'] ?? [], 10, 60),
         'cities' => pm_brand_list($draft['cities'] ?? [], 12, 40), 'existing_clients' => [], 'pillars' => array_values(array_filter((array)($draft['pillars'] ?? []), fn($r) => trim((string)($r['name'] ?? '')) !== '')),
     ];
     $blk['profile']['targeting'] = pm_study_targeting_store((array)($draft['targeting'] ?? []), (array)$blk['profile']['sectors']); // who to target, with why: steers the scouts and the qualifier
+    $blk['profile']['presence'] = array_slice(array_values(array_filter((array)($draft['presence'] ?? []), fn($p) => is_array($p) && preg_match('#^https?://#i', (string)($p['url'] ?? '')))), 0, 10); // where it is online: the launch saves its social pages
     $blk['profile']['learned'] = ['at' => date('Y-m-d H:i'), 'from' => array_slice(array_values(array_filter(array_map('strval', (array)($draft['pages_read'] ?? [])))), 0, 6), 'ai' => !empty($draft['ai']),
         'qa' => pm_study_qa($a['qa'] ?? [])];
     if ($blk['profile']['magnet'] !== '' && $blk['profile']['cta_keyword'] !== '' && !array_filter($blk['profile']['pillars'], fn($r) => preg_match('/^free\b/i', (string)$r['name']))) {

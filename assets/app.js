@@ -329,3 +329,58 @@
   window.addEventListener('load', function () { all(); setTimeout(all, 300); });
   window.addEventListener('resize', function () { all(); });
 })();
+
+/* Pages of 10: every table with more than 10 rows, and every list marked data-page-items="<selector of its rows>", shows 10 at a time with
+   Previous / Next and "Show all". A link to a row on a later page (#l<id>) opens that page. data-nopage on a table leaves it whole. */
+(function () {
+  var PER = 10;
+  function pager(rows, after) {
+    if (rows.length <= PER) return;
+    var pages = Math.ceil(rows.length / PER), at = 0, all = false;
+    var bar = document.createElement('div');
+    bar.className = 'pager';
+    bar.innerHTML = '<button type="button" class="btn small" data-p="-1">‹ Previous</button><span class="muted t-sm"></span><button type="button" class="btn small" data-p="1">Next ›</button><button type="button" class="btn small ghost" data-p="all">Show all</button>';
+    var info = bar.querySelector('span'), prev = bar.querySelector('[data-p="-1"]'), next = bar.querySelector('[data-p="1"]'), tog = bar.querySelector('[data-p="all"]');
+    function show() {
+      rows.forEach(function (r, i) { r.classList.toggle('pg-off', !all && Math.floor(i / PER) !== at); });
+      info.textContent = all ? 'All ' + rows.length : (at * PER + 1) + '–' + Math.min(rows.length, (at + 1) * PER) + ' of ' + rows.length;
+      prev.disabled = all || at === 0; next.disabled = all || at === pages - 1;
+      tog.textContent = all ? 'Show 10 at a time' : 'Show all';
+    }
+    bar.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-p]');
+      if (!b) return;
+      var p = b.getAttribute('data-p');
+      if (p === 'all') all = !all; else at = Math.max(0, Math.min(pages - 1, at + (+p)));
+      show();
+    });
+    after.parentNode.insertBefore(bar, after.nextSibling);
+    function goHash() {
+      var id = location.hash.slice(1), t = id && document.getElementById(id);
+      if (!t) return;
+      for (var i = 0; i < rows.length; i++) { if (rows[i] === t || rows[i].contains(t)) { at = Math.floor(i / PER); all = false; show(); t.scrollIntoView(); return; } }
+    }
+    show();
+    goHash();
+    window.addEventListener('hashchange', goHash);
+  }
+  function init() {
+    document.querySelectorAll('table:not([data-nopage])').forEach(function (t) {
+      var body = t.tBodies[0];
+      if (!body) return;
+      var rows = Array.prototype.filter.call(body.rows, function (r) { return r.querySelector('td'); });
+      pager(rows, t.closest('.rs-wrap') || t);
+    });
+    document.querySelectorAll('[data-page-items]').forEach(function (box) {
+      var rows = Array.prototype.filter.call(box.children, function (c) { return c.matches(box.getAttribute('data-page-items')); });
+      pager(rows, box);
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+
+/* A card that is still being built (data-reload-every="<seconds>") reloads the page until the work is done. */
+(function () {
+  var el = document.querySelector('[data-reload-every]');
+  if (el) setTimeout(function () { location.reload(); }, Math.max(3, +el.getAttribute('data-reload-every') || 5) * 1000);
+})();

@@ -56,7 +56,7 @@ function pm_ta_area(string $action): string
     static $map = [
         'Sales' => ['agents', 'wa_log', 'proposal', 'reuse', 'clear', 'template', 'sendschedule', 'msgdefault', 'share', 'lines', 'reset_line'],
         'Social' => ['social', 'social_x', 'social_ext', 'fbm', 'fbg', 'social_check', 'social_accounts'],
-        'Brand' => ['brand_cancel', 'brand_draft', 'brand_redraft', 'brand_create', 'brand_restudy', 'brand_study_apply', 'brand_archive', 'brand_unhide', 'brand_delete', 'brand_save'],
+        'Brand' => ['brand_cancel', 'brand_draft', 'brand_redraft', 'brand_create', 'brand_restudy', 'brand_study_apply', 'brand_launch', 'brand_archive', 'brand_unhide', 'brand_delete', 'brand_save'],
         'AI help' => ['compose', 'reword_text', 'suggest_words'],
         'Operations' => ['settings', 'access', 'smtp_check', 'health_check', 'archive_restore', 'link_refresh', 'page_reset'],
         'Deletes' => ['admin_delete'],

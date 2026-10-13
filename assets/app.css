@@ -884,3 +884,5 @@ details.drop .menu { position:static; min-width:0; max-width:100%; margin-top:6p
 pre, code { white-space:pre-wrap; word-break:break-word; }
 .hint, p, li, td { overflow-wrap:anywhere; }
 }
+.pager { display:flex; gap:var(--s-2); align-items:center; flex-wrap:wrap; margin:var(--s-2) 0 var(--s-3); }
+.pg-off { display:none !important }

@@ -2138,11 +2138,8 @@ function pm_php_binary(): string
     return preg_match('/php(\d|-cgi)?(\.exe)?$/i', PHP_BINARY) && !str_contains(strtolower(PHP_BINARY), 'fpm') ? PHP_BINARY : 'php';
 }
 
-/**
- * The daily run inside this web request, after the page has been answered: the browser gets its redirect at once and the run carries on (progress shows on Leads).
- * For hosts that block exec(). The session is released first, so the team can keep working while it runs.
- */
-function pm_agents_run_here(string $brand, string $mode = ''): void
+/** Hands the finished page to the browser and keeps this PHP process going (work that runs after the page, on a host that blocks background work). */
+function pm_finish_response(): void
 {
     ignore_user_abort(true);
     @set_time_limit(0);
@@ -2162,6 +2159,15 @@ function pm_agents_run_here(string $brand, string $mode = ''): void
     } elseif (function_exists('litespeed_finish_request')) {
         litespeed_finish_request();
     }
+}
+
+/**
+ * The daily run inside this web request, after the page has been answered: the browser gets its redirect at once and the run carries on (progress shows on Leads).
+ * For hosts that block exec(). The session is released first, so the team can keep working while it runs.
+ */
+function pm_agents_run_here(string $brand, string $mode = ''): void
+{
+    pm_finish_response();
     $argv = array_values(array_filter(['run_agents.php', $brand, $mode], fn($a) => $a !== ''));
     if (!defined('PM_RUN_HERE')) {
         define('PM_RUN_HERE', true);

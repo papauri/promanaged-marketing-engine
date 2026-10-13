@@ -31,7 +31,7 @@ if ($step === 0) {
 }
 
 if ($step === 1) {
-    echo pm_ui_head('Add a business', 'Three questions are enough to start. Everything else is optional, and you can change every answer later.');
+    echo pm_ui_head('Add a business', 'Any kind of business: a shop, a hotel, a school, a service. Its name and what it does are enough; give its website and social pages and the AI studies them, then builds everything up.');
     echo $stepper(1);
     ?>
 <form method="post" class="card wiz nofold"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="brand_draft">
@@ -39,18 +39,20 @@ if ($step === 1) {
   <input type="text" name="name" required maxlength="60" value="<?= $av('name') ?>" placeholder="e.g. Sunrise Solar" autofocus>
   <label>What does it do or sell? *</label>
   <textarea name="sells" required rows="3" placeholder="One or two plain sentences, e.g. We design, install and maintain solar power systems for homes and small businesses."><?= $av('sells') ?></textarea>
-  <label>Who buys from you? *</label>
-  <input type="text" name="customers" required maxlength="200" value="<?= $av('customers') ?>" placeholder="e.g. Schools, clinics and small businesses that want reliable power">
+  <label>Who buys from you? <span class="muted">(leave it empty and the AI works it out)</span></label>
+  <input type="text" name="customers" maxlength="200" value="<?= $av('customers') ?>" placeholder="e.g. Schools, clinics and small businesses that want reliable power">
   <label>Who do you mainly sell to?</label>
   <div class="checks mt-0">
-    <?php foreach (['business' => 'Other businesses (the agents find and write to them)', 'public' => 'The public (social media, enquiries and partners; no cold emails)', 'both' => 'Both'] as $k => $l): ?>
-      <label class="check"><input type="radio" name="sell_to" value="<?= $k ?>" <?= ($ans['sell_to'] ?? 'business') === $k ? 'checked' : '' ?>> <?= pm_h($l) ?></label>
+    <?php foreach (['' => 'Not sure: let the AI decide', 'business' => 'Other businesses (the agents find and write to them)', 'public' => 'The public (social media, enquiries and partners; no cold emails)', 'both' => 'Both'] as $k => $l): ?>
+      <label class="check"><input type="radio" name="sell_to" value="<?= $k ?>" <?= ($ans['sell_to'] ?? '') === $k ? 'checked' : '' ?>> <?= pm_h($l) ?></label>
     <?php endforeach; ?>
   </div>
   <label>Where do you sell? <span class="muted">(countries, home first; add "Worldwide" if you sell anywhere)</span></label>
   <input type="text" name="market" maxlength="120" value="<?= $av('market') ?: 'Malawi' ?>" placeholder="Malawi, Zambia, Worldwide">
   <label>Website <span class="muted">(the AI reads it, up to five pages, to learn the business and who to target)</span></label>
   <input type="text" name="website" value="<?= $av('website') ?>" placeholder="www.example.mw">
+  <label>Social pages and listings <span class="muted">(one per line: Facebook, Instagram, TikTok, LinkedIn, Google Maps, TripAdvisor...; the AI also searches the web for them)</span></label>
+  <textarea name="socials" rows="2" placeholder="facebook.com/yourpage&#10;instagram.com/yourpage"><?= $av('socials') ?></textarea>
   <details class="more mt-3" <?= array_filter([$ans['cities'] ?? '', $ans['targets'] ?? '', $ans['facts'] ?? '', $ans['email'] ?? '', $ans['notes'] ?? '']) ? 'open' : '' ?>><summary>More, if you like (the agents work better with it)</summary>
     <label>Anything else the AI should read <span class="muted">(paste an About text, a brochure or a list of services; it is treated as your own words)</span></label>
     <textarea name="notes" rows="4" maxlength="6000" placeholder="No website? Paste a few paragraphs about the business here."><?= $av('notes') ?></textarea>
@@ -74,7 +76,7 @@ if ($step === 1) {
     </div>
   </details>
   <div class="btns"><button class="btn primary">Draft my profile</button><a class="btn ghost" href="?tab=settings">Cancel</a></div>
-  <p class="hint">The AI reads your answers and your website (this can take a minute), then drafts what the business is, who to target and why, and the few things only you can tell it. You check everything before anything is saved. No AI key yet? You get a plain draft from your own words.</p>
+  <p class="hint">The AI reads your answers, your website and your social pages, and searches the web for your listings and reviews (this can take a minute or two), then drafts what the business is, who to target and why, and the few things only you can tell it. You check everything before anything is saved. No AI key yet? You get a plain draft from your own words.</p>
 </form>
     <?php
     return;
@@ -105,6 +107,9 @@ if ($step === 2) {
     if (!empty($bundle['pages'])) {
         echo '<p class="hint">Read: ' . implode(' · ', array_map(fn($p) => '<a href="' . pm_h((string)$p['url']) . '" target="_blank" rel="noopener noreferrer">' . pm_h(pm_study_host((string)$p['url']) . (string)parse_url((string)$p['url'], PHP_URL_PATH)) . '</a>', $bundle['pages'])) . '</p>';
     }
+    if (!empty($d['presence'])) {
+        echo '<p class="hint">Found online: ' . implode(' · ', array_map(fn($p) => '<a href="' . pm_h((string)$p['url']) . '" target="_blank" rel="noopener noreferrer">' . pm_h(($p['platform'] ?? '') !== '' ? pm_platforms()[$p['platform']]['name'] ?? $p['platform'] : pm_study_host((string)$p['url'])) . '</a>' . (($p['what'] ?? '') !== '' ? ' <span class="muted">(' . pm_h((string)$p['what']) . ')</span>' : ''), (array)$d['presence'])) . '. Its social pages are saved to the business when you create it.</p>';
+    }
     ?>
 <form method="post" class="wiz"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="brand_create">
   <div class="card nofold"><h2>What the business is</h2>
@@ -123,8 +128,10 @@ if ($step === 2) {
       <div><label>Who buys</label><input type="text" name="d[audience]" value="<?= pm_h((string)($d['audience'] ?? '')) ?>"></div>
       <div><label>Voice</label><input type="text" name="d[voice]" value="<?= pm_h((string)($d['voice'] ?? '')) ?>"></div>
     </div>
-    <label>Never</label>
-    <input type="text" name="d[never]" value="<?= pm_h((string)($d['never'] ?? '')) ?>">
+    <div class="two">
+      <div><label>Never</label><input type="text" name="d[never]" value="<?= pm_h((string)($d['never'] ?? '')) ?>"></div>
+      <div><label>Sells mainly to<?= ($ans['sell_to'] ?? '') === '' ? ' <span class="muted">(the AI chose)</span>' : '' ?></label><select name="d[sell_to]"><?php foreach (['business' => 'Other businesses', 'public' => 'The public (no cold emails)', 'both' => 'Both'] as $k => $l): ?><option value="<?= $k ?>" <?= ($d['sell_to'] ?? 'business') === $k ? 'selected' : '' ?>><?= $l ?></option><?php endforeach; ?></select></div>
+    </div>
     <div class="two">
       <div><label>Business email<?= !empty($found['email']) ? ' <span class="muted">(from your website)</span>' : '' ?></label><input type="text" name="d[email]" value="<?= pm_h((string)($ans['email'] ?? '') !== '' ? (string)$ans['email'] : (string)($found['email'] ?? '')) ?>" placeholder="info@example.com"></div>
       <div><label>Phone or WhatsApp<?= !empty($found['phone']) ? ' <span class="muted">(from your website)</span>' : '' ?></label><input type="text" name="d[phone]" value="<?= pm_h((string)($ans['phone'] ?? '') !== '' ? (string)$ans['phone'] : (string)($found['phone'] ?? '')) ?>" placeholder="0999 123 456"></div>
@@ -171,9 +178,10 @@ if ($step === 2) {
     <label>Topics for social posts (one per line, "Name: share of posts")</label>
     <textarea name="d[pillars]" rows="4"><?= pm_h(implode("\n", array_map(fn($p) => $p['name'] . ': ' . $p['weight'], (array)($d['pillars'] ?? [])))) ?></textarea>
   </div>
+  <label class="check"><input type="checkbox" name="launch" value="1" checked> Then let the AI build it up: save its social pages, draw its profile pictures and covers, suggest free offers, draft its first posts and find its first leads</label>
   <div class="btns"><button class="btn primary">Create <?= pm_h((string)($ans['name'] ?? 'the business')) ?></button><a class="btn" href="?tab=business&amp;new=1">Back</a>
     <button class="btn ghost" name="action" value="brand_cancel" formnovalidate>Start over</button></div>
-  <p class="hint">Creating a business sends nothing and switches nothing on. Email, Facebook and WhatsApp stay off until you connect them.</p>
+  <p class="hint">Nothing is sent or published: posts wait for your approval and first messages wait in Leads. Email, Facebook and WhatsApp stay off until you connect them.</p>
 </form>
     <?php
     return;
@@ -224,7 +232,26 @@ $title = pm_brand_title($settings, $id);
 echo pm_ui_head($title . ' is ready', 'It is set up with its own voice and limits. A few things are left before it can work end to end.');
 echo $stepper(3);
 $rows = pm_brand_checklist($id);
+$ls = pm_launch_state($id);
+$busy = pm_launch_busy($id);
+$lbtn = fn(string $label, bool $missing, string $cls = 'btn') => '<form method="post"><input type="hidden" name="csrf" value="' . $csrf . '"><input type="hidden" name="action" value="brand_launch"><input type="hidden" name="id" value="' . pm_h($id) . '">'
+    . ($missing ? '<input type="hidden" name="missing" value="1">' : '') . '<button class="' . $cls . '">' . $label . '</button></form>';
 ?>
+<div class="card nofold" <?= $busy ? 'data-reload-every="5"' : '' ?>><h2>Built by the AI <?= $busy ? '<span class="pill warn">working…</span>' : ($ls['state'] === 'done' ? '<span class="pill ok">done</span>' : '') ?></h2>
+  <?php if ($ls['state'] === ''): ?>
+    <p class="hint mt-0">The AI can build this business up for you: save its social pages, draw its profile pictures and covers, suggest free offers, draft its first posts and find its first leads. Nothing is sent or published.</p>
+    <div class="btns"><?= $lbtn('Build it up now', false, 'btn primary') ?></div>
+  <?php else: ?>
+  <ul class="nextlist">
+  <?php foreach (pm_launch_steps() as $k => $label): $sx = $ls['steps'][$k] ?? null; $now = $busy && ($ls['current'] ?? '') === $k; ?>
+    <li class="<?= $sx && $sx['ok'] ? 'ok' : '' ?>"><span class="mark"><?= $sx ? ($sx['ok'] ? '✓' : '!') : ($now ? '…' : '') ?></span><div><b><?= pm_h($label) ?></b><br>
+      <span class="muted"><?= $sx ? pm_h((string)$sx['msg']) : ($now ? 'Working on it now.' : ($busy ? 'Waiting its turn.' : 'Not done.')) ?></span>
+      <?php if ($sx && $sx['ok'] && ($lk = pm_launch_link($id, $k)) !== ''): ?> <a href="<?= pm_h($lk) ?>">Open</a><?php endif; ?></div></li>
+  <?php endforeach; ?>
+  </ul>
+  <?php if (!$busy): ?><div class="btns"><?php if (array_filter(pm_launch_steps(), fn($k) => empty($ls['steps'][$k]['ok']), ARRAY_FILTER_USE_KEY)): ?><?= $lbtn('Try the unfinished steps again', true, 'btn primary') ?><?php endif; ?><?= $lbtn('Build it all again', false) ?></div><?php endif; ?>
+  <?php endif; ?>
+</div>
 <div class="card nofold"><h2>What is left</h2>
   <ul class="nextlist">
   <?php foreach ($rows as $r): ?><li class="<?= $r['ok'] ? 'ok' : '' ?>"><span class="mark"><?= $r['ok'] ? '✓' : '' ?></span><div><b><?= pm_h($r['label']) ?></b><br><span class="muted"><?= $r['ok'] ? 'Done.' : pm_h($r['hint']) ?></span></div></li><?php endforeach; ?>

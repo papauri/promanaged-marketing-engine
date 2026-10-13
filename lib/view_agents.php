@@ -183,6 +183,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <?php if ($hasApprove && function_exists('pm_view_send_queue') && count(array_filter($leadsAll, fn($x) => !empty($x['approved_at'])))) { pm_view_send_queue(pm_leads()); } ?>
 <?php if (!$shown && ($ftype !== '' || $fq !== '')): ?><div class="card empty">No <?= pm_h($ftype ?: 'leads') ?><?= $fq !== '' ? ' matching "' . pm_h($fq) . '"' : '' ?> in this list. <a href="?tab=agents&status=all<?= $ftype !== '' ? '&type=' . urlencode($ftype) : '' ?><?= $fq !== '' ? '&q=' . urlencode($fq) : '' ?>">Look in All</a></div>
 <?php elseif (!$shown): ?><div class="card empty">No leads here yet. <?= $filter === 'active' ? 'Press <b>Run the agents</b> or find a business by name.' : '' ?></div><?php endif; ?>
+<div class="leadlist" data-page-items="details.lead">
 <?php foreach ($shown as $l):
     $id = $l['id'];
     $which = ($l['status'] === 'contacted' && !empty($l['followup_draft'])) ? 'followup' : 'first';
@@ -350,6 +351,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
   </div>
 </details>
 <?php endforeach; ?>
+</div>
 
 <!-- 6. More -->
 <details class="card morecard"><summary>More: add a lead yourself, the archive</summary>

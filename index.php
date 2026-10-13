@@ -1818,7 +1818,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($action === 'brand_draft') {
         $answers = [];
-        foreach (['name', 'sells', 'customers', 'sell_to', 'market', 'cities', 'targets', 'facts', 'magnet', 'voice', 'email', 'phone', 'website', 'never', 'notes'] as $k) {
+        foreach (['name', 'sells', 'customers', 'sell_to', 'market', 'cities', 'targets', 'facts', 'magnet', 'voice', 'email', 'phone', 'website', 'socials', 'never', 'notes'] as $k) {
             $answers[$k] = trim((string)($_POST[$k] ?? ''));
         }
         $answers['notes'] = mb_substr($answers['notes'], 0, 6000);
@@ -1826,7 +1826,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($bad = pm_brand_check_answers($answers)) {
             pm_redirect('business&new=1', implode(' ', $bad), 'err');
         }
-        @set_time_limit(180); // up to five pages of the website, then one AI call
+        @set_time_limit(240); // up to five pages of the website, one web search for its social pages and listings, up to four of those, then one AI call
         $r = pm_brand_draft($answers);
         $_SESSION['bwiz'] = ['answers' => $answers, 'draft' => $r['draft'], 'ai' => $r['ai'], 'note' => $r['note'], 'pages' => $r['pages'], 'rounds' => 0];
         pm_redirect('business&step=2');
@@ -1884,14 +1884,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'voice' => trim((string)($in['voice'] ?? '')), 'never' => trim((string)($in['never'] ?? '')), 'sectors' => pm_brand_list(array_merge(pm_brand_list($in['sectors'] ?? '', 10, 60), $extra), 10, 60), 'cities' => pm_brand_list($in['cities'] ?? '', 12, 40),
             'magnet' => trim((string)($in['magnet'] ?? '')), 'cta_keyword' => (string)($in['cta_keyword'] ?? ''), 'pillars' => array_slice($pl, 0, 8),
             'email' => trim((string)($in['email'] ?? '')), 'phone' => trim((string)($in['phone'] ?? '')), 'targeting' => (array)($wzs['draft']['targeting'] ?? []), // the advice itself is kept on the server, not posted back
-            'pages_read' => array_column((array)($wzs['pages']['pages'] ?? []), 'url'), 'ai' => !empty($wzs['ai'])];
+            'pages_read' => array_column((array)($wzs['pages']['pages'] ?? []), 'url'), 'ai' => !empty($wzs['ai']),
+            'sell_to' => (string)($in['sell_to'] ?? ''), 'presence' => (array)($wzs['draft']['presence'] ?? [])];
         [$newId, $errs] = pm_brand_create($ans, $draft);
         if ($errs) {
             pm_redirect('business&step=2', implode(' ', $errs), 'err');
         }
         unset($_SESSION['bwiz']);
         $_SESSION['abrand'] = $newId;
-        pm_redirect('business&id=' . $newId . '&welcome=1', pm_brand_name($newId) . ' was created. Nothing was sent and nothing was switched on.');
+        $built = !empty($_POST['launch']) && pm_launch_start($newId);
+        pm_redirect('business&id=' . $newId . '&welcome=1', pm_brand_name($newId) . ' was created. ' . ($built ? 'The AI is building it up now: watch the steps below.' : 'Nothing was sent and nothing was switched on.'));
+    }
+    if ($action === 'brand_launch') { // build an added business up (again), or only the steps that did not work
+        $bid = pm_brand_norm((string)($_POST['id'] ?? ''));
+        if (!pm_brand_is_custom($bid)) {
+            pm_redirect('business', 'Only a business you added can be built up here.', 'err');
+        }
+        $ok = pm_launch_start($bid, !empty($_POST['missing']));
+        pm_redirect('business&id=' . $bid . '&welcome=1', $ok ? 'The AI is building ' . pm_brand_name($bid) . ' up now.' : 'It is already being built: wait for the steps below to finish.', $ok ? 'ok' : 'err');
     }
     if ($action === 'brand_restudy') { // read the website again and show what is new; nothing changes until the owner ticks it
         $bid = pm_brand_norm((string)($_POST['id'] ?? ''));
