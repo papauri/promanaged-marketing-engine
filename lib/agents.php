@@ -1213,6 +1213,18 @@ function pm_starter_draft(array $lead): ?array
     if (pm_brand() === 'travel' || (function_exists('pm_dm_use_default') && pm_dm_use_default())) {
         return null;
     }
+    // Free draft or paid Writer, decided by results: until each has 8 sent, one lead in three still goes to the Writer so the two can be compared;
+    // after that the study starter is used only while its reply rate is at least 80% of the Writer's.
+    $fmt = function_exists('pm_win_stats') ? pm_win_stats(pm_brand())['fmt'] : [];
+    [$sn, $sr] = $fmt['Study starter'] ?? [0, 0];
+    [$wn, $wr] = $fmt['Agent draft'] ?? [0, 0];
+    if ($sn >= 8 && $wn >= 8) {
+        if ($sr / $sn < 0.8 * ($wr / $wn)) {
+            return null;
+        }
+    } elseif (crc32((string)($lead['id'] ?? '')) % 3 === 0) {
+        return null;
+    }
     $name = mb_strtolower(trim((string)($lead['name'] ?? '')));
     foreach ((array)($lead['research']['starters'] ?? []) as $st) {
         $body = trim((string)($st['email'] ?? ''));

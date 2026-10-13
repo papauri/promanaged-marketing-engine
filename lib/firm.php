@@ -61,6 +61,9 @@ function pm_win_fmt(array $l): string
     if ($f !== '' && defined('PM_COMPOSE_TONES') && isset(PM_COMPOSE_TONES[$f])) {
         return PM_COMPOSE_TONES[$f];
     }
+    if (($l['variant']['from'] ?? '') === 'starter') { // the first draft came free from the day's study
+        return 'Study starter';
+    }
     return ($d['source'] ?? '') === 'default' ? 'Default message' : 'Agent draft';
 }
 

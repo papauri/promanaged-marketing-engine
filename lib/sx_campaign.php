@@ -13,7 +13,40 @@
  * files in data/campaigns/<id>/.
  */
 
-const PM_CAMP_PICS = ['card' => 'Drawn card in the brand colours', 'photo' => 'My photo', 'ai' => 'AI picture'];
+const PM_CAMP_PICS = ['card' => 'Drawn card in the brand colours (free)', 'photo' => 'My photo (free)', 'ailib' => 'An AI picture made before (free)', 'ai' => 'A new AI picture (about 5 US cents)'];
+
+/** The business's AI story pictures already paid for, least used first: [path, ...]. Reusing one costs nothing. */
+function pm_camp_ai_library(string $brand): array
+{
+    if (!function_exists('pm_aiimg_dir')) {
+        return [];
+    }
+    $uses = (array)(pm_load('aiimg_uses', fn() => [])[$brand] ?? []);
+    $files = array_values(array_filter(glob(pm_aiimg_dir($brand) . '/*.png') ?: [], function ($f) {
+        $sz = @getimagesize($f);
+        return $sz && $sz[0] === 1080 && $sz[1] === 1920;
+    }));
+    usort($files, fn($a, $b) => [(int)($uses[basename($a)] ?? 0), filemtime($a)] <=> [(int)($uses[basename($b)] ?? 0), filemtime($b)]);
+    return $files;
+}
+
+/** Puts the least-used AI picture of the business into the campaign: [relative path, why it could not]. */
+function pm_camp_ai_reuse(string $brand, string $cid): array
+{
+    $lib = pm_camp_ai_library($brand);
+    if (!$lib) {
+        return ['', 'No AI picture has been made for this business yet, so the drawn card is used.'];
+    }
+    $dst = pm_camp_dir($cid) . '/ai.png';
+    if (!@copy($lib[0], $dst)) {
+        return ['', 'The AI picture could not be copied.'];
+    }
+    pm_update('aiimg_uses', function (array $all) use ($brand, $lib) {
+        $all[$brand][basename($lib[0])] = (int)($all[$brand][basename($lib[0])] ?? 0) + 1;
+        return $all;
+    }, fn() => []);
+    return ['campaigns/' . $cid . '/ai.png', ''];
+}
 const PM_CAMP_ROLES = ['feed' => 'Feed post', 'story1' => 'Story 1 · the hook', 'story2' => 'Story 2 · the offer', 'story3' => 'Story 3 · what to do', 'carousel' => 'Carousel (next day)'];
 
 /* ---------------- storage ---------------- */
@@ -322,6 +355,10 @@ function pm_camp_ai_picture(string $brand, string $cid, string $topic): array
     if (empty($r['ok']) || $path === '' || !is_file($path)) {
         return ['', 'The AI picture did not work' . (($r['why'] ?? '') !== '' ? ' (' . mb_substr((string)$r['why'], 0, 80) . ')' : '') . ', so the drawn card is used.'];
     }
+    pm_update('aiimg_uses', function (array $all) use ($brand, $path) { // used once already: a library pick prefers pictures used less
+        $all[$brand][basename($path)] = (int)($all[$brand][basename($path)] ?? 0) + 1;
+        return $all;
+    }, fn() => []);
     $ext = preg_match('/\.png$/i', $path) ? 'png' : 'jpg';
     $dst = pm_camp_dir($cid) . '/ai.' . $ext;
     @copy($path, $dst);
@@ -568,8 +605,8 @@ function pm_camp_create(string $brand, array $in): array
             $notes[] = 'No usable photo was uploaded (JPEG, PNG or WebP), so the drawn card is used.';
             $camp['pic'] = 'card';
         }
-    } elseif ($camp['pic'] === 'ai') {
-        [$rel, $why] = pm_camp_ai_picture($brand, $id, $own['headline'] . ($own['message'] !== '' ? '. ' . $own['message'] : ''));
+    } elseif ($camp['pic'] === 'ai' || $camp['pic'] === 'ailib') {
+        [$rel, $why] = $camp['pic'] === 'ailib' ? pm_camp_ai_reuse($brand, $id) : pm_camp_ai_picture($brand, $id, $own['headline'] . ($own['message'] !== '' ? '. ' . $own['message'] : ''));
         if ($rel !== '') {
             $camp['bg'] = $rel;
             $camp['bg_ai'] = true;

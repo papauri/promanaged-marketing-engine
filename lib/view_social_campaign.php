@@ -100,7 +100,7 @@ $prof = pm_brand_profile($vb);
     <div class="row">
       <div><label>WhatsApp keyword</label><input type="text" name="keyword" maxlength="12" value="<?= pm_h((string)$prof['cta_keyword']) ?>" placeholder="QUOTE"></div>
       <div><label>Starts</label><input type="datetime-local" name="when" value="<?= pm_h(date('Y-m-d\TH:00', time() + 3600)) ?>"></div>
-      <div><label>Picture</label><select name="pic"><?php foreach (PM_CAMP_PICS as $k => $l): if ($k === 'ai' && !$aiPic) { continue; } ?><option value="<?= $k ?>"><?= pm_h($l) ?></option><?php endforeach; ?></select></div>
+      <div><label>Picture</label><select name="pic"><?php foreach (PM_CAMP_PICS as $k => $l): if (($k === 'ai' && !$aiPic) || ($k === 'ailib' && !pm_camp_ai_library($vb))) { continue; } ?><option value="<?= $k ?>"><?= pm_h($l) ?></option><?php endforeach; ?></select></div>
       <div><label>Your photo (if you picked it)</label><input type="file" name="photo" accept="image/jpeg,image/png,image/webp"></div>
     </div>
     <label>WhatsApp broadcast goes to <span class="muted">(only people who agreed to WhatsApp messages<?= $waOn ? '' : '; WhatsApp Business is not connected yet, so it is kept as a draft' ?>)</span></label>
