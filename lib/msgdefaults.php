@@ -14,7 +14,7 @@ const PM_DM_VARS = ['first_name' => 'their first name', 'name' => 'their busines
     'address' => 'your address', 'title' => 'your job title', 'link' => 'your website link', 'opening' => 'the line written for this lead (the AI writes it for Travel Malawi; otherwise who you are and how you came across them)'];
 
 /** The default opening line (who is writing and how they came across the lead), with {placeholders}. */
-const PM_DM_OPENING_TRAVEL = 'I am writing to invite {name} in {city} to take bookings directly from travellers.'; // no name (the signature has it), no posing as a traveller
+const PM_DM_OPENING_TRAVEL = 'I would love {name} in {city} to be part of something new.'; // no name (the signature has it), no posing as a traveller
 const PM_DM_OPENING_TRAVEL_OLD = '{intro}, and I came across {name} while looking at places to stay in {city}.'; // written out in saved messages from before {opening}
 const PM_DM_OPENING = 'I came across {name} in {city} and thought we might be able to help.';
 
@@ -42,7 +42,7 @@ function pm_dm_seed(string $brand): array
     if ($brand === 'travel') {
         $pack = function_exists('pm_share_pack_state') && pm_share_pack_state('travel') !== 'none';
         return ['email_subject' => 'Direct bookings for {name}', 'email_body' => pm_tm_email_compose([], '', true),
-            'whatsapp' => 'Hello {first_name}, this is {company}. We help independent stays like {name} take direct bookings with no commission. Guests chat and video call with you before they come, and your reviews from different sources are shown together, so they trust you. Listing is free for now. '
+            'whatsapp' => 'Hello {first_name}, this is {company}. ' . PM_TM_WA_AIM . ' '
                 . ($pack ? 'The host starter pack and the links to get listed are below.' : 'May I send you the details?'),
             'signature' => $sig, 'wa_signature' => '— {sender}, {company}'];
     }

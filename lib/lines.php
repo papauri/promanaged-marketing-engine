@@ -477,8 +477,8 @@ function pm_onboarding_line(): array
     $sig = "Kind regards,\n{signature}";
     return [
         'title' => 'Stay Onboarding Proposal',
-        'intro' => 'Travel Malawi is a direct booking platform connecting travellers with independent lodges, B&Bs, cottages, guest houses and safari camps across Malawi. This proposal explains how your property would be listed, what you keep and what you get.',
-        'cover_hook' => 'Be found by travellers, and be booked directly.',
+        'intro' => 'Travel Malawi is building Malawi\'s own directory of independent lodges, B&Bs, cottages, guest houses and safari camps, together with the hosts who run them. Joining is free and there is no commission, unlike Booking.com and the other big booking sites that take a cut of every stay. This proposal explains how your property would be listed, what you keep and what you get.',
+        'cover_hook' => 'Malawi\'s own directory of stays, built together with its hosts.',
         'pain_title' => 'Where independent stays lose bookings and margin',
         'pain_intro' => 'Most independent stays do the work of hosting and then share the margin, or never get found at all.',
         'pain_points' => [
@@ -544,7 +544,7 @@ function pm_onboarding_line(): array
         'emails' => [
             'pitch' => [
                 'subject' => 'Listing {business} on Travel Malawi',
-                'body' => "Hello {contact},\n\nTravel Malawi is a direct booking platform for independent lodges, B&Bs, cottages, guest houses and safari camps across Malawi. Guests book you directly, you keep the rate you set, and requests reach you in your dashboard and over WhatsApp. Guests can chat and video call you in the app before they book, and your listing shows your reviews from different sources together, so they can see the honest picture and trust you.\n\n{fee_line}\n\nI have attached a short proposal for {business} explaining how onboarding works. If it is of interest, just reply to this email{or_call} and we will help you get listed.\n\n$sig",
+                'body' => "Hello {contact},\n\nWe are building Malawi's own directory of independent stays, together with the hosts who run them, and we would love {business} to be part of it. Unlike Booking.com and the other big sites, there is no commission. Guests book you directly, you keep the rate you set, and requests reach you in your dashboard and over WhatsApp. Guests can chat and video call you in the app before they book, and your listing shows your reviews from different sources together, so they can see the honest picture and trust you.\n\n{fee_line}\n\nI have attached a short proposal for {business} explaining how onboarding works. If it is of interest, just reply to this email{or_call} and we will help you get listed.\n\n$sig",
             ],
             'contract' => [
                 'subject' => '{business}: your Travel Malawi agreement ({reference})',

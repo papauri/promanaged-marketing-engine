@@ -8,25 +8,45 @@
 
 const PM_TM_LINK = 'https://ulendomalawi.com';
 
+/** Our aim, the hook of every first message: Malawi's own directory of stays, built with the hosts, free, where the big booking sites take a cut. */
+const PM_TM_AIM = "We are building Malawi's own directory of independent stays, together with the hosts who run them. Joining is free and there is no commission, unlike Booking.com and the other big sites that take a cut of every stay.";
+
+/** The WhatsApp version of the hook, after "Hello {first_name}, this is {company}." */
+const PM_TM_WA_AIM = "We are building Malawi's own directory of independent stays together with hosts, and we would love {name} in it. It is free, with no commission, unlike Booking.com. Guests chat and video call you before they come, and your reviews from different sources are shown together.";
+
 /** The benefit line about reviews: open about what guests said, wherever they said it, is what earns a new guest's trust. */
-const PM_TM_REVIEWS = 'Your listing shows your reviews from different sources together, so guests see the honest picture and trust you.';
+const PM_TM_REVIEWS = 'Your reviews from different sources, shown together, so guests trust you.';
+
+/** Lines of the earlier wording and what replaced them (the hook first, then a shorter list so a written opening still fits in 190 words). Applied once to saved text and unsent drafts. */
+const PM_TM_SWAP = [
+    'Travel Malawi is a direct booking platform for independent lodges, B&Bs, cottages, guest houses and safari camps across Malawi.' => PM_TM_AIM,
+    'Guests chat and video call with you in the app, so they see your place before booking.' => 'Guests chat and video call with you before booking, so they see your place.',
+    'Your listing shows your reviews from different sources together, so guests see the honest picture and trust you.' => PM_TM_REVIEWS,
+    'Ulendo, our AI concierge, works with you and your manager: it writes your listing and helps answer guests.' => 'Ulendo, our AI concierge, helps you write your listing and answer guests.',
+    'or reply and our concierge team sets your listing up for you.' => 'or reply and our concierge team sets it up for you.',
+    'We review it before it goes live.' => 'We review it, and it goes live.',
+    'Add your rooms and rates in your host dashboard, and booking requests arrive there.' => 'Booking requests arrive in your host dashboard.',
+    'There is no commission, no listing fee and no monthly charge for now.' => 'There is no listing fee or monthly charge for now.',
+    'We help independent stays like {name} take direct bookings with no commission. Guests chat and video call with you before they come, and your reviews from different sources are shown together, so they trust you. Listing is free for now.'
+        => PM_TM_WA_AIM,
+];
 
 /** The starting text of the default message (and what is shown until the owner saves their own): the facts already in Travel Malawi's brain, in the order a host cares about them. */
 function pm_tm_email_defaults(): array
 {
     return [
-        'intro' => 'Travel Malawi is a direct booking platform for independent lodges, B&Bs, cottages, guest houses and safari camps across Malawi.',
+        'intro' => PM_TM_AIM,
         'benefits_title' => 'What you get:',
         'benefits' => ['Guests pay you directly, in {currency}: mobile money, bank or cash.',
-            'Guests chat and video call with you in the app, so they see your place before booking.', // where we win: the guest meets the host before they come
+            'Guests chat and video call with you before booking, so they see your place.', // where we win: the guest meets the host before they come
             PM_TM_REVIEWS,
-            'Ulendo, our AI concierge, works with you and your manager: it writes your listing and helps answer guests.',
+            'Ulendo, our AI concierge, helps you write your listing and answer guests.',
             'There is a host starter guide to help you get set up.'],
         'steps_title' => 'How to start:',
-        'steps' => ["Send your property's details at {link}, or reply and our concierge team sets your listing up for you.", 'We review it before it goes live.',
-            'Add your rooms and rates in your host dashboard, and booking requests arrive there.'],
+        'steps' => ["Send your property's details at {link}, or reply and our concierge team sets it up for you.", 'We review it, and it goes live.',
+            'Booking requests arrive in your host dashboard.'],
         'link' => PM_TM_LINK,
-        'free' => 'There is no commission, no listing fee and no monthly charge for now.',
+        'free' => 'There is no listing fee or monthly charge for now.',
         'why' => '', // kept short: the first email must stay under 190 words
         'closing' => 'Shall I send you the host starter guide?',
     ];
@@ -76,7 +96,7 @@ function pm_tm_first_name(array $lead): string
 function pm_tm_default_opening(array $lead): string
 {
     $city = trim((string)($lead['city'] ?? ''));
-    return 'I am writing to invite ' . trim((string)($lead['name'] ?? 'your place')) . ($city !== '' && strcasecmp($city, 'Malawi') !== 0 ? " in $city" : '') . ' to take bookings directly from travellers.';
+    return 'I would love ' . trim((string)($lead['name'] ?? 'your place')) . ($city !== '' && strcasecmp($city, 'Malawi') !== 0 ? " in $city" : '') . ' to be part of something new.';
 }
 
 /** A sentence the Travel Malawi opening must not have: the writer naming themselves (the signature does), or posing as a traveller looking for a stay. */
@@ -91,12 +111,18 @@ function pm_tm_clean_opening(string $s): string
         return '';
     }
     $s = str_replace('!', '.', $s);
-    $s = (string)preg_replace('/,?\s+while (looking|searching|browsing)\b[^.?]*/iu', '', $s); // "I came across X while looking at stays" keeps "I came across X"
-    $s = implode(' ', array_slice(array_values(array_filter((array)preg_split('/(?<=[.?])\s+/u', $s), fn($x) => !preg_match(PM_TM_OPENING_BANNED, (string)$x) && str_word_count((string)$x) >= 7)), 0, 2));
+    $keep = [];
+    foreach ((array)preg_split('/(?<=[.?])\s+/u', $s) as $x) {
+        $cut = (string)preg_replace('/,?\s+while (looking|searching|browsing)\b[^.?]*/iu', '', (string)$x); // "I came across X while looking at stays" keeps "I came across X", when that still says something
+        if (($cut === $x || str_word_count($cut) >= 7) && !preg_match(PM_TM_OPENING_BANNED, $cut)) {
+            $keep[] = $cut;
+        }
+    }
+    $s = implode(' ', array_slice($keep, 0, 2));
     if ($s === '') {
         return '';
     }
-    return count((array)preg_split('/\s+/u', $s, -1, PREG_SPLIT_NO_EMPTY)) > 40 ? '' : $s;
+    return count((array)preg_split('/\s+/u', $s, -1, PREG_SPLIT_NO_EMPTY)) > 28 ? '' : $s; // room for the fixed part inside 190 words
 }
 
 /** The first email to a stay: the Travel Malawi default message (Sales > Targeting and messages) with the line the AI wrote in place of {opening}. $template builds the starting text of that message instead, with {placeholders} left in. */
@@ -134,10 +160,13 @@ function pm_tm_write(array $leads): array
     $subjectLine = function_exists('pm_email_exp_example') ? pm_email_exp_example('travel') : '';
     $system = pm_agents_company_brief('tiny') . "\nYou are writing outreach for {$s['company_name']}, a business inviting places to stay to list with it. For each item write three things. "
         . 'email_subject: under 45 characters, specific to them, truthful, in the subject_style given, written like a normal subject line: a capital letter first and a capital letter on every town, area, road, person and business name (for example "Rooms near the Shire River barrage?"), every other word in ordinary lowercase, no full stop, no exclamation marks, no word in ALL CAPS except an acronym such as VAT. '
-        . 'opening: one or two short sentences, at most 40 words: ONE true observation about their place from the evidence or research, and that we are writing to invite them to list. '
+        . 'Our aim, which every message must make a host excited about: ' . PM_TM_AIM . ' Hosts are partners building it with us, not customers. '
+        . 'opening: the first lines a busy owner reads, so they must hook: one or two short sentences, at most 30 words: ONE true, specific observation about their place from the evidence or research, then that we would love them to be part of it. '
+        . 'The very next paragraph is the aim above, word for word, so lead into it and never repeat it. '
         . 'Never give your own name or introduce yourself (the signature does that). We are a business offering a service: never say or suggest that you were looking for a place to stay, planning a trip, travelling or a possible guest. '
         . 'No greeting, no sign-off, no promises, no numbers, no prices, no link, no exclamation marks. '
-        . 'whatsapp: 30 to 50 words, one paragraph: a greeting with the first name if given, that this is ' . $s['company_name'] . ' (never your own name: the sign-off carries it), the gain (direct bookings with no commission; guests chat and video call with them before they come; their reviews from different sources shown together, so guests trust them), one easy question. Never pose as a traveller. '
+        . 'whatsapp: 35 to 60 words, one paragraph: a greeting with the first name if given, that this is ' . $s['company_name'] . ' (never your own name: the sign-off carries it), then straight away the aim (we are building Malawi\'s own directory of stays together with hosts and would love them in it; free, no commission, unlike Booking.com), one gain (guests chat and video call them before they come, or their reviews from different sources shown together), one easy question. Never pose as a traveller. '
+        . 'email_subject: make an owner curious to open it, for example about joining Malawi\'s own directory of stays, within the subject_style. '
         . 'The rest of the email (what the platform is, the benefits, the set-up steps, the link and that it is free) is a fixed text the app adds, so never describe it. '
         . ($subjectLine !== '' ? $subjectLine . ' ' : '') . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'] ?? '', 'city' => $l['city'] ?? '', 'contact' => $l['contact'] ?? '', 'evidence' => array_slice((array)($l['evidence'] ?? []), 0, 2),
@@ -161,7 +190,7 @@ function pm_tm_write(array $leads): array
         $first = pm_tm_first_name($l);
         $wa = $txt($x['whatsapp'] ?? '', 'whatsapp');
         if ($wa === '') {
-            $wa = 'Hello' . ($first !== '' ? " $first" : '') . ', this is Travel Malawi. We help independent stays take direct bookings with no commission, and your reviews from different sources are shown together so guests trust you. Listing is free for now. May I send you the details?';
+            $wa = 'Hello' . ($first !== '' ? " $first" : '') . ', this is Travel Malawi. ' . str_replace('{name}', trim((string)$l['name']) ?: 'your place', PM_TM_WA_AIM) . ' May I send you the details?';
         }
         $res[] = ['id' => $l['id'], 'email_subject' => $subject, 'email_body' => pm_tm_email_compose($l, pm_tm_clean_opening($txt($x['opening'] ?? ''))), 'whatsapp' => $wa];
     }
@@ -271,9 +300,74 @@ function pm_tm_fix_drafts(): int
 /** Runs pm_tm_fix_drafts once per data folder (the first page opened after the update), so a server copy is fixed without anyone pressing anything. */
 function pm_tm_fix_once(): void
 {
-    if (!empty(pm_load('migrations', fn() => [])['tm_opening_v1'])) {
-        return;
+    $done = pm_load('migrations', fn() => []);
+    if (empty($done['tm_opening_v1'])) {
+        pm_tm_fix_v1();
     }
+    if (empty($done['tm_aim_v2'])) {
+        $n = pm_tm_aim_v2();
+        pm_update('migrations', fn(array $m) => $m + ['tm_aim_v2' => date('c') . " ($n drafts)"], fn() => []);
+    }
+}
+
+/** Earlier wording swapped for the hook (PM_TM_SWAP), and the earlier fallback opening for the new one. */
+function pm_tm_swap_text(string $t): string
+{
+    $t = strtr(str_replace("\r", '', $t), PM_TM_SWAP);
+    $t = (string)preg_replace('/^I am with Travel Malawi\.\s+/mu', '', $t); // the next paragraph says who we are
+    return (string)preg_replace('/^I am writing to invite (.{2,120}?) to take bookings directly from travellers\.$/mu', 'I would love $1 to be part of something new.', $t);
+}
+
+/** The hook reaches what was saved before it: the default message, the starting text, the brain's "about" (when never changed by hand), and unsent Travel Malawi drafts. Returns how many drafts changed. */
+function pm_tm_aim_v2(): int
+{
+    pm_update('message_defaults', function (array $all) {
+        foreach (['email_body', 'whatsapp'] as $k) {
+            if (isset($all['travel'][$k])) {
+                $all['travel'][$k] = pm_tm_swap_text((string)$all['travel'][$k]);
+            }
+        }
+        return $all;
+    }, fn() => []);
+    pm_update('settings', function (array $s) {
+        if (isset($s['travel']['host_email']) && is_array($s['travel']['host_email'])) {
+            array_walk_recursive($s['travel']['host_email'], function (&$v) {
+                $v = is_string($v) ? pm_tm_swap_text($v) : $v;
+            });
+        }
+        $br = (array)($s['travel']['brain'] ?? []);
+        if (trim((string)($br['about'] ?? '')) === 'A direct booking platform connecting travellers with independent lodges, B&Bs, cottages, guest houses and safari camps across Malawi (stays only).') {
+            $s['travel']['brain']['about'] = pm_brain_defaults('travel')['about'];
+        }
+        if (trim((string)($br['facts'] ?? '')) !== '' && !preg_match('/different sources/i', (string)$br['facts'])) {
+            $s['travel']['brain']['facts'] = rtrim((string)$br['facts']) . "\nA listing shows the stay's reviews from different sources side by side, not only the platform's own; that openness is why travellers trust the place and book";
+        }
+        return $s;
+    }, 'pm_default_settings');
+    $n = 0;
+    pm_update('leads', function (array $cur) use (&$n) {
+        foreach ($cur as $id => $l) {
+            $d = (array)($l['drafts'] ?? []);
+            if (($l['brand'] ?? 'promanaged') !== 'travel' || !empty($l['sent']) || !$d) {
+                continue;
+            }
+            $b = pm_tm_swap_text((string)($d['email_body'] ?? ''));
+            $w = pm_tm_swap_text((string)($d['whatsapp'] ?? ''));
+            if ($b !== (string)($d['email_body'] ?? '') || $w !== (string)($d['whatsapp'] ?? '')) {
+                $cur[$id]['drafts']['email_body'] = $b;
+                $cur[$id]['drafts']['whatsapp'] = $w;
+                pm_lead_note($cur[$id], 'Draft updated: it now opens with the directory we are building together');
+                $n++;
+            }
+        }
+        return $cur;
+    }, fn() => []);
+    return $n;
+}
+
+/** The first fix: no sender name or traveller pose in openings, and the reviews line. */
+function pm_tm_fix_v1(): void
+{
     pm_update('message_defaults', function (array $all) { // the saved default message: the reviews line, and a WhatsApp that names the business, not the sender
         if (empty($all['travel'])) {
             return $all;
