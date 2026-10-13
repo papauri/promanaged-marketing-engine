@@ -27,6 +27,7 @@ $csrf = $_SESSION['csrf'];
 
 $settings = pm_settings();
 $tpl = pm_template();
+pm_tm_fix_once(); // Travel Malawi drafts from before the no-name, no-traveller opening rule
 $tab = $_GET['tab'] ?? 'home';
 $here = $tab . ($tab === 'social' && isset($_GET['view']) ? '&view=' . preg_replace('/[^a-z]/', '', (string)$_GET['view']) : '');
 $moved = pm_ui_moved($here);
