@@ -731,14 +731,8 @@ try {
     }
     pm_agent_log('Swarm', sprintf('Run finished: %d new leads, %d qualified, %d drafted, %d follow-ups, %d errors', $stats['added'], $stats['qualified'], $stats['drafted'], $stats['followups'], $stats['errors']), $stats['errors'] > 0);
     if ($only === '') {
-        try { // new drafts and follow-ups changed what is waiting: bring today's strategy up to date
-            pm_director_brief(true);
-        } catch (Throwable) {
-        }
-        try { // and the engagement playbook (reused when the people and leads are the same)
-            if (pm_social_cfg($brand)['ready']) {
-                pm_agent_engage_playbook($brand);
-            }
+        try { // today's engagement playbook, unless the morning scheduler already wrote it (one a day)
+            pm_playbook_ensure($brand);
         } catch (Throwable) {
         }
     }

@@ -203,7 +203,7 @@ function pm_director_social(string $brand): array
 }
 
 /**
- * Today's strategy for a brand: cached for the day, one cheap AI call. $force re-asks.
+ * Today's strategy for a brand: written once a day (the morning run, or the first page opened if the run did not happen), one cheap AI call. $force re-asks.
  * If the AI call fails, today's date and headline are NOT saved: the previous brief is kept and returned with an 'error'
  * (and the call is not repeated for 30 minutes).
  */
@@ -219,11 +219,9 @@ function pm_director_brief(bool $force = false): array
     $all = pm_load('director', fn() => []);
     $mine = $all[$brand] ?? [];
     $stats = pm_pipeline_stats($brand); // the numbers are always live; only the written advice is cached
-    $changed = abs((int)$stats['leads'] - (int)($mine['stats']['leads'] ?? 0)) >= 3 || (int)$stats['signed'] !== (int)($mine['stats']['signed'] ?? 0);
-    // the work on the desk (replies waiting, follow-ups due, drafts, the queue, what was sent) moved since the advice was written: it is rewritten, at most every 90 minutes
     $sig = md5(json_encode([$stats['awaiting_reply'] ?? 0, $stats['followups_due'] ?? 0, $stats['followups_to_draft'] ?? 0, $stats['drafts_unsent'] ?? 0, $stats['approved_waiting'] ?? 0, $stats['sent_today'] ?? 0, $stats['contacted'] ?? 0, $stats['replied'] ?? 0]));
-    $moved = ($mine['sig'] ?? '') !== $sig && time() - (int)($mine['at'] ?? 0) >= 5400;
-    if (!$force && ($mine['date'] ?? '') === date('Y-m-d') && !empty($mine['headline']) && !$changed && !$moved) {
+    // the day is studied once, in advance (the morning run): opening a page or doing the work never asks again; "Refresh" ($force) does
+    if (!$force && ($mine['date'] ?? '') === date('Y-m-d') && !empty($mine['headline'])) {
         $mine['stats'] = $stats;
         return $mine;
     }

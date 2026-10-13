@@ -409,8 +409,12 @@ function pm_ai_cache_key(string $system, string $user, bool $web, int $maxTokens
         return '';
     }
     foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 12) as $f) {
-        if (in_array($f['function'] ?? '', PM_AI_FRESH, true)) {
+        $fn = (string)($f['function'] ?? '');
+        if (in_array($fn, PM_AI_FRESH, true)) {
             return '';
+        }
+        if (str_starts_with($fn, 'pm_agent_')) { // the nearest agent decides: a Researcher run inside the playbook still uses the memory
+            break;
         }
     }
     return sha1(implode("\x1f", [pm_brand(), $web ? 'web' : 'text', $tier, $maxTokens, $system, $user]));

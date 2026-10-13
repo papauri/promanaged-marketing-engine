@@ -861,11 +861,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $back('The AI needs a key in .env first.', 'err');
             }
             @set_time_limit(300);
-            $fr = pm_followup_draft_now();
-            try {
-                pm_director_brief(true); // the work on the desk changed: the strategy follows
-            } catch (Throwable) {
-            }
+            $fr = pm_followup_draft_now(); // today's strategy was written in the morning and is not asked again (Refresh does)
             $back(!$fr['due'] ? 'No follow-ups are due without a draft.' : $fr['drafted'] . ' follow-up' . ($fr['drafted'] === 1 ? '' : 's') . ' drafted with AI' . ($fr['failed'] ? ', ' . $fr['failed'] . ' could not be (try again)' : '') . '. Read them, then send.', $fr['failed'] && !$fr['drafted'] ? 'err' : 'ok');
         }
         if ($do === 'fix_subjects') { // capital letters and names in the subject lines of unsent drafts (nothing is sent; hand-edited drafts are left alone)
