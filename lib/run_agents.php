@@ -6,13 +6,13 @@
  * Only this script writes leads.json for a run, so parallel workers never collide. One run per brand at a time (data/run_<brand>.lock).
  * --dry: take the lock, then stop before any AI call (used to test the lock).
  */
-if (PHP_SAPI !== 'cli') {
+if (PHP_SAPI !== 'cli' && !defined('PM_RUN_HERE')) { // the web runs it only through pm_agents_run_here() (a host that blocks background work)
     http_response_code(404);
     exit;
 }
-require dirname(__DIR__) . '/vendor/autoload.php';
-require __DIR__ . '/agents.php';
-require __DIR__ . '/engage.php';
+require_once dirname(__DIR__) . '/vendor/autoload.php';
+require_once __DIR__ . '/agents.php';
+require_once __DIR__ . '/engage.php';
 require_once __DIR__ . '/swarm.php';
 set_time_limit(0);
 
@@ -537,7 +537,7 @@ try {
     }
     $rs = array_values($rs);
     if (($cfg['enabled']['research'] ?? true) && $rs) {
-        $progress("Studying today's " . count($rs) . ' leads: business, news, names and contacts');
+        $progress("Researchers studying today's " . count($rs) . ' leads: business, news, names and contacts');
         $jobs = array_map(fn($l) => ['agent' => 'research', 'lead' => $l], $rs);
         foreach (pm_swarm($jobs, $cfg['parallel'], $tmp, $beat) as $i => $r) {
             $id = $rs[$i]['id'];

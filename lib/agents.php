@@ -2138,6 +2138,39 @@ function pm_php_binary(): string
     return preg_match('/php(\d|-cgi)?(\.exe)?$/i', PHP_BINARY) && !str_contains(strtolower(PHP_BINARY), 'fpm') ? PHP_BINARY : 'php';
 }
 
+/**
+ * The daily run inside this web request, after the page has been answered: the browser gets its redirect at once and the run carries on (progress shows on Leads).
+ * For hosts that block exec(). The session is released first, so the team can keep working while it runs.
+ */
+function pm_agents_run_here(string $brand, string $mode = ''): void
+{
+    ignore_user_abort(true);
+    @set_time_limit(0);
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
+    if (!headers_sent()) {
+        header('Content-Length: ' . ob_get_length());
+        header('Connection: close');
+    }
+    while (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
+    @flush();
+    if (function_exists('fastcgi_finish_request')) {
+        fastcgi_finish_request();
+    } elseif (function_exists('litespeed_finish_request')) {
+        litespeed_finish_request();
+    }
+    $argv = array_values(array_filter(['run_agents.php', $brand, $mode], fn($a) => $a !== ''));
+    if (!defined('PM_RUN_HERE')) {
+        define('PM_RUN_HERE', true);
+    }
+    pm_brand_set($brand);
+    pm_run_state(['state' => 'idle', 'beat' => 0]); // the run takes over the state it set aside when the button was pressed
+    require __DIR__ . '/run_agents.php';
+}
+
 /** Start the daily run in the background without blocking the web page. */
 function pm_agents_launch(string $mode = ''): bool
 {
@@ -2145,8 +2178,14 @@ function pm_agents_launch(string $mode = ''): bool
     if (($state['state'] ?? '') === 'running') {
         return false;
     }
-    if (!pm_can_spawn()) { // a host that blocks exec(): the scheduled task (cron) runs the agents instead
-        return false;
+    if (!pm_can_spawn()) { // a host that blocks exec(): from a page, the run starts right after the page is answered, in the same PHP process (no cron needed)
+        if (PHP_SAPI === 'cli') {
+            return false;
+        }
+        $brand = pm_brand();
+        pm_run_state(['state' => 'running', 'started' => date('Y-m-d H:i:s'), 'phase' => 'starting', 'beat' => time()]);
+        register_shutdown_function('pm_agents_run_here', $brand, $mode);
+        return true;
     }
     $script = __DIR__ . '/run_agents.php';
     $php = pm_php_binary();
