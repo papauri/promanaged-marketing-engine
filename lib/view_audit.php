@@ -58,6 +58,10 @@ echo '</nav>';
 </form>
 <?php
 $aStart = pm_ta_log_start();
+$aDir = pm_ta_dir();
+if (!(is_dir($aDir) ? is_writable($aDir) : is_writable(PM_DATA))): ?>
+  <div class="flash err">The activity log cannot be saved on this server, so nobody's activity is being recorded. In cPanel > File Manager, make the folder <code>data</code> (and <code>data/audit</code> if it exists) writable: permissions 755, or 775.</div>
+<?php endif;
 if ($asec !== 'followups' && ($aStart === '' || $aStart > $ar['from'] . ' 00:00:00')): ?>
   <p class="hint">The activity log started <?= $aStart === '' ? 'just now' : pm_h(date('j M Y \a\t H:i', strtotime($aStart))) ?>: nothing before that was recorded. Follow-ups are read from the leads, so they go back to the start.</p>
 <?php endif;
@@ -69,6 +73,13 @@ if ($asec === ''):
         $rows = array_values(array_filter($rows, fn($x) => ($x['brand'] ?? '') === $aBrand || in_array($x['kind'] ?? '', ['signin', 'signin_fail', 'signout'], true)));
     }
     $people = pm_ta_people($rows);
+    $seen = array_column($people, 'user');
+    foreach (pm_users() as $un => $uu) { // every account is listed, so someone who did nothing in the period stands out
+        if (!in_array($un, $seen, true)) {
+            $people[$uu['name']] = ['name' => $uu['name'], 'user' => $un, 'signins' => 0, 'fails' => 0, 'actions' => 0, 'failed_actions' => 0, 'views' => 0, 'risky' => 0, 'late' => 0,
+                'last' => '', 'minutes' => 0, 'areas' => [], 'idle' => $uu['on'] ? 'Nothing in this period' : 'Account turned off'];
+        }
+    }
     $kind = (string)($_GET['kind'] ?? 'team');
     $who = (string)($_GET['who'] ?? '');
     $q = mb_strtolower(trim((string)($_GET['q'] ?? '')));
@@ -112,7 +123,7 @@ if ($asec === ''):
       <table class="grid"><thead><tr><th>Person</th><th>Last seen</th><th class="num">Sign-ins</th><th class="num">Active</th><th class="num">Actions</th><th>Mostly</th><th class="num">Pages</th><th class="num">Failed</th><th class="num">Deletes, accounts</th><th class="num">Out of hours</th></tr></thead><tbody>
       <?php foreach ($people as $p): arsort($p['areas']); ?>
         <tr><td class="nowrap"><?= pm_auth_av(['username' => $p['user'] ?: $p['name'], 'name' => $p['name']]) ?> <a href="<?= pm_h($aLink(['who' => $p['user'], 'kind' => 'team'] + ['range' => $ar['preset'], 'from' => $ar['from'], 'to' => $ar['to']])) ?>"><?= pm_h($p['name']) ?></a></td>
-          <td class="nowrap muted"><?= $p['last'] !== '' ? pm_h(date('j M H:i', strtotime($p['last']))) : '–' ?></td>
+          <td class="nowrap muted"><?= $p['last'] !== '' ? pm_h(date('j M H:i', strtotime($p['last']))) : (!empty($p['idle']) ? '<span class="chip warn">' . pm_h($p['idle']) . '</span>' : '–') ?></td>
           <td class="num"><?= $p['signins'] ?><?= $p['fails'] ? ' <span class="chip warn">' . $p['fails'] . ' failed</span>' : '' ?></td>
           <td class="num nowrap"><?= pm_h(pm_ta_dur($p['minutes'])) ?></td>
           <td class="num"><?= $p['actions'] ?></td>
