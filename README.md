@@ -2,14 +2,15 @@
 
 A PHP app the marketing team uses every day to find leads, write to them, follow up, send proposals and run the social pages. It handles more than one business.
 
-Nothing goes to a customer until a person approves it.
+Nothing goes to a customer until a person approves it. The AI runs on the cheapest model that does the job. Pages never wait for it, and its cost is shown in US dollars with a daily limit.
 
 ## What it does
 
 - **Sales:** finds businesses, drafts the first email and the WhatsApp message, and handles follow-ups and replies. Proposals are signed online.
-- **Social:** plans posts, publishes them, and handles comments, messages and ads.
+- **Social:** plans posts and publishes them. One message can become a campaign with stories, a carousel, a WhatsApp broadcast and a printable flyer. It also handles comments, messages and ads.
 - **Brand:** covers, profile pictures, profile text and the voice the writers follow.
-- **Insights:** what brought enquiries and wins.
+- **Insights:** what brought enquiries and wins, and the next moves for each business.
+- **Any business:** add one by describing it. The AI reads its website and social pages, then builds it up for you to approve.
 - **Operations:** business details, email, connections, health checks and team accounts.
 - **Audit** (admin only): an activity log, follow-up counts and a weekly review.
 

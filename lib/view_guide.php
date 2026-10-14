@@ -18,13 +18,14 @@ $team = [
         'Open the ' . $a('?tab=home', 'Overview') . '. "Needs you now" lists what is waiting.',
         'Answer replies first: ' . $a('?tab=agents&status=awaiting', 'Sales › Leads › Needs reply') . '.',
         'Send the follow-ups that are due. They are in the Today list on ' . $a('?tab=agents', 'Leads') . '.',
-        'Read the new drafts in ' . $a('?tab=agents&status=drafted', 'Draft ready') . ', tick Approve for sending on the good ones, then press Approve selected.',
+        'Read the new drafts in ' . $a('?tab=agents&status=drafted', 'Draft ready') . ', tick Approve for sending on the good ones (or Select all on this page once you have read them), then press Approve selected. To hold them until a set time, fill in Not before first.',
         'Work the ' . $a('?tab=whatsapp', 'WhatsApp queue') . '.',
         'Approve this week\'s posts in ' . $a('?tab=social', 'Social › Plan') . ' and answer people in ' . $a('?tab=social&view=inbox', 'Social › Inbox') . '.',
         'Add a note to every lead you work on. The admin reads them.',
     ]],
     'leads' => ['Leads', [
         'To add a business, type its name in the Find box and press Find. To find new businesses, press Run the agents.',
+        'Leads come 10 to a page. Use Previous and Next under the list. An "open" link to a lead takes you straight to its page.',
         'Open a lead to see what we know about the business, the conversation and the notes on the left, and the message on the right.',
         'Change the email or WhatsApp text if needed and press Save edits. Send me a test email shows you exactly what they will get.',
         'Send email sends it now. Approve for sending puts it in the queue, and it goes out during the ' . $a('?tab=targeting#sendschedule', 'sending hours') . '.',
@@ -57,6 +58,8 @@ $team = [
     'social' => ['Social', [
         $a('?tab=social', 'Plan') . ': Plan posts writes a week of posts. Read and edit them, add a photo, then press Approve. Approved posts go out at their set time.',
         $a('?tab=social&view=leadposts', 'Lead posts') . ': turn an offer into posts. People who comment the keyword become leads.',
+        $a('?tab=social&view=campaign', 'Campaigns') . ': one message becomes a feed post, 3 story frames for Facebook and Instagram, a carousel, a WhatsApp Status pack, a WhatsApp broadcast with a picture, and a flyer (picture, A4 and A5 PDF with a QR code). Check each item, change the words if needed, then press Approve all. The feed post and the stories go out together, the carousel the next day.',
+        'Campaign pictures: the drawn card and your own photo are free, and so is an AI picture made before. A new AI picture costs about 5 US cents. AI pictures show places and moods only, never your real rooms, products or people.',
         $a('?tab=social&view=inbox', 'Inbox') . ': comments and messages, each with a draft answer for you to check. "Answered by" shows who replied. A comment someone already answered, or a conversation answered in the last 30 minutes, is not answered twice.',
         $a('?tab=social&view=channels', 'Channels') . ': posts for places the app cannot post to. Press "I\'ll post this" so nobody else does, publish it there, then press Mark posted.',
         $a('?tab=social&view=ads', 'Ads') . ': paid campaigns. They are created paused and cost nothing until you start them.',
@@ -68,6 +71,8 @@ $team = [
     ]],
     'results' => ['Results', [
         $a('?tab=social&view=results', 'Insights › Results') . ': what brought enquiries and wins.',
+        $a('?tab=targeting#advisor', 'Sales › Targeting › What is selling') . ': which kinds of buyer, towns, offers and channels get answers and deals, why deals were lost, and 3 to 5 next moves for the week. A suggested new offer has a Make it an offer button that sends it to Lead posts.',
+        "The morning run writes the day's brief on the " . $a('?tab=home', 'Overview') . " and the engagement playbook. Opening a page never asks the AI. To get a fresh one, press Refresh (brief) or Make today's playbook. If nothing has changed, you get the same advice at no cost.",
         $a('?tab=social&view=numbers', 'Enter numbers') . ': type in numbers the app cannot read by itself.',
     ]],
 ];
@@ -82,8 +87,9 @@ $admin = [
         $a('?tab=targeting', 'Sales › Targeting and messages') . ': who to look for, the daily limits, the ' . $a('?tab=targeting#sendschedule', 'sending hours') . ' and the ' . $a('?tab=targeting#defaultmsg', 'default first message') . '.',
         $a('?tab=settings&section=business', 'Business details') . ': name, contacts, logo and documents to share.',
         $a('?tab=settings&section=email', 'Email') . ': the mailbox each business sends from. Check the mail login after any change.',
-        $a('?tab=settings&section=connections', 'Connections') . ': Facebook, WhatsApp, other platforms and the AI keys.',
-        $a('?tab=business&new=1', 'Add a business') . ': three questions to start one. It sends nothing until you switch it on.',
+        $a('?tab=settings&section=connections', 'Connections') . ': Facebook, WhatsApp, other platforms and the AI keys. It also shows what the AI has cost in US dollars, today and over 30 days, and the daily spend limit (1 US dollar unless you change it). At the limit the AI stops until the next day.',
+        $a('?tab=business&new=1', 'Add a business') . ': any kind of business. Give its name and what it does, plus its website and social pages if it has them. The AI reads them, searches the web for its listings, drafts its profile and who to sell to, and you check everything before it is saved.',
+        'After it is created, the AI builds it up: it saves its social pages, draws its profile pictures and covers, suggests free offers, drafts the first posts and looks for its first leads. Follow the steps on its Build-up page (Operations › Businesses › Build-up). Nothing is sent or published until you approve it.',
     ]],
     'audit' => ['Audit', [
         $a('?tab=audit', 'Activity log') . ': every sign-in, failed sign-in, action and page opened, by person. Filter it by period, person or business, or download it as CSV.',
@@ -95,6 +101,8 @@ $admin = [
         'Clear the late leads in ' . $a('?tab=audit&section=followups', 'Follow-ups') . ', or reassign them.',
         'Look for red rows in ' . $a('?tab=settings&section=health', 'Health and backups') . '. Fix them the same day.',
         'Check the ' . $a('?tab=template', 'prices') . ' and the ' . $a('?tab=targeting#defaultmsg', 'default first message') . ' are still right.',
+        "Read each business's " . $a('?tab=targeting#advisor', 'next moves') . ' and act on one of them.',
+        'Glance at the AI cost on ' . $a('?tab=settings&section=connections', 'Connections') . '. A normal week costs a few cents.',
     ]],
 ];
 
