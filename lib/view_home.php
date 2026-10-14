@@ -53,6 +53,12 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
   <p class="hq-headline"><?= pm_h((string)$bd['headline']) ?></p>
   <?php if ($bd['you']): ?><div class="btns"><?php foreach ($bd['you'] as [$yt, $yh, $yu]): ?><a class="btn small<?= $yu ? ' primary' : '' ?>" href="<?= pm_h($yh) ?>"><?= pm_h($yt) ?></a><?php endforeach; ?></div><?php endif; ?>
   <ul class="talklist"><?php foreach ($bd['reports'] as [$rd, $rt, $rh]): ?><li><time></time><b><?= pm_h(pm_talk_name($rd)) ?>:</b><span><?= $rh !== '' ? '<a href="' . pm_h($rh) . '">' . pm_h($rt) . '</a>' : pm_h($rt) ?></span></li><?php endforeach; ?></ul>
+  <?php if (!empty($bd['goals'])): uasort($bd['goals'], fn($a, $b) => $a['ok'] <=> $b['ok']); ?>
+  <details id="goals"<?= array_filter($bd['goals'], fn($x) => !$x['ok']) ? ' open' : '' ?>><summary><b>Each head's goal</b> <span class="muted t-sm">· <?= count(array_filter($bd['goals'], fn($x) => $x['ok'])) ?> of <?= count($bd['goals']) ?> on track</span></summary>
+    <?php if (!empty($bd['chain'])): ?><p class="hint mt-0"><?= pm_h((string)$bd['chain']) ?></p><?php endif; ?>
+    <ul class="talklist"><?php foreach ($bd['goals'] as $gd => $gx): ?><li><time><?= $gx['ok'] ? 'on track' : '<b>behind</b>' ?></time><b><?= pm_h(pm_talk_name($gd)) ?>:</b><span><?= pm_h($gx['goal'] . ' · now ' . $gx['have'] . '.' . ($gx['why'] !== '' ? ' ' . $gx['why'] : '') . ($gx['ask_to'] !== '' ? ($gx['ask_to'] === 'owner' ? ' Asks you: "' : ' Asked ' . pm_talk_name($gx['ask_to']) . ': "') . $gx['ask'] . '"' : '')) ?></span></li><?php endforeach; ?></ul>
+  </details>
+  <?php endif; ?>
   <?php if ($bd['checks']): ?><p class="hint"><b><?= pm_h(pm_agent_first('director')) ?> checked the board against what we have:</b></p><ul class="t-sm"><?php foreach ($bd['checks'] as [$ct, $ch]): ?><li><a href="<?= pm_h($ch) ?>"><?= pm_h($ct) ?></a></li><?php endforeach; ?></ul><?php endif; ?>
 </section>
 <?php endif; ?>

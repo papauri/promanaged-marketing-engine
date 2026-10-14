@@ -294,8 +294,9 @@ function pm_director_brief(bool $force = false, bool $ask = true): array
     }
     $system .= ' Also include in that JSON the key "orders": up to 4 short orders to the departments that will move the goal most today, as [{"to":"scouts|research|writers|followup|social|replies","say":"one sentence, specific"}]; '
         . 'they act on them automatically, and nothing goes out without the owner\'s approval. "team_notes" is what the departments told you: use it. '
+        . '"departments" is each head\'s goal and where it stands: order the heads that are BEHIND first, and where one head waits on another, tell the one it waits on. '
         . 'Also include "meeting": the morning sit-down that led to the orders, 4 to 6 lines [{"who":"scouts|research|writers|followup|replies|social|advisor|director","says":"one short sentence in the first person, from the numbers and the notes"}], the director speaking last.';
-    $user = json_encode(['brand' => $brand, 'today' => date('Y-m-d'), 'firm_goal' => pm_firm_goal($brand)['line'], 'market_and_needs' => pm_firm_line($brand), 'team_notes' => pm_tb_line($brand, 'director', 6), 'what_wins' => pm_win_line($brand), 'pipeline' => $ai, 'target_types' => $cfg['sectors'], 'daily_send_cap' => $cfg['send_cap']] + ($social ? ['social' => $social] : [])
+    $user = json_encode(['brand' => $brand, 'today' => date('Y-m-d'), 'firm_goal' => pm_firm_goal($brand)['line'], 'market_and_needs' => pm_firm_line($brand), 'team_notes' => pm_tb_line($brand, 'director', 6), 'departments' => function_exists('pm_heads_line') ? pm_heads_line($brand) : '','what_wins' => pm_win_line($brand), 'pipeline' => $ai, 'target_types' => $cfg['sectors'], 'daily_send_cap' => $cfg['send_cap']] + ($social ? ['social' => $social] : [])
         + (function_exists('pm_adv_director_lines') && ($lessons = pm_adv_director_lines($brand)) ? ['lessons' => $lessons] : []), JSON_UNESCAPED_UNICODE);
     $out = null;
     $err = '';

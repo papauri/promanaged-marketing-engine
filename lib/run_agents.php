@@ -195,6 +195,13 @@ try {
     $leads = array_filter($all, $isMine);
     $loaded = true;
 
+    // ---- The heads check their goals against the month's goal and ask each other for help where they are behind (no AI), so the Director hears it ----
+    if ($only === '') try {
+        pm_heads_check($brand);
+    } catch (Throwable $e) {
+        pm_agent_log('Director', 'The heads could not check their goals: ' . mb_substr($e->getMessage(), 0, 120), true);
+    }
+
     // ---- Director: today's strategy (one small call) ----
     if ($only === '') try {
         $brief = pm_director_brief();
@@ -562,8 +569,12 @@ try {
     $newIds = $only === 'names'
         ? array_slice(array_keys(array_filter($leads, fn($l) => !in_array($l['status'], ['won', 'lost', 'optout'], true) && empty($l['contact']) && empty($l['contact_hint'])
             && (($c = strtotime((string)($l['contact_checked'] ?? ''))) === false || $c < strtotime('-30 days')))), 0, 24) // the website read is free and names are searched six to a call: twice as many as before
-        : array_slice(array_keys(array_filter($leads, fn($l) => $worth($l) && (empty($l['email']) || empty($l['contact']))
-            && (($c = strtotime((string)($l['contact_checked'] ?? ''))) === false || $c < strtotime('-30 days')))), 0, 10); // a lead searched lately is not paid for again
+        : array_keys(array_filter($leads, fn($l) => $worth($l) && (empty($l['email']) || empty($l['contact']))
+            && (($c = strtotime((string)($l['contact_checked'] ?? ''))) === false || $c < strtotime('-30 days')))); // a lead searched lately is not paid for again
+    if ($only !== 'names') { // the Writers asked for emails: the best leads with no email go first
+        in_array('writers', pm_heads_asked($brand, 'contact'), true) && usort($newIds, fn($a, $b) => [!empty($leads[$a]['email']), -($leads[$a]['score'] ?? 0)] <=> [!empty($leads[$b]['email']), -($leads[$b]['score'] ?? 0)]);
+        $newIds = array_slice($newIds, 0, 10);
+    }
     if ($cfg['enabled']['contact'] && $newIds) {
         $progress('Contact Finders on ' . count($newIds) . ' leads');
         $jobs = array_map(fn($id) => ['agent' => 'contact', 'lead' => $leads[$id], 'batch_names' => true], $newIds); // their own website first (free); a name still missing is searched below, six leads to one call

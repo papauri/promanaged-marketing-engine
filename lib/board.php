@@ -5,7 +5,8 @@
  * connected, nothing is stuck in the Outbox, nobody is left unanswered) and puts the owner's few things first. Written by code from stored data: no AI.
  * The reports go into the agents' conversation (each head to the Director), so the Audit shows the stand-up. The Overview rebuilds it quietly when
  * it is over an hour old, so it always shows what we have.
- * Data: data/board.json {brand: {at, standup (when the heads last reported), headline, you[[text, href, urgent, dept]], reports[[dept, text, href]], checks[[text, href]]}}.
+ * Each head is also checked against its goal for the month (lib/heads.php), and the ones behind say so at the stand-up.
+ * Data: data/board.json {brand: {at, standup (when the heads last reported), headline, you[[text, href, urgent, dept]], reports[[dept, text, href]], checks[[text, href]], goals{dept: {...}}, chain}}.
  */
 
 /** Every head's report and the Director's checks, from what is stored now. */
@@ -79,9 +80,13 @@ function pm_board_build(string $brand): array
         ($dir['date'] ?? '') !== '' && ($dir['date'] ?? '') < date('Y-m-d', strtotime('-2 days')) && $chk[] = ['My strategy is ' . max(2, (int)((time() - strtotime((string)$dir['date'])) / 86400)) . ' days old.', '?tab=home#brief'];
         ($listen['date'] ?? '') !== $today && $ranToday && $chk[] = ['Social has not held today\'s huddle yet.', '?tab=social'];
 
+        $goals = function_exists('pm_heads_goals') ? pm_heads_goals($brand) : ['goals' => [], 'line' => ''];
+        $late = array_filter($goals['goals'], fn($x) => !$x['ok']);
+        $late && $chk[] = [count($late) . ' of ' . count($goals['goals']) . ' heads are behind their goal; they have asked for help where someone holds them up.', '?tab=home#goals'];
+
         $headline = $you ? count($you) . ' thing' . (count($you) === 1 ? '' : 's') . ' for you today: ' . strtolower(implode(', ', array_column(array_slice($you, 0, 3), 0))) . '.'
             : 'Nothing needs you right now: the team is working.';
-        return ['at' => date('Y-m-d H:i'), 'headline' => $headline, 'you' => $you, 'reports' => $rep, 'checks' => $chk, 'ran_today' => $ranToday];
+        return ['at' => date('Y-m-d H:i'), 'headline' => $headline, 'you' => $you, 'reports' => $rep, 'checks' => $chk, 'ran_today' => $ranToday, 'goals' => $goals['goals'], 'chain' => $goals['line']];
     } finally {
         pm_brand_set($was);
     }
@@ -95,6 +100,9 @@ function pm_board_refresh(string $brand, bool $standup = false): array
     if ($standup && function_exists('pm_talk')) {
         foreach ($b['reports'] as [$dept, $text]) {
             $dept !== 'director' && pm_talk($brand, $dept, $text, 'director');
+        }
+        foreach ((array)($b['goals'] ?? []) as $dept => $x) { // each head against its goal, and who it asked
+            $dept !== 'director' && !$x['ok'] && pm_talk($brand, $dept, 'Behind on my goal (' . $x['goal'] . '): ' . $x['have'] . '. ' . $x['why'] . ($x['ask_to'] !== '' ? ' I asked ' . ($x['ask_to'] === 'owner' ? 'the owner' : pm_talk_name($x['ask_to'])) . ' for help.' : ''), 'director');
         }
         pm_talk($brand, 'director', 'Today\'s board is up. ' . $b['headline'] . ($b['checks'] ? ' To check: ' . implode(' ', array_column($b['checks'], 0)) : ''));
     }

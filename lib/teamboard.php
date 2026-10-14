@@ -8,7 +8,7 @@
  */
 
 const PM_TB_DEPTS = ['director' => 'Director', 'scouts' => 'Scouts', 'research' => 'Researchers', 'writers' => 'Writers', 'followup' => 'Follow-up', 'replies' => 'Replies',
-    'social' => 'Social', 'owner' => 'You', 'all' => 'Everyone'];
+    'social' => 'Social', 'contact' => 'Contact Finder', 'sender' => 'Sender', 'owner' => 'You', 'all' => 'Everyone'];
 
 /** Posts a note from one department to another. $key: the same key replaces the earlier note (so a repeated event does not fill the board). */
 function pm_tb_post(string $brand, string $from, string $to, string $text, string $key = ''): void
@@ -30,21 +30,47 @@ function pm_tb_post(string $brand, string $from, string $to, string $text, strin
     }
 }
 
-/** The newest notes for a department (and those to everyone), newest first. */
+/** The newest notes for a department (and those to everyone): another head's ask for help and the Director's orders first, then the rest newest first. */
 function pm_tb_for(string $brand, string $to, int $n = 4): array
 {
-    $rows = array_filter((array)(pm_load('team_board', fn() => [])[$brand] ?? []), fn($r) => in_array($r['to'] ?? '', [$to, 'all'], true) && empty($r['struck']));
-    return array_slice(array_reverse(array_values($rows)), 0, $n);
+    $rows = array_reverse(array_values(array_filter((array)(pm_load('team_board', fn() => [])[$brand] ?? []), fn($r) => in_array($r['to'] ?? '', [$to, 'all'], true) && empty($r['struck']))));
+    $first = fn($r) => preg_match('/^(ask|order):/', (string)($r['key'] ?? '')) ? 0 : 1;
+    usort($rows, fn($a, $b) => $first($a) <=> $first($b) ?: strcmp((string)$b['at'], (string)$a['at']));
+    return array_slice($rows, 0, $n);
 }
 
-/** One line for an agent's instructions: what the rest of the team told it lately. '' when nothing. */
+/** One line for an agent's instructions: its own goal, then what the rest of the team told it lately. '' when nothing. */
 function pm_tb_line(string $brand, string $to, int $n = 4): string
 {
+    $goal = function_exists('pm_heads_goal_line') ? pm_heads_goal_line($brand, $to) : '';
     $rows = pm_tb_for($brand, $to, $n);
     if (!$rows) {
-        return '';
+        return $goal;
     }
-    return 'Notes from the rest of the team (act on them where they fit): ' . implode(' | ', array_map(fn($r) => (PM_TB_DEPTS[$r['from']] ?? $r['from']) . ': ' . $r['text'], $rows)) . '.';
+    return trim($goal . ' Notes from the rest of the team (act on them where they fit; a head asking for help comes first): ' . implode(' | ', array_map(fn($r) => (PM_TB_DEPTS[$r['from']] ?? $r['from']) . ': ' . $r['text'], $rows)) . '.');
+}
+
+/** Is a note with this key up? */
+function pm_tb_has(string $brand, string $key): bool
+{
+    foreach ((array)(pm_load('team_board', fn() => [])[$brand] ?? []) as $r) {
+        if (($r['key'] ?? '') === $key && empty($r['struck']) && strtotime((string)$r['at']) > strtotime('-14 days')) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/** Takes a note down (the ask was answered): the agents stop reading it. */
+function pm_tb_take(string $brand, string $key): void
+{
+    try {
+        pm_update('team_board', function (array $all) use ($brand, $key) {
+            $all[$brand] = array_values(array_filter((array)($all[$brand] ?? []), fn($r) => ($r['key'] ?? '') !== $key));
+            return $all;
+        }, fn() => []);
+    } catch (Throwable) {
+    }
 }
 
 /** The owner strikes a note that is wrong: the agents stop reading it. */
