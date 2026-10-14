@@ -467,7 +467,7 @@ function pm_email_auth_check(string $domain, bool $fresh = false, string $host =
     } else {
         $out['advice'][] = 'No DMARC record. Add one (start with v=DMARC1; p=none; rua=mailto:you@yourdomain) so Gmail and Yahoo accept your mail reliably.';
     }
-    foreach (['default', 'google', 'selector1', 'selector2', 'k1'] as $sel) {
+    foreach (['default', 'privateemail', 'google', 'selector1', 'selector2', 'k1', 'dkim', 'mail', 's1', 's2'] as $sel) {
         $r = array_merge($txt("$sel._domainkey.$domain"), $txt("$sel._domainkey.$domain", DNS_CNAME));
         if (array_filter($r, fn($t) => $t !== '')) {
             $out['dkim'] = ['status' => 'ok', 'detail' => "selector $sel"];
@@ -476,7 +476,7 @@ function pm_email_auth_check(string $domain, bool $fresh = false, string $host =
     }
     if ($out['dkim']['status'] === 'missing') {
         $out['advice'][] = str_contains(strtolower($host), 'privateemail.com')
-            ? 'No DKIM key: in Namecheap open Private Email, switch DKIM on for this domain and add the TXT record it gives you (host default._domainkey) in Advanced DNS.'
+            ? 'No DKIM key: in Namecheap open Private Email, switch DKIM on for this domain and add the TXT record it gives you (host privateemail._domainkey, exactly as Private Email shows it) in Advanced DNS.'
             : 'No DKIM key found under the common selector names. If your host uses another selector this may be a false alarm; otherwise ask your email host to switch DKIM signing on.';
     }
     pm_ob_update('email_verify', function ($d) use ($domain, $out) {
