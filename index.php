@@ -1193,7 +1193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $back($fmsg, $fok ? 'ok' : 'err');
         }
         if ($do === 'use_default') { // the business's default message instead of an AI draft
-            [$udOk, $udMsg] = pm_dm_apply($leads[$id]);
+            [$udOk, $udMsg] = pm_dm_apply($leads[$id], !empty($_POST['plain']));
             $udOk && pm_leads_save($leads);
             $back($udMsg, $udOk ? 'ok' : 'err');
         }

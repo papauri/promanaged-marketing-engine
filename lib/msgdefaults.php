@@ -211,13 +211,14 @@ function pm_dm_save(string $brand): array
 }
 
 /** Puts the default message on one lead as its draft (email and WhatsApp), replacing what is there. Returns [ok, message]. */
-function pm_dm_apply(array &$lead): array
+function pm_dm_apply(array &$lead, bool $plain = false): array
 {
     if (!empty($lead['sent'])) {
         return [false, 'A first email was already sent to this business: use a follow-up.'];
     }
-    $r = pm_dm_as((string)($lead['brand'] ?? pm_brand()), fn() => pm_dm_render($lead));
-    $lead['drafts'] = $r + ['source' => 'default'];
+    $use = $plain ? array_diff_key($lead, ['research' => 1]) : $lead; // plain: the default opening, without the study's personal line
+    $r = pm_dm_as((string)($lead['brand'] ?? pm_brand()), fn() => pm_dm_render($use));
+    $lead['drafts'] = $r + ['source' => 'default'] + ($plain ? ['plain' => true] : []); // plain stays plain: the morning run does not put the personal line back
     if (in_array($lead['status'] ?? '', ['new', 'qualified'], true)) {
         $lead['status'] = 'drafted';
     }

@@ -73,6 +73,8 @@ function pm_market_pulse_line(string $brand = ''): string
     $bits = array_map(fn($x) => $x['issue'] . ' (we help: ' . $x['helps'] . ')', (array)(pm_market_pulse($brand)['items'] ?? []));
     if ($brand === 'travel') { // the owner's own angle: free to join, so a host pays nothing at all, in forex or kwacha
         $bits[] = 'paying abroad in foreign currency is hard (we help: joining is free with no commission, so a host pays nothing at all, in forex or kwacha, and guests pay them directly in kwacha)';
+    } elseif ($brand === 'promanaged') { // the owner's own angle: a local supplier paid locally, so no forex to find for IT
+        $bits[] = 'foreign currency is scarce, so paying overseas suppliers for IT and software is hard (we help: you pay us locally in ' . pm_local_currency()['word'] . ', with no forex to find)';
     }
     return $bits ? 'What is happening where they are now; when it fits this lead, touch on ONE of these in a single natural clause, never as a lecture: ' . implode('; ', $bits) . '.' : '';
 }
@@ -115,7 +117,7 @@ function pm_dm_personalise(array &$lead): bool
     $brand = (string)($lead['brand'] ?? pm_brand());
     $was = [$body, (string)($d['whatsapp'] ?? '')];
     $p = pm_lead_personal($lead);
-    if ($p !== '' && !str_contains($body, $p)) {
+    if ($p !== '' && empty($d['plain']) && !str_contains($body, $p)) {
         $bare = array_diff_key($lead, ['research' => 1]);
         $generic = pm_dm_as($brand, fn() => [pm_dm_vars($bare)['opening'], $brand === 'travel' ? pm_tm_default_opening($bare) : '']);
         foreach (array_filter($generic) as $g) {
