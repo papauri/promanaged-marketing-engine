@@ -56,6 +56,8 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
       <?php if ($brief['priorities']): ?><ol class="hq-prio"><?php foreach (array_slice($brief['priorities'], 0, 5) as $p): ?><li><?= pm_h($p) ?></li><?php endforeach; ?></ol><?php endif; ?>
       <?php if ($dir['focus']): ?><p class="hint">Searching more of: <b><?= pm_h(implode(', ', $dir['focus'])) ?></b><?= $dir['drop'] ? ' · less of: ' . pm_h(implode(', ', $dir['drop'])) : '' ?></p><?php endif; ?>
       <?php if ($dir['experiment']): ?><p class="hint">Experiment this week: <?= pm_h($dir['experiment']) ?></p><?php endif; ?>
+      <?php if (!empty($dir['meeting'])): ?><details class="more mt-1"><summary>This morning's sit-down (how the team decided)</summary><ul class="talklist"><?php foreach ($dir['meeting'] as $mt): ?><li><time></time><b><?= pm_h(pm_talk_name((string)$mt['who'])) ?>:</b><span><?= pm_h((string)$mt['says']) ?></span></li><?php endforeach; ?></ul>
+        <?php if (!empty($dir['orders'])): ?><p class="hint"><b>Orders:</b> <?= pm_h(implode(' · ', array_map(fn($o) => pm_talk_name((string)$o['to']) . ': ' . $o['say'], $dir['orders']))) ?></p><?php endif; ?></details><?php endif; ?>
       <?php if ($brief['date'] !== '' && $brief['date'] !== date('Y-m-d')): ?><p class="hint">Written on <?= pm_h(date('j M', strtotime($brief['date']))) ?>.</p><?php endif; ?>
     <?php else: ?>
       <p class="muted">No strategy has been written yet. The Director reads the numbers once a day and says what to do first.</p>

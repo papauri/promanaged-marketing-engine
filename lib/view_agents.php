@@ -279,6 +279,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <?= pm_lead_touch_chip($l) ?>
       <?php if (!empty($l['owner'])): ?><span class="pill" title="Owner of this lead"><?= pm_h($l['owner']) ?></span><?php endif; ?>
       <?php foreach ((array)($l['folders'] ?? []) as $lf): ?><a class="pill folder" href="?tab=agents&amp;status=all&amp;folder=<?= pm_h(rawurlencode((string)$lf)) ?>" onclick="event.stopPropagation()" title="Show this folder">▸ <?= pm_h((string)$lf) ?></a><?php endforeach; ?>
+      <?php if (!empty($l['sitdown']['action']) && strtotime((string)$l['sitdown']['at']) > strtotime('-3 days')): ?><span class="pill <?= in_array($l['sitdown']['action'], ['send', 'call'], true) ? 'hot' : '' ?>" title="<?= pm_h((string)($l['sitdown']['angle'] ?: $l['sitdown']['why'])) ?>">Team: <?= pm_h(strtolower(PM_SD_ACTIONS[$l['sitdown']['action']] ?? '')) ?></span><?php endif; ?>
       <span class="fixcols"><?php /* always last and the same width, so they line up down the list */ ?>
         <span class="pill c-ready <?= $gapOpen ? ($apx['ready'] >= 80 ? 'ok' : ($apx['ready'] < 50 ? 'warn' : '')) : 'blank' ?>"<?= $gapOpen ? ' title="' . pm_h($apx['missing'] ? 'Missing: ' . implode(', ', $apx['missing']) : 'Everything a good approach needs is there') . '"' : '' ?>><?= $gapOpen ? $apx['ready'] . '% ready' : '' ?></span>
         <span class="pill c-score <?= ($l['score'] ?? 0) >= 70 ? 'hot' : '' ?>" title="How good a fit, out of 100"><?= (int)($l['score'] ?? 0) ?></span>
@@ -301,6 +302,11 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
         <?php if ($waOn && trim((string)($l['phone'] ?? '') . (string)($l['whatsapp'] ?? '')) !== ''): ?><p class="hint wa-optin"><?= pm_h(pm_wa_optin_line($l)) ?></p><?php endif; ?>
         <?php if (!empty($l['social_gaps'])): ?><p class="hint gaps"><b>Where they lack online:</b> <?= pm_h(implode(' · ', array_slice($l['social_gaps'], 0, 3))) ?></p><?php endif; ?>
         </section>
+        <?php if (!empty($l['sitdown']['lines'])): $sdz = $l['sitdown']; ?>
+        <section class="lc"><h4 class="lc-h">The team's sit-down <span class="muted">· <?= pm_h((string)$sdz['at']) ?></span></h4>
+          <ul class="talklist"><?php foreach ($sdz['lines'] as [$sw, $ss]): ?><li><time></time><b><?= pm_h(pm_talk_name($sw)) ?>:</b><span><?= pm_h($ss) ?></span></li><?php endforeach; ?></ul>
+          <p class="hint"><b>Decided: <?= pm_h(PM_SD_ACTIONS[$sdz['action']] ?? $sdz['action']) ?></b><?= $sdz['angle'] !== '' ? ' · ' . pm_h($sdz['angle']) : '' ?><?= $sdz['why'] !== '' ? ' · ' . pm_h($sdz['why']) : '' ?></p></section>
+        <?php endif; ?>
         <?php if (!empty($l['research'])): $rz = $l['research']; ?>
         <section class="lc"><h4 class="lc-h">What the research found <span class="muted">· <?= pm_h(substr((string)$rz['at'], 0, 10)) ?></span></h4>
         <div class="research">
@@ -386,6 +392,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <?php if (($l['status'] ?? '') === 'contacted' && !pm_lead_email_dead($l) && pm_agents_ready()): ?><form method="post"<?= empty($l['followup_draft']) ? '' : ' data-confirm="Write a new follow-up in place of the one shown?"' ?>><?= $post($id, 'followup_ai') ?><button class="btn" title="The Follow-up agent writes a follow-up for you to read; nothing is sent"><?= empty($l['followup_draft']) ? 'Draft follow-up with AI' : 'Draft a new follow-up' ?></button></form><?php endif; ?>
       </div>
       <div class="agrp" aria-label="Prepare the message">
+      <?php if (!in_array($l['status'], ['won', 'lost', 'optout'], true)): ?><form method="post"><?= $post($id, 'sitdown') ?><button class="btn" title="The team talks this lead over and decides how best to approach it (one small AI call)">Team sit-down</button></form><?php endif; ?>
       <form method="post"><?= $post($id, 'research') ?><button class="btn" title="Website, Facebook, Instagram, reviews and recent news"><?= empty($l['research']) ? 'Research' : 'Research again' ?></button></form>
       <?php if (empty($dr['email_body'])): ?><form method="post"><?= $post($id, 'draft_outreach') ?><button class="btn">Draft outreach</button></form><?php endif; ?>
       <?php if ($which === 'first' && in_array($l['status'], ['new', 'qualified', 'drafted'], true)): ?><form method="post"<?= !empty($dr['email_body']) ? ' data-confirm="Replace the draft with the default message?"' : '' ?>><?= $post($id, 'use_default') ?><button class="btn" title="The default email and WhatsApp message of this business, no AI (Sales > Targeting and messages), opening with the detail the study found about them">Use default message</button><?php if (pm_lead_personal($l) !== ''): ?><button class="btn" name="plain" value="1" title="The default message with its usual opening, without the personal detail">Plain default</button><?php endif; ?></form><?php endif; ?>

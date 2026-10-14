@@ -795,6 +795,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pm_tb_strike(pm_brand(), (string)($_POST['note'] ?? ''));
             pm_redirect((string)($_POST['bt'] ?? '') === 'home' ? 'home' : 'agents', 'Struck off: the agents no longer read that note.');
         }
+        if ($do === 'sitdown') { // the team talks one lead over now (one cheap call) and decides how to approach it
+            if (!pm_agents_ready()) {
+                $back('The AI needs a key in .env first.', 'err');
+            }
+            try {
+                $sdr = pm_sitdown_ask([['id' => $id] + $lead])[$id] ?? null;
+            } catch (Throwable $e) {
+                $back('The sit-down could not be held: ' . $e->getMessage(), 'err');
+            }
+            if (!$sdr) {
+                $back('The team did not come back with a decision. Try again.', 'err');
+            }
+            $sdAct = pm_sitdown_apply($leads[$id], $sdr, pm_brand());
+            pm_leads_save($leads);
+            if ($sdAct === 'rewrite' && !empty($leads[$id]['rewrite_reason'])) { // written again now with the new angle
+                $rw = ($leads[$id]['status'] ?? '') === 'contacted' ? pm_agent_followup([['id' => $id] + $leads[$id]]) : pm_agent_write([['id' => $id] + $leads[$id]]);
+                $w = $rw[0] ?? null;
+                if (is_array($w) && !empty($w['email_body'])) {
+                    if (($leads[$id]['status'] ?? '') === 'contacted') {
+                        pm_followup_store($leads[$id], $w, pm_brand());
+                    } else {
+                        $leads[$id]['drafts'] = ['email_subject' => (string)($w['email_subject'] ?? ''), 'email_body' => (string)$w['email_body'], 'whatsapp' => (string)($w['whatsapp'] ?? ''), 'source' => 'sitdown'];
+                        $leads[$id]['status'] = 'drafted';
+                        unset($leads[$id]['rewrite_reason']);
+                    }
+                    pm_leads_save($leads);
+                }
+            }
+            $back('The team sat down over ' . $lead['name'] . ': ' . strtolower(PM_SD_ACTIONS[$sdAct]) . ($sdr['angle'] !== '' ? ' (' . $sdr['angle'] . ')' : '') . '. The talk is on the lead and in Audit > Agent conversations.');
+        }
         if ($do === 'turn_down') { // the owner turns the ticked drafts down with a reason: the Writers learn it and write them again now
             $tdIds = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? []))));
             if (!$tdIds) {

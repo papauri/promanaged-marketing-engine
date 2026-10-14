@@ -293,7 +293,8 @@ function pm_director_brief(bool $force = false, bool $ask = true): array
         $system .= '}';
     }
     $system .= ' Also include in that JSON the key "orders": up to 4 short orders to the departments that will move the goal most today, as [{"to":"scouts|research|writers|followup|social","say":"one sentence, specific"}]; '
-        . 'they act on them automatically, and nothing goes out without the owner\'s approval. "team_notes" is what the departments told you: use it.';
+        . 'they act on them automatically, and nothing goes out without the owner\'s approval. "team_notes" is what the departments told you: use it. '
+        . 'Also include "meeting": the morning sit-down that led to the orders, 4 to 6 lines [{"who":"scouts|research|writers|followup|replies|social|advisor|director","says":"one short sentence in the first person, from the numbers and the notes"}], the director speaking last.';
     $user = json_encode(['brand' => $brand, 'today' => date('Y-m-d'), 'firm_goal' => pm_firm_goal($brand)['line'], 'market_and_needs' => pm_firm_line($brand), 'team_notes' => pm_tb_line($brand, 'director', 6), 'what_wins' => pm_win_line($brand), 'pipeline' => $ai, 'target_types' => $cfg['sectors'], 'daily_send_cap' => $cfg['send_cap']] + ($social ? ['social' => $social] : [])
         + (function_exists('pm_adv_director_lines') && ($lessons = pm_adv_director_lines($brand)) ? ['lessons' => $lessons] : []), JSON_UNESCAPED_UNICODE);
     $out = null;
@@ -336,6 +337,14 @@ function pm_director_brief(bool $force = false, bool $ask = true): array
             $brief['social_at'] = date('Y-m-d');
         }
         $brief['social_note'] = mb_substr(trim((string)($out['social_note'] ?? '')), 0, 240);
+    }
+    foreach (array_slice((array)($out['meeting'] ?? []), 0, 6) as $mt) { // the morning sit-down, as the team said it (into the agents' conversation)
+        $who = is_array($mt) ? strtolower((string)($mt['who'] ?? '')) : '';
+        $says = is_array($mt) ? mb_substr(trim(strip_tags((string)($mt['says'] ?? ''))), 0, 240) : '';
+        if ($says !== '' && in_array($who, ['scouts', 'research', 'writers', 'followup', 'replies', 'social', 'advisor', 'director'], true)) {
+            $brief['meeting'][] = ['who' => $who, 'says' => $says];
+            function_exists('pm_talk') && pm_talk($brand, $who, $says);
+        }
     }
     foreach (array_slice((array)($out['orders'] ?? []), 0, 4) as $o) { // the Director's orders go on the team board: each department reads its own
         $to = is_array($o) ? strtolower((string)($o['to'] ?? '')) : '';

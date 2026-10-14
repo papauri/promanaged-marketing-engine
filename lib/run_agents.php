@@ -481,6 +481,27 @@ try {
     }
     $np && $save();
 
+    // ---- 3b2. The team's sit-down: the day's top leads (who wrote back, follow-ups due, the best emails ready) are talked over and decided, six to one cheap call ----
+    $sd = ($cfg['enabled']['writer'] ?? true) && function_exists('pm_sitdown_due') ? pm_sitdown_due($leads, $cfg, 12) : [];
+    if ($sd) {
+        $progress('The team sitting down over ' . count($sd) . ' leads: how best to approach each');
+        foreach (array_chunk($sd, 6) as $chunk) {
+            try {
+                $dec = pm_sitdown_ask($chunk);
+            } catch (Throwable $e) {
+                pm_agent_log('Director', 'The sit-down could not be held: ' . mb_substr($e->getMessage(), 0, 120), true);
+                continue;
+            }
+            foreach ($dec as $sid => $s) {
+                if (isset($leads[$sid])) {
+                    $act = pm_sitdown_apply($leads[$sid], $s, $brand);
+                    $stats['sitdown_' . $act] = ($stats['sitdown_' . $act] ?? 0) + 1;
+                }
+            }
+        }
+        $save();
+    }
+
     // ---- 3c. Re-qualify: a researched lead gets a fresh score and package from what was found (capped per run), before the Writers read the score ----
     $rq = $cfg['enabled']['qualifier'] && !$hold && function_exists('pm_requalify_due') ? pm_requalify_due($leads, 3) : [];
     if ($rq) {
