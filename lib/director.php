@@ -292,7 +292,9 @@ function pm_director_brief(bool $force = false, bool $ask = true): array
     } else {
         $system .= '}';
     }
-    $user = json_encode(['brand' => $brand, 'today' => date('Y-m-d'), 'firm_goal' => pm_firm_goal($brand)['line'], 'market_and_needs' => pm_firm_line($brand), 'what_wins' => pm_win_line($brand), 'pipeline' => $ai, 'target_types' => $cfg['sectors'], 'daily_send_cap' => $cfg['send_cap']] + ($social ? ['social' => $social] : [])
+    $system .= ' Also include in that JSON the key "orders": up to 4 short orders to the departments that will move the goal most today, as [{"to":"scouts|research|writers|followup|social","say":"one sentence, specific"}]; '
+        . 'they act on them automatically, and nothing goes out without the owner\'s approval. "team_notes" is what the departments told you: use it.';
+    $user = json_encode(['brand' => $brand, 'today' => date('Y-m-d'), 'firm_goal' => pm_firm_goal($brand)['line'], 'market_and_needs' => pm_firm_line($brand), 'team_notes' => pm_tb_line($brand, 'director', 6), 'what_wins' => pm_win_line($brand), 'pipeline' => $ai, 'target_types' => $cfg['sectors'], 'daily_send_cap' => $cfg['send_cap']] + ($social ? ['social' => $social] : [])
         + (function_exists('pm_adv_director_lines') && ($lessons = pm_adv_director_lines($brand)) ? ['lessons' => $lessons] : []), JSON_UNESCAPED_UNICODE);
     $out = null;
     $err = '';
@@ -334,6 +336,14 @@ function pm_director_brief(bool $force = false, bool $ask = true): array
             $brief['social_at'] = date('Y-m-d');
         }
         $brief['social_note'] = mb_substr(trim((string)($out['social_note'] ?? '')), 0, 240);
+    }
+    foreach (array_slice((array)($out['orders'] ?? []), 0, 4) as $o) { // the Director's orders go on the team board: each department reads its own
+        $to = is_array($o) ? strtolower((string)($o['to'] ?? '')) : '';
+        $say = is_array($o) ? trim((string)($o['say'] ?? '')) : '';
+        if ($say !== '' && in_array($to, ['scouts', 'research', 'writers', 'followup', 'social'], true)) {
+            pm_tb_post($brand, 'director', $to, $say, 'order:' . $to);
+            $brief['orders'][] = ['to' => $to, 'say' => mb_substr($say, 0, 240)];
+        }
     }
     pm_update('director', fn(array $d) => array_replace($d, [$brand => $brief]), fn() => []); // only this business's brief, under the lock
     return $brief;

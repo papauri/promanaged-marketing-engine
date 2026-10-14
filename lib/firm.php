@@ -221,6 +221,9 @@ function pm_firm_line(string $brand): string
     if (function_exists('pm_market_pulse_line') && ($p = pm_market_pulse_line($brand)) !== '') {
         $bits[] = $p;
     }
+    if (function_exists('pm_tb_line') && ($tb = pm_tb_line($brand, 'social', 3)) !== '') {
+        $bits[] = $tb;
+    }
     return $memo[$brand] = implode(' ', $bits);
 }
 

@@ -600,11 +600,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (in_array($_POST['bt'] ?? '', ['targeting', 'home', 'ops'], true)) { // the page the button was on
                 pm_redirect(['home' => 'home', 'ops' => 'settings&section=connections'][$_POST['bt']] ?? 'targeting', $m, $k);
             }
-            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after', 'dismiss_unmatched', 'folder_add', 'folder_remove', 'folder_rename', 'folder_delete', 'outbox_retry', 'outbox_discard', 'move_to'], true);
+            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after', 'dismiss_unmatched', 'folder_add', 'folder_remove', 'folder_rename', 'folder_delete', 'outbox_retry', 'outbox_discard', 'move_to', 'turn_down', 'tb_strike'], true);
             if ($id !== '' && !$noLead) {
                 pm_redirect(!empty($_POST['rl']) ? 'agents&lead=' . $id : 'agents' . $keep . '&at=' . rawurlencode($id) . '#l' . $id, $m, $k); // at= opens the page of the list that holds the lead
             }
-            pm_redirect('agents' . (in_array($do, ['delete', 'plan', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after', 'folder_add', 'folder_remove', 'outbox_retry', 'outbox_discard', 'move_to'], true) ? $keep : ''), $m, $k);
+            pm_redirect('agents' . (in_array($do, ['delete', 'plan', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after', 'folder_add', 'folder_remove', 'outbox_retry', 'outbox_discard', 'move_to', 'turn_down'], true) ? $keep : ''), $m, $k);
         };
 
         if ($do === 'run') {
@@ -782,6 +782,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $back('Could not read the inbox: ' . $e->getMessage(), 'err');
             }
             $back($msg);
+        }
+        if ($do === 'tb_strike') { // the owner strikes a wrong note off the team board
+            pm_tb_strike(pm_brand(), (string)($_POST['note'] ?? ''));
+            pm_redirect((string)($_POST['bt'] ?? '') === 'home' ? 'home' : 'agents', 'Struck off: the agents no longer read that note.');
+        }
+        if ($do === 'turn_down') { // the owner turns the ticked drafts down with a reason: the Writers learn it and write them again now
+            $tdIds = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? []))));
+            if (!$tdIds) {
+                $back('Tick the leads first.', 'err');
+            }
+            [$tdDone, $tdN, $tdMsg] = pm_leads_turn_down($tdIds, (string)($_POST['reason'] ?? ''));
+            $back($tdMsg, $tdN ? 'ok' : 'err');
         }
         if ($do === 'move_to') { // the ticked leads go to another stage by hand (Active to Contacted, Won, Lost...)
             $mvIds = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? []))));

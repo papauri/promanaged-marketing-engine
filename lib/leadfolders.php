@@ -132,6 +132,94 @@ function pm_lead_set_status(array &$lead, string $st, string $lostReason = ''): 
     if (in_array($st, ['won', 'lost', 'optout', 'replied', 'proposal'], true)) {
         unset($lead['approved_at'], $lead['send_after']); // nothing cold goes to them from the queue
     }
+    if ($st === 'lost' && function_exists('pm_tb_post')) {
+        pm_tb_post((string)($lead['brand'] ?? 'promanaged'), 'owner', 'director', ($lead['name'] ?? 'A lead') . ' closed as lost (' . (pm_lost_reasons()[$lead['lost_reason']] ?? 'other') . ')', 'lost:' . ($lead['id'] ?? $lead['name'] ?? ''));
+    }
     pm_lead_note($lead, 'Moved by hand from ' . (PM_LEAD_STATUSES[$was] ?? $was) . ' to ' . PM_LEAD_STATUSES[$st] . ($st === 'lost' ? ' (' . (pm_lost_reasons()[$lead['lost_reason']] ?? '') . ')' : ''));
     return '';
+}
+
+/**
+ * The owner turns drafts down ("not like this") with a reason: each ticked lead's waiting first email or follow-up is taken away, the reason goes on the lead and on the
+ * team board (so every Writer learns it), and the Writers write them again now, in batches (one cheap call for up to six). A rewrite that fails is done by the next run.
+ * Returns [rewritten, turned down, message].
+ */
+function pm_leads_turn_down(array $ids, string $reason): array
+{
+    $reason = mb_substr(trim((string)preg_replace('/\s+/u', ' ', strip_tags($reason))), 0, 200) ?: 'The owner did not like it';
+    $brand = pm_brand();
+    $first = [];
+    $fups = [];
+    pm_update('leads', function (array $all) use ($ids, $reason, $brand, &$first, &$fups) {
+        foreach ($ids as $id) {
+            $l = $all[$id] ?? null;
+            if (!$l || ($l['brand'] ?? 'promanaged') !== $brand) {
+                continue;
+            }
+            if (($l['status'] ?? '') === 'contacted' && !empty($l['followup_draft']['email_body'])) {
+                unset($all[$id]['followup_draft'], $all[$id]['followup_approved'], $all[$id]['approved_at'], $all[$id]['send_after']);
+                $all[$id]['rewrite_reason'] = $reason;
+                pm_lead_note($all[$id], 'Follow-up turned down: ' . $reason);
+                $fups[] = (string)$id;
+            } elseif (empty($l['sent']) && !empty($l['drafts']['email_body']) && in_array($l['status'] ?? '', ['new', 'qualified', 'drafted'], true)) {
+                unset($all[$id]['drafts'], $all[$id]['approved_at'], $all[$id]['send_after']);
+                $all[$id]['status'] = 'qualified';
+                $all[$id]['rewrite_reason'] = $reason;
+                pm_lead_note($all[$id], 'First email turned down: ' . $reason);
+                $first[] = (string)$id;
+            }
+        }
+        return $all;
+    }, fn() => []);
+    $n = count($first) + count($fups);
+    if (!$n) {
+        return [0, 0, 'None of the ticked leads had a waiting email to turn down.'];
+    }
+    pm_tb_post($brand, 'owner', $first ? 'writers' : 'followup', 'The owner turned down ' . $n . ' email' . ($n === 1 ? '' : 's') . ': "' . $reason . '". Do not repeat that.', 'turned:' . md5($reason));
+    if (!pm_agents_ready() && !isset($GLOBALS['PM_AI_STUB'])) {
+        return [0, $n, "$n turned down. They are written again at the next agent run (the AI is not set up here)."];
+    }
+    @set_time_limit(300);
+    $done = 0;
+    $leads = pm_leads();
+    foreach (array_chunk($first, 6) as $chunk) { // first emails: the Writer, with the owner's reason on each
+        try {
+            $rows = pm_agent_write(array_map(fn($id) => ['id' => $id] + $leads[$id], $chunk));
+        } catch (Throwable) {
+            continue;
+        }
+        pm_update('leads', function (array $all) use ($rows, &$done) {
+            foreach ($rows as $w) {
+                $id = (string)($w['id'] ?? '');
+                if (isset($all[$id]) && !empty($w['email_body']) && empty($all[$id]['drafts']) && empty($all[$id]['sent'])) {
+                    $all[$id]['drafts'] = ['email_subject' => (string)($w['email_subject'] ?? ''), 'email_body' => (string)$w['email_body'], 'whatsapp' => (string)($w['whatsapp'] ?? ''), 'source' => 'rewrite'];
+                    $all[$id]['status'] = 'drafted';
+                    pm_lead_note($all[$id], 'Rewritten after your feedback: ' . ($all[$id]['rewrite_reason'] ?? ''));
+                    unset($all[$id]['rewrite_reason']);
+                    $done++;
+                }
+            }
+            return $all;
+        }, fn() => []);
+    }
+    if ($fups) { // follow-ups: the Follow-up agent, with the reason; asked by the owner, so it writes
+        foreach (array_chunk($fups, 6) as $chunk) {
+            try {
+                $rows = pm_agent_followup(array_map(fn($id) => ['id' => $id] + $leads[$id], $chunk));
+            } catch (Throwable) {
+                continue;
+            }
+            pm_update('leads', function (array $all) use ($rows, $brand, &$done) {
+                foreach ($rows as $w) {
+                    $id = (string)($w['id'] ?? '');
+                    if (isset($all[$id]) && !empty($w['email_body']) && ($all[$id]['status'] ?? '') === 'contacted' && empty($all[$id]['followup_draft'])) {
+                        pm_followup_store($all[$id], $w, $brand);
+                        $done++;
+                    }
+                }
+                return $all;
+            }, fn() => []);
+        }
+    }
+    return [$done, $n, "$n turned down, $done written again with your reason" . ($done < $n ? ' (the rest at the next agent run)' : '') . '. Every Writer has your reason on the team board.'];
 }

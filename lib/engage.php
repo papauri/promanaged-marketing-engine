@@ -951,6 +951,11 @@ function pm_inbox_process(array $messages, array &$leads, array &$seen, string $
         }
         pm_agent_log('Reply', $leads[$id]['name'] . ': ' . $what);
         $handled++;
+        if (function_exists('pm_tb_post') && in_array((string)$r['intent'], ['interested', 'question', 'meeting_request', 'not_now', 'not_interested'], true) && trim((string)($r['summary'] ?? '')) !== '') {
+            $tbB = (string)($leads[$id]['brand'] ?? 'promanaged');
+            pm_tb_post($tbB, 'replies', 'writers', $leads[$id]['name'] . ' replied (' . str_replace('_', ' ', (string)$r['intent']) . '): ' . $r['summary'], 'reply:' . $id);
+            in_array((string)$r['intent'], ['not_interested', 'not_now'], true) && pm_tb_post($tbB, 'replies', 'director', $leads[$id]['name'] . ' said no for now: ' . $r['summary'], 'no:' . $id);
+        }
         $item = ['id' => $id, 'name' => (string)$leads[$id]['name'], 'brand' => (string)($leads[$id]['brand'] ?? 'promanaged'), 'intent' => (string)$r['intent'], 'summary' => (string)($r['summary'] ?? ''),
             'needs_human' => !empty($r['needs_human']), 'what' => $what, 'status' => (string)($leads[$id]['status'] ?? '')];
         $report[$r['intent'] === 'bounce' ? 'bounces' : 'replies'][] = $item;

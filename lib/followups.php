@@ -56,6 +56,7 @@ function pm_followup_apply(array &$lead, array $w, string $brand): string
 function pm_followup_store(array &$lead, array $w, string $brand): void
 {
     $lead['followup_draft'] = ['email_subject' => (string)($w['email_subject'] ?? ''), 'email_body' => (string)($w['email_body'] ?? ''), 'whatsapp' => (string)($w['whatsapp'] ?? '')];
+    if (!empty($lead["rewrite_reason"])) { pm_lead_note($lead, "Follow-up rewritten after your feedback: " . $lead["rewrite_reason"]); unset($lead["rewrite_reason"]); }
     if (function_exists('pm_followup_arm')) {
         $lead['followup_arm'] = pm_followup_arm($lead, $brand);
     }

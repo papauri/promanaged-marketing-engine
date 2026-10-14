@@ -159,7 +159,7 @@ function pm_tm_write(array $leads): array
     $all = $leads;
     $ready = []; // the day's study already wrote the personal line and a subject: the email is that line plus the standard part, and the AI is not asked again
     foreach ($leads as $l) {
-        if (($p = pm_lead_personal($l)) !== '') {
+        if (($p = pm_lead_personal($l)) !== '' && empty($l['rewrite_reason'])) {
             $dm = pm_dm_render($l, $p);
             $subj = trim((string)($l['research']['personal_subject'] ?? ''));
             $ready[] = ['id' => $l['id'], 'email_subject' => $subj !== '' ? $subj : $dm['email_subject'], 'email_body' => $dm['email_body'], 'whatsapp' => $dm['whatsapp'], 'starter' => true];
@@ -188,10 +188,10 @@ function pm_tm_write_ai(array $leads): array
         . (pm_wa_on() ? 'whatsapp: 35 to 60 words, one paragraph: a greeting with the first name if given, that this is ' . $s['company_name'] . ' (never your own name: the sign-off carries it), then straight away the aim (we are building Malawi\'s own directory of stays together with hosts and would love them in it; free, no commission, unlike Booking.com), one gain (guests chat and video call them before they come, or their reviews from different sources shown together), one easy question. Never pose as a traveller. ' : 'No WhatsApp message: this business works by email only. ')
         . 'email_subject: make an owner curious to open it, for example about joining Malawi\'s own directory of stays, within the subject_style. '
         . 'The rest of the email (what the platform is, the benefits, the set-up steps, the link and that it is free) is a fixed text the app adds, so never describe it. '
-        . ($subjectLine !== '' ? $subjectLine . ' ' : '') . pm_market_pulse_line() . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
+        . ($subjectLine !== '' ? $subjectLine . ' ' : '') . pm_market_pulse_line() . ' ' . pm_tb_line('travel', 'writers') . ' Where an item has owner_feedback, the owner turned the last version down for that reason: fix exactly that. ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'] ?? '', 'city' => $l['city'] ?? '', 'contact' => $l['contact'] ?? '', 'evidence' => array_slice((array)($l['evidence'] ?? []), 0, 2),
         'online_gaps' => array_slice((array)($l['social_gaps'] ?? []), 0, 2), 'research' => function_exists('pm_research_brief') ? pm_research_brief($l) : '',
-        'subject_style' => function_exists('pm_subject_style') ? pm_subject_style(pm_email_exp_arm((string)$l['id'], 'travel')) : ''], $leads);
+        'subject_style' => function_exists('pm_subject_style') ? pm_subject_style(pm_email_exp_arm((string)$l['id'], 'travel')) : ''] + (!empty($l['rewrite_reason']) ? ['owner_feedback' => (string)$l['rewrite_reason']] : []), $leads);
     $out = pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"email_subject\",\"opening\"" . (pm_wa_on() ? ",\"whatsapp\"" : '') . "}. Never greet with the business name.", false, 2000, 'write')));
     $by = [];
     foreach ($out as $x) {

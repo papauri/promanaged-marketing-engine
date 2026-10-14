@@ -486,6 +486,7 @@ require_once __DIR__ . '/followups.php';
 require_once __DIR__ . '/subjects.php';
 require_once __DIR__ . '/contacts.php';
 require_once __DIR__ . '/leadfolders.php'; // the owner's own folders of leads
+require_once __DIR__ . '/teamboard.php'; // how the departments talk to each other (no AI)
 require_once __DIR__ . '/personal.php'; // the market pulse, the study's personal line, drafts brought up to date with a found name
 
 /* ---------------- Spend control: every call is counted against a daily token budget ---------------- */
@@ -1065,6 +1066,7 @@ function pm_agent_scout(string $sector, string $city, int $want, array $knownNam
     }
     $user = "Find up to {$want}. Skip these (already known): " . implode('; ', array_slice(array_map(fn($n) => preg_replace('/ \(.*$/', '', $n), $knownNames), -40)) . "\n"
         . 'JSON array of {"name","type":"kind of business in 2-3 words","city","address","website","phone","email","contact":"owner, founder, managing director or manager if a page of the business itself names one, else empty","contact_title":"their role","contact_source":"URL of the page that names them","facebook":"Facebook page URL or empty","instagram":"Instagram URL or empty","social_gaps":["what is missing or weak online: no website, no Facebook page, page inactive since a year, few reviews, no way to book or enquire online"],"evidence":["one factual observation + source URL"],"need_signals":["why they need us"],"offering":"' . (pm_brand_is_custom(pm_brand()) ? 'the name of the offering that fits, or empty' : 'build, source or support') . '"}';
+    $system .= ' ' . pm_tb_line(pm_brand(), 'scouts', 3); // the Director's orders and what the team learned about who answers
     $out = pm_agent_list(pm_agent_json(pm_claude($system, $user, true, 2500)));
     return array_values(array_filter($out, fn($x) => is_array($x) && !empty($x['name'])));
 }
@@ -1185,7 +1187,7 @@ function pm_sender_name(): string
 /** WRITER: first email and WhatsApp in our voice. */
 function pm_agent_write(array $leads): array
 {
-    if (function_exists('pm_dm_use_default') && pm_dm_use_default()) { // this business drafts from its default message: no AI, the same wording for every lead (Sales > Targeting and messages)
+    if (function_exists('pm_dm_use_default') && pm_dm_use_default() && !array_filter($leads, fn($l) => !empty($l['rewrite_reason']))) { // this business drafts from its default message: no AI, the same wording for every lead (Sales > Targeting and messages); a draft the owner turned down is written by the AI with the reason
         return pm_dm_rows($leads);
     }
     if (pm_brand() === 'travel') { // a personal opening + the standard Travel Malawi text (lib/tm_email.php)
@@ -1199,11 +1201,11 @@ function pm_agent_write(array $leads): array
     $sender = pm_sender_name();
     $subjectLine = function_exists('pm_email_exp_example') ? pm_email_exp_example(pm_brand()) : '';
     $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou are writing outreach for {$s['company_name']} as " . ($sender !== '' ? "$sender (use this first name: " . explode(' ', $sender)[0] . ")" : "a member of the team (no personal name: introduce the company instead)") . ". $ask" . PM_EMAIL_CRAFT . ' ' . ($subjectLine !== '' ? $subjectLine . ' ' : '')
-        . "Each item has subject_style: write that item's email subject in that style. " . pm_market_pulse_line() . ' ' . PM_AGENT_RULES;
+        . "Each item has subject_style: write that item's email subject in that style. Where an item has owner_feedback, the owner turned the last version down for that reason: fix exactly that. " . pm_market_pulse_line() . ' ' . pm_tb_line(pm_brand(), 'writers') . ' ' . PM_AGENT_RULES;
     $brand = pm_brand();
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'city' => $l['city'], 'currency' => pm_local_currency($l)['word'], 'contact' => $l['contact'] ?? '',
         'evidence' => array_slice($l['evidence'] ?? [], 0, 2), 'online_gaps' => array_slice($l['social_gaps'] ?? [], 0, 2), 'research' => pm_research_brief($l), 'lead_with' => $l['pain'] ?? '', 'how_it_stops' => pm_fix_for((string)($l['pain'] ?? '')),
-        'subject_style' => pm_subject_style(pm_email_exp_arm((string)$l['id'], $brand))], $leads);
+        'subject_style' => pm_subject_style(pm_email_exp_arm((string)$l['id'], $brand))] + (!empty($l['rewrite_reason']) ? ['owner_feedback' => (string)$l['rewrite_reason']] : []), $leads);
     return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
         . "\nJSON array of {\"id\",\"email_subject\",\"email_body\"" . (pm_wa_on() ? ",\"whatsapp\"" : '') . "}. Never greet with the business name." . (pm_wa_on() ? '' : ' Email only: no WhatsApp message.'), false, 2500, 'write'))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);
 }
@@ -1216,8 +1218,8 @@ function pm_agent_write(array $leads): array
  */
 function pm_starter_draft(array $lead): ?array
 {
-    if (pm_brand() === 'travel' || (function_exists('pm_dm_use_default') && pm_dm_use_default())) {
-        return null;
+    if (pm_brand() === 'travel' || (function_exists('pm_dm_use_default') && pm_dm_use_default()) || !empty($lead['rewrite_reason'])) {
+        return null; // (a draft the owner turned down is written again by the Writer, with the reason)
     }
     // Free draft or paid Writer, decided by results: until each has 8 sent, one lead in three still goes to the Writer so the two can be compared;
     // after that the study starter is used only while its reply rate is at least 80% of the Writer's.
@@ -1258,6 +1260,7 @@ function pm_agent_followup(array $leads): array
         . "Match the state: for \"opened\" (they opened our proposal or email but stayed quiet) gently reference what they saw and add one new, true reason; for \"silent\" (never engaged) be shorter and lead with one specific fact about their business (from what_we_know when given: our research's facts, news and hooks; never invent one);for \"replied\" pick up their last words, never repeat a whole earlier message. "
         . "No prices, no guilt, no pressure, no urgency. Plain text, no sign-off. Each item has subject_style: write that item's email subject in that style, $subjectRule. "
         . pm_email_exp_followup_example(pm_brand()) . ' ' . pm_market_pulse_line() . ' '
+        . pm_tb_line(pm_brand(), 'followup') . ' Where an item has owner_feedback, the owner turned the last follow-up down for that reason: write a new one that fixes exactly that, and decide send. '
         . 'Before writing, DECIDE for each item what is best for winning this business: "send" (a follow-up now: write it), "wait" (too soon, or a better moment is coming: give wait_days 2 to 21 and leave the texts empty), '
         . 'or "stop" (a poor fit, or enough follow-ups have gone with no sign of interest; only when followups_already_sent is 1 or more). Use days_since_our_last_email, followups_already_sent, state, views, score and what_we_know. Default to "send". Give a short why. '
         . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
@@ -1272,6 +1275,7 @@ function pm_agent_followup(array $leads): array
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'contact' => $l['contact'] ?? '', 'used' => mb_substr($l['drafts']['email_body'] ?? '', 0, 220),
         'their_last_message' => $last($l, 'in'), 'our_last_message' => $last($l, 'out'), 'followups_already_sent' => (int)($l['followups'] ?? 0),
         'state' => pm_lead_engagement((array)$l), 'views' => (int)($l['view_count'] ?? 0), 'last_seen' => (string)($l['last_viewed_at'] ?? ''), 'score' => (int)($l['score'] ?? 0),
+        'owner_feedback' => (string)($l['rewrite_reason'] ?? ''),
         'days_since_our_last_email' => ($lt = strtotime((string)($l['last_contacted'] ?? ''))) ? (int)floor((time() - $lt) / 86400) : null,
         'subject_style' => pm_subject_style(pm_followup_arm((array)$l))] + (!empty($l['research']) ? ['what_we_know' => pm_research_brief($l)] : []), $leads); // the morning study: real facts and news to build the new angle on
     return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"decision\":\"send|wait|stop\",\"wait_days\",\"why\",\"email_subject\",\"email_body\"" . (pm_wa_on() ? ",\"whatsapp\"" : '') . "}" . (pm_wa_on() ? '' : ' Email only: no WhatsApp message.'), false, 1800))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);
@@ -2696,7 +2700,7 @@ function pm_agent_research_batch(array $leads): array
         . 'Step 5b, personal: the line our first email opens with, at most 25 words, no greeting, number, price or link: ONE true, specific detail about them from a confirmed fact (their rooms, setting, a recent review, news), then '
         . (pm_brand() === 'travel' ? 'that we would love them to be part of what we are building. Never name yourself, never say or suggest you were looking for a stay or travelling. ' : 'why it made us write to them. ')
         . 'personal_subject: under 45 characters, specific to them, a capital letter first and on names only. ' . pm_market_pulse_line() . ' '
-        . 'Step 6, re-score each business from what you confirmed (its previous_score is given): ' . pm_qualify_rule() . 'Confirmed facts may raise or lower it; with nothing confirmed, keep the previous score. ' . PM_AGENT_RULES;
+        . 'Step 6, re-score each business from what you confirmed (its previous_score is given): ' . pm_qualify_rule() . 'Confirmed facts may raise or lower it; with nothing confirmed, keep the previous score. ' . pm_tb_line(pm_brand(), 'research', 3) . ' ' . PM_AGENT_RULES;
     $obj = '{"id":"","identity":{"confirmed":true,"how":"what proves it is this business"},"discoveries":[{"fact":"","source":"URL","date":"","confidence":"high|medium"}],"website":{"url":"","verdict":"one short line","issues":[""]},'
         . '"social":{"facebook":"URL","instagram":"URL","verdict":"one short line: last post date, followers, reviews"},"news":[{"headline":"","source":"URL","date":""}],'
         . '"people":[{"name":"full name","role":"as the source states it","source":"URL"}],"reach":{"email":"","phone":"","whatsapp":"","source":"URL"},"opportunities":[""],"hooks":[""],'

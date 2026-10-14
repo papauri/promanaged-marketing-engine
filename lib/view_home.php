@@ -95,3 +95,14 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
     <li class="<?= $a['error'] ? 'err' : '' ?>"><time><?= pm_h($a['at'] !== '' ? date('j M H:i', strtotime($a['at'])) : '') ?></time><b><?= pm_h($a['agent']) ?></b><span><?= pm_h(mb_substr($a['msg'], 0, 220)) ?></span></li>
   <?php endforeach; ?></ul><?php endif; ?>
 </section>
+
+<?php $tbRows = function_exists('pm_tb_rows') ? array_filter(pm_tb_rows($vb, 30), fn($r) => empty($r['struck'])) : []; ?>
+<h3 id="teamtalk">How the team is talking</h3>
+<section class="card hq-feed">
+  <p class="hint mt-0">The departments pass notes to each other (no AI): what replies taught the Writers, what you turned down and why, the Director's orders for the day. Each agent reads the notes addressed to it. Strike a note that is wrong and they stop reading it.</p>
+  <?php if (!$tbRows): ?><p class="muted">No notes yet. They appear as replies come in, as you turn drafts down, and when the Director plans the day.</p>
+  <?php else: $csrfH = pm_h((string)($_SESSION['csrf'] ?? '')); ?><ul><?php foreach (array_slice($tbRows, 0, 15) as $r): ?>
+    <li><time><?= pm_h(date('j M H:i', strtotime((string)$r['at']))) ?></time><b><?= pm_h((PM_TB_DEPTS[$r['from']] ?? $r['from']) . ' → ' . (PM_TB_DEPTS[$r['to']] ?? $r['to'])) ?></b><span><?= pm_h((string)$r['text']) ?></span>
+      <form method="post" class="inline"><input type="hidden" name="csrf" value="<?= $csrfH ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="tb_strike"><input type="hidden" name="bt" value="home"><input type="hidden" name="note" value="<?= pm_h((string)$r['id']) ?>"><button class="btn small ghost" title="The agents stop reading this note">Strike</button></form></li>
+  <?php endforeach; ?></ul><?php endif; ?>
+</section>

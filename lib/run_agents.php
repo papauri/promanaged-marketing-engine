@@ -647,7 +647,7 @@ try {
     }
 
     // ---- 4. Writers ----
-    $todo = array_values(array_filter($leads, fn($l) => $l['status'] === 'qualified' && ($l['score'] ?? 0) >= 60
+    $todo = array_values(array_filter($leads, fn($l) => $l['status'] === 'qualified' && (($l['score'] ?? 0) >= 60 || !empty($l['rewrite_reason']))
         && (!empty($l['email']) || !empty($l['phone'])) && empty($l['drafts']) && !pm_lead_is_client($l))); // a client is messaged personally, never with a cold draft
     usort($todo, fn($a, $b) => $b['score'] <=> $a['score']);
     $todo = array_slice($todo, 0, 30);
@@ -685,6 +685,7 @@ try {
                 if (isset($leads[$id]) && !empty($w['email_body'])) {
                     $L = $leads[$id];
                     $leads[$id]['drafts'] = ['email_subject' => (string)$w['email_subject'], 'email_body' => (string)$w['email_body'], 'whatsapp' => (string)($w['whatsapp'] ?? '')];
+                    if (!empty($leads[$id]["rewrite_reason"])) { pm_lead_note($leads[$id], "Rewritten after your feedback: " . $leads[$id]["rewrite_reason"]); unset($leads[$id]["rewrite_reason"]); }
                     if ($byAi && empty($w['starter'])) { // a starter's subject was not written in an arm's style: it stays out of the subject experiment
                         $leads[$id]['email_arm'] = function_exists('pm_email_exp_arm') ? pm_email_exp_arm((string)$id, $brand) : 'A'; // subject experiment arm
                     }
