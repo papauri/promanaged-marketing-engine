@@ -694,6 +694,12 @@ try {
         $save();
     }
 
+    // ---- 4a. Every lead with an email is ready to send: what the Writers did not draft (below their score bar, or held) gets the default message, no AI ----
+    if (function_exists('pm_dm_ready_all') && ($readied = pm_dm_ready_all($leads))) {
+        $stats['drafted'] += $readied;
+        $save();
+    }
+
     // ---- 4b. Tailored proposals ----
     // First the leads that replied and asked for one (any score), then the best cold leads. Both share proposals_per_day (counted from the leads, so a second run today does not double it).
     $slots = max(0, (int)$cfg['proposals_per_day'] - count(array_filter($leads, fn($l) => str_starts_with((string)($l['proposal_ai']['at'] ?? ''), $today))));

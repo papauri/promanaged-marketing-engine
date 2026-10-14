@@ -8,6 +8,7 @@ $_SESSION['abrand'] = pm_brand_norm($bsel);
 pm_brand_set($_SESSION['abrand']);
 $bname = pm_brand_title(pm_settings(), pm_brand());
 $acfg = pm_agents_config();
+$readied = function_exists('pm_dm_ready_all') ? pm_dm_ready_all() : 0; // every lead with an email has its first email ready (default message + personal line, no AI)
 $synced = function_exists('pm_ml_autosync') ? pm_ml_autosync() : 0; // the Sent folders are read at most every 5 minutes (no AI): a lead emailed from the other copy is not in Active
 $leadsAll = array_filter(pm_leads(), fn($l) => ($l['brand'] ?? 'promanaged') === pm_brand());
 $run = pm_run_state();
@@ -97,6 +98,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
 ?>
 <?= pm_ui_head('Leads · ' . pm_h($bname), 'Find businesses, let the agents draft the messages, and send what you approve. Nothing goes out without you.') ?>
 <?= pm_ui_strip('agents') ?>
+<?php if ($readied): ?><div class="flash ok"><?= $readied ?> lead<?= $readied === 1 ? '' : 's' ?> with an email had no first email yet: <?= $readied === 1 ? 'it is' : 'they are' ?> now written from your default message and ready to send.</div><?php endif; ?>
 <?php if ($synced): ?><div class="flash ok"><?= $synced ?> lead<?= $synced === 1 ? '' : 's' ?> found in the Sent folder (emailed from the other copy of the app or by hand) and marked contacted.</div><?php endif; ?>
 <?php if (!pm_agents_ready()): ?>
   <div class="flash err"><b>One thing to set up first.</b> Add <code><?= pm_h(pm_agents_missing_key()) ?>=...</code> to <code>.env</code>, then reload.</div>

@@ -1176,6 +1176,9 @@ const PM_EMAIL_CRAFT_SHORT = "under 60 words, opens with something specific and 
 function pm_sender_name(): string
 {
     $who = trim((string)($GLOBALS['PM_WHO'] ?? ''));
+    if (preg_match('/^(admin(istrator)?|user|test(er)?|owner|staff|team|manager|system|scheduler|guest|demo)\d*$/i', $who)) {
+        $who = ''; // an account name ("Admin") is not a person's name: the business's signatory signs instead, or nobody by name
+    }
     return $who !== '' ? $who : trim((string)(pm_settings()['signatory_name'] ?? ''));
 }
 

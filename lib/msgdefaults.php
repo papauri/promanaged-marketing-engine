@@ -225,3 +225,36 @@ function pm_dm_apply(array &$lead, bool $plain = false): array
     pm_lead_note($lead, 'Default message used');
     return [true, 'The default message is now the draft for ' . ($lead['name'] ?? 'this lead') . '. Read it, then send.'];
 }
+
+/**
+ * Every lead with an email address is ready to send without opening it: a lead that has an address but no first email yet gets one now from the business's default
+ * message, with the study's personal line and the owner's name when they are known (no AI, so it costs nothing). Leads already written, sent, closed, opted out or
+ * clients are left alone. Returns how many drafts were made.
+ */
+function pm_dm_ready_all(?array &$leads = null): int
+{
+    $own = $leads === null;
+    if ($own) {
+        $leads = pm_leads();
+    }
+    $n = 0;
+    foreach ($leads as $id => $l) {
+        if (!filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) || trim((string)($l['drafts']['email_body'] ?? '')) !== '' || !empty($l['sent'])
+            || !in_array($l['status'] ?? '', ['new', 'qualified', 'drafted'], true) || (function_exists('pm_lead_is_client') && pm_lead_is_client($l))
+            || (!empty($l['email_bad']) && strcasecmp((string)$l['email_bad'], (string)$l['email']) === 0)) {
+            continue;
+        }
+        $r = pm_dm_as((string)($l['brand'] ?? 'promanaged'), fn() => pm_dm_render($l));
+        if (trim((string)$r['email_body']) === '') {
+            continue;
+        }
+        $leads[$id]['drafts'] = $r + ['source' => 'default'];
+        $leads[$id]['status'] = 'drafted';
+        pm_lead_note($leads[$id], 'First email made from the default message, so it is ready to send' . (function_exists('pm_lead_personal') && pm_lead_personal($l) !== '' ? ' (with the personal line from the study)' : ''));
+        $n++;
+    }
+    if ($own && $n) {
+        pm_leads_save($leads);
+    }
+    return $n;
+}
