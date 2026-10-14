@@ -46,9 +46,13 @@ $gaps = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted'], true) 
 $fuDue = array_flip(array_map('strval', array_keys(pm_followup_due($leadsAll, $acfg, false))));
 $todo = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted', 'replied', 'proposal'], true) || $waiting($l)
     || ($l['status'] === 'contacted' && (!empty($l['followup_draft']) || isset($fuDue[(string)$l['id']]))); // Active: something to do now
+$hasMail = fn($l) => (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) && !(!empty($l['email_bad']) && strcasecmp((string)$l['email_bad'], (string)$l['email']) === 0);
+$readySend = fn($l) => $hasMail($l) && empty($l['approved_at']) && $l['status'] !== 'optout'
+    && ((in_array($l['status'], ['new', 'qualified', 'drafted'], true) && empty($l['sent']) && !empty($l['drafts']['email_body'])) || ($l['status'] === 'contacted' && !empty($l['followup_draft']['email_body']))); // Ready to send: an email address and a message, nothing in the way
 $inStatus = fn($l, $f) => $f === 'all' ? true : ($f === 'mine' ? (($l['owner'] ?? '') === $who && (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l))) : ($f === 'awaiting' ? $waiting($l)
+    : ($f === 'ready' ? $readySend($l) : ($f === 'noemail' ? (!$hasMail($l) && !in_array($l['status'], ['won', 'lost', 'optout'], true))
     : ($f === 'followups' ? ($l['status'] === 'contacted' && (!empty($l['followup_draft']) || isset($fuDue[(string)$l['id']]))) : ($f === 'closed' ? in_array($l['status'], ['lost', 'optout'], true)
-    : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? $todo($l) : $l['status'] === $f))))));
+    : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? $todo($l) : $l['status'] === $f))))))));
 $inSearch = fn($l) => ($fq === '' || mb_stripos($l['name'] . ' ' . $l['city'] . ' ' . ($l['contact'] ?? '') . ' ' . ($l['type'] ?? '') . ' ' . ($l['email'] ?? ''), $fq) !== false)
     && ($fcity === '' || strcasecmp(trim((string)($l['city'] ?? '')), $fcity) === 0) && $hasOk($l) && (int)($l['score'] ?? 0) >= $fmin
     && ($ffolder === '' || in_array($ffolder, (array)($l['folders'] ?? []), true));
@@ -68,6 +72,8 @@ $counts['active'] = count(array_filter($base, fn($l) => $inStatus($l, 'active'))
 $counts['awaiting'] = count(array_filter($base, fn($l) => $waiting($l)));
 $counts['gaps'] = count(array_filter($base, $gaps));
 $counts['followups'] = count(array_filter($base, fn($l) => $inStatus($l, 'followups')));
+$counts['ready'] = count(array_filter($base, $readySend));
+$counts['noemail'] = count(array_filter($base, fn($l) => $inStatus($l, 'noemail')));
 $counts['closed'] = count(array_filter($base, fn($l) => $inStatus($l, 'closed')));
 $counts['all'] = count($base);
 $counts['mine'] = $who === '' ? 0 : count(array_filter($base, fn($l) => $inStatus($l, 'mine')));
@@ -202,20 +208,20 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <div class="focusbar"><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?><?= pm_h($fq2()) ?>&at=<?= pm_h(rawurlencode($focusId)) ?>#l<?= pm_h($focusId) ?>">← All leads</a> <span class="muted">Focused on <b><?= pm_h($leadsAll[$focusId]['name']) ?></b></span></div>
 <?php else: ?>
 <div class="filters">
-  <?php foreach (($who !== '' ? ['mine' => 'Mine'] : []) + ['active' => 'Active', 'awaiting' => 'Needs reply', 'gaps' => 'Missing details', 'drafted' => 'Draft ready', 'followups' => 'Follow-ups', 'contacted' => 'Contacted', 'replied' => 'Replied', 'proposal' => 'Proposal sent', 'won' => 'Won', 'closed' => 'Closed', 'all' => 'All'] as $k => $l): ?>
+  <?php foreach (($who !== '' ? ['mine' => 'Mine'] : []) + ['active' => 'Active', 'ready' => 'Ready to send', 'awaiting' => 'Needs reply', 'noemail' => 'No email', 'gaps' => 'Missing details', 'drafted' => 'Draft ready', 'followups' => 'Follow-ups', 'contacted' => 'Contacted', 'replied' => 'Replied', 'proposal' => 'Proposal sent', 'won' => 'Won', 'closed' => 'Closed', 'all' => 'All'] as $k => $l): ?>
     <a href="?tab=agents&status=<?= $k ?><?= pm_h($fq2()) ?>" class="<?= $filter === $k ? 'on' : '' ?>"><?= $l ?> <small><?= (int)($counts[$k] ?? 0) ?></small></a>
   <?php endforeach; ?>
   <form method="get" class="typesel" data-noload="1"><input type="hidden" name="tab" value="agents"><input type="hidden" name="status" value="<?= pm_h($filter) ?>">
     <input type="search" name="q" value="<?= pm_h($fq) ?>" placeholder="Search leads" aria-label="Search leads by name, town or contact" class="narrow">
-    <select name="type" onchange="this.form.submit()" aria-label="Business type"><option value="">All business types</option>
+    <select name="type" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Business type"><option value="">All business types</option>
       <?php foreach ($types as $tk => $tn): ?><option value="<?= pm_h($tk) ?>" <?= $ftype === $tk ? 'selected' : '' ?>><?= pm_h($tk) ?> (<?= $tn ?>)</option><?php endforeach; ?></select>
-    <select name="city" onchange="this.form.submit()" aria-label="Town"><option value="">All towns</option>
+    <select name="city" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Town"><option value="">All towns</option>
       <?php foreach ($cities as $ck => $cn): ?><option value="<?= pm_h($ck) ?>" <?= strcasecmp($fcity, (string)$ck) === 0 ? 'selected' : '' ?>><?= pm_h($ck) ?> (<?= $cn ?>)</option><?php endforeach; ?></select>
-    <select name="has" onchange="this.form.submit()" aria-label="What we know"><option value="">Any details</option><?php foreach ($leadHas as $hk => $hl): ?><option value="<?= $hk ?>" <?= $fhas === $hk ? 'selected' : '' ?>><?= pm_h($hl) ?></option><?php endforeach; ?></select>
-    <select name="min" onchange="this.form.submit()" aria-label="Lowest fit score"><?php foreach ([0 => 'Any score', 60 => 'Score 60+', 75 => 'Score 75+', 85 => 'Score 85+'] as $mk => $ml): ?><option value="<?= $mk ?>" <?= $fmin === $mk ? 'selected' : '' ?>><?= $ml ?></option><?php endforeach; ?></select>
-    <select name="sort" onchange="this.form.submit()" aria-label="Order"><?php foreach (['' => 'Best first', 'ready' => 'Most ready first', 'new' => 'Newest first', 'name' => 'Name A to Z', 'city' => 'By town'] as $sk => $sl): ?><option value="<?= $sk ?>" <?= $fsort === $sk ? 'selected' : '' ?>><?= $sl ?></option><?php endforeach; ?></select>
-    <?php if ($folders): ?><select name="folder" onchange="this.form.submit()" aria-label="Folder"><option value="">All folders</option><?php foreach ($folders as $fk => $fn): ?><option value="<?= pm_h((string)$fk) ?>" <?= $ffolder === (string)$fk ? 'selected' : '' ?>><?= pm_h((string)$fk) ?> (<?= (int)$fn ?>)</option><?php endforeach; ?></select><?php endif; ?>
-    <select name="per" onchange="this.form.submit()" aria-label="Leads per page"><?php foreach ([10, 25, 50, 100, 200] as $pk): ?><option value="<?= $pk ?>" <?= $fper === $pk ? 'selected' : '' ?>><?= $pk ?> a page</option><?php endforeach; ?></select>
+    <select name="has" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="What we know"><option value="">Any details</option><?php foreach ($leadHas as $hk => $hl): ?><option value="<?= $hk ?>" <?= $fhas === $hk ? 'selected' : '' ?>><?= pm_h($hl) ?></option><?php endforeach; ?></select>
+    <select name="min" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Lowest fit score"><?php foreach ([0 => 'Any score', 60 => 'Score 60+', 75 => 'Score 75+', 85 => 'Score 85+'] as $mk => $ml): ?><option value="<?= $mk ?>" <?= $fmin === $mk ? 'selected' : '' ?>><?= $ml ?></option><?php endforeach; ?></select>
+    <select name="sort" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Order"><?php foreach (['' => 'Best first', 'ready' => 'Most ready first', 'new' => 'Newest first', 'name' => 'Name A to Z', 'city' => 'By town'] as $sk => $sl): ?><option value="<?= $sk ?>" <?= $fsort === $sk ? 'selected' : '' ?>><?= $sl ?></option><?php endforeach; ?></select>
+    <?php if ($folders): ?><select name="folder" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Folder"><option value="">All folders</option><?php foreach ($folders as $fk => $fn): ?><option value="<?= pm_h((string)$fk) ?>" <?= $ffolder === (string)$fk ? 'selected' : '' ?>><?= pm_h((string)$fk) ?> (<?= (int)$fn ?>)</option><?php endforeach; ?></select><?php endif; ?>
+    <select name="per" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Leads per page"><?php foreach ([10, 25, 50, 100, 200] as $pk): ?><option value="<?= $pk ?>" <?= $fper === $pk ? 'selected' : '' ?>><?= $pk ?> a page</option><?php endforeach; ?></select>
     <?php if ($ftype !== '' || $fq !== '' || $fcity !== '' || $fhas !== '' || $fmin || $fsort !== '' || $ffolder !== ''): ?><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?>">Clear</a><?php endif; ?></form>
 </div>
 <?php endif; ?>

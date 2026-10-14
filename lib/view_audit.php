@@ -233,7 +233,7 @@ else:
         <button class="btn primary" data-busy="The AI auditor is reading the numbers…">Audit <?= pm_h(mb_strtolower($ar['label'])) ?> with AI</button>
         <span class="muted t-sm">One AI call. It reads counts only: activity, follow-ups, late leads, sign-ins, deletes and agent errors.</span></form>
       <form method="post" class="cluster mt-2"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="audit"><input type="hidden" name="do" value="weekly">
-        <label class="tick"><input type="checkbox" name="on" value="1"<?= !empty($conf['weekly']) ? ' checked' : '' ?> onchange="this.form.submit()"> Audit the last 7 days by itself every Monday morning</label></form>
+        <label class="tick"><input type="checkbox" name="on" value="1"<?= !empty($conf['weekly']) ? ' checked' : '' ?> onchange="(this.form.requestSubmit || this.form.submit).call(this.form)"> Audit the last 7 days by itself every Monday morning</label></form>
     </div>
 
     <?php if (!$rep): ?>

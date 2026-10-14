@@ -2183,7 +2183,7 @@ $GLOBALS['PM_DEPT'] = pm_ui_dept_of($tab, (string)($_GET['view'] ?? ''), $sectio
 $team = array_values(array_filter((array)($settings['team'] ?? [])));
 echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'section' => $section, 'vb' => $vb, 'settings' => $settings, 'csrf' => $csrf, 'team' => $team, 'who' => $GLOBALS['PM_WHO'], 'hbAge' => pm_social_heartbeat_age()]);
 ?>
-<main>
+<main data-brand="<?= pm_h((string)($_SESSION['abrand'] ?? pm_brand())) ?>">
 <?php if ($flash): ?><div class="flash <?= pm_h($flash[0]) ?>"><?= pm_h($flash[1]) ?></div><?php endif; ?>
 
 <?php if (in_array($tab, ['proposal', 'history', 'template'], true) && empty(pm_brand_profile($vb)['proposals'])): ?>

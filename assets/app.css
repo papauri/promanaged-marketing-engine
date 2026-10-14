@@ -938,3 +938,4 @@ details.lead > summary .who { flex:1 1 auto; min-width:0; }
 .selbar .advice { flex:1 1 100%; color:var(--ink-2); }
 .lead .tags .pill.folder { background:var(--surface-2); color:var(--ink-2); text-decoration:none; }
 @media (max-width:760px) { .outbox .obrow { flex-direction:column; } }
+main.swapping { opacity:.55; pointer-events:none; transition:opacity .12s; }

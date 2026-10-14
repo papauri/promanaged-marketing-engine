@@ -291,15 +291,22 @@
   });
 
   // Heat maps (table.heat): each td[data-v] is shaded by its value relative to the largest in the table.
-  document.querySelectorAll('table.heat').forEach(function (t) {
-    var cells = t.querySelectorAll('td[data-v]'), max = 0;
-    cells.forEach(function (c) { max = Math.max(max, parseFloat(c.getAttribute('data-v')) || 0); });
-    cells.forEach(function (c) { c.style.setProperty('--v', max > 0 ? ((parseFloat(c.getAttribute('data-v')) || 0) / max).toFixed(2) : 0); });
-  });
+  function heat() {
+    document.querySelectorAll('table.heat').forEach(function (t) {
+      var cells = t.querySelectorAll('td[data-v]'), max = 0;
+      cells.forEach(function (c) { max = Math.max(max, parseFloat(c.getAttribute('data-v')) || 0); });
+      cells.forEach(function (c) { c.style.setProperty('--v', max > 0 ? ((parseFloat(c.getAttribute('data-v')) || 0) / max).toFixed(2) : 0); });
+    });
+  }
+  heat();
+  document.addEventListener('pm:swap', heat);
 
   window.addEventListener('pageshow', hide);              // back button: never leave the loader stuck
 
-  // Live progress while the agents search.
+  // Live progress while the agents search (set up again when a filter changes the page without reloading it).
+  var runTimer = null;
+  function runbar() {
+  clearTimeout(runTimer);
   var rb = document.getElementById('runbar');
   if (rb && rb.dataset.running === '1') {
     document.querySelectorAll('.leadlist.locked form button, .leadlist.locked form input[type=checkbox], .selbar.locked button, .selbar.locked input, .lsel').forEach(function (b) { // one job at a time: lead actions wait for the run
@@ -312,11 +319,14 @@
         if (sub) sub.textContent = (s.phase || 'Working') + (s.total ? ' · ' + s.done + ' of ' + s.total + ' done' : '') + (s.new_leads ? ' · ' + s.new_leads + ' new leads so far' : '');
         var st = Math.max(1, s.steps || 7), part = s.total ? Math.min(1, (s.done || 0) / s.total) : 0; // inside a step, its jobs done move the bar on
         if (fill) fill.style.width = Math.max(6, Math.round(100 * (Math.max(0, (s.step || 1) - 1) + part) / st)) + '%';
-        setTimeout(tick, 2000);
-      }).catch(function () { setTimeout(tick, 4000); });
+        runTimer = setTimeout(tick, 2000);
+      }).catch(function () { runTimer = setTimeout(tick, 4000); });
     };
-    setTimeout(tick, 1500);
+    runTimer = setTimeout(tick, 1500);
   }
+  }
+  runbar();
+  document.addEventListener('pm:swap', runbar);
 })();
 
 /* Text boxes grow to show everything typed in them, so a message is never cut off (up to 70% of the window, then it scrolls). */
@@ -332,6 +342,7 @@
   document.addEventListener('toggle', function (e) { if (e.target.open) all(e.target); }, true);
   window.addEventListener('load', function () { all(); setTimeout(all, 300); });
   window.addEventListener('resize', function () { all(); });
+  document.addEventListener('pm:swap', function () { all(); });
 })();
 
 /* Pages of 10: every table with more than 10 rows, and every list marked data-page-items="<selector of its rows>", shows 10 at a time with
@@ -381,6 +392,7 @@
     });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+  document.addEventListener('pm:swap', init);
 })();
 
 /* A card that is still being built (data-reload-every="<seconds>") reloads the page until the work is done. */
@@ -394,4 +406,69 @@
   var m = location.hash.match(/^#l([^&#?\/]+)$/);
   if (!m || document.getElementById('l' + m[1]) || !/[?&]tab=agents(&|$)/.test(location.search) || /[?&]at=/.test(location.search)) return;
   location.replace(location.pathname + location.search + '&at=' + encodeURIComponent(decodeURIComponent(m[1])) + location.hash);
+})();
+
+/* Filters without a reload, everywhere in the app: a filter, a search, a sort, a tab or a page inside the same screen fetches that screen and swaps only <main>
+   (the address bar, Back and Forward work as before). Another screen, a different business, a download or anything that fails falls back to a normal page load. */
+(function () {
+  if (!window.fetch || !window.DOMParser || !history.pushState) return;
+  var mainEl = function () { return document.querySelector('main'); };
+  var here = function () { return new URL(location.href); };
+  function sameScreen(u) {
+    var h = here(), m = mainEl();
+    if (u.origin !== h.origin || u.pathname !== h.pathname) return false;
+    if ((u.searchParams.get('tab') || '') !== (h.searchParams.get('tab') || '')) return false;
+    if (u.searchParams.get('section') !== h.searchParams.get('section') && (u.searchParams.has('section') || h.searchParams.has('section'))) return false;
+    var b = u.searchParams.get('brand');
+    if (b && m && m.dataset.brand && b !== m.dataset.brand) return false; // another business: the whole page changes
+    return true;
+  }
+  var seq = 0;
+  function load(url, push, scrollTo) {
+    var m = mainEl();
+    if (!m) { location.href = url; return; }
+    var mine = ++seq, y = window.scrollY;
+    m.classList.add('swapping');
+    fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'pm-swap' } }).then(function (r) {
+      if (r.redirected) { location.href = r.url; throw 0; } // signed out, or sent elsewhere: follow it properly
+      if (!r.ok) throw 1;
+      return r.text();
+    }).then(function (html) {
+      if (mine !== seq) return; // a newer filter won
+      var doc = new DOMParser().parseFromString(html, 'text/html'), nm = doc.querySelector('main');
+      if (!nm || nm.querySelector('script')) { location.href = url; return; } // a screen with its own scripts loads the normal way
+      m.innerHTML = nm.innerHTML;
+      if (nm.dataset.brand) m.dataset.brand = nm.dataset.brand;
+      document.title = doc.title;
+      if (push) history.pushState({ pmSwap: 1 }, '', url);
+      var u = new URL(url, location.href), t = u.hash && document.getElementById(u.hash.slice(1));
+      if (t) t.scrollIntoView();
+      else if (scrollTo === 'list') { var p = m.querySelector('nav.pager, .leadlist, table'); window.scrollTo(0, p ? Math.max(0, p.getBoundingClientRect().top + window.scrollY - 90) : 0); }
+      else window.scrollTo(0, y);
+      document.dispatchEvent(new CustomEvent('pm:swap'));
+    }).catch(function (e) { if (e !== 0) location.href = url; }).then(function () { m.classList.remove('swapping'); });
+  }
+  document.addEventListener('click', function (e) {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target.closest('a[href]');
+    if (!a || !a.closest('main') || a.target || a.hasAttribute('download') || a.hasAttribute('data-nosoft') || a.closest('[data-nosoft]')) return;
+    var href = a.getAttribute('href');
+    if (!href || href.charAt(0) === '#' || /^(mailto|tel|javascript):/i.test(href)) return;
+    var u = new URL(a.href, location.href);
+    if (!sameScreen(u) || (u.search === location.search && u.hash)) return; // only the place on the page changes: the browser does that itself
+    e.preventDefault();
+    load(u.href, true, a.closest('nav.pager, .pager') ? 'list' : 'keep');
+  });
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (e.defaultPrevented || !f || (f.method || 'get').toLowerCase() !== 'get' || !f.closest('main') || f.hasAttribute('data-nosoft') || f.target) return;
+    var u = new URL(f.getAttribute('action') || location.pathname, location.href);
+    var ps = new URLSearchParams(new FormData(f));
+    Array.from(ps.keys()).forEach(function (k) { if (ps.get(k) === '') ps.delete(k); }); // a tidy address: no empty filters
+    u.search = ps.toString();
+    if (!sameScreen(u)) return;
+    e.preventDefault();
+    load(u.href, true, 'keep');
+  });
+  window.addEventListener('popstate', function () { load(location.href, false, 'keep'); });
 })();

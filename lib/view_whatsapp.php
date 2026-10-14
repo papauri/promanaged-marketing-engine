@@ -56,7 +56,7 @@ usort($wrote, fn($a, $b) => strcmp((string)($a['awaiting_reply_since'] ?? $a['la
 <h2 class="repttl">To message</h2>
 <?php endif; ?>
 <form method="get" class="typesel mb-2"><input type="hidden" name="tab" value="whatsapp">
-  <select name="type" onchange="this.form.submit()" aria-label="Business type"><option value="">All business types</option>
+  <select name="type" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Business type"><option value="">All business types</option>
   <?php foreach ($wtypes as $tk => $tn): ?><option value="<?= pm_h($tk) ?>" <?= strtolower($wtype) === $tk ? 'selected' : '' ?>><?= pm_h(ucfirst($tk)) ?> (<?= $tn ?>)</option><?php endforeach; ?></select></form>
 <div class="prog"><i style="width:<?= $cap ? min(100, (int)(100 * $sent / $cap)) : 0 ?>%"></i></div>
 

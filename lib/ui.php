@@ -293,7 +293,7 @@ function pm_ui_topbar(array $c): string
     }
     if ($team) {
         $h .= '<form method="post" class="who" data-quiet><input type="hidden" name="csrf" value="' . pm_h((string)$c['csrf']) . '"><input type="hidden" name="action" value="who"><input type="hidden" name="back" value="' . pm_h($tab) . '">'
-            . '<select name="who" onchange="this.form.submit()" aria-label="Who is working"><option value="">Working as…</option>';
+            . '<select name="who" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Who is working"><option value="">Working as…</option>';
         foreach ($team as $m) {
             $h .= '<option' . (($c['who'] ?? '') === $m ? ' selected' : '') . '>' . pm_h($m) . '</option>';
         }
