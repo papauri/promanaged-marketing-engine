@@ -660,8 +660,14 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     }
     pm_lead_note($L, ($which === 'drafts' ? 'First email' : ($which === 'winback_draft' ? 'Win-back email' : 'Follow-up')) . ' sent to ' . $email);
     unset($L);
-    pm_send_stats_mark();
-    pm_leads_save($leads);
+    try {
+        pm_send_stats_mark();
+        pm_leads_save($leads);
+    } catch (Throwable $e) { // the email is gone: say so loudly, so nobody sends it twice because the page still shows a draft
+        @file_put_contents(sys_get_temp_dir() . '/pm_sent_unrecorded.log', date('c') . ' ' . ($lead['name'] ?? '') . ' <' . $email . '> ' . $e->getMessage() . "
+", FILE_APPEND);
+        return pm_ob_res(false, 'The email to ' . ($lead['name'] ?? 'the lead') . ' WAS sent, but the app could not save that (' . mb_substr($e->getMessage(), 0, 120) . '). Do NOT send it again. Check that the data folder is writable (Operations > Health), then mark the lead contacted by hand.', 'smtp');
+    }
     return pm_ob_res(true, 'Sent to ' . ($lead['name'] ?? 'the lead') . '.', 'ok');
 }
 
