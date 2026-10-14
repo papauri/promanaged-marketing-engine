@@ -21,12 +21,13 @@ if ($camp):
     $drafts = count(array_filter($items, fn($i) => in_array($i['state'], ['draft', 'held'], true)));
     $fl = (array)($camp['copy']['flyer'] ?? []);
     $v = '&amp;v=' . substr(md5((string)@filemtime($files['share'] ?? '')), 0, 6);
+    $guide = pm_camp_guide($camp, $items);
     ?>
 <div class="card">
   <div class="cluster"><h2 class="m-0"><?= pm_h((string)$camp['name']) ?></h2> <?= $stateChip(match ((string)$camp['status']) { 'approved' => 'approved', 'partly approved' => 'held', default => 'draft' }) ?>
     <span class="muted t-sm">starts <?= pm_h(date('D j M, H:i', strtotime((string)$camp['when']))) ?> · <?= pm_h(PM_CAMP_PICS[$camp['pic'] ?? 'card'] ?? '') ?><?= !empty($camp['ai']) ? ' · words by the AI from your facts' : ' · your own words' ?></span></div>
   <?php if (($camp['note'] ?? '') !== ''): ?><p class="hint"><?= pm_h((string)$camp['note']) ?></p><?php endif; ?>
-  <p class="hint">The feed post goes out at the start time, the three story frames right after it (Facebook and Instagram stories, and WhatsApp Status as a hand-post task), the carousel the next day, and the WhatsApp broadcast a few people at a time in working hours. Nothing goes out until it is approved.</p>
+  <p class="mt-1"><b>Next:</b> <?= pm_h($guide['next']) ?></p>
   <div class="btns">
     <?php if ($drafts && pm_social_can_approve()): ?><form method="post" class="inl"><?= $sx('camp_approve', $hid('id', $camp['id'])) ?><button class="btn primary">Approve all <?= count(array_filter($items, fn($i) => $i['post'] !== null || $i['role'] === 'wac')) ?> items</button></form>
     <?php elseif ($drafts): ?><span class="hint">An approver has to approve this campaign.</span><?php endif; ?>
@@ -34,6 +35,22 @@ if ($camp):
     <a class="btn ghost" href="?tab=social&amp;view=campaign">All campaigns</a>
     <form method="post" class="inl"><?= $sx('camp_delete', $hid('id', $camp['id'])) ?><button class="btn danger" data-confirm="Delete this campaign? Items that are not published yet are removed; anything already published stays on the Page.">Delete</button></form>
   </div>
+</div>
+
+<div class="card"><h2>What is happening</h2>
+  <ol class="nextlist">
+  <?php foreach ($guide['steps'] as [$sl, $ss, $sd]): ?>
+    <li><span class="grow"><b><?= pm_h($sl) ?></b><br><span class="muted t-sm"><?= pm_h($sd) ?></span></span> <span class="chip <?= ['done' => 'ok', 'now' => 'warn', 'todo' => ''][$ss] ?>"><?= ['done' => 'done', 'now' => 'now', 'todo' => 'later'][$ss] ?></span></li>
+  <?php endforeach; ?>
+  </ol>
+  <?php if ($guide['times']): ?>
+  <details class="more mt-2"><summary>When each item goes out</summary>
+    <table class="grid" data-nopage><thead><tr><th>Item</th><th>Goes out</th><th>State</th></tr></thead><tbody>
+    <?php foreach ($guide['times'] as [$tl, $tw, $ts]): ?><tr><td><?= pm_h($tl) ?></td><td><?= $tw !== '' ? pm_h(date('D j M, H:i', strtotime($tw))) : '–' ?></td><td><?= $stateChip($ts) ?></td></tr><?php endforeach; ?>
+    </tbody></table>
+    <p class="hint">Story frames also become WhatsApp Status hand-post tasks. The broadcast goes only to people who agreed to WhatsApp messages, a few at a time in working hours. Nothing goes out until it is approved.</p>
+  </details>
+  <?php endif; ?>
 </div>
 
 <div class="card"><h2>Every item</h2>
@@ -89,22 +106,41 @@ $offers = function_exists('pm_lp_for_brand') ? array_reverse(pm_lp_for_brand($vb
 $aiPic = function_exists('pm_aiimg_ready') && pm_aiimg_ready($vb);
 $waOn = function_exists('pm_wa_biz_cfg') && pm_wa_biz_cfg($vb)['ready'];
 $prof = pm_brand_profile($vb);
+$ideas = pm_camp_ideas_saved($vb);
+$pick = isset($_GET['idea']) ? ($ideas['rows'][(int)$_GET['idea']] ?? null) : null;
+$aiOn = function_exists('pm_agents_ready') && pm_agents_ready();
 ?>
-<div class="card"><h2>New campaign</h2>
+<div class="card" id="ideas"><h2>Campaign ideas</h2>
+  <p class="hint mt-0">How a campaign works: 1. pick an idea or write your own message below; 2. the app makes every item from it; 3. you check the words and press Approve all; 4. it goes out on its own, and its page shows what is happening and what it brought.</p>
+  <?php if ($ideas['note'] !== ''): ?><p class="hint"><?= pm_h($ideas['note']) ?></p><?php endif; ?>
+  <?php if ($ideas['rows']): ?>
+  <ul class="nextlist">
+  <?php foreach ($ideas['rows'] as $ii => $idea): ?>
+    <li><span class="grow"><span class="chip <?= $idea['src'] === 'ai' ? 'info' : '' ?>"><?= pm_h(PM_CAMP_IDEA_SRC[$idea['src']] ?? '') ?></span> <b><?= pm_h($idea['headline']) ?></b><?= $idea['message'] !== '' ? ' · ' . pm_h($idea['message']) : '' ?>
+      <?php if ($idea['why'] !== ''): ?><br><span class="muted t-sm"><?= pm_h($idea['why']) ?></span><?php endif; ?></span>
+      <a class="btn small primary" href="?tab=social&amp;view=campaign&amp;idea=<?= (int)$ii ?>#new">Use this</a></li>
+  <?php endforeach; ?>
+  </ul>
+  <?php else: ?><p class="hint">No ideas yet: add an offer on Lead posts, or the free first step in Business details.</p><?php endif; ?>
+  <?php if ($aiOn): ?><form method="post" class="btns"><?= $sx('camp_ideas') ?><button class="btn small">Suggest campaigns with the AI</button><span class="hint">A fraction of a US cent. They are also refreshed by themselves once a week<?= $ideas['at'] !== '' ? '; last on ' . pm_h($ideas['at']) : '' ?><?= $ideas['ai'] ? '' : '. These come from your offers and results' ?>.</span></form><?php endif; ?>
+</div>
+
+<div class="card" id="new"><h2>New campaign</h2>
+  <?php if ($pick): ?><p class="hint mt-0">Filled in from the idea "<?= pm_h($pick['headline']) ?>". Change anything you like.</p><?php endif; ?>
   <form method="post" enctype="multipart/form-data"><?= $sx('camp_create') ?>
     <div class="row">
-      <div><label>What does it say? *</label><input type="text" name="headline" maxlength="90" placeholder="e.g. Free website check this month"></div>
-      <div><label>Or start from an offer</label><select name="offer"><option value="">No offer</option><?php foreach ($offers as $o): ?><option value="<?= pm_h((string)$o['id']) ?>"><?= pm_h((string)$o['title']) ?></option><?php endforeach; ?></select></div>
+      <div><label>What does it say? *</label><input type="text" name="headline" maxlength="90" value="<?= pm_h((string)($pick['headline'] ?? '')) ?>" placeholder="e.g. Free website check this month"></div>
+      <div><label>Or start from an offer</label><select name="offer"><option value="">No offer</option><?php foreach ($offers as $o): ?><option value="<?= pm_h((string)$o['id']) ?>"<?= ($pick['offer'] ?? '') === (string)$o['id'] ? ' selected' : '' ?>><?= pm_h((string)$o['title']) ?></option><?php endforeach; ?></select></div>
     </div>
-    <label>One more line (optional)</label><input type="text" name="message" maxlength="240" placeholder="What you do for them, in plain words">
+    <label>One more line (optional)</label><input type="text" name="message" maxlength="240" value="<?= pm_h((string)($pick['message'] ?? '')) ?>" placeholder="What you do for them, in plain words">
     <div class="row">
-      <div><label>WhatsApp keyword</label><input type="text" name="keyword" maxlength="12" value="<?= pm_h((string)$prof['cta_keyword']) ?>" placeholder="QUOTE"></div>
+      <div><label>WhatsApp keyword</label><input type="text" name="keyword" maxlength="12" value="<?= pm_h((string)(($pick['keyword'] ?? '') ?: $prof['cta_keyword'])) ?>" placeholder="QUOTE"></div>
       <div><label>Starts</label><input type="datetime-local" name="when" value="<?= pm_h(date('Y-m-d\TH:00', time() + 3600)) ?>"></div>
       <div><label>Picture</label><select name="pic"><?php foreach (PM_CAMP_PICS as $k => $l): if (($k === 'ai' && !$aiPic) || ($k === 'ailib' && !pm_camp_ai_library($vb))) { continue; } ?><option value="<?= $k ?>"><?= pm_h($l) ?></option><?php endforeach; ?></select></div>
       <div><label>Your photo (if you picked it)</label><input type="file" name="photo" accept="image/jpeg,image/png,image/webp"></div>
     </div>
     <label>WhatsApp broadcast goes to <span class="muted">(only people who agreed to WhatsApp messages<?= $waOn ? '' : '; WhatsApp Business is not connected yet, so it is kept as a draft' ?>)</span></label>
-    <div class="checks mt-0"><?php foreach (PM_WAC_AUDIENCE_STATUSES as $k => $l): ?><label class="check"><input type="checkbox" name="statuses[]" value="<?= $k ?>" <?= in_array($k, ['contacted', 'replied', 'proposal', 'won'], true) ? 'checked' : '' ?>> <?= pm_h($l) ?></label><?php endforeach; ?></div>
+    <div class="checks mt-0"><?php foreach (PM_WAC_AUDIENCE_STATUSES as $k => $l): ?><label class="check"><input type="checkbox" name="statuses[]" value="<?= $k ?>" <?= in_array($k, ($pick['statuses'] ?? []) ?: ['contacted', 'replied', 'proposal', 'won'], true) ? 'checked' : '' ?>> <?= pm_h($l) ?></label><?php endforeach; ?></div>
     <div class="btns"><button class="btn primary">Make the campaign</button></div>
     <p class="hint">Makes a feed post, three story frames, a carousel, a WhatsApp broadcast and a flyer (A4 and A5 PDF, share picture), all saying the same thing. The words use only your facts<?= $aiPic ? '' : '; AI pictures appear here once they are set up' ?>. You check everything and approve it with one press.</p>
   </form>
@@ -113,8 +149,9 @@ $prof = pm_brand_profile($vb);
 <?php $all = pm_camp_for($vb); if ($all): [$rows, $pager] = pm_ui_page($all, 10, 'cp'); ?>
 <div class="card"><h2>Campaigns</h2>
   <ul class="nextlist">
-  <?php foreach ($rows as $c): $its = pm_camp_items($c); $pub = count(array_filter($its, fn($i) => $i['state'] === 'published')); ?>
-    <li><span class="grow"><a href="?tab=social&amp;view=campaign&amp;c=<?= pm_h($c['id']) ?>"><b><?= pm_h((string)$c['name']) ?></b></a><br><span class="muted t-sm"><?= pm_h(date('j M Y, H:i', strtotime((string)$c['when']))) ?> · <?= $pub ?> of <?= count($its) ?> items out</span></span>
+  <?php foreach ($rows as $c): $its = pm_camp_items($c); $pub = count(array_filter($its, fn($i) => $i['state'] === 'published')); $g = pm_camp_guide($c, $its); ?>
+    <li><span class="grow"><a href="?tab=social&amp;view=campaign&amp;c=<?= pm_h($c['id']) ?>"><b><?= pm_h((string)$c['name']) ?></b></a><br><span class="muted t-sm"><?= pm_h(date('j M Y, H:i', strtotime((string)$c['when']))) ?> · <?= $pub ?> of <?= count($its) ?> items out<?= $g['results']['leads'] ? ' · ' . $g['results']['leads'] . ' enquir' . ($g['results']['leads'] === 1 ? 'y' : 'ies') : '' ?></span>
+      <br><span class="t-sm"><b>Next:</b> <?= pm_h($g['next']) ?></span></span>
       <?= $stateChip(match ((string)$c['status']) { 'approved' => 'approved', 'partly approved' => 'held', default => 'draft' }) ?> <a class="btn small primary" href="?tab=social&amp;view=campaign&amp;c=<?= pm_h($c['id']) ?>">Open</a></li>
   <?php endforeach; ?>
   </ul>

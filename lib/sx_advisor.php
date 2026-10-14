@@ -508,7 +508,8 @@ function pm_job_advisor_moves(string $brand): string
         return '';
     }
     $r = pm_adv_moves($brand);
-    return count($r['moves']) . ' next moves written' . ($r['ai'] ? '' : ' (from the numbers)');
+    $ideas = function_exists('pm_camp_ideas') ? pm_camp_ideas($brand) : null; // campaign ideas build on the new moves (no call when nothing changed)
+    return count($r['moves']) . ' next moves written' . ($r['ai'] ? '' : ' (from the numbers)') . ($ideas ? ', ' . count($ideas['rows']) . ' campaign ideas' : '');
 }
 
 /* ---------------- handlers ---------------- */

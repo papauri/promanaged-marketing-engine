@@ -767,7 +767,251 @@ function pm_camp_items(array $camp): array
     return $out;
 }
 
+/* ---------------- results and where a campaign stands ---------------- */
+
+/** What a campaign has brought so far: enquiries from its posts (or its offer since it started), reactions, comments and shares, WhatsApp messages sent. */
+function pm_camp_results(array $camp): array
+{
+    $ids = array_values(array_map('strval', (array)($camp['posts'] ?? [])));
+    $since = strtotime((string)($camp['when'] ?? '')) ?: 0;
+    $tag = ($camp['offer'] ?? '') !== '' ? 'offer-' . substr((string)$camp['offer'], 0, 10) : '';
+    $leads = 0;
+    foreach ((array)pm_load('leads', fn() => []) as $l) {
+        if (!is_array($l) || ($l['brand'] ?? '') !== ($camp['brand'] ?? '')) {
+            continue;
+        }
+        if (in_array((string)($l['source_post'] ?? ''), $ids, true) || ($tag !== '' && str_starts_with((string)($l['src_tag'] ?? ''), $tag) && (strtotime((string)($l['created'] ?? '')) ?: 0) >= $since)) {
+            $leads++;
+        }
+    }
+    $out = ['leads' => $leads, 'reactions' => 0, 'comments' => 0, 'shares' => 0, 'measured' => 0, 'sent' => 0];
+    foreach (pm_camp_posts($camp) as $p) {
+        $m = (array)($p['metrics']['d7'] ?? $p['metrics']['d3'] ?? $p['metrics']['h24'] ?? []);
+        if ($m) {
+            $out['measured']++;
+            foreach (['reactions', 'comments', 'shares'] as $k) {
+                $out[$k] += (int)($m[$k] ?? 0);
+            }
+        }
+    }
+    if (($camp['wac'] ?? '') !== '' && function_exists('pm_wac_get') && ($w = pm_wac_get((string)$camp['wac']))) {
+        $out['sent'] = (int)pm_wac_counts($w)['sent'];
+    }
+    return $out;
+}
+
+/** "in 3 hours", "in 2 days", "now". */
+function pm_camp_in(int $ts): string
+{
+    $s = $ts - time();
+    return $s <= 60 ? 'now' : ($s < 5400 ? 'in ' . max(1, (int)round($s / 60)) . ' minutes' : ($s < 129600 ? 'in ' . (int)round($s / 3600) . ' hours' : 'in ' . (int)round($s / 86400) . ' days'));
+}
+
+/**
+ * Where a campaign stands, in plain words (no AI): 'next' = the one thing to do now, 'steps' = [[label, done|now|todo, detail]],
+ * 'times' = [[label, 'Y-m-d H:i', state]] when each item goes out, 'results' = pm_camp_results().
+ */
+function pm_camp_guide(array $camp, array $items): array
+{
+    $by = fn(string $s) => array_values(array_filter($items, fn($i) => $i['state'] === $s));
+    [$draft, $held, $failed, $waiting, $appr, $pub] = [$by('draft'), $by('held'), $by('failed'), $by('waiting'), $by('approved'), $by('published')];
+    $posts = array_values(array_filter($items, fn($i) => $i['post'] !== null));
+    $postsOut = count(array_filter($posts, fn($i) => $i['state'] === 'published'));
+    $start = strtotime((string)$camp['when']) ?: time();
+    $r = pm_camp_results($camp);
+    $plural = fn(int $n, string $one, string $many) => $n . ' ' . ($n === 1 ? $one : $many);
+    $resLine = $postsOut || $r['sent'] ? trim(($r['leads'] ? $plural($r['leads'], 'enquiry', 'enquiries') . ' so far. ' : 'No enquiries yet. ')
+        . ($r['measured'] ? $r['reactions'] . ' reactions, ' . $r['comments'] . ' comments, ' . $r['shares'] . ' shares on the posts measured. ' : 'Reactions and comments are counted about a day after a post goes out. ')
+        . ($r['sent'] ? $plural($r['sent'], 'WhatsApp message', 'WhatsApp messages') . ' sent.' : '')) : 'Shows here once the first item is out.';
+    $toCheck = count($draft) + count($held);
+    $steps = [
+        ['Made', 'done', 'On ' . date('j M, H:i', strtotime((string)$camp['created']) ?: time()) . ($camp['ai'] ? ', words by the AI from your facts.' : ', from your own words.')],
+        ['Checked and approved', $toCheck ? 'now' : 'done', $held ? $plural(count($held), 'item needs', 'items need') . ' an edit (the reason is under each one).' . (count($draft) ? ' ' . count($draft) . ' more wait for Approve all.' : '')
+            : ($draft ? $plural(count($draft), 'item waits', 'items wait') . ' for your check and Approve all.' : 'Approved' . (($camp['approved_at'] ?? '') !== '' ? ' ' . date('j M, H:i', strtotime((string)$camp['approved_at'])) . ' by ' . $camp['approved_by'] : '') . '.' . ($by('off') ? ' The WhatsApp broadcast waits until WhatsApp Business is connected (Operations > Connections).' : ''))],
+        ['Going out', $posts && $postsOut === count($posts) ? 'done' : ($appr ? 'now' : 'todo'), $postsOut . ' of ' . count($posts) . ' posts out.'
+            . ($appr && $start > time() ? ' The first goes out ' . pm_camp_in($start) . ' (' . date('D j M, H:i', $start) . ').' : ($appr ? ' The rest follow on their times below.' : ''))],
+    ];
+    $hand = array_values(array_filter($items, fn($i) => str_contains($i['role'], ':')));
+    if ($hand) {
+        $steps[] = ['Posted by hand', $waiting ? 'now' : 'done', $waiting ? $plural(count($waiting), 'post waits', 'posts wait') . ' for you to post by hand (' . implode(', ', array_unique(array_map(fn($i) => preg_replace('/^↳\s*/u', '', $i['label']), $waiting))) . ').' : 'All hand-posts done.'];
+    }
+    $steps[] = ['Results', $postsOut || $r['sent'] ? 'now' : 'todo', $resLine];
+    $next = match (true) {
+        (bool)$failed => 'Fix the failed item: ' . $failed[0]['label'] . ($failed[0]['note'] !== '' ? ' (' . $failed[0]['note'] . ')' : '') . '. Change its words and save, or open it in Channels.',
+        (bool)$held => 'Change the words of the ' . $plural(count($held), 'item', 'items') . ' marked "needs an edit" below, save, then press Approve all.',
+        (bool)$draft => pm_social_can_approve() ? 'Check the pictures and words below (change any you like), then press Approve all. Nothing goes out before that.' : 'Waiting for an approver to press Approve all.',
+        (bool)$waiting => 'Post the hand-post items: download the stories (zip), post them to your WhatsApp Status, then mark them done in Channels.',
+        $appr && $start > time() => 'Nothing to do: it starts by itself ' . pm_camp_in($start) . '. Meanwhile, print the flyer or share it in your groups.',
+        (bool)$appr => 'Going out now; the rest follows on the times below by itself.',
+        $r['leads'] > 0 => 'Answer the ' . $plural($r['leads'], 'enquiry', 'enquiries') . ' quickly: fast replies win most deals.',
+        default => 'Everything is out. Share the flyer in person and in groups; when it has run a week, try one of the next campaign ideas.',
+    };
+    $times = [];
+    foreach ($posts as $i) {
+        $times[] = [$i['label'], (string)($i['post']['when'] ?? ''), $i['state']];
+    }
+    foreach ($items as $i) {
+        if ($i['role'] === 'wac' && ($w = function_exists('pm_wac_get') ? pm_wac_get($i['id']) : null)) {
+            $times[] = ['WhatsApp broadcast (a few at a time, working hours)', (string)($w['send_from'] ?? $camp['when']), $i['state']];
+        }
+    }
+    return ['next' => $next, 'steps' => $steps, 'times' => $times, 'results' => $r];
+}
+
+/* ---------------- ideas: what to run next ---------------- */
+
+const PM_CAMP_IDEA_SRC = ['offer' => 'Your offer', 'advisor' => 'What is selling', 'magnet' => 'Free first step', 'ai' => 'AI idea'];
+
+/** The headlines of the business's campaigns of the last $days days, lower-cased, so an idea is not a campaign that just ran. */
+function pm_camp_recent_heads(string $brand, int $days = 30): array
+{
+    $cut = date('Y-m-d H:i', time() - $days * 86400);
+    return array_map(fn($c) => mb_strtolower(trim((string)($c['headline'] ?? ''))), array_filter(pm_camp_for($brand), fn($c) => (string)($c['created'] ?? '') >= $cut));
+}
+
+/** Campaign ideas from code alone (free): the offers by enquiries, this week's advisor offer, the free first step; minus what ran lately. */
+function pm_camp_ideas_plain(string $brand): array
+{
+    $recent = pm_camp_recent_heads($brand);
+    $p = pm_brand_profile($brand);
+    $kw = (string)$p['cta_keyword'];
+    $out = [];
+    $rows = [];
+    foreach (function_exists('pm_lp_for_brand') ? pm_lp_for_brand($brand, true) : [] as $o) {
+        $s = function_exists('pm_lp_stats') ? pm_lp_stats($o) : [];
+        $rows[] = [$o, (int)($s['leads'] ?? 0) + (int)($s['keyword_comments'] ?? 0), (int)($s['published'] ?? 0)];
+    }
+    usort($rows, fn($a, $b) => $b[1] <=> $a[1]);
+    foreach (array_slice($rows, 0, 2) as [$o, $enq, $pub]) {
+        $out[] = ['headline' => (string)$o['title'], 'message' => (string)($o['fix'] ?? ''), 'keyword' => (string)($o['keyword'] ?? '') ?: $kw, 'offer' => (string)$o['id'], 'statuses' => ['contacted', 'replied', 'proposal', 'won'], 'src' => 'offer',
+            'why' => $enq ? 'This offer brought ' . $enq . ' enquir' . ($enq === 1 ? 'y' : 'ies') . ' from ' . $pub . ' post' . ($pub === 1 ? '' : 's') . ': give it every channel at once.'
+                : ($pub ? 'Posted ' . $pub . ' time' . ($pub === 1 ? '' : 's') . ' with no enquiry yet: stories, WhatsApp and a flyer reach people the feed missed.' : 'Not posted yet: a campaign launches it on every channel at once.')];
+    }
+    foreach (function_exists('pm_adv_moves_saved') ? pm_adv_moves_saved($brand)['moves'] : [] as $mv) {
+        if (!empty($mv['offer']['title'])) {
+            $out[] = ['headline' => (string)$mv['offer']['title'], 'message' => (string)($mv['offer']['fix'] ?? ''), 'keyword' => (string)($mv['offer']['keyword'] ?? '') ?: $kw, 'offer' => '', 'statuses' => ['replied', 'won'], 'src' => 'advisor',
+                'why' => (string)($mv['reason'] ?: $mv['title'])];
+        }
+    }
+    if ($p['magnet'] !== '') {
+        $out[] = ['headline' => mb_strtoupper(mb_substr($p['magnet'], 0, 1)) . mb_substr($p['magnet'], 1), 'message' => '', 'keyword' => $kw, 'offer' => '', 'statuses' => ['qualified', 'contacted'], 'src' => 'magnet',
+            'why' => 'Your free first step: no risk for the buyer, so it starts conversations with people who have not bought yet.'];
+    }
+    $seen = [];
+    return array_slice(array_values(array_filter($out, function ($i) use ($recent, &$seen) {
+        $k = mb_strtolower(trim($i['headline']));
+        if ($k === '' || in_array($k, $recent, true) || isset($seen[$k])) {
+            return false;
+        }
+        return $seen[$k] = true;
+    })), 0, 4);
+}
+
+/**
+ * Asks the AI (cheap tier, one call) for 3 or 4 campaign ideas from the business's facts, offers and their enquiries, past campaigns and their results,
+ * the advisor's moves and the month; the free ideas fill up the rest. Skipped when nothing changed since the last ideas (unless $force).
+ * Every idea is checked like campaign words: no number the business never gave, none of the banned words, a real offer id. Saved in data/camp_ideas.json.
+ */
+function pm_camp_ideas(string $brand, bool $force = false): array
+{
+    $prev = (array)(pm_load('camp_ideas', fn() => [])[$brand] ?? []);
+    $plain = pm_camp_ideas_plain($brand);
+    $res = ['at' => date('Y-m-d H:i'), 'ai' => false, 'note' => '', 'sig' => '', 'rows' => $plain];
+    $ready = function_exists('pm_agents_ready') && (pm_agents_ready() || isset($GLOBALS['PM_AI_STUB']));
+    if ($ready) {
+        $brain = pm_brain($brand);
+        $p = pm_brand_profile($brand);
+        $offers = [];
+        foreach (function_exists('pm_lp_for_brand') ? pm_lp_for_brand($brand, true) : [] as $o) {
+            $s = function_exists('pm_lp_stats') ? pm_lp_stats($o) : [];
+            $offers[] = ['id' => (string)$o['id'], 'title' => (string)$o['title'], 'problem' => (string)($o['problem'] ?? ''), 'fix' => (string)($o['fix'] ?? ''), 'keyword' => (string)($o['keyword'] ?? ''),
+                'posts_out' => (int)($s['published'] ?? 0), 'enquiries' => (int)($s['leads'] ?? 0) + (int)($s['keyword_comments'] ?? 0)];
+        }
+        $past = array_map(fn($c) => ['said' => (string)$c['headline'], 'started' => substr((string)$c['when'], 0, 10), 'enquiries' => pm_camp_results($c)['leads']], array_slice(pm_camp_for($brand), 0, 6));
+        $moves = array_map(fn($m) => $m['title'] . ': ' . $m['reason'], function_exists('pm_adv_moves_saved') ? pm_adv_moves_saved($brand)['moves'] : []);
+        $input = ['business' => pm_brand_name($brand), 'about' => (string)$brain['about'], 'market' => (string)$p['market'], 'sells_to' => (string)$p['sell_to'],
+            'true_facts' => array_values(array_filter(array_map('trim', preg_split('/\R/', (string)$brain['facts']) ?: []))), 'offerings' => array_values((array)(pm_agents_config($brand)['offerings'] ?? [])),
+            'free_first_step' => (string)$p['magnet'], 'whatsapp_keyword' => (string)$p['cta_keyword'], 'month' => date('F'), 'offers' => $offers, 'past_campaigns' => $past, 'advisor_moves' => $moves,
+            'audiences' => (defined('PM_WAC_AUDIENCE_STATUSES') ? PM_WAC_AUDIENCE_STATUSES : [])];
+        $res['sig'] = sha1(json_encode($input, JSON_UNESCAPED_UNICODE));
+        if (!$force && ($prev['sig'] ?? '') === $res['sig'] && !empty($prev['ai'])) {
+            return $prev; // nothing new to think about: the same ideas, no AI call
+        }
+        try {
+            $system = 'You suggest the next marketing campaigns for a small business in ' . ($p['market'] ?: 'Malawi') . '. A campaign is one message sent to every channel at once: feed post, stories, carousel, '
+                . 'a WhatsApp broadcast to people who already know the business, and a printed flyer. Suggest 3 or 4, best first, each different: build on the offers that brought enquiries, the advisor moves, '
+                . 'the free first step and what people need in ' . date('F') . '. Use ONLY the facts given. Never invent numbers, prices, discounts, deadlines, awards, customers or guarantees, never use the words '
+                . 'best, cheapest, fastest, guaranteed or 24/7, and do not repeat a past campaign. Say "we". Short plain words for a phone screen. Reply with JSON only.';
+            $user = json_encode($input, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                . "\nJSON: {\"note\":\"one sentence: what these ideas build on\",\"ideas\":[{\"headline\":\"what it says, under 9 words\",\"message\":\"one more plain line\",\"keyword\":\"ONE capital word\","
+                . "\"offer_id\":\"an id from offers, or empty\",\"audience\":[\"keys from audiences\"],\"why\":\"one sentence: why this, why now, quoting only numbers given\"}]}";
+            $r = pm_agent_json(pm_claude($system, $user, false, 1200, 'cheap'));
+            if (is_array($r) && array_is_list($r) && is_array($r[0] ?? null)) {
+                $r = isset($r[0]['ideas']) ? $r[0] : ['ideas' => $r]; // some models wrap the answer in a list
+            }
+        } catch (Throwable $e) {
+            $r = null;
+            $res['note'] = 'The AI ideas did not work this time (' . mb_substr($e->getMessage(), 0, 80) . '); these come from your offers and results.';
+        }
+        $src = mb_strtolower(json_encode($input, JSON_UNESCAPED_UNICODE));
+        $clean = fn($v, int $n) => mb_substr(trim(preg_replace('/\s+/u', ' ', strip_tags(is_scalar($v) ? (string)$v : ''))), 0, $n);
+        $bad = fn(string $t) => pm_brand_unsourced_number($t, $src) || preg_match('/\b(best|cheapest|fastest|guarantee[sd]?|24\s?\/\s?7)\b/i', $t);
+        $ids = array_column($offers, 'id');
+        $ai = [];
+        foreach (is_array($r) ? (array)($r['ideas'] ?? []) : [] as $x) {
+            if (!is_array($x) || count($ai) >= 4) {
+                continue;
+            }
+            $row = ['headline' => $clean($x['headline'] ?? '', 90), 'message' => $clean($x['message'] ?? '', 240), 'keyword' => mb_substr(strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string)($x['keyword'] ?? ''))), 0, 12) ?: (string)$p['cta_keyword'],
+                'offer' => in_array((string)($x['offer_id'] ?? ''), $ids, true) ? (string)$x['offer_id'] : '', 'src' => 'ai', 'why' => $clean($x['why'] ?? '', 260),
+                'statuses' => array_values(array_intersect(array_map('strval', (array)($x['audience'] ?? [])), array_keys((defined('PM_WAC_AUDIENCE_STATUSES') ? PM_WAC_AUDIENCE_STATUSES : []))))];
+            if (mb_strlen($row['headline']) < 3 || $bad($row['headline'] . ' ' . $row['message'] . ' ' . $row['why'])) {
+                continue; // a number nobody gave it, or a banned claim
+            }
+            $ai[] = $row;
+        }
+        if ($ai) {
+            $heads = array_map(fn($i) => mb_strtolower($i['headline']), $ai);
+            $same = function (array $i) use ($heads): bool { // a free idea the AI already said in its own words
+                $k = preg_replace('/^(a|an|the)\s+/u', '', mb_strtolower(trim($i['headline'])));
+                return (bool)array_filter($heads, fn($h) => str_contains($h, $k));
+            };
+            $res['rows'] = array_slice(array_merge($ai, array_values(array_filter($plain, fn($i) => !$same($i)))), 0, 6);
+            $res['ai'] = true;
+            $n = $clean(is_array($r) ? ($r['note'] ?? '') : '', 200);
+            $res['note'] = $bad($n) ? '' : $n;
+        } elseif ($res['note'] === '') {
+            $res['note'] = 'The AI gave no usable idea this time; these come from your offers and results.';
+        }
+    } else {
+        $res['note'] = 'The AI is not set up, so these ideas come from your offers and results alone.';
+    }
+    pm_update('camp_ideas', function (array $all) use ($brand, $res) {
+        $all[$brand] = $res;
+        return $all;
+    }, fn() => []);
+    return $res;
+}
+
+/** What the screen shows: the saved ideas minus campaigns made since, else the free ones. Never asks the AI (pages stay instant). */
+function pm_camp_ideas_saved(string $brand): array
+{
+    $s = (array)(pm_load('camp_ideas', fn() => [])[$brand] ?? []);
+    $recent = pm_camp_recent_heads($brand);
+    $rows = array_values(array_filter((array)($s['rows'] ?? []), fn($i) => !in_array(mb_strtolower(trim((string)($i['headline'] ?? ''))), $recent, true)));
+    return $rows ? ['at' => (string)($s['at'] ?? ''), 'ai' => !empty($s['ai']), 'note' => (string)($s['note'] ?? ''), 'rows' => $rows]
+        : ['at' => '', 'ai' => false, 'note' => '', 'rows' => pm_camp_ideas_plain($brand)];
+}
+
 /* ---------------- forms (POST action=social_ext&do=camp_*) ---------------- */
+
+/** "Suggest campaigns with the AI": asks now, even when nothing changed. */
+function pm_do_camp_ideas(string $vb): array
+{
+    @set_time_limit(120);
+    $r = pm_camp_ideas($vb, true);
+    return ['msg' => count($r['rows']) . ' campaign idea' . (count($r['rows']) === 1 ? '' : 's') . ' ready' . ($r['ai'] ? ', written by the AI from your facts and results.' : '. ' . $r['note']), 'kind' => 'ok', 'to' => 'social&view=campaign#ideas'];
+}
 
 function pm_camp_back(string $msg, string $kind = 'ok', string $id = ''): array
 {
