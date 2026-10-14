@@ -951,6 +951,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $leads[$id]['phone'] = $newPhone;
             $leads[$id]['contact'] = trim((string)($_POST['contact'] ?? $lead['contact'] ?? ''));
+            if ($leads[$id]['contact'] !== trim((string)($lead['contact'] ?? '')) && $leads[$id]['contact'] !== '') {
+                unset($leads[$id]['contact_hint']);
+                pm_dm_greet($leads[$id]); // a name typed in the To box goes into the greetings now
+            }
             if ($key === 'drafts' && in_array($lead['status'], ['new', 'qualified'], true)) {
                 $leads[$id]['status'] = 'drafted';
             }

@@ -173,3 +173,30 @@ function pm_dm_personalise(array &$lead): bool
     pm_lead_note($lead, 'Draft made personal with what we learned' . ($first !== '' ? " (greets $first)" : ''));
     return true;
 }
+
+/**
+ * The owner chose a name (pressed Use this name, or typed it in the To box): it goes into the greeting of every unsent message on the lead straight away, the first email,
+ * the follow-up and their WhatsApp versions, even a draft edited by hand (only the greeting line changes). Returns true when a greeting changed.
+ */
+function pm_dm_greet(array &$lead): bool
+{
+    $first = pm_dm_first($lead);
+    if ($first === '' || !empty($lead['sent']) && empty($lead['followup_draft'])) {
+        return false;
+    }
+    $did = false;
+    foreach (['drafts', 'followup_draft'] as $k) {
+        if (empty($lead[$k]) || ($k === 'drafts' && !empty($lead['sent']))) {
+            continue;
+        }
+        foreach (['email_body', 'whatsapp'] as $f) {
+            $t = (string)($lead[$k][$f] ?? '');
+            $n = (string)preg_replace('/^(Hello|Hi|Dear|Good day|Moni|Muli bwanji)(\s+(Mr|Mrs|Ms|Dr)\.?)?(\s+[\p{L}\'’-]+){0,2}\s*,/u', "Hello $first,", $t, 1);
+            if ($n !== $t) {
+                $lead[$k][$f] = $n;
+                $did = true;
+            }
+        }
+    }
+    return $did;
+}

@@ -16,7 +16,7 @@ function pm_contact_name_ok(string $name): bool
 {
     $name = trim($name);
     return $name !== '' && !preg_match('/\d|@|https?:/', $name) && mb_strlen(preg_replace('/[^\p{L}]/u', '', $name)) >= 2
-        && !preg_match('/\b(reservations?|reception|info|sales|bookings?|management|admin|team|office|manager|owner|director)\b/i', $name);
+        && !preg_match('/\b(reservations?|reception|info|sales|bookings?|management|admin|team|office|manager|owner|director|lodge|hotel|camp|resort|guest ?house|beach|cottages?|apartments?|ltd|limited|company|enterprises?|tours?|safaris?|restaurant|bar|inn|village|retreat)\b/i', $name); // a business's name is not a person's
 }
 
 /** WhatsApp numbers a page shows: wa.me and api.whatsapp.com links, whatsapp:// links, and numbers written next to the word WhatsApp. Digits with the country code, mobiles only. */
@@ -435,11 +435,12 @@ function pm_contact_use_hint(string $id): array
             }
             unset($cur[$id]['contact_hint']);
             pm_lead_note($cur[$id], 'Contact name confirmed by you: ' . $parts['name']);
+            function_exists('pm_dm_greet') && pm_dm_greet($cur[$id]); // the name goes into the waiting messages now
             function_exists('pm_dm_personalise') && pm_dm_personalise($cur[$id]);
         }
         return $cur;
     }, fn() => []);
-    return [true, $parts['name'] . ' is now the contact: the greeting uses their first name (a waiting draft nobody edited is updated now).'];
+    return [true, $parts['name'] . ' is now the contact, and the waiting messages greet them by name.'];
 }
 
 /**
@@ -497,7 +498,7 @@ function pm_contact_save(string $id, array $in): array
         if ($name !== '') {
             $l['contact'] = $name;
             unset($l['contact_hint']);
-            $said[] = 'contact name saved';
+            $said[] = function_exists('pm_dm_greet') && pm_dm_greet($l) ? 'contact name saved and put in the greeting of the waiting messages' : 'contact name saved';
         }
         pm_lead_note($l, 'Contact details added by you');
         return $cur;
