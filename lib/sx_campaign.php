@@ -220,7 +220,7 @@ function pm_camp_copy(string $brand, array $own, array $cta): array
         $system = 'You write one coordinated marketing campaign for a small business in ' . (pm_brand_profile($brand)['market'] ?? 'Malawi') . ': a feed post, three story frames, a carousel, a WhatsApp Status line, '
             . 'a WhatsApp broadcast and a flyer, all saying the same thing. Use ONLY the facts and the owner\'s words you are given. Never invent numbers, prices, discounts, deadlines, '
             . 'awards, customers or guarantees, and never use the words best, cheapest, fastest, guaranteed or 24/7. Say "we", never "our team". Short plain words, written for a phone screen. Always tell people exactly what to do, using the call to action you are given: never a vague "contact us" or a keyword without the number. '
-            . 'Voice: ' . ($own['voice'] !== '' ? $own['voice'] : 'friendly and plain') . '.' . ($own['never'] !== '' ? ' Never: ' . $own['never'] : '') . ' Reply with JSON only.';
+            . 'Voice: ' . ($own['voice'] !== '' ? $own['voice'] : 'friendly and plain') . '.' . ($own['never'] !== '' ? ' Never: ' . $own['never'] : '') . ' ' . (function_exists('pm_firm_line') ? pm_firm_line($brand) . ' ' : '') . 'Reply with JSON only.';
         $user = json_encode(['business' => pm_brand_name($brand), 'about' => $own['about'], 'headline' => $own['headline'], 'message' => $own['message'], 'true_facts' => $own['facts'],
                 'call_to_action' => $cta['line'], 'reply_line' => $cta['reply']], JSON_UNESCAPED_UNICODE)
             . "\nJSON: {\"feed\":{\"headline\":\"under 9 words\",\"sub\":\"one short line\",\"caption\":\"the post text, 2 to 5 short lines, ending with call_to_action word for word\",\"bullets\":[\"3 short points\"]},"

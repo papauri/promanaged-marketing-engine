@@ -485,7 +485,7 @@ function pm_sx_build(string $brand, int $n, string $start, string $focus, bool $
         if ($learn === '' && function_exists('pm_audit_learnings')) {
             $learn = trim((string)pm_audit_learnings($brand));
         }
-        [$sys, $usr] = pm_sx_prompt($brand, (string)$s['company_name'], pm_agents_company_brief('tiny'), $items, $start, $learn);
+        [$sys, $usr] = pm_sx_prompt($brand, (string)$s['company_name'], pm_agents_company_brief('tiny') . ' ' . pm_firm_line($brand), $items, $start, $learn); // the firm's goal, local news and what prospects lack: Social sells what Sales sells
         $out = pm_agent_json(pm_claude($sys, $usr, false, min(4500, 300 + 250 * count($aiIdx)), 'write'));
         foreach ((array)(is_array($out) ? ($out['posts'] ?? []) : []) as $r) {
             if (!is_array($r) || !isset($r['i']) || !in_array((int)$r['i'], $aiIdx, true)) {

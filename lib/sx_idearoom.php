@@ -31,7 +31,7 @@ function pm_ir_prompt(array $brief, int $n, array $feedback, array $tried): arra
     }
     $system = pm_agents_company_brief('tiny') . "\nYou run the idea room for " . $f['name'] . ' (Malawi). Four specialists each give ' . max(1, intdiv($n, 4)) . ' ideas for social posts: ' . implode('; ', $sp) . '. '
         . 'An idea is one sentence (8 to 30 words) that a writer can turn into a post: a clear angle, something specific from the facts. Use ONLY the facts for what is true: no number, price, result or claim that is not in them; no hashtag, link or emoji. '
-        . 'Make every idea different from the others and from the ones the business already has. ' . PM_HUMAN_RULES . ' An editor scores each idea and sends weak ones back. Reply JSON only.';
+        . 'Make every idea different from the others and from the ones the business already has. ' . (function_exists('pm_firm_line') ? pm_firm_line(pm_brand()) . ' ' : '') . PM_HUMAN_RULES . ' An editor scores each idea and sends weak ones back. Reply JSON only.';
     $user = json_encode(['business' => $f['name'], 'about' => mb_substr($f['about'], 0, 400), 'audience' => mb_substr($f['audience'], 0, 200), 'facts' => array_slice($f['facts'], 0, 8), 'town' => $f['address_real'] ? $f['address'] : 'Malawi',
         'ideas_we_already_have' => array_slice($brief['have'], 0, 12), 'already_proposed' => array_slice($tried, 0, 10), 'editor_said' => $feedback], JSON_UNESCAPED_UNICODE)
         . "\nJSON: {\"ideas\":[{\"by\":\"\",\"idea\":\"\"}]}";

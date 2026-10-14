@@ -76,7 +76,7 @@ function pm_market_pulse_line(string $brand = ''): string
     } elseif ($brand === 'promanaged') { // the owner's own angle: a local supplier paid locally, so no forex to find for IT
         $bits[] = 'foreign currency is scarce, so paying overseas suppliers for IT and software is hard (we help: you pay us locally in ' . pm_local_currency()['word'] . ', with no forex to find)';
     }
-    return $bits ? 'What is happening where they are now; when it fits this lead, touch on ONE of these in a single natural clause, never as a lecture: ' . implode('; ', $bits) . '.' : '';
+    return $bits ? 'What is happening where they are now; touch on ONE of these in a single natural clause when it fits, never as a lecture: ' . implode('; ', $bits) . '.' : '';
 }
 
 /* ---------------- the personal line ---------------- */

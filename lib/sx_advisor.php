@@ -436,6 +436,7 @@ function pm_adv_moves(string $brand, bool $force = false): array
                 . 'Types: double_down (more of what answers or buys), drop (less of what does not), try_next (a kind of buyer, town or channel not tried yet), new_offer (a small free or low-risk offer that starts conversations), fix (something that loses deals). '
                 . 'Every reason quotes the numbers you were given; never invent a number, a result, a price or a claim. With few leads worked (under 15), say so in "note" and lean on try_next and new_offer, using the studied kinds of buyer and what does well for our other businesses. '
                 . 'A new_offer may only use the true facts, offerings and free first step; never the words best, cheapest, fastest, guaranteed or 24/7. Plain words. Reply with JSON only.';
+            $system .= function_exists('pm_firm_line') ? ' ' . pm_firm_line($brand) : ''; // the goal, local news and what prospects lack: a move can answer them
             $user = json_encode($input, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
                 . "\nJSON: {\"note\":\"one sentence on how much there is to learn from\",\"moves\":[{\"type\":\"double_down|drop|try_next|new_offer|fix\",\"title\":\"under 10 words\",\"reason\":\"one sentence with the numbers\",\"action\":\"one concrete thing to do this week\","
                 . "\"offer\":{\"title\":\"only for new_offer: what is offered, under 8 words\",\"problem\":\"the problem it fixes\",\"fix\":\"what the business does about it\",\"keyword\":\"ONE capital word\"}}]}";
@@ -564,6 +565,7 @@ function pm_adv_card(string $brand, string $csrf): string
         $h .= '</ol>';
     }
     $h .= '<form method="post" class="btns">' . $hid . '<input type="hidden" name="do" value="adv_refresh"><button class="btn small">Ask the advisor again</button><span class="hint">It writes them by itself once a week' . ($mv['at'] !== '' ? '; last on ' . pm_h((string)$mv['at']) : '') . '.</span></form>';
+    $h .= pm_firm_card_html($brand);
     $h .= '<details class="more mt-2"><summary>The numbers behind it</summary>';
     foreach (PM_ADV_DIMS as $dim => $label) {
         $rows = array_slice((array)($m['dims'][$dim] ?? []), 0, 8, true);

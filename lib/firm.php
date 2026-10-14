@@ -158,3 +158,90 @@ function pm_touched_recently(array $l, int $days = 2): bool
     $last = pm_touches($l)[0]['at'] ?? '';
     return $last !== '' && strtotime($last) > strtotime("-$days days");
 }
+
+/* ---------------- one message: what every department knows about selling ---------------- */
+
+/** What our own website checks found across the business's studied leads (code facts, no AI): [['need' => words, 'n' => leads, 'of' => studied]], most common first. */
+const PM_FIRM_NEEDS = [
+    'no way to book or reserve on their website' => '/no way to book or reserve/i',
+    'no WhatsApp button on their website' => '/no WhatsApp button or link/i',
+    'a website not set up for phones' => '/not set up for phones/i',
+    'a website that would not open' => '/did not open for us/i',
+    'a website without a secure https address' => '/without a secure https address/i',
+    'an out-of-date website' => '/footer still says/i',
+    'no contact form or email on their website' => '/No contact form or email address/i',
+];
+
+function pm_firm_needs(string $brand): array
+{
+    $count = array_fill_keys(array_keys(PM_FIRM_NEEDS), 0);
+    $of = 0;
+    $noSite = 0;
+    foreach (pm_leads_read() as $l) {
+        if (($l['brand'] ?? 'promanaged') !== $brand || empty($l['research']['at'])) {
+            continue;
+        }
+        $of++;
+        $facts = implode("\n", array_map(fn($d) => (string)($d['fact'] ?? ''), (array)($l['research']['discoveries'] ?? [])));
+        $noSite += trim((string)($l['website'] ?? '')) === '' ? 1 : 0;
+        foreach (PM_FIRM_NEEDS as $need => $re) {
+            $count[$need] += preg_match($re, $facts) ? 1 : 0;
+        }
+    }
+    $count['no website at all'] = $noSite;
+    arsort($count);
+    $out = [];
+    foreach ($count as $need => $n) {
+        if ($of >= 5 && $n * 4 >= $of) { // a need at least a quarter of the studied leads share, once enough are studied to say
+            $out[] = ['need' => $need, 'n' => $n, 'of' => $of];
+        }
+    }
+    return array_slice($out, 0, 3);
+}
+
+/**
+ * One line every department's writer reads, so Sales, Social, campaigns and the Director pull the same way: the month's goal and pace, what is happening where we sell
+ * (the market pulse: forex, fuel, the season...), and what the businesses we study really lack (our own checks). No AI; about 80 tokens.
+ */
+function pm_firm_line(string $brand): string
+{
+    static $memo = [];
+    if (isset($memo[$brand])) {
+        return $memo[$brand];
+    }
+    $g = pm_firm_goal($brand);
+    $bits = [];
+    if ($g['line'] !== '') {
+        $bits[] = 'Common goal: selling. ' . ($g['pace'] === 'behind' ? 'We are behind this month, so every piece must ask for an enquiry (reply, message or sign up), not only build the brand.' : 'Every piece should move people towards an enquiry.');
+    }
+    $needs = pm_firm_needs($brand);
+    if ($needs) {
+        $bits[] = 'What the businesses we study lack most (our own checks; use as the angle, never quote the numbers or name anyone): ' . implode('; ', array_map(fn($x) => $x['need'] . ' (' . $x['n'] . ' of ' . $x['of'] . ')', $needs)) . '.';
+    }
+    if (function_exists('pm_market_pulse_line') && ($p = pm_market_pulse_line($brand)) !== '') {
+        $bits[] = $p;
+    }
+    return $memo[$brand] = implode(' ', $bits);
+}
+
+/** For the owner: the one message every department writes with (Sales, Social posts, campaigns, lead posts, the idea room, the advisor and the Director). '' when there is nothing yet. */
+function pm_firm_card_html(string $brand): string
+{
+    $g = pm_firm_goal($brand);
+    $needs = pm_firm_needs($brand);
+    $pulse = function_exists('pm_market_pulse') ? (array)(pm_market_pulse($brand)['items'] ?? []) : [];
+    if ($g['pace'] === 'no goal' && !$needs && !$pulse) {
+        return '';
+    }
+    $h = '<h3 class="mt-2">What every department writes with</h3><p class="hint mt-0">Sales emails, Social posts, campaigns, lead posts, the idea room, this advisor and the Director all read the same three things, so the whole firm pushes one way: selling.</p><ul class="t-sm">';
+    if ($g['pace'] !== 'no goal') {
+        $h .= '<li><b>Goal:</b> ' . $g['signed'][0] . ' of ' . $g['signed'][1] . ' signed and ' . $g['replies'][0] . ' of ' . $g['replies'][1] . ' replies this month, ' . pm_h($g['pace']) . ($g['pace'] === 'behind' ? ': every piece asks for an enquiry' : '') . '.</li>';
+    }
+    if ($needs) {
+        $h .= '<li><b>What the businesses we study lack:</b> ' . pm_h(implode('; ', array_map(fn($x) => $x['need'] . ' (' . $x['n'] . ' of ' . $x['of'] . ')', $needs))) . '.</li>';
+    }
+    foreach ($pulse as $x) {
+        $h .= '<li><b>Where we sell now:</b> ' . pm_h($x['issue']) . ' — we help: ' . pm_h($x['helps']) . ' <a href="' . pm_h($x['source']) . '" target="_blank" rel="noopener noreferrer">source</a></li>';
+    }
+    return $h . '</ul>';
+}
