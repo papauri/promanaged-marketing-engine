@@ -61,6 +61,7 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
       <p class="muted">No strategy has been written yet. The Director reads the numbers once a day and says what to do first.</p>
     <?php endif; ?>
     <?= function_exists('pm_adv_home_line') ? pm_adv_home_line($vb) : '' ?>
+    <?php $was = pm_brand(); pm_brand_set($vb); $miss = pm_brand_missing(pm_settings()); pm_brand_set($was); if ($miss): ?><p class="hint"><span class="chip warn">missing</span> <b><?= pm_h(implode(', ', array_column($miss, 'label'))) ?></b>: clients cannot use what is not filled in. <a href="?tab=settings&amp;section=business&amp;brand=<?= pm_h($vb) ?>#missing">Add them</a></p><?php endif; ?>
     <form method="post" class="btns"><input type="hidden" name="csrf" value="<?= pm_h((string)($_SESSION['csrf'] ?? '')) ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="director"><input type="hidden" name="bt" value="home">
       <button class="btn small<?= $brief['headline'] === '' ? ' primary' : '' ?>"><?= $brief['headline'] === '' ? "Write today's strategy" : 'Refresh strategy' ?></button></form>
   </section>

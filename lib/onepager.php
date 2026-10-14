@@ -26,7 +26,7 @@ function pm_onepager_content(string $brand): array
     }
     return ['name' => (string)($s['company_name'] ?? pm_brand_name($brand)), 'tagline' => trim((string)($s['tagline'] ?? '')), 'about' => trim((string)($brn['about'] ?? '')), 'offerings' => $offers,
         'facts' => array_slice(array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($brn['facts'] ?? '')) ?: []))), 0, 6), 'magnet' => trim((string)$p['magnet']),
-        'keyword' => (string)$p['cta_keyword'], 'phone' => trim((string)($s['phone'] ?? '')), 'email' => trim((string)($s['email'] ?? '')), 'website' => trim((string)($s['website'] ?? '')),
+        'keyword' => (string)$p['cta_keyword'], 'phone' => trim((string)($s['phone'] ?? '')), 'wa' => pm_our_wa_number($s), 'email' => trim((string)($s['email'] ?? '')), 'website' => trim((string)($s['website'] ?? '')),
         'address' => trim((string)($s['address'] ?? '')), 'accent' => (string)($s['accent_color'] ?? '#17375E')];
 }
 
@@ -196,7 +196,7 @@ function pm_build_onepager(string $brand, ?string $file = null, bool $compress =
         $label('A free first step');
         $pdf->SetFont('helvetica', '', 10.5);
         $pdf->SetTextColor(40, 40, 40);
-        $pdf->MultiCell(165, 5.6, $c['keyword'] !== '' && $c['phone'] !== '' ? 'Send ' . $c['keyword'] . ' on WhatsApp to ' . $c['phone'] . ' for ' . $c['magnet'] . '.' : 'Ask us about ' . $c['magnet'] . '.', 0, 'L');
+        $pdf->MultiCell(165, 5.6, $c['keyword'] !== '' && ($c['wa'] ?? '') !== '' ? 'Send ' . $c['keyword'] . ' on WhatsApp to ' . $c['wa'] . ' for ' . $c['magnet'] . '.' : 'Ask us about ' . $c['magnet'] . '.', 0, 'L');
     }
     $touch = array_filter(['Phone / WhatsApp' => $c['phone'], 'Email' => $c['email'], 'Website' => $c['website'], 'Address' => $c['address']], fn($v) => $v !== '');
     if ($touch) {

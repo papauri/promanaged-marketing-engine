@@ -25,7 +25,7 @@ function pm_inb_label(string $brand): string { return pm_brand_name($brand); }
 function pm_inb_wa_digits(string $brand): string
 {
     return (string)pm_inb_as($brand, function () {
-        [$n, $k] = pm_wa_number((string)(pm_settings()['phone'] ?? ''));
+        [$n, $k] = pm_wa_number(pm_our_wa_number(pm_settings()));
         return $k === 'landline' ? '' : $n;
     });
 }

@@ -53,7 +53,7 @@ function pm_lp_wa_number(string $brand): string
 {
     $was = pm_brand();
     pm_brand_set($brand);
-    [$n, $k] = pm_wa_number((string)(pm_settings()['phone'] ?? ''));
+    [$n, $k] = pm_wa_number(pm_our_wa_number(pm_settings()));
     pm_brand_set($was);
     return $k === 'landline' ? '' : (string)$n;
 }

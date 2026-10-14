@@ -40,7 +40,7 @@ function pm_settings_save(array $settings, string $vb): array
     $text = fn(array $from, string $k) => trim((string)($from[$k] ?? ''));
 
     if ($part('business')) {
-        foreach (['company_name', 'tagline', 'address', 'phone', 'email', 'website', 'signatory_name', 'signatory_title', 'ref_prefix'] as $k) {
+        foreach (['company_name', 'tagline', 'address', 'phone', 'whatsapp', 'email', 'website', 'signatory_name', 'signatory_title', 'ref_prefix'] as $k) {
             $new[$k] = $text($in, $k);
         }
         $new['company_name'] = $new['company_name'] !== '' ? mb_substr($new['company_name'], 0, 80) : ((string)($settings['company_name'] ?? '') ?: 'ProManaged IT'); // a business always has a name
@@ -50,7 +50,7 @@ function pm_settings_save(array $settings, string $vb): array
         $new['link_on'] = !empty($in['link_on']);
         $new['esign_tags'] = !empty($in['esign_tags']);
         $new['online_signing'] = !empty($in['online_signing']);
-        foreach (['company_name', 'tagline', 'address', 'phone', 'email', 'website', 'signatory_name', 'signatory_title'] as $k) {
+        foreach (['company_name', 'tagline', 'address', 'phone', 'whatsapp', 'email', 'website', 'signatory_name', 'signatory_title'] as $k) {
             $tv[$k] = $text($tin, $k);
         }
         $tv['from_email'] = '';
@@ -184,7 +184,7 @@ function pm_brand_save_custom(string $bid): array
     $blk = $cur;
     $bad = '';
     if ($part('details')) {
-        foreach (['tagline', 'address', 'phone', 'email', 'website', 'signatory_name', 'signatory_title'] as $k) {
+        foreach (['tagline', 'address', 'phone', 'whatsapp', 'email', 'website', 'signatory_name', 'signatory_title'] as $k) {
             $blk[$k] = $t($k);
         }
         $blk['company_name'] = $t('company_name') ?: (string)$cur['company_name'];

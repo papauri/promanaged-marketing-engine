@@ -2,26 +2,40 @@
 /** Operations > Business details: who each business is, how to reach it, its logo and how it signs. Included by view_settings.php. */
 require_once __DIR__ . '/view_share.php';
 pm_view_hidden_businesses($csrf);
+$was = pm_brand();
+pm_brand_set($vb);
+$missing = pm_brand_missing(pm_settings());
+pm_brand_set($was);
+$missKeys = array_column($missing, 'key');
+$need = fn(string $k) => in_array($k, $missKeys, true) ? ' <span class="chip warn">missing</span>' : '';
+if ($missing): ?>
+<div class="card nofold" id="missing"><h2>Missing details for <?= pm_h($bname) ?></h2>
+  <p class="hint mt-0">Clients can only reach you through what is filled in here. Add these below, then press Save.</p>
+  <ul class="nextlist"><?php foreach ($missing as $m): ?><li><span class="grow"><b><?= pm_h($m['label']) ?></b><br><span class="muted t-sm">Used for: <?= pm_h($m['why']) ?>.</span></span> <span class="chip warn">missing</span></li><?php endforeach; ?></ul>
+</div>
+<?php endif;
 
 if ($isCustom): // a business added in the app: one form, saved by brand_save (the details part only)
     $b = $vb;
     $c = (array)$settings['brands'][$b];
     $logo = pm_brand_asset($b, 'logo');
-    $fld = fn(string $k, string $label, string $ph = '') => '<div><label>' . pm_h($label) . '</label><input type="text" name="b[' . $k . ']" value="' . pm_h((string)($c[$k] ?? '')) . '" placeholder="' . pm_h($ph) . '"></div>';
+    $fld = fn(string $k, string $label, string $ph = '', string $mark = '') => '<div><label>' . pm_h($label) . $mark . '</label><input type="text" name="b[' . $k . ']" value="' . pm_h((string)($c[$k] ?? '')) . '" placeholder="' . pm_h($ph) . '"></div>';
     $lp = pm_link_preview($b);
     ?>
 <h3><?= pm_h($bname) ?></h3>
 <form method="post" enctype="multipart/form-data">
   <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="brand_save"><input type="hidden" name="id" value="<?= pm_h($b) ?>"><input type="hidden" name="_sec" value="details">
-  <div class="card"><h2>Who the business is</h2>
+  <div class="card"><h2>How clients reach you</h2>
     <div class="row">
-      <?= $fld('company_name', 'Business name') ?>
+      <?= $fld('company_name', 'Business name', '', $need('company_name')) ?>
+      <?= $fld('whatsapp', 'WhatsApp number', '0999 123 456', $need('whatsapp')) ?>
+      <?= $fld('phone', 'Phone number (for calls)', '0999 123 456', $need('phone')) ?>
+      <?= $fld('email', 'Email', 'info@example.com', $need('email')) ?>
+      <?= $fld('website', 'Website', 'www.example.com', $need('website')) ?>
+      <?= $fld('address', 'Address or town', '', $need('address')) ?>
       <?= $fld('tagline', 'Tagline', 'One line under the name') ?>
-      <?= $fld('email', 'Email', 'info@example.com') ?>
-      <?= $fld('phone', 'Phone or WhatsApp', '0999 123 456') ?>
-      <?= $fld('website', 'Website', 'www.example.com') ?>
-      <?= $fld('address', 'Address or town') ?>
     </div>
+    <p class="hint">The WhatsApp number is what campaigns, flyers, QR codes and WhatsApp buttons use. Leave it empty if your phone number is also your WhatsApp.</p>
   </div>
   <div class="card"><h2>Signing and numbering</h2>
     <div class="row">
@@ -64,7 +78,7 @@ if ($isCustom): // a business added in the app: one form, saved by brand_save (t
 </details>
 
 <?php else: // ProManaged IT and Travel Malawi: one form holds both (the one not on screen is hidden), saved by settings (the business part only)
-    $card = function (string $b) use ($settings, $vb): void {
+    $card = function (string $b) use ($settings, $vb, $need): void {
         $tr = $b === 'travel';
         $c = $tr ? (array)$settings['travel'] : $settings;
         $n = fn(string $k) => $tr ? "s[travel][$k]" : "s[$k]";
@@ -73,16 +87,19 @@ if ($isCustom): // a business added in the app: one form, saved by brand_save (t
         $sig = $tr ? 'assets/travel_signature.png' : 'assets/signature.png';
         $hide = $vb === $b ? '' : 'hidden';
         $lp = pm_link_preview($b);
+        $mk = fn(string $k) => $vb === $b ? $need($k) : '';
         ?>
-    <div class="card" <?= $hide ?>><h2><?= pm_h($name) ?> · Who the business is</h2>
+    <div class="card" <?= $hide ?>><h2><?= pm_h($name) ?> · How clients reach you</h2>
       <div class="row">
-        <div><label>Business name</label><input type="text" name="<?= $n('company_name') ?>" value="<?= pm_h($c['company_name'] ?? '') ?>"></div>
+        <div><label>Business name<?= $mk('company_name') ?></label><input type="text" name="<?= $n('company_name') ?>" value="<?= pm_h($c['company_name'] ?? '') ?>"></div>
+        <div><label>WhatsApp number<?= $mk('whatsapp') ?></label><input type="text" name="<?= $n('whatsapp') ?>" value="<?= pm_h($c['whatsapp'] ?? '') ?>" placeholder="0999 123 456"></div>
+        <div><label>Phone number (for calls)<?= $mk('phone') ?></label><input type="text" name="<?= $n('phone') ?>" value="<?= pm_h($c['phone'] ?? '') ?>" placeholder="0999 123 456"></div>
+        <div><label>Email<?= $mk('email') ?></label><input type="text" name="<?= $n('email') ?>" value="<?= pm_h($c['email'] ?? '') ?>" placeholder="info@example.com"></div>
+        <div><label>Website<?= $mk('website') ?></label><input type="text" name="<?= $n('website') ?>" value="<?= pm_h($c['website'] ?? '') ?>" placeholder="www.example.com"></div>
+        <div><label>Address or town<?= $mk('address') ?></label><input type="text" name="<?= $n('address') ?>" value="<?= pm_h($c['address'] ?? '') ?>"></div>
         <div><label>Tagline</label><input type="text" name="<?= $n('tagline') ?>" value="<?= pm_h($c['tagline'] ?? '') ?>"></div>
-        <div><label>Phone</label><input type="text" name="<?= $n('phone') ?>" value="<?= pm_h($c['phone'] ?? '') ?>"></div>
-        <div><label>Email</label><input type="text" name="<?= $n('email') ?>" value="<?= pm_h($c['email'] ?? '') ?>"></div>
-        <div><label>Website</label><input type="text" name="<?= $n('website') ?>" value="<?= pm_h($c['website'] ?? '') ?>"></div>
-        <div><label>Address</label><input type="text" name="<?= $n('address') ?>" value="<?= pm_h($c['address'] ?? '') ?>"></div>
       </div>
+      <p class="hint">The WhatsApp number is what campaigns, flyers, QR codes and WhatsApp buttons use. Leave it empty if your phone number is also your WhatsApp.</p>
     </div>
     <div class="card" <?= $hide ?>><h2><?= pm_h($name) ?> · Signing and numbering</h2>
       <div class="row">

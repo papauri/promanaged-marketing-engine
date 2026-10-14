@@ -263,7 +263,7 @@ function pm_settings(): array
             }
         }
         // Contact details and signatory are Travel Malawi's own: never fall back to ProManaged's.
-        foreach (['address', 'phone', 'email', 'website', 'signatory_name', 'signatory_title'] as $k) {
+        foreach (['address', 'phone', 'whatsapp', 'email', 'website', 'signatory_name', 'signatory_title'] as $k) {
             $s[$k] = trim((string)($t[$k] ?? ''));
         }
         if ($s['website'] === '' && trim((string)($t['link_url'] ?? '')) !== '') {
@@ -304,7 +304,7 @@ function pm_settings(): array
                 $s[$k] = $t[$k];
             }
         }
-        foreach (['address', 'phone', 'email', 'website', 'signatory_name', 'signatory_title'] as $k) {
+        foreach (['address', 'phone', 'whatsapp', 'email', 'website', 'signatory_name', 'signatory_title'] as $k) {
             $s[$k] = trim((string)($t[$k] ?? ''));
         }
         if ($s['website'] === '' && trim((string)($t['link_url'] ?? '')) !== '') {

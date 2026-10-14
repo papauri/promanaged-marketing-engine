@@ -1017,7 +1017,7 @@ function pm_ads_create(string $brand, int $i): array
     $boost = preg_match('/^\d+_\d+$/', (string)($c['boost_post_id'] ?? '')) ? (string)$c['boost_post_id'] : '';
     $goal = (string)($c['goal'] ?? 'engagement');
     $link = pm_brand_site($brand);
-    $wa = preg_replace('/\D/', '', (string)(pm_settings()['phone'] ?? ''));
+    $wa = preg_replace('/\D/', '', pm_our_wa_number(pm_settings()));
     if ($goal === 'traffic' && $link === '') {
         $goal = 'messages';
     }

@@ -141,7 +141,7 @@ function pm_camp_cta(string $brand, array $camp): array
     $wa = function_exists('pm_inb_wa_link') ? pm_inb_wa_link($brand, $kw !== '' ? $kw : 'Hi') : '';
     $was = pm_brand();
     pm_brand_set($brand);
-    $phone = trim((string)(pm_settings()['phone'] ?? ''));
+    $phone = pm_our_wa_number(pm_settings()); // the WhatsApp number, else the phone
     $site = trim((string)(pm_settings()['website'] ?? ''));
     pm_brand_set($was);
     $site = $site !== '' ? (preg_match('#^https?://#i', $site) ? $site : 'https://' . $site) : '';

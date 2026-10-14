@@ -433,13 +433,39 @@ function pm_brand_checklist(string $b): array
     $s = pm_settings();
     $sm = (array)($s['smtp'] ?? []);
     $rows = [];
-    $rows[] = ['label' => 'Business details', 'ok' => trim((string)($s['email'] ?? '')) !== '' && trim((string)($s['company_name'] ?? '')) !== '', 'hint' => 'Add the business email address (and phone, website) in its settings.'];
+    $miss = pm_brand_missing($s);
+    $rows[] = ['label' => 'Business details', 'ok' => !array_filter($miss, fn($m) => $m['key'] === 'email' || $m['key'] === 'whatsapp' || $m['key'] === 'company_name'), 'hint' => 'Add ' . implode(', ', array_map(fn($m) => mb_strtolower($m['label']), $miss)) . ' in Operations > Business details.'];
     $rows[] = ['label' => 'Email sending', 'ok' => trim((string)($sm['host'] ?? '')) !== '' && trim((string)($sm['username'] ?? '')) !== '', 'hint' => 'Add the mail server login for this business in its settings, so outreach goes from its own address.'];
     $cfg = pm_agents_config($b);
     $rows[] = ['label' => 'Who to look for', 'ok' => !empty($cfg['sectors']) && !empty($cfg['cities']), 'hint' => 'Add the kinds of business and the cities to search in (Agents > Settings).'];
     $rows[] = ['label' => 'Facts the AI may use', 'ok' => trim((string)(pm_brain($b)['facts'] ?? '')) !== '', 'hint' => 'Add a few true statements about the business, one per line. The AI says nothing beyond them.'];
     pm_brand_set($was);
     return $rows;
+}
+
+/**
+ * The important contact details a business has not filled in, most important first: [['key','label','why']]. $s is the business's settings.
+ * A WhatsApp number counts as there when the WhatsApp field or the phone is a mobile number.
+ */
+function pm_brand_missing(array $s): array
+{
+    $has = fn(string $k) => trim((string)($s[$k] ?? '')) !== '';
+    $wa = function_exists('pm_our_wa_number') ? pm_our_wa_number($s) : trim((string)($s['phone'] ?? ''));
+    $waOk = $wa !== '' && (!function_exists('pm_wa_number') || pm_wa_number($wa)[1] !== 'landline');
+    $out = [];
+    foreach ([
+        'company_name' => [$has('company_name'), 'Business name', 'every post, flyer, email and proposal'],
+        'whatsapp' => [$waOk, 'WhatsApp number', 'the number campaigns, flyers and posts ask people to WhatsApp; the QR codes and WhatsApp buttons open it'],
+        'phone' => [$has('phone'), 'Phone number', 'people who prefer to call; shown on emails, proposals and flyers'],
+        'email' => [$has('email'), 'Email address', 'emails, proposals and flyers, and where enquiries are sent'],
+        'website' => [$has('website'), 'Website', 'flyers and emails; the AI also reads it to learn the business'],
+        'address' => [$has('address'), 'Address or town', 'telling local buyers where you are; flyers and proposals'],
+    ] as $k => [$ok, $label, $why]) {
+        if (!$ok) {
+            $out[] = ['key' => $k, 'label' => $label, 'why' => $why];
+        }
+    }
+    return $out;
 }
 
 /** The business name for headings: the name saved in its settings (so a renamed business reads right), else the built-in or onboarding name. */

@@ -1443,7 +1443,7 @@ function pm_social_caption(array $p, string $channel = 'facebook'): string
     pm_brand_set($p['brand'] ?? 'promanaged');
     $t = trim((string)($p['caption'] ?? ''));
     $s = pm_settings();
-    $phone = trim((string)($s['phone'] ?? ''));
+    $phone = pm_our_wa_number($s);
     $head = trim((string)($p['headline'] ?? '')) ?: mb_substr($t, 0, 40);
     if ($channel === 'instagram') {
         $t .= "\n\nMessage us on WhatsApp" . ($phone !== '' ? ': ' . $phone : '.');
