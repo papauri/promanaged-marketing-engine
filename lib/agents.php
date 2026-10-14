@@ -485,6 +485,7 @@ require_once __DIR__ . '/firm.php'; // one goal, what wins, one contact timeline
 require_once __DIR__ . '/followups.php';
 require_once __DIR__ . '/subjects.php';
 require_once __DIR__ . '/contacts.php';
+require_once __DIR__ . '/personal.php'; // the market pulse, the study's personal line, drafts brought up to date with a found name
 
 /* ---------------- Spend control: every call is counted against a daily token budget ---------------- */
 
@@ -1112,7 +1113,7 @@ function pm_apply_contact(array &$lead, array $d): void
         return;
     }
     $src = trim((string)($d['source'] ?? $d['contact_source'] ?? ''));
-    if (pm_trusted_source($src, (string)($lead['website'] ?? ''))) {
+    if (pm_trusted_source($src, (string)($lead['website'] ?? '')) || pm_owner_listing_source($src, $title)) { // their own pages, or their own listing naming the owner or host
         $lead['contact'] = $name;
         if ($title !== '' && empty($lead['contact_title'])) {
             $lead['contact_title'] = $title;
@@ -1193,7 +1194,7 @@ function pm_agent_write(array $leads): array
     $sender = pm_sender_name();
     $subjectLine = function_exists('pm_email_exp_example') ? pm_email_exp_example(pm_brand()) : '';
     $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou are writing outreach for {$s['company_name']} as " . ($sender !== '' ? "$sender (use this first name: " . explode(' ', $sender)[0] . ")" : "a member of the team (no personal name: introduce the company instead)") . ". $ask" . PM_EMAIL_CRAFT . ' ' . ($subjectLine !== '' ? $subjectLine . ' ' : '')
-        . "Each item has subject_style: write that item's email subject in that style. " . PM_AGENT_RULES;
+        . "Each item has subject_style: write that item's email subject in that style. " . pm_market_pulse_line() . ' ' . PM_AGENT_RULES;
     $brand = pm_brand();
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'city' => $l['city'], 'currency' => pm_local_currency($l)['word'], 'contact' => $l['contact'] ?? '',
         'evidence' => array_slice($l['evidence'] ?? [], 0, 2), 'online_gaps' => array_slice($l['social_gaps'] ?? [], 0, 2), 'research' => pm_research_brief($l), 'lead_with' => $l['pain'] ?? '', 'how_it_stops' => pm_fix_for((string)($l['pain'] ?? '')),
@@ -1250,7 +1251,7 @@ function pm_agent_followup(array $leads): array
     $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou are the Follow-up agent for {$s['company_name']}. Write a 40-word follow-up email and 25-word WhatsApp that add ONE new angle (a different gain, or a one-page plan offer).  Read their_last_message and our_last_message: never repeat our last message, never quote words they did not write, and if their_last_message is empty never say they said anything. followups_already_sent tells you how many nudges came before: each one must add a different reason."
         . "Match the state: for \"opened\" (they opened our proposal or email but stayed quiet) gently reference what they saw and add one new, true reason; for \"silent\" (never engaged) be shorter and lead with one specific fact about their business (from what_we_know when given: our research's facts, news and hooks; never invent one);for \"replied\" pick up their last words, never repeat a whole earlier message. "
         . "No prices, no guilt, no pressure, no urgency. Plain text, no sign-off. Each item has subject_style: write that item's email subject in that style, $subjectRule. "
-        . pm_email_exp_followup_example(pm_brand()) . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
+        . pm_email_exp_followup_example(pm_brand()) . ' ' . pm_market_pulse_line() . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $last = function (array $l, string $dir): string { // the latest message each way, so "pick up their last words" has their words to pick up
         foreach (array_reverse((array)($l['thread'] ?? [])) as $m) {
             if (($m['dir'] ?? '') === $dir && trim((string)($m['text'] ?? '')) !== '') {
@@ -2642,18 +2643,21 @@ function pm_agent_research(array $lead): array
         . "Step 2, facts: from its own website, its Facebook and Instagram pages, Google reviews, and local or business/finance news from the last 18 months (expansion, new rooms or branch, awards, funding, tenders won, hiring, events). "
         . "Only facts you actually read, each with its exact source URL and the date shown on the source; mark confidence high (read it yourself on an official page or reputable news) or medium (a review site or directory). Never guess, infer or fill gaps. "
         . "The 'checked_by_code' list was verified by our own system: treat it as true, do not contradict it, and never claim a website, certificate or security problem that is not in it. "
-        . "Step 2b, people and contacts: who owns or runs it (owner, founder, director, general manager, manager or host; never kitchen, restaurant, front-desk or housekeeping staff, guests or reviewers), each with the exact source URL that names them; and its public email, phone and WhatsApp, with the source URL. Only what a source states; leave empty what you did not find. "
+        . "Step 2b, people and contacts: who owns or runs it (owner, founder, director, general manager, manager or host; never kitchen, restaurant, front-desk or housekeeping staff, guests or reviewers), each with the exact source URL that names them. Try hard for the owner's real name: their About page, Facebook About and posts, review replies signed by the owner or manager on TripAdvisor or Google, the host on Airbnb or Booking.com, news, LinkedIn. And its public email, phone and WhatsApp, with the source URL. Only what a source states; leave empty what you did not find. "
         . "Step 3, through our eyes: what is weak or missing online and where we could genuinely help (for our team only). "
         . "Step 4, write 2 or 3 hooks: one real observation plus a curious question that makes the owner want to reply, WITHOUT handing over the solution or offering to fix it. Friendly, never critical or creepy, business information only. "
         . "Step 5, write 3 conversation starters, each built on a different hook, ready to send: an email (subject of max 7 words, then a body of 45 to 80 words: a greeting line" . ($first !== '' ? " to $first" : '') . ", one line saying who we are"
         . ", the observation, one easy question about how they handle it today; ONE question only, no offer to fix it, no prices, no feature list, no sign-off) and a WhatsApp version of 25 to 40 words. "
+        . 'Step 5b, personal: the line our first email opens with, at most 25 words, no greeting, number, price or link: ONE true, specific detail about them from a confirmed fact (their rooms, setting, a recent review, news), then '
+        . (pm_brand() === 'travel' ? 'that we would love them to be part of what we are building. Never name yourself, never say or suggest you were looking for a stay or travelling. ' : 'why it made us write to them. ')
+        . 'personal_subject: under 45 characters, specific to them, a capital letter first and on names only. ' . pm_market_pulse_line() . ' '
         . 'Step 6, re-score this lead from what you confirmed (previous score ' . (int)($lead['score'] ?? 0) . '): ' . pm_qualify_rule() . 'Confirmed facts may raise or lower it; with nothing confirmed, keep the previous score. ' . PM_AGENT_RULES;
-    $user = "Business: {$lead['name']} ({$lead['type']}), " . pm_lead_place($lead) . ". Known website: " . ($lead['website'] ?? '') . '. Known Facebook: ' . ($lead['facebook'] ?? '') . '. Contact: ' . ($lead['contact'] ?? '') . ".\n"
+    $user = "Business: {$lead['name']} ({$lead['type']}), " . pm_lead_place($lead) . ". Known website: " . ($lead['website'] ?? '') . '. Known Facebook: ' . ($lead['facebook'] ?? '') . '. Contact: ' . ($lead['contact'] ?? '') . (!empty($lead['contact_hint']) && empty($lead['contact']) ? ' (possible, confirm or correct: ' . $lead['contact_hint'] . ')' : '') . ".\n"
         . 'checked_by_code: ' . json_encode($site['facts'] ?? ['no website known'], JSON_UNESCAPED_UNICODE) . ($site['social'] ?? [] ? ' social links on their site: ' . json_encode($site['social']) : '') . "\n"
         . 'JSON: {"identity":{"confirmed":true,"how":"what proves it is this business"},"discoveries":[{"fact":"","source":"URL","date":"","confidence":"high|medium"}],"website":{"url":"","verdict":"one short line","issues":[""]},'
         . '"social":{"facebook":"URL","instagram":"URL","verdict":"one short line: last post date, followers, reviews"},"news":[{"headline":"","source":"URL","date":""}],'
         . '"people":[{"name":"full name","role":"as the source states it","source":"URL"}],"reach":{"email":"","phone":"","whatsapp":"","source":"URL"},"opportunities":[""],"hooks":[""],'
-        . '"starters":[{"angle":"2-4 words","subject":"","email":"","whatsapp":""}],'
+        . '"starters":[{"angle":"2-4 words","subject":"","email":"","whatsapp":""}],"personal":"","personal_subject":"",'
         . '"rescore":{"score":0,' . ($pkgs ? '"package":0,' : '') . (pm_brand() === 'travel' ? '' : '"offering":"' . ($pkgs ? 'build, source or support' : 'name of the offering that fits') . '",') . '"pain":"the need to lead with","reason":"one short sentence","skip":false}}';
     $out = pm_agent_json(pm_claude($system, $user, true, 3300, 'write'));
     if (!is_array($out)) {
@@ -2708,6 +2712,9 @@ function pm_agent_research(array $lead): array
         'opportunities' => array_values(array_filter(array_map('strval', (array)($out['opportunities'] ?? [])))),
         'hooks' => $sure || $site ? array_values(array_filter(array_map('strval', (array)($out['hooks'] ?? [])))) : [],
         'starters' => $sure || $site ? $starters : [],
+        // the line the first email opens with (the default message's {opening}): only from a confirmed business, else the default opening is used
+        'personal' => $sure && is_scalar($out['personal'] ?? null) ? pm_personal_clean(pm_human_polish((string)$out['personal'], 'email'), pm_brand()) : '',
+        'personal_subject' => $sure && is_scalar($out['personal_subject'] ?? null) && trim((string)$out['personal_subject']) !== '' && !str_contains((string)$out['personal_subject'], '!') ? pm_subject_tidy(mb_substr(trim(strip_tags((string)$out['personal_subject'])), 0, 60), $lead) : '',
         // the Qualifier's fresh score from the same call (no second call to re-score): only when the business was confirmed and the answer carries a number
         'rescore' => $sure && is_array($out['rescore'] ?? null) && is_numeric($out['rescore']['score'] ?? null) ? array_intersect_key($out['rescore'], array_flip(['score', 'package', 'offering', 'pain', 'reason', 'skip'])) : [],
     ];
@@ -2748,8 +2755,25 @@ function pm_apply_research(array &$lead, array $r): void
         $reach = (array)($r['reach'] ?? []);
         $added = pm_contact_apply($lead, ['contact' => (string)($p['name'] ?? ''), 'contact_title' => (string)($p['role'] ?? ''), 'source' => (string)($p['source'] ?? ''),
             'email' => (string)($reach['email'] ?? ''), 'phone' => (string)($reach['phone'] ?? ''), 'whatsapp' => (string)($reach['whatsapp'] ?? '')]);
+        foreach (array_slice($people, 1) as $q) { // the first name came from a page we cannot trust: the next person on a trusted page is the owner's real name
+            if (trim((string)($lead['contact'] ?? '')) !== '') {
+                break;
+            }
+            $hint = $lead['contact_hint'] ?? null;
+            unset($lead['contact_hint']);
+            pm_apply_contact($lead, ['contact' => (string)$q['name'], 'contact_title' => (string)$q['role'], 'source' => (string)$q['source']]);
+            if (trim((string)($lead['contact'] ?? '')) === '') {
+                $lead['contact_hint'] = $hint ?? $lead['contact_hint'] ?? null;
+            } else {
+                $added[] = 'the owner or manager\'s name (' . $lead['contact'] . ')';
+            }
+        }
+        if (array_key_exists('contact_hint', $lead) && $lead['contact_hint'] === null) {
+            unset($lead['contact_hint']);
+        }
         $added && pm_lead_note($lead, 'The study found ' . implode(', ', $added));
     }
+    pm_dm_personalise($lead); // a waiting draft gets the personal line and the owner's name now, without AI
 }
 
 /** What writers get from the research: the freshest discoveries and the hooks. */

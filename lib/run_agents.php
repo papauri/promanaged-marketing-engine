@@ -416,6 +416,10 @@ try {
     // ---- 3b. The day's study: the leads we will work today are studied in advance, once, in one web call each: the business, its news, the owner's name and its contacts.
     // The Writers, the Follow-up agent and the Proposal agent then read the study instead of asking again, and a studied lead is not searched by the Contact Finder for 30 days.
     // Order: replies asking for a proposal, follow-ups due today, today's first messages, leads still missing an email and a phone, then the best new leads. Web search, so inside the day's allowance.
+    try { // what is happening where we sell (forex, fuel, the season...): one short web call a week, read by the study and every writer
+        pm_market_pulse($brand, true);
+    } catch (Throwable) {
+    }
     $unstudied = fn($l) => empty($l['research']['at']) || (strtotime((string)$l['research']['at']) ?: 0) < strtotime('-60 days');
     $best = function (array $a): array {
         usort($a, fn($x, $y) => ($y['score'] ?? 0) <=> ($x['score'] ?? 0));
@@ -457,6 +461,13 @@ try {
         }
         $save();
     }
+    $np = 0; // drafts already waiting: the personal line and the owner's name they now have (no AI)
+    foreach ($leads as $id => $l0) {
+        if (($l0['brand'] ?? $brand) === $brand && pm_dm_personalise($leads[$id])) {
+            $np++;
+        }
+    }
+    $np && $save();
 
     // ---- 3c. Re-qualify: a researched lead gets a fresh score and package from what was found (capped per run), before the Writers read the score ----
     $rq = $cfg['enabled']['qualifier'] && !$hold && function_exists('pm_requalify_due') ? pm_requalify_due($leads, 3) : [];

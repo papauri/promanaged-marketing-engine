@@ -251,6 +251,7 @@ function pm_contact_apply(array &$lead, array $d): array
         $added[] = 'a possible name to confirm (' . $lead['contact_hint'] . ')';
     }
     $lead['contact_checked'] = date('Y-m-d');
+    function_exists('pm_dm_personalise') && pm_dm_personalise($lead); // a waiting draft that said "Hello," greets the owner by name
     return $added;
 }
 
@@ -311,10 +312,11 @@ function pm_contact_use_hint(string $id): array
             }
             unset($cur[$id]['contact_hint']);
             pm_lead_note($cur[$id], 'Contact name confirmed by you: ' . $parts['name']);
+            function_exists('pm_dm_personalise') && pm_dm_personalise($cur[$id]);
         }
         return $cur;
     }, fn() => []);
-    return [true, $parts['name'] . ' is now the contact: the greeting will use their first name from the next draft.'];
+    return [true, $parts['name'] . ' is now the contact: the greeting uses their first name (a waiting draft nobody edited is updated now).'];
 }
 
 /**

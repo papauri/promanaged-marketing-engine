@@ -156,6 +156,26 @@ function pm_tm_email_compose(array $lead, string $opening = '', bool $template =
 /** WRITER for Travel Malawi: the AI writes the subject, the personal opening and the WhatsApp message; the email is the opening plus the standard part. */
 function pm_tm_write(array $leads): array
 {
+    $all = $leads;
+    $ready = []; // the day's study already wrote the personal line and a subject: the email is that line plus the standard part, and the AI is not asked again
+    foreach ($leads as $l) {
+        if (($p = pm_lead_personal($l)) !== '') {
+            $dm = pm_dm_render($l, $p);
+            $subj = trim((string)($l['research']['personal_subject'] ?? ''));
+            $ready[] = ['id' => $l['id'], 'email_subject' => $subj !== '' ? $subj : $dm['email_subject'], 'email_body' => $dm['email_body'], 'whatsapp' => $dm['whatsapp'], 'starter' => true];
+        }
+    }
+    $done = array_column($ready, 'id');
+    $leads = array_values(array_filter($leads, fn($l) => !in_array($l['id'], $done, true)));
+    if (!$leads) {
+        return pm_subjects_polish($ready, $all);
+    }
+    return array_merge(pm_subjects_polish($ready, $all), pm_tm_write_ai($leads));
+}
+
+/** The AI part of the Travel Malawi writer, for leads the study wrote no personal line for. */
+function pm_tm_write_ai(array $leads): array
+{
     $s = pm_settings();
     $subjectLine = function_exists('pm_email_exp_example') ? pm_email_exp_example('travel') : '';
     $system = pm_agents_company_brief('tiny') . "\nYou are writing outreach for {$s['company_name']}, a business inviting places to stay to list with it. For each item write three things. "
@@ -168,7 +188,7 @@ function pm_tm_write(array $leads): array
         . 'whatsapp: 35 to 60 words, one paragraph: a greeting with the first name if given, that this is ' . $s['company_name'] . ' (never your own name: the sign-off carries it), then straight away the aim (we are building Malawi\'s own directory of stays together with hosts and would love them in it; free, no commission, unlike Booking.com), one gain (guests chat and video call them before they come, or their reviews from different sources shown together), one easy question. Never pose as a traveller. '
         . 'email_subject: make an owner curious to open it, for example about joining Malawi\'s own directory of stays, within the subject_style. '
         . 'The rest of the email (what the platform is, the benefits, the set-up steps, the link and that it is free) is a fixed text the app adds, so never describe it. '
-        . ($subjectLine !== '' ? $subjectLine . ' ' : '') . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
+        . ($subjectLine !== '' ? $subjectLine . ' ' : '') . pm_market_pulse_line() . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'] ?? '', 'city' => $l['city'] ?? '', 'contact' => $l['contact'] ?? '', 'evidence' => array_slice((array)($l['evidence'] ?? []), 0, 2),
         'online_gaps' => array_slice((array)($l['social_gaps'] ?? []), 0, 2), 'research' => function_exists('pm_research_brief') ? pm_research_brief($l) : '',
         'subject_style' => function_exists('pm_subject_style') ? pm_subject_style(pm_email_exp_arm((string)$l['id'], 'travel')) : ''], $leads);

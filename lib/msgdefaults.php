@@ -11,7 +11,7 @@
 
 const PM_DM_VARS = ['first_name' => 'their first name', 'name' => 'their business', 'city' => 'their town', 'currency' => 'the money of their country (kwacha in Malawi, never dollars)', 'type' => 'kind of business', 'intro' => 'who is writing ("I\'m Grace from ...")',
     'sender' => 'your name', 'company' => 'your business name', 'tagline' => 'your tagline', 'phone' => 'your phone', 'email' => 'your email', 'website' => 'your website',
-    'address' => 'your address', 'title' => 'your job title', 'link' => 'your website link', 'opening' => 'the line written for this lead (the AI writes it for Travel Malawi; otherwise who you are and how you came across them)'];
+    'address' => 'your address', 'title' => 'your job title', 'link' => 'your website link', 'opening' => 'the personal line about this lead from the day\'s study (one true detail about them); with nothing found, how you came across them'];
 
 /** The default opening line (who is writing and how they came across the lead), with {placeholders}. */
 const PM_DM_OPENING_TRAVEL = 'I would love {name} in {city} to be part of something new.'; // no name (the signature has it), no posing as a traveller
@@ -47,7 +47,7 @@ function pm_dm_seed(string $brand): array
             'signature' => $sig, 'wa_signature' => '— {sender}, {company}'];
     }
     return ['email_subject' => 'A short note for {name}',
-        'email_body' => "Hello {first_name},\n\n{intro}.\n\nI came across {name} in {city} and thought we might be able to help. If it would be useful, I can send you a short plan for your business.\n\n"
+        'email_body' => "Hello {first_name},\n\n{intro}.\n\n{opening} If it would be useful, I can send you a short plan for your business.\n\n"
             . (pm_our_wa_number(pm_settings()) !== '' ? 'Reply to this email, or message us on WhatsApp on {phone}, and I will come back to you.' : 'Reply to this email and I will come back to you.'), // WhatsApp only with a number to reach us on
         'whatsapp' => 'Hello {first_name}, {intro}. I came across {name} and thought we could help. May I send you a short plan for your business?',
         'signature' => $sig, 'wa_signature' => '— {sender}, {company}'];
@@ -99,7 +99,8 @@ function pm_dm_vars(array $lead = [], string $opening = ''): array
         'tagline' => trim((string)($s['tagline'] ?? '')), 'phone' => trim((string)($s['phone'] ?? '')), 'email' => trim((string)($s['email'] ?? '')), 'website' => trim((string)($s['website'] ?? '')),
         'address' => trim((string)($s['address'] ?? '')), 'currency' => pm_local_currency($lead)['word'], 'title' => $sender !== '' && $sender === trim((string)($s['signatory_name'] ?? '')) ? trim((string)($s['signatory_title'] ?? '')) : '',
         'link' => $link !== '' ? $link : (trim((string)($s['website'] ?? '')) !== '' ? 'https://' . preg_replace('#^https?://#i', '', trim((string)$s['website'])) : '')];
-    $v['opening'] = $opening !== '' ? $opening : pm_dm_fill(pm_brand() === 'travel' ? PM_DM_OPENING_TRAVEL : PM_DM_OPENING, $v);
+    $personal = function_exists('pm_lead_personal') ? pm_lead_personal($lead) : ''; // the day's study wrote it: no AI here
+    $v['opening'] = $opening !== '' ? $opening : ($personal !== '' ? $personal : pm_dm_fill(pm_brand() === 'travel' ? PM_DM_OPENING_TRAVEL : PM_DM_OPENING, $v));
     return $v;
 }
 
