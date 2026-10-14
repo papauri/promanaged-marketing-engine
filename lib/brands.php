@@ -14,6 +14,7 @@
  */
 
 require_once __DIR__ . '/brand_study.php'; // reading a business's website and learning who to target
+require_once __DIR__ . '/bizfind.php'; // finding missing contact details (Facebook Page, website, then the AI), each one approved by hand
 require_once __DIR__ . '/onepager.php'; // the one-page offer that replaces a proposal for an added business
 require_once __DIR__ . '/brand_launch.php'; // building an added business up: social pages, pictures, offers, first posts and first leads
 require_once __DIR__ . '/sharekit.php'; // the PDFs and website links a business shares in its emails and WhatsApp messages

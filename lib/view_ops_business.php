@@ -8,12 +8,16 @@ $missing = pm_brand_missing(pm_settings());
 pm_brand_set($was);
 $missKeys = array_column($missing, 'key');
 $need = fn(string $k) => in_array($k, $missKeys, true) ? ' <span class="chip warn">missing</span>' : '';
-if ($missing): ?>
+$finder = pm_bizfind_card($vb, $csrf);
+if ($missing || $finder !== ''): ?>
 <div class="card nofold" id="missing"><h2>Missing details for <?= pm_h($bname) ?></h2>
-  <p class="hint mt-0">Clients can only reach you through what is filled in here. Add these below, then press Save.</p>
-  <ul class="nextlist"><?php foreach ($missing as $m): ?><li><span class="grow"><b><?= pm_h($m['label']) ?></b><br><span class="muted t-sm">Used for: <?= pm_h($m['why']) ?>.</span></span> <span class="chip warn">missing</span></li><?php endforeach; ?></ul>
+  <?php if ($missing): ?><p class="hint mt-0">Clients can only reach you through what is filled in here. Type them in below and press Save, or let the app find them.</p>
+  <ul class="nextlist"><?php foreach ($missing as $m): ?><li><span class="grow"><b><?= pm_h($m['label']) ?></b><br><span class="muted t-sm">Used for: <?= pm_h($m['why']) ?>.</span></span> <span class="chip warn">missing</span></li><?php endforeach; ?></ul><?php endif; ?>
+  <?= $finder ?>
 </div>
 <?php endif;
+// the business name is locked (greyed out) so it is not wiped by accident; "Change the name" unlocks it
+$lockName = fn(string $h) => str_contains($h, 'value=""') ? $h : (string)preg_replace('#<input (.*?)>\s*</div>$#s', '<input readonly $1><button type="button" class="btn small ghost mt-1" onclick="var i=this.previousElementSibling;i.readOnly=false;i.focus();this.remove()">Change the name</button></div>', $h, 1);
 
 if ($isCustom): // a business added in the app: one form, saved by brand_save (the details part only)
     $b = $vb;
@@ -27,7 +31,7 @@ if ($isCustom): // a business added in the app: one form, saved by brand_save (t
   <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="brand_save"><input type="hidden" name="id" value="<?= pm_h($b) ?>"><input type="hidden" name="_sec" value="details">
   <div class="card"><h2>How clients reach you</h2>
     <div class="row">
-      <?= $fld('company_name', 'Business name', '', $need('company_name')) ?>
+      <?= $lockName($fld('company_name', 'Business name', '', $need('company_name'))) ?>
       <?= $fld('whatsapp', 'WhatsApp number', '0999 123 456', $need('whatsapp')) ?>
       <?= $fld('phone', 'Phone number (for calls)', '0999 123 456', $need('phone')) ?>
       <?= $fld('email', 'Email', 'info@example.com', $need('email')) ?>
@@ -78,7 +82,7 @@ if ($isCustom): // a business added in the app: one form, saved by brand_save (t
 </details>
 
 <?php else: // ProManaged IT and Travel Malawi: one form holds both (the one not on screen is hidden), saved by settings (the business part only)
-    $card = function (string $b) use ($settings, $vb, $need): void {
+    $card = function (string $b) use ($settings, $vb, $need, $lockName): void {
         $tr = $b === 'travel';
         $c = $tr ? (array)$settings['travel'] : $settings;
         $n = fn(string $k) => $tr ? "s[travel][$k]" : "s[$k]";
@@ -91,7 +95,7 @@ if ($isCustom): // a business added in the app: one form, saved by brand_save (t
         ?>
     <div class="card" <?= $hide ?>><h2><?= pm_h($name) ?> · How clients reach you</h2>
       <div class="row">
-        <div><label>Business name<?= $mk('company_name') ?></label><input type="text" name="<?= $n('company_name') ?>" value="<?= pm_h($c['company_name'] ?? '') ?>"></div>
+        <?= $lockName('<div><label>Business name' . $mk('company_name') . '</label><input type="text" name="' . $n('company_name') . '" value="' . pm_h($c['company_name'] ?? '') . '"></div>') ?>
         <div><label>WhatsApp number<?= $mk('whatsapp') ?></label><input type="text" name="<?= $n('whatsapp') ?>" value="<?= pm_h($c['whatsapp'] ?? '') ?>" placeholder="0999 123 456"></div>
         <div><label>Phone number (for calls)<?= $mk('phone') ?></label><input type="text" name="<?= $n('phone') ?>" value="<?= pm_h($c['phone'] ?? '') ?>" placeholder="0999 123 456"></div>
         <div><label>Email<?= $mk('email') ?></label><input type="text" name="<?= $n('email') ?>" value="<?= pm_h($c['email'] ?? '') ?>" placeholder="info@example.com"></div>

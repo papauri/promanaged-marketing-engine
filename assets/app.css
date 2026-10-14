@@ -49,6 +49,7 @@ body:has(.withpage) .topin { max-width:1560px; }
 input[type=checkbox], input[type=radio] { width:auto; height:auto; accent-color:var(--dept); }
 .row > div { min-width:0; }
 input::placeholder, textarea::placeholder { color:var(--muted); }
+input[readonly] { background:var(--line); color:var(--muted) }
 .whereto { margin:8px 0 0; padding-left:16px; display:grid; gap:4px; }
 .row.pillrow { grid-template-columns:minmax(0, 1fr) 120px; margin-bottom:8px }
 .row > div > label:first-child, .row > label:first-child { margin-top:0; }
