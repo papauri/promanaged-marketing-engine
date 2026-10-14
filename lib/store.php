@@ -227,6 +227,26 @@ function pm_migrate_to_mwk(): void
 }
 
 /** True when Travel Malawi has its own mail server details in .env (TM_SMTP_HOST ...). */
+/**
+ * The mail security setting as the app uses it: 'ssl' (implicit TLS, port 465), 'tls' (STARTTLS, port 587) or 'none'. People write it many ways (SSL, SSL/TLS, STARTTLS, TLS,
+ * SMTPS), and the port decides when it contradicts itself: 465 only ever works with ssl and 587 only with STARTTLS, so a wrong word there never leaves a mailbox that cannot connect.
+ */
+function pm_smtp_security(string $value, int $port): string
+{
+    $v = strtolower(trim($value));
+    if ($port === 465) {
+        return 'ssl';
+    }
+    if ($port === 587) {
+        return 'tls';
+    }
+    return match (true) {
+        in_array($v, ['ssl', 'ssl/tls', 'tls/ssl', 'smtps'], true) => 'ssl',
+        in_array($v, ['tls', 'starttls', 'start tls', 'start-tls'], true) => 'tls',
+        default => 'none',
+    };
+}
+
 function pm_tm_smtp_from_env(): bool
 {
     return (pm_env()['TM_SMTP_HOST'] ?? '') !== '';
@@ -244,8 +264,7 @@ function pm_settings(): array
     if (pm_smtp_from_env()) {
         $s['smtp']['host'] = $e['SMTP_HOST'];
         $s['smtp']['port'] = (int)($e['SMTP_PORT'] ?? 587);
-        $sec = strtolower($e['SMTP_SECURE'] ?? 'tls');
-        $s['smtp']['encryption'] = in_array($sec, ['ssl', 'tls'], true) ? $sec : 'none';
+        $s['smtp']['encryption'] = pm_smtp_security((string)($e['SMTP_SECURE'] ?? 'tls'), (int)$s['smtp']['port']);
         $s['smtp']['username'] = $e['SMTP_USER'] ?? '';
         $s['smtp']['password'] = $e['SMTP_PASS'] ?? '';
         $s['smtp']['from_email'] = $e['SMTP_FROM'] ?? ($e['SMTP_USER'] ?? $s['smtp']['from_email']);
@@ -289,8 +308,7 @@ function pm_settings(): array
         if (pm_tm_smtp_from_env()) { // Travel Malawi's own mail account, separate from ProManaged's
             $s['smtp']['host'] = $e['TM_SMTP_HOST'];
             $s['smtp']['port'] = (int)($e['TM_SMTP_PORT'] ?? 587);
-            $sec = strtolower($e['TM_SMTP_SECURE'] ?? 'tls');
-            $s['smtp']['encryption'] = in_array($sec, ['ssl', 'tls'], true) ? $sec : 'none';
+            $s['smtp']['encryption'] = pm_smtp_security((string)($e['TM_SMTP_SECURE'] ?? 'tls'), (int)$s['smtp']['port']);
             $s['smtp']['username'] = $e['TM_SMTP_USER'] ?? '';
             $s['smtp']['password'] = $e['TM_SMTP_PASS'] ?? '';
             $s['smtp']['from_email'] = $e['TM_SMTP_FROM'] ?? ($e['TM_SMTP_USER'] ?? $s['smtp']['from_email']);
@@ -317,8 +335,7 @@ function pm_settings(): array
         $s['smtp'] = ['host' => '', 'port' => 465, 'encryption' => 'ssl', 'username' => '', 'password' => '', 'from_email' => '', 'from_name' => '', 'bcc_self' => !empty($ts['bcc_self'])];
         $p = pm_brand_env_prefix($b);
         if (($e[$p . 'SMTP_HOST'] ?? '') !== '') { // a mailbox given in .env wins, like the other businesses
-            $sec = strtolower($e[$p . 'SMTP_SECURE'] ?? 'ssl');
-            $s['smtp'] = ['host' => $e[$p . 'SMTP_HOST'], 'port' => (int)($e[$p . 'SMTP_PORT'] ?? 465), 'encryption' => in_array($sec, ['ssl', 'tls'], true) ? $sec : 'none',
+            $s['smtp'] = ['host' => $e[$p . 'SMTP_HOST'], 'port' => (int)($e[$p . 'SMTP_PORT'] ?? 465), 'encryption' => pm_smtp_security((string)($e[$p . 'SMTP_SECURE'] ?? 'ssl'), (int)($e[$p . 'SMTP_PORT'] ?? 465)),
                 'username' => $e[$p . 'SMTP_USER'] ?? '', 'password' => $e[$p . 'SMTP_PASS'] ?? '', 'from_email' => $e[$p . 'SMTP_FROM'] ?? ($e[$p . 'SMTP_USER'] ?? ''),
                 'from_name' => $e[$p . 'SMTP_FROM_NAME'] ?? '', 'bcc_self' => !empty($ts['bcc_self'])];
         } else {

@@ -49,7 +49,7 @@ pm_brand_set($vb);
         $env = $tr ? pm_tm_smtp_from_env() : pm_smtp_from_env();
         $e = pm_env();
         if ($env && $tr) {
-            $sm = array_merge($sm, ['host' => $e['TM_SMTP_HOST'] ?? '', 'port' => $e['TM_SMTP_PORT'] ?? 465, 'encryption' => strtolower($e['TM_SMTP_SECURE'] ?? 'ssl'),
+            $sm = array_merge($sm, ['host' => $e['TM_SMTP_HOST'] ?? '', 'port' => $e['TM_SMTP_PORT'] ?? 465, 'encryption' => pm_smtp_security((string)($e['TM_SMTP_SECURE'] ?? 'ssl'), (int)($e['TM_SMTP_PORT'] ?? 465)),
                 'username' => $e['TM_SMTP_USER'] ?? '', 'from_email' => $e['TM_SMTP_FROM'] ?? '', 'from_name' => $e['TM_SMTP_FROM_NAME'] ?? ($sm['from_name'] ?? '')]);
         }
         $name = trim((string)($c['company_name'] ?? '')) ?: pm_brand_name($b); // the name as typed: renaming the business renames it everywhere
