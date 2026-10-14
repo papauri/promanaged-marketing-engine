@@ -8,6 +8,28 @@
 
 const PM_SD_ACTIONS = ['send' => 'Send it as it is', 'rewrite' => 'Rewrite with a new angle', 'wait' => 'Wait', 'call' => 'Call them', 'drop' => 'Drop them'];
 
+/** The rules every writer keeps so an email reads as a real person's, never as spam or phishing (a few dozen tokens in each writer's instructions). */
+const PM_TRUST_RULES = 'It must read as a real, trusted person\'s email to one owner: professional, friendly, specific to them and detailed enough to be useful, with who we are and why we are writing to them; nothing a spam filter or a careful owner would flag: no urgency or pressure, no ALL CAPS, no "click here", no link without saying what it is, no attachment they did not ask for, never ask for money, passwords or bank details.';
+
+/** What in an email could make an owner (or a spam filter) think spam or phishing, checked by code, free: ['too many links', ...]. */
+function pm_trust_flags(string $subject, string $body): array
+{
+    $t = $subject . "\n" . $body;
+    $f = [];
+    preg_match_all('#https?://#i', $body, $lk);
+    count($lk[0]) > 2 && $f[] = count($lk[0]) . ' links';
+    preg_match('#\\b(bit\\.ly|tinyurl|t\\.co|goo\\.gl|ow\\.ly|is\\.gd)/#i', $t) && $f[] = 'a shortened link';
+    preg_match_all('/\\b[A-Z]{4,}\\b/', preg_replace('/\\b(MWK|USD|VAT|WhatsApp|SEO|CRM|ICT)\\b/', '', $t), $cp);
+    count($cp[0]) >= 2 && $f[] = 'words in capitals';
+    substr_count($t, '!') >= 2 && $f[] = 'exclamation marks';
+    preg_match('/\\b(act now|urgent|limited time|click here|winner|risk[- ]free|100% free|guarantee[sd]?|last chance|don\'t miss|exclusive offer|verify your|confirm your account|password|bank details|send money)\\b/i', $t, $sw) && $f[] = 'the words "' . strtolower($sw[0]) . '"';
+    preg_match('/^\\s*(dear (sir|madam|sir\\/madam)|to whom it may concern)/i', $body) && $f[] = 'a nameless greeting';
+    str_word_count($body) < 35 && $f[] = 'very short';
+    str_word_count($body) > 260 && $f[] = 'very long';
+    !str_contains($body, '?') && !preg_match('/\b(reply|let me know|would you|shall i|happy to|get in touch|write back)\b/i', $body) && $f[] = 'nothing inviting them to answer';
+    return $f;
+}
+
 /** What the team knows about one lead, kept short for the sit-down. */
 function pm_sitdown_brief(array $l): array
 {
@@ -26,7 +48,8 @@ function pm_sitdown_brief(array $l): array
         'stage' => (string)($l['status'] ?? ''), 'owner_name_known' => trim((string)($l['contact'] ?? '')) !== '', 'has_email' => (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL),
         'has_phone' => trim((string)($l['phone'] ?? '') . (string)($l['whatsapp'] ?? '')) !== '', 'emails_sent' => count((array)($l['sent'] ?? [])),
         'days_since_last_email' => $lt ? (int)floor((time() - $lt) / 86400) : null, 'facts' => array_slice(array_map(fn($x) => (string)($x['fact'] ?? ''), (array)($r['discoveries'] ?? [])), 0, 3),
-        'personal_line' => (string)($r['personal'] ?? ''), 'their_last_message' => $last('in'), 'our_waiting_email' => mb_substr(trim((string)($d['email_subject'] ?? '') . ' | ' . (string)($d['email_body'] ?? '')), 0, 260),
+        'personal_line' => (string)($r['personal'] ?? ''), 'their_last_message' => $last('in'), 'our_waiting_email' => pm_sitdown_email_view($l, (string)($d['email_subject'] ?? ''), (string)($d['email_body'] ?? '')),
+        'trust_flags' => pm_trust_flags((string)($d['email_subject'] ?? ''), (string)($d['email_body'] ?? '')), 'our_waiting_reply' => mb_substr((string)($l['reply_draft']['body'] ?? ''), 0, 500),
         'lead_with' => (string)($l['pain'] ?? '')];
 }
 
@@ -37,11 +60,12 @@ function pm_sitdown_ask(array $leads): array
     if (!$items) {
         return [];
     }
-    $sys = pm_agents_company_brief('tiny') . "\nYou chair a short sit-down of our marketing team about each lead: research (what we know), replies (what they said), writers (how to open), followup (when), then director decides. "
-        . 'For each lead write 3 to 5 lines, each one short sentence in the first person, sharp and specific to that lead, from the facts given only (no invented facts). '
+    $sys = pm_agents_company_brief('tiny') . "\nYou chair a short sit-down of our marketing team about each lead: research (what we know), replies (what they said, and whether our waiting reply answers it), writers (how to open), sender (whether our waiting email could look like spam or phishing to this owner: read trust_flags and the email itself), followup (when), then director decides. "
+        . 'If the sender sees anything that would make this owner distrust the email, or the email is not professional, warm, specific and useful, the decision is rewrite, with exactly what to fix. ' . PM_TRUST_RULES . ' '
+        . 'For each lead write 4 to 6 lines of the team talking to EACH OTHER about the lead (never to the lead), each line an object {"who","says"}: one short sentence in the first person, sharp and specific to that lead, from the facts given only (no invented facts), the director last. '
         . 'Then the decision: action "send" (our waiting email is right), "rewrite" (give the new angle in one sentence: what to open with and why it will land), "wait" (wait_days 2 to 21), "call" (a phone call would win it), or "drop" (not a fit). '
         . 'Think like the best salespeople in the world: the angle that this owner, in this town, will care about today. ' . pm_firm_line(pm_brand()) . ' ' . pm_tb_line(pm_brand(), 'writers', 3) . ' ' . PM_AGENT_RULES;
-    $out = pm_agent_json(pm_claude($sys, json_encode($items, JSON_UNESCAPED_UNICODE) . "\nJSON: {\"items\":[{\"id\":\"\",\"lines\":[{\"who\":\"research|replies|writers|followup|director\",\"says\":\"\"}],\"action\":\"send|rewrite|wait|call|drop\",\"angle\":\"\",\"wait_days\":0,\"why\":\"one sentence\"}]}", false, 220 + 260 * count($items), 'cheap'));
+    $out = pm_agent_json(pm_claude($sys, json_encode($items, JSON_UNESCAPED_UNICODE) . "\nJSON: {\"items\":[{\"id\":\"\",\"lines\":[{\"who\":\"research|replies|writers|sender|followup|director\",\"says\":\"\"}],\"action\":\"send|rewrite|wait|call|drop\",\"angle\":\"\",\"wait_days\":0,\"why\":\"one sentence\"}]}", false, 220 + 260 * count($items), 'cheap'));
     $res = [];
     foreach ((array)($out['items'] ?? (is_array($out) && array_is_list($out) ? $out : [])) as $x) {
         $id = is_array($x) ? (string)($x['id'] ?? '') : '';
@@ -50,10 +74,16 @@ function pm_sitdown_ask(array $leads): array
             continue;
         }
         $lines = [];
-        foreach (array_slice((array)($x['lines'] ?? []), 0, 6) as $ln) {
-            $who = is_array($ln) ? strtolower((string)($ln['who'] ?? '')) : '';
+        $order = ['research', 'replies', 'writers', 'sender', 'followup', 'director'];
+        foreach (array_values(array_slice((array)($x['lines'] ?? []), 0, 6)) as $li => $ln) {
+            if (is_string($ln)) { // a line without a name: the team speaks in its usual order
+                $ln = ['who' => $order[$li] ?? 'director', 'says' => $ln];
+            }
+            $who = is_array($ln) ? strtolower(trim((string)($ln['who'] ?? ''))) : '';
+            $who = (string)preg_replace('/^.*\((\w[\w -]*)\)$/', '$1', $who); // "Pemba (Sender)" is the sender
+            $who = ['researcher' => 'research', 'writer' => 'writers', 'follow-up' => 'followup', 'scout' => 'scouts'][$who] ?? $who;
             $says = is_array($ln) ? mb_substr(trim(strip_tags((string)($ln['says'] ?? ''))), 0, 220) : '';
-            if ($says !== '' && in_array($who, ['research', 'replies', 'writers', 'followup', 'director', 'social', 'scouts'], true)) {
+            if ($says !== '' && in_array($who, ['research', 'replies', 'writers', 'sender', 'followup', 'director', 'social', 'scouts'], true)) {
                 $lines[] = [$who, $says];
             }
         }
@@ -87,6 +117,10 @@ function pm_sitdown_apply(array &$lead, array $s, string $brand): string
     };
     switch ($s['action']) {
         case 'rewrite':
+            if (!empty($lead['reply_draft']['body']) && $s['angle'] !== '' && in_array($lead['status'] ?? '', ['replied', 'proposal'], true)) {
+                $lead['reply_rewrite'] = $s['angle']; // the answer to their message is written again with this angle (pm_sitdown_reply_rewrites)
+                break;
+            }
             if (!$locked && !empty($draft['email_body']) && $s['angle'] !== '') {
                 if ($first && empty($lead['sent'])) {
                     unset($lead['drafts']);
@@ -133,4 +167,39 @@ function pm_sitdown_due(array $leads, array $cfg, int $max = 12): array
         }
     }
     return array_values($out);
+}
+
+/** The answers to their messages that a sit-down said to write again: one small call each, with the angle. Returns how many were rewritten. */
+function pm_sitdown_reply_rewrites(array &$leads): int
+{
+    $n = 0;
+    foreach ($leads as $id => $l) {
+        if (empty($l['reply_rewrite']) || empty($l['reply_draft']['body']) || !function_exists('pm_regen_lead')) {
+            continue;
+        }
+        try {
+            $leads[$id] = pm_regen_lead($l, 'reply_draft', ['subject' => (string)($l['reply_draft']['subject'] ?? ''), 'body' => (string)$l['reply_draft']['body']], (string)$l['reply_rewrite'] . ' ' . PM_TRUST_RULES);
+            $n++;
+        } catch (Throwable) {
+        }
+        unset($leads[$id]['reply_rewrite']);
+    }
+    return $n;
+}
+
+/** The waiting email as the sit-down reads it: whole when short; for Travel Malawi the part written for this owner, with the fixed part named, not cut (so nobody judges it unfinished). */
+function pm_sitdown_email_view(array $l, string $subject, string $body): string
+{
+    if ($body === '') {
+        return '';
+    }
+    if (($l['brand'] ?? '') === 'travel' && defined('PM_TM_AIM') && ($p = mb_strpos($body, mb_substr(PM_TM_AIM, 0, 40))) !== false) {
+        $end = (string)preg_replace('/^.*\R\R/su', '', trim($body)); // the closing line, after the fixed part
+        return 'Subject: ' . $subject . "
+" . trim(mb_substr($body, 0, $p)) . "
+[then our fixed, complete part: what Travel Malawi is, what a host gets, three steps with the link, that it is free]
+" . $end;
+    }
+    return 'Subject: ' . $subject . "
+" . (mb_strlen($body) > 1500 ? mb_substr($body, 0, 1500) . ' [shortened here for the meeting: the email itself is complete]' : $body);
 }

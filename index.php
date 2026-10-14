@@ -808,6 +808,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $back('The team did not come back with a decision. Try again.', 'err');
             }
             $sdAct = pm_sitdown_apply($leads[$id], $sdr, pm_brand());
+            pm_sitdown_reply_rewrites($leads); // a replied lead: the answer to them is written again with the angle
             pm_leads_save($leads);
             if ($sdAct === 'rewrite' && !empty($leads[$id]['rewrite_reason'])) { // written again now with the new angle
                 $rw = ($leads[$id]['status'] ?? '') === 'contacted' ? pm_agent_followup([['id' => $id] + $leads[$id]]) : pm_agent_write([['id' => $id] + $leads[$id]]);

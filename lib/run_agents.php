@@ -499,6 +499,7 @@ try {
                 }
             }
         }
+        pm_sitdown_reply_rewrites($leads);
         $save();
     }
 

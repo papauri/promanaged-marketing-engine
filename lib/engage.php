@@ -115,10 +115,12 @@ function pm_agent_reply(array $lead, string $incoming, string $ch = 'email'): ar
         . "Set needs_human true if they are angry, complaining, negotiating price or terms, raise legal or security questions, ask for something outside the facts above, or you are unsure. "
         . "For stop, not_interested, not_now, out_of_office and bounce, reply_body must be empty. "
         . "resume_on: only for not_now, the date (YYYY-MM-DD) they asked to be contacted again, else " . date('Y-m-d', strtotime('+30 days')) . " (today is " . date('Y-m-d') . "). "
+        . 'You are Mphatso, head of the Replies desk: answer like the best human salesperson would, professional, warm, specific to what they wrote and complete, so it never reads as automated, spam or phishing. ' . (function_exists('pm_trust_flags') ? PM_TRUST_RULES . ' ' : '') . (function_exists('pm_tb_line') ? pm_tb_line((string)($lead['brand'] ?? pm_brand()), 'replies', 3) . ' ' : '')
+        . 'tell: as head of Replies, a short note to each department that should act on this reply (writers: what it teaches about how we open; director: a hot lead or a lost one and why; followup: stop or change timing; research: a new fact they gave, like a name or a number); leave a department empty when there is nothing. '
         . "whatsapp: the same answer as a WhatsApp message, at most 40 words, no subject, no links; empty when reply_body is empty." . (function_exists('pm_share_reply_hint') ? pm_share_reply_hint((string)($lead['brand'] ?? '')) : '') . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $user = "Business: {$lead['name']} ({$lead['city']}), contact: " . ($lead['contact'] ?? '') . ", package we suggested: $pk, their likely need: " . ($lead['pain'] ?? '') . ".\n"
         . "Conversation so far:\n" . implode("\n", $thread) . "\n\nTheir new message" . ($ch === 'wa' ? ' (on WhatsApp)' : '') . ":\n" . mb_substr($incoming, 0, 4000)
-        . "\n\nReturn JSON: {\"intent\",\"summary\":\"one sentence\",\"needs_human\":bool,\"reply_subject\",\"reply_body\",\"whatsapp\",\"resume_on\",\"next_step\":\"what the owner should do next\"}";
+        . "\n\nReturn JSON: {\"intent\",\"summary\":\"one sentence\",\"needs_human\":bool,\"reply_subject\",\"reply_body\",\"whatsapp\",\"resume_on\",\"next_step\":\"what the owner should do next\",\"tell\":{\"writers\":\"\",\"director\":\"\",\"followup\":\"\",\"research\":\"\"}}";
     $out = pm_agent_json(pm_claude($system, $user, false, 1200)); // a reply under 120 words + a WhatsApp line + a few short fields: about 400 tokens; 1200 leaves room, never a runaway
     if (!is_array($out)) {
         return pm_reply_fallback('Could not be classified.');
@@ -794,6 +796,14 @@ function pm_handle_incoming(array &$lead, string $text, string $ch = 'email', ar
                 throw $e;
             }
             $r = pm_reply_fallback('Daily AI budget reached: read it and reply yourself.');
+        }
+    }
+    if (function_exists('pm_tb_post') && is_array($r['tell'] ?? null)) { // Mphatso, head of Replies, tells each department what this reply means for it
+        foreach (['writers', 'director', 'followup', 'research'] as $dept) {
+            $note = trim((string)($r['tell'][$dept] ?? ''));
+            if ($note !== '' && mb_strlen($note) > 8) {
+                pm_tb_post((string)($lead['brand'] ?? pm_brand()), 'replies', $dept, ($lead['name'] ?? 'A lead') . ': ' . $note, 'tell:' . $dept . ':' . ($lead['id'] ?? ''));
+            }
         }
     }
     return [pm_apply_reply($lead, $text, $r, $mode, $send, $ch), $r];

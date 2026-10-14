@@ -1204,7 +1204,7 @@ function pm_agent_write(array $leads): array
     $sender = pm_sender_name();
     $subjectLine = function_exists('pm_email_exp_example') ? pm_email_exp_example(pm_brand()) : '';
     $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou are writing outreach for {$s['company_name']} as " . ($sender !== '' ? "$sender (use this first name: " . explode(' ', $sender)[0] . ")" : "a member of the team (no personal name: introduce the company instead)") . ". $ask" . PM_EMAIL_CRAFT . ' ' . ($subjectLine !== '' ? $subjectLine . ' ' : '')
-        . "Each item has subject_style: write that item's email subject in that style. Where an item has owner_feedback, the owner turned the last version down for that reason: fix exactly that. " . pm_market_pulse_line() . ' ' . pm_tb_line(pm_brand(), 'writers') . ' ' . PM_AGENT_RULES;
+        . "Each item has subject_style: write that item's email subject in that style. Where an item has owner_feedback, the owner turned the last version down for that reason: fix exactly that. " . PM_TRUST_RULES . ' ' . pm_market_pulse_line() . ' ' . pm_tb_line(pm_brand(), 'writers') . ' ' . PM_AGENT_RULES;
     $brand = pm_brand();
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'city' => $l['city'], 'currency' => pm_local_currency($l)['word'], 'contact' => $l['contact'] ?? '',
         'evidence' => array_slice($l['evidence'] ?? [], 0, 2), 'online_gaps' => array_slice($l['social_gaps'] ?? [], 0, 2), 'research' => pm_research_brief($l), 'lead_with' => $l['pain'] ?? '', 'how_it_stops' => pm_fix_for((string)($l['pain'] ?? '')),
@@ -1263,7 +1263,7 @@ function pm_agent_followup(array $leads): array
         . "Match the state: for \"opened\" (they opened our proposal or email but stayed quiet) gently reference what they saw and add one new, true reason; for \"silent\" (never engaged) be shorter and lead with one specific fact about their business (from what_we_know when given: our research's facts, news and hooks; never invent one);for \"replied\" pick up their last words, never repeat a whole earlier message. "
         . "No prices, no guilt, no pressure, no urgency. Plain text, no sign-off. Each item has subject_style: write that item's email subject in that style, $subjectRule. "
         . pm_email_exp_followup_example(pm_brand()) . ' ' . pm_market_pulse_line() . ' '
-        . pm_tb_line(pm_brand(), 'followup') . ' Where an item has owner_feedback, the owner turned the last follow-up down for that reason: write a new one that fixes exactly that, and decide send. '
+        . pm_tb_line(pm_brand(), 'followup') . ' ' . PM_TRUST_RULES . ' Where an item has owner_feedback, the owner turned the last follow-up down for that reason: write a new one that fixes exactly that, and decide send. '
         . 'Before writing, DECIDE for each item what is best for winning this business: "send" (a follow-up now: write it), "wait" (too soon, or a better moment is coming: give wait_days 2 to 21 and leave the texts empty), '
         . 'or "stop" (a poor fit, or enough follow-ups have gone with no sign of interest; only when followups_already_sent is 1 or more). Use days_since_our_last_email, followups_already_sent, state, views, score and what_we_know. Default to "send". Give a short why. '
         . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
