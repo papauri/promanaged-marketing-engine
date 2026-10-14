@@ -84,6 +84,21 @@ function pm_market_pulse_line(string $brand = ''): string
 /** The study's line made safe for the start of a first email: no greeting, link, number or price, no self-introduction or traveller pose, two sentences and 30 words at most. '' when unusable. */
 function pm_personal_clean(string $s, string $brand): string
 {
+    $keep = []; // a place with a number in it ("Area 44", "the M1") is an address, not a price: kept through the no-numbers rule
+    $s = (string)preg_replace_callback('/\b(Area|Sector|Plot|Zone|M|S)\s?\d{1,3}\b/u', function ($m) use (&$keep) {
+        $keep[] = $m[0];
+        return '⟦' . str_repeat('·', count($keep)) . '⟧';
+    }, $s);
+    $out = pm_personal_clean_text($s, $brand);
+    foreach (array_reverse($keep, true) as $i => $k) {
+        $out = str_replace('⟦' . str_repeat('·', $i + 1) . '⟧', $k, $out);
+    }
+    return $out;
+}
+
+/** pm_personal_clean() once the numbered places are set aside. */
+function pm_personal_clean_text(string $s, string $brand): string
+{
     if ($brand === 'travel') { // too long: the first sentence alone (the detail) still opens the email well
         $one = (string)(preg_split('/(?<=[.?!])\s+/u', trim($s))[0] ?? '');
         return pm_tm_clean_opening($s) ?: (pm_tm_clean_opening($one) ?: pm_tm_clean_opening((string)preg_replace('/,\s+(and|so)\s+we\b.*$/iu', '.', $one)));
@@ -100,7 +115,17 @@ function pm_personal_clean(string $s, string $brand): string
 /** The personal line the day's study wrote for this lead, or ''. */
 function pm_lead_personal(array $lead): string
 {
-    return trim((string)($lead['research']['personal'] ?? ''));
+    $p = trim((string)($lead['research']['personal'] ?? ''));
+    if ($p !== '' || empty($lead['research']['sure'])) {
+        return $p;
+    }
+    foreach ((array)($lead['research']['hooks'] ?? []) as $h) { // no line written (or it broke a rule): the observation half of a hook the study already wrote, no AI
+        $obs = trim((string)preg_split('/\s*(—|–|\?|;|, but\b| but\b|,? (and )?(how|do|does|what|when|where|why|who|is|are|can|could|would)\b)/u', (string)$h)[0]);
+        if (str_word_count($obs) >= 7 && preg_match('/^(Your|From your)\b/u', $obs) && ($c = pm_personal_clean(rtrim($obs, ' ,.') . '.', (string)($lead['brand'] ?? pm_brand()))) !== '') {
+            return $c;
+        }
+    }
+    return '';
 }
 
 /**

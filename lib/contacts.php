@@ -100,6 +100,121 @@ function pm_contact_site(string $website, int $max = 5): array
     return $r;
 }
 
+/** Words that start with a capital on a lodge's page but are never a person's name. */
+const PM_NOT_NAMES = ['The', 'Our', 'We', 'Us', 'Team', 'Lodge', 'Lake', 'Malawi', 'Camp', 'Hotel', 'Resort', 'Guest', 'House', 'Beach', 'Safari', 'Village', 'Restaurant', 'Africa', 'African',
+    'Lilongwe', 'Blantyre', 'Mzuzu', 'Zomba', 'Mangochi', 'Salima', 'Liwonde', 'Mulanje', 'Contact', 'Home', 'About', 'Welcome', 'Booking', 'Bookings', 'Reservations', 'Management', 'Company',
+    'Limited', 'Ltd', 'Group', 'Services', 'Office', 'Email', 'Phone', 'Tel', 'Call', 'Mr', 'Mrs', 'Ms', 'Dr', 'Madam', 'Sir', 'And', 'Of', 'In', 'At', 'For', 'With', 'This', 'Your', 'Page',
+    'Facebook', 'Instagram', 'Google', 'Tripadvisor', 'Airbnb', 'Manager', 'Owner', 'Director', 'Founder', 'Host', 'Hosts', 'General', 'Managing', 'Chalets', 'Cottage', 'Cottages', 'Rooms', 'Bar'];
+
+/** The lines of the pages that mention an owner, manager or host (what the AI needs to read, and all it is sent): [['url','text']]. */
+function pm_contact_role_lines(array $pages, int $max = 900): array
+{
+    $out = [];
+    foreach ($pages as $p) {
+        $keep = [];
+        foreach ((array)preg_split('/(?<!Mr\.|Dr\.|Ms\.|Mrs\.|St\.)(?<=[.!?])\s+|\R/u', (string)($p['text'] ?? '')) as $line) {
+            $line = trim((string)$line);
+            if ($line !== '' && mb_strlen($line) < 300 && preg_match('/\b(owner|owned|founder|founded|proprietor|director|manager|managed|managing|hosts?|hosted|run by|started by|your hosts?|meet)\b/iu', $line)
+                && !preg_match('/\b(restaurant|kitchen|chef|waiter|housekeep\w*|front desk|reception\w*)\s+manager\b/iu', $line)) {
+                $keep[] = $line;
+            }
+        }
+        if ($keep) {
+            $out[] = ['url' => (string)$p['url'], 'text' => mb_substr(implode("\n", array_unique($keep)), 0, $max)];
+        }
+    }
+    return $out;
+}
+
+/**
+ * The owner or manager named in plain words on the business's own pages, found by code (no AI): "Owner: Grace Banda", "Grace Banda, General Manager", "run by John and Mary",
+ * "your hosts Tom and Ann". ['name','title','source','quote'] or [] when the pages say nothing that plain.
+ */
+function pm_contact_free_name(array $pages): array
+{
+    $N = '((?:\p{Lu}[\p{Ll}\'’-]+)(?:\s+\p{Lu}[\p{Ll}\'’-]+){0,2})';
+    $R = '(?i:(co-?owner|owner|co-?founder|founder|proprietor|proprietress|general manager|managing director|director|manager|hosts?))';
+    $T = '(?:(?:Mr|Mrs|Ms|Dr|Madam)\.?\s+)?';
+    $pats = ['/\b' . $R . '\s*(?:[:\-–—,]|is|was)\s*' . $T . $N . '/u' => [1, 2],
+        '/' . $N . '\s*(?:[,\-–—(]|is)\s*(?i:the\s+|our\s+)?' . $R . '\b/u' => [2, 1],
+        '/\b(?i:(owned|run|managed|founded|hosted|started))\s+(?i:and\s+\w+\s+)?(?i:by)\s+' . $T . $N . '/u' => [1, 2],
+        '/\b(?i:(your|our)\s+hosts?)\s*,?\s*(?i:are\s+)?' . $T . $N . '/u' => [1, 2]];
+    $rank = fn(string $r) => preg_match('/owner|own|founder|found|proprietor|start/i', $r) ? 1 : (preg_match('/managing|director/i', $r) ? 2 : (preg_match('/general/i', $r) ? 3 : 4));
+    $best = [];
+    foreach ($pages as $p) {
+        foreach ((array)preg_split('/(?<!Mr\.|Dr\.|Ms\.|Mrs\.|St\.)(?<=[.!?])\s+|\R/u', (string)($p['text'] ?? '')) as $line) {
+            if (mb_strlen((string)$line) > 300 || preg_match('/\b(restaurant|kitchen|chef|waiter|housekeep\w*|front desk|reception\w*|guest|review\w*)\b/iu', (string)$line)) {
+                continue; // a staff role, or a guest writing a review
+            }
+            foreach ($pats as $re => [$ri, $ni]) {
+                if (!preg_match($re, (string)$line, $m)) {
+                    continue;
+                }
+                $words = [];
+                foreach (preg_split('/\s+/u', trim($m[$ni])) ?: [] as $w) {
+                    if (in_array($w, PM_NOT_NAMES, true)) {
+                        if ($ni === 1) { // the words before ", manager": one that is not a name ("Kande Beach Resort, manager") means it is not a person
+                            $words = [];
+                        }
+                        break; // after "Owner: Grace Banda Welcome": the name stops at the first word that is not one
+                    }
+                    $words[] = $w;
+                }
+                $name = implode(' ', $words);
+                if ($name === '' || !pm_contact_name_ok($name)) {
+                    continue;
+                }
+                $role = strtolower(trim($m[$ri]));
+                $role = preg_match('/^(owned|run|founded|started)$/', $role) ? 'Owner' : (preg_match('/^(managed)$/', $role) ? 'Manager' : (preg_match('/host/', $role) ? 'Host' : ucwords($role)));
+                if (!$best || $rank($role) < $rank((string)$best['title'])) {
+                    $best = ['name' => $name, 'title' => $role, 'source' => (string)$p['url'], 'quote' => mb_substr(trim((string)$line), 0, 200)];
+                }
+            }
+        }
+    }
+    return $best;
+}
+
+/** A possible name the owner has not confirmed becomes the contact when its role is the owner's or a manager's (not kitchen, restaurant or front-desk staff), so the greeting uses it. */
+function pm_contact_promote_hint(array &$lead): bool
+{
+    if (trim((string)($lead['contact'] ?? '')) !== '' && isset($lead['contact_hint'])) {
+        unset($lead['contact_hint']); // the name is known: the old guess goes
+    }
+    if (trim((string)($lead['contact'] ?? '')) !== '' || !($h = pm_contact_hint_parts($lead)) || $h['not_owner']
+        || !preg_match('/owner|founder|proprietor|director|manager|host|managing/i', $h['title']) || preg_match('/restaurant|kitchen|chef|front desk|reception|housekeep|assistant/i', $h['title'])) {
+        return false;
+    }
+    $lead['contact'] = $h['name'];
+    $lead['contact_title'] = $lead['contact_title'] ?? $h['title'];
+    unset($lead['contact_hint']);
+    pm_lead_note($lead, 'Greeting now uses ' . $h['name'] . ' (' . $h['title'] . ($h['source'] !== '' ? ', from ' . $h['source'] : '') . ')');
+    function_exists('pm_dm_personalise') && pm_dm_personalise($lead);
+    return true;
+}
+
+/**
+ * NAME SEARCH for several leads in ONE web call (instead of one call each): the owner's or manager's name of each, with the page that states it.
+ * Returns [id => ['contact','contact_title','source']]; a lead nobody found is left out.
+ */
+function pm_agent_names_batch(array $leads): array
+{
+    $system = 'You find who runs each business: the owner, founder, managing director, general manager, manager or host, by web search (their website, Facebook, TripAdvisor or Google review replies signed by the owner or manager, Airbnb or Booking.com host, news, LinkedIn). '
+        . 'Only a name a page ties to THIS business in THIS town, with that page\'s URL. Never guess; never kitchen, restaurant or front-desk staff, guests or reviewers. Leave out a business you cannot find a name for. ' . PM_AGENT_RULES;
+    $list = implode("\n", array_map(fn($l) => $l['id'] . ': ' . $l['name'] . ', ' . ($l['city'] ?? '') . (!empty($l['website']) ? ' (' . $l['website'] . ')' : ''), $leads));
+    $out = pm_agent_json(pm_claude($system, $list . "\nJSON: {\"found\":[{\"id\",\"name\",\"role\",\"source\":\"URL\"}]}", true, 120 + 60 * count($leads), 'cheap'));
+    $res = [];
+    $ids = array_column($leads, 'id');
+    foreach ((array)($out['found'] ?? (is_array($out) && array_is_list($out) ? $out : [])) as $x) {
+        $id = is_array($x) && is_scalar($x['id'] ?? null) ? (string)$x['id'] : '';
+        $n = trim(strip_tags((string)($x['name'] ?? '')));
+        if (in_array($id, $ids, true) && pm_contact_name_ok($n) && preg_match('#^https?://#i', (string)($x['source'] ?? ''))) {
+            $res[$id] = ['contact' => mb_substr($n, 0, 80), 'contact_title' => mb_substr(trim(strip_tags((string)($x['role'] ?? ''))), 0, 60), 'source' => (string)$x['source']];
+        }
+    }
+    return $res;
+}
+
 /**
  * The owner or manager named on the business's own pages: ['name','title','source' (page address),'quote'] or []. The AI points to the sentence; code checks that the sentence is
  * on the page, that the name is in it, that the name is a person's and that the role is the owner's or the manager's (not kitchen, restaurant, housekeeping or front-desk staff).
@@ -110,13 +225,21 @@ function pm_contact_people(array $lead, array $site): array
     if (!$pages) {
         return [];
     }
+    if ($free = pm_contact_free_name($pages)) { // the page says it plainly ("Owner: Grace Banda", "run by John and Mary"): no AI
+        return $free;
+    }
+    $snip = pm_contact_role_lines($pages);
+    if ($snip === []) {
+        return []; // no line on their pages mentions an owner, manager or host: nothing for the AI to find
+    }
+    $pages = $snip; // the AI reads only the lines that mention a role, not whole pages (a tenth of the tokens)
     $system = 'You read pages from the website of ' . (string)($lead['name'] ?? 'a business') . '. List the people the pages themselves name as running THIS business: owner, founder, director, general manager, manager or host. '
         . 'For each give "quote": the exact sentence or line from the pages that names them, copied word for word. Never guess, and never complete a name from anything except the pages. '
         . 'Ignore guests, reviewers, customers quoted in testimonials, staff in the kitchen, restaurant, housekeeping or front desk, and people who belong to other organisations. '
         . 'If the pages name nobody, answer {"people":[]}. Reply JSON only.';
     $user = '';
     foreach (array_slice($pages, 0, 5) as $p) {
-        $user .= 'PAGE ' . $p['url'] . "\n" . mb_substr((string)$p['text'], 0, 3500) . "\n\n";
+        $user .= 'PAGE ' . $p['url'] . "\n" . mb_substr((string)$p['text'], 0, 900) . "\n\n";
     }
     $user .= 'JSON: {"people":[{"name":"full name","role":"as written on the page","quote":"the exact sentence"}]}';
     try {
@@ -194,12 +317,12 @@ function pm_contact_find(array $lead): array
  * CONTACT FINDER for one lead: the website first, then the web search for what is still missing (the owner's name, or an email address).
  * Returns the same keys the web search always returned, so the callers are unchanged.
  */
-function pm_agent_contact(array $lead): array
+function pm_agent_contact(array $lead, bool $nameSearch = true): array // $nameSearch false: a missing name is left to the batched name search (pm_agent_names_batch)
 {
     $d = pm_contact_find($lead);
     $haveName = trim((string)($lead['contact'] ?? '')) !== '' || $d['contact'] !== '';
     $haveMail = trim((string)($lead['email'] ?? '')) !== '' || $d['email'] !== '';
-    if (!$haveName || !$haveMail) {
+    if ((!$haveName && $nameSearch) || !$haveMail) {
         $found = [];
         try {
             $found = pm_agent_contact_search($lead);

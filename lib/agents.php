@@ -43,7 +43,7 @@ function pm_agents_default_config(): array
         // Businesses we already serve (named on our website): never pitched as new ProManaged IT leads.
         'existing_clients' => ["Rosalyn's Beach Hotel", 'Liwonde Sun Hotel'],
         'proposals_per_day' => 2, // best leads get a tailored proposal prepared ahead of time (each costs an AI call)
-        'research_per_day' => 12, // the day's leads (replies, follow-ups due, today's first messages) are studied in advance: business, news, owner's name, contacts; one web call each
+        'research_per_day' => 20, // the day's leads (replies, follow-ups due, today's first messages) are studied in advance: business, news, owner's name, contacts; one web call each
         'daily_token_budget' => 400000, // hard stop for all AI use in a day, all brands together (0 = no limit)
         'daily_usd_budget' => 1.0, // hard stop in estimated US dollars a day, all brands together (0 = no limit): pictures cost far more per token than text
         'quality' => 'economy',   // economy = cheapest models everywhere; balanced = a stronger model for web research and proposals
@@ -58,7 +58,7 @@ function pm_travel_agent_defaults(): array
         'sectors' => ['lodges and guest houses', 'bed and breakfasts and cottages', 'safari camps and eco-lodges', 'lakeshore resorts and beach lodges', 'boutique and city hotels', 'backpackers and hostels'],
         'cities' => ['Cape Maclear', 'Nkhata Bay', 'Mangochi', 'Salima', 'Nkhotakota', 'Livingstonia', 'Karonga', 'Liwonde', 'Zomba', 'Mulanje', 'Blantyre', 'Lilongwe', 'Mzuzu', 'Chintheche'],
         'markets' => ['Malawi'],
-        'new_per_day' => 10, 'scouts_per_day' => 4, 'send_cap' => 10, 'wa_cap' => 40, 'followup_days' => 4, 'max_followups' => 2, 'proposals_per_day' => 2, 'research_per_day' => 12,
+        'new_per_day' => 10, 'scouts_per_day' => 4, 'send_cap' => 10, 'wa_cap' => 40, 'followup_days' => 4, 'max_followups' => 2, 'proposals_per_day' => 2, 'research_per_day' => 20,
         'enabled' => ['scout' => true, 'contact' => true, 'qualifier' => true, 'research' => true, 'writer' => true, 'proposals' => true, 'followup' => true],
     ];
 }
@@ -1121,6 +1121,7 @@ function pm_apply_contact(array &$lead, array $d): void
         pm_lead_note($lead, 'Contact name from ' . $src);
     } else {
         $lead['contact_hint'] = $name . ($title !== '' ? " ($title)" : '') . ($src !== '' ? ', from ' . $src : '');
+        function_exists('pm_contact_promote_hint') && pm_contact_promote_hint($lead); // named as owner or manager: greet them by name rather than "Hello,"
     }
 }
 
@@ -2638,16 +2639,18 @@ function pm_agent_research(array $lead): array
     $first = trim(explode(' ', preg_replace('/^(mr|mrs|ms|dr|miss|madam|sir)\.?\s+/i', '', trim((string)($lead['contact'] ?? ''))))[0] ?? '');
     $first = preg_match('/^\p{Lu}\p{L}+$/u', $first) ? $first : '';
     $pkgs = pm_brand() !== 'travel' && !pm_brand_is_custom(pm_brand()); // the package list, so the same call can re-score the lead
+    // a ready starter is only used where the AI writes the first message (pm_starter_draft): Travel Malawi and a business that drafts from its default message get none, the rest one (fewer words written = fewer tokens)
+    $nStart = pm_brand() === 'travel' || (function_exists('pm_dm_use_default') && pm_dm_use_default()) ? 0 : 1;
     $system = pm_agents_company_brief($pkgs ? 'packages' : 'short') . "\nYou are the Researcher, and precision is your job. Use web search to study ONE business. "
         . "Step 1, identity: make sure every source is about THIS business in THIS town (same name, same place). Similar names elsewhere, directories that only list the name, and other branches do not count. If you cannot confirm it, say so. "
         . "Step 2, facts: from its own website, its Facebook and Instagram pages, Google reviews, and local or business/finance news from the last 18 months (expansion, new rooms or branch, awards, funding, tenders won, hiring, events). "
-        . "Only facts you actually read, each with its exact source URL and the date shown on the source; mark confidence high (read it yourself on an official page or reputable news) or medium (a review site or directory). Never guess, infer or fill gaps. "
+        . "At most 5 facts, the most useful first, each one short line. Only facts you actually read, each with its exact source URL and the date shown on the source; mark confidence high (read it yourself on an official page or reputable news) or medium (a review site or directory). Never guess, infer or fill gaps. "
         . "The 'checked_by_code' list was verified by our own system: treat it as true, do not contradict it, and never claim a website, certificate or security problem that is not in it. "
         . "Step 2b, people and contacts: who owns or runs it (owner, founder, director, general manager, manager or host; never kitchen, restaurant, front-desk or housekeeping staff, guests or reviewers), each with the exact source URL that names them. Try hard for the owner's real name: their About page, Facebook About and posts, review replies signed by the owner or manager on TripAdvisor or Google, the host on Airbnb or Booking.com, news, LinkedIn. And its public email, phone and WhatsApp, with the source URL. Only what a source states; leave empty what you did not find. "
-        . "Step 3, through our eyes: what is weak or missing online and where we could genuinely help (for our team only). "
-        . "Step 4, write 2 or 3 hooks: one real observation plus a curious question that makes the owner want to reply, WITHOUT handing over the solution or offering to fix it. Friendly, never critical or creepy, business information only. "
-        . "Step 5, write 3 conversation starters, each built on a different hook, ready to send: an email (subject of max 7 words, then a body of 45 to 80 words: a greeting line" . ($first !== '' ? " to $first" : '') . ", one line saying who we are"
-        . ", the observation, one easy question about how they handle it today; ONE question only, no offer to fix it, no prices, no feature list, no sign-off) and a WhatsApp version of 25 to 40 words. "
+        . "Step 3, through our eyes: at most 3 short lines on what is weak or missing online and where we could genuinely help (for our team only). "
+        . "Step 4, write 2 hooks: one real observation plus a curious question that makes the owner want to reply, WITHOUT handing over the solution or offering to fix it. Friendly, never critical or creepy, business information only. "
+        . ($nStart ? "Step 5, write 1 conversation starter, built on the best hook, ready to send:" : '') . ($nStart ? " an email (subject of max 7 words, then a body of 45 to 80 words: a greeting line" . ($first !== '' ? " to $first" : '') . ", one line saying who we are"
+        . ", the observation, one easy question about how they handle it today; ONE question only, no offer to fix it, no prices, no feature list, no sign-off) and a WhatsApp version of 25 to 40 words. " : '')
         . 'Step 5b, personal: the line our first email opens with, at most 25 words, no greeting, number, price or link: ONE true, specific detail about them from a confirmed fact (their rooms, setting, a recent review, news), then '
         . (pm_brand() === 'travel' ? 'that we would love them to be part of what we are building. Never name yourself, never say or suggest you were looking for a stay or travelling. ' : 'why it made us write to them. ')
         . 'personal_subject: under 45 characters, specific to them, a capital letter first and on names only. ' . pm_market_pulse_line() . ' '
@@ -2657,7 +2660,7 @@ function pm_agent_research(array $lead): array
         . 'JSON: {"identity":{"confirmed":true,"how":"what proves it is this business"},"discoveries":[{"fact":"","source":"URL","date":"","confidence":"high|medium"}],"website":{"url":"","verdict":"one short line","issues":[""]},'
         . '"social":{"facebook":"URL","instagram":"URL","verdict":"one short line: last post date, followers, reviews"},"news":[{"headline":"","source":"URL","date":""}],'
         . '"people":[{"name":"full name","role":"as the source states it","source":"URL"}],"reach":{"email":"","phone":"","whatsapp":"","source":"URL"},"opportunities":[""],"hooks":[""],'
-        . '"starters":[{"angle":"2-4 words","subject":"","email":"","whatsapp":""}],"personal":"","personal_subject":"",'
+        . ($nStart ? '"starters":[{"angle":"2-4 words","subject":"","email":"","whatsapp":""}],' : '') . '"personal":"","personal_subject":"",'
         . '"rescore":{"score":0,' . ($pkgs ? '"package":0,' : '') . (pm_brand() === 'travel' ? '' : '"offering":"' . ($pkgs ? 'build, source or support' : 'name of the offering that fits') . '",') . '"pain":"the need to lead with","reason":"one short sentence","skip":false}}';
     $out = pm_agent_json(pm_claude($system, $user, true, 3300, 'write'));
     if (!is_array($out)) {

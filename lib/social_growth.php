@@ -551,7 +551,7 @@ function pm_playbook_pick(string $brand, int $max = 8, array $skip = []): array
 function pm_playbook_research(array $picked): array
 {
     $today = date('Y-m-d'); // one research allowance a day for the business (Sales > Targeting), shared with the morning run, which studies the day's leads first
-    $room = max(0, (int)(pm_agents_config()['research_per_day'] ?? 12) - count(array_filter(pm_leads(), fn($l) => ($l['brand'] ?? 'promanaged') === pm_brand() && str_starts_with((string)($l['research']['at'] ?? ''), $today))));
+    $room = max(0, (int)(pm_agents_config()['research_per_day'] ?? 20) - count(array_filter(pm_leads(), fn($l) => ($l['brand'] ?? 'promanaged') === pm_brand() && str_starts_with((string)($l['research']['at'] ?? ''), $today))));
     $due = array_slice(array_values(array_filter($picked, fn($l) => empty($l['research']['at']) || strtotime((string)$l['research']['at']) < strtotime('-30 days'))), 0, min(PM_PB_RESEARCH_MAX, $room));
     if (!$due || !pm_agents_ready()) {
         return [0, []];

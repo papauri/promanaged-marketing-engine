@@ -12,7 +12,8 @@ function pm_agent_job(array $job): array
     try {
         $data = match ($job['agent'] ?? '') {
             'scout'    => pm_agent_scout($job['sector'], $job['city'], (int)$job['want'], $job['known'] ?? []),
-            'contact'  => pm_agent_contact($job['lead']),
+            'contact'  => pm_agent_contact($job['lead'], empty($job['batch_names'])),
+            'names'    => pm_agent_names_batch($job['leads']),
             'qualify'  => pm_agent_qualify($job['leads']),
             'write'    => pm_agent_write($job['leads']),
             'followup' => pm_agent_followup($job['leads']),

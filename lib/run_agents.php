@@ -435,13 +435,13 @@ try {
         array_values(array_filter($leads, fn($l) => $l['status'] === 'replied' && !empty($l['want_proposal']) && empty($l['proposal_ai']))),
         $best(array_values(pm_followup_due($leads, $cfg, false))),
         // drafts waiting to go out (even while new leads are held): studied so their draft gets the personal line and the owner's name before it is sent
-        array_slice($best(array_filter($leads, fn($l) => $l['status'] === 'drafted' && empty($l['sent']) && empty($l['approved_at']) && empty($l['drafts']['edited_at']) && !pm_lead_is_client($l))), 0, max(1, (int)($cfg['send_cap'] ?? 10))),
+        $best(array_filter($leads, fn($l) => $l['status'] === 'drafted' && empty($l['sent']) && empty($l['approved_at']) && empty($l['drafts']['edited_at']) && !pm_lead_is_client($l))), // as many as the day's allowance lets
         $hold ? [] : array_slice($best(array_filter($leads, fn($l) => $cold($l) && (!empty($l['email']) || !empty($l['phone'])) && empty($l['drafts']))), 0, max(1, (int)($cfg['send_cap'] ?? 10))), // as many first messages as go out today
         $hold ? [] : $best(array_filter($leads, fn($l) => $cold($l) && empty($l['email']) && empty($l['phone']))),
         $hold ? [] : $best(array_filter($leads, fn($l) => $l['status'] === 'new' && ($l['score'] ?? 0) >= 65)),
         function_exists('pm_research_queue') ? pm_research_queue($leads, 2) : []
     );
-    $rsRoom = max(0, (int)($cfg['research_per_day'] ?? 12) - count(array_filter($leads, fn($l) => str_starts_with((string)($l['research']['at'] ?? ''), $today)))); // a day's allowance, not a run's
+    $rsRoom = max(0, (int)($cfg['research_per_day'] ?? 20) - count(array_filter($leads, fn($l) => str_starts_with((string)($l['research']['at'] ?? ''), $today)))); // a day's allowance, not a run's
     $rs = [];
     foreach ($dayList as $l) {
         if (count($rs) < $rsRoom && $unstudied($l) && !isset($rs[(string)$l['id']])) {
@@ -470,7 +470,7 @@ try {
     }
     $np = 0; // drafts already waiting: the personal line and the owner's name they now have (no AI)
     foreach ($leads as $id => $l0) {
-        if (($l0['brand'] ?? $brand) === $brand && pm_dm_personalise($leads[$id])) {
+        if (($l0['brand'] ?? $brand) === $brand && (pm_contact_promote_hint($leads[$id]) | pm_dm_personalise($leads[$id]))) { // a possible owner or manager's name is used; the draft follows
             $np++;
         }
     }
@@ -521,12 +521,12 @@ try {
     $worth = fn($l) => $cfg['enabled']['qualifier'] ? ($l['status'] === 'qualified' && ($l['score'] ?? 0) >= 60 && empty($l['drafts'])) : $l['status'] === 'new';
     $newIds = $only === 'names'
         ? array_slice(array_keys(array_filter($leads, fn($l) => !in_array($l['status'], ['won', 'lost', 'optout'], true) && empty($l['contact']) && empty($l['contact_hint'])
-            && (($c = strtotime((string)($l['contact_checked'] ?? ''))) === false || $c < strtotime('-30 days')))), 0, 12)
+            && (($c = strtotime((string)($l['contact_checked'] ?? ''))) === false || $c < strtotime('-30 days')))), 0, 24) // the website read is free and names are searched six to a call: twice as many as before
         : array_slice(array_keys(array_filter($leads, fn($l) => $worth($l) && (empty($l['email']) || empty($l['contact']))
             && (($c = strtotime((string)($l['contact_checked'] ?? ''))) === false || $c < strtotime('-30 days')))), 0, 10); // a lead searched lately is not paid for again
     if ($cfg['enabled']['contact'] && $newIds) {
         $progress('Contact Finders on ' . count($newIds) . ' leads');
-        $jobs = array_map(fn($id) => ['agent' => 'contact', 'lead' => $leads[$id]], $newIds);
+        $jobs = array_map(fn($id) => ['agent' => 'contact', 'lead' => $leads[$id], 'batch_names' => true], $newIds); // their own website first (free); a name still missing is searched below, six leads to one call
         foreach (pm_swarm($jobs, $cfg['parallel'], $tmp, $beat) as $i => $r) {
             $id = $newIds[$i];
             $leads[$id]['contact_checked'] = $today; // looked once: not searched again for 30 days in "names" mode
@@ -546,6 +546,33 @@ try {
                 $leads[$id]['email'] = '';
             }
             $stats['contacts'] += (!empty($leads[$id]['email']) || !empty($leads[$id]['phone'])) ? 1 : 0;
+        }
+        $save();
+    }
+    // ---- the names still missing: one web search for six leads at a time (a search each would cost six times as much), the best leads first, each lead once a month ----
+    $nmPool = array_filter($leads, fn($l) => !in_array($l['status'], ['won', 'lost', 'optout'], true) && !pm_lead_is_client($l) && trim((string)($l['contact'] ?? '')) === ''
+        && (($c = strtotime((string)($l['names_searched'] ?? ''))) === false || $c < strtotime('-30 days')));
+    uasort($nmPool, fn($a, $b) => ($b['score'] ?? 0) <=> ($a['score'] ?? 0));
+    $nameless = array_slice(array_map('strval', array_keys($nmPool)), 0, 12);
+    if (($cfg['enabled']['contact'] ?? true) && $nameless) {
+        foreach ($nameless as $id) {
+            $leads[$id]['names_searched'] = $today;
+        }
+        $progress('Contact Finders searching the owner names of ' . count($nameless) . ' leads');
+        $chunks = array_chunk($nameless, 6);
+        $jobs = array_map(fn($ids) => ['agent' => 'names', 'leads' => array_map(fn($id) => ['id' => $id] + $leads[$id], $ids)], $chunks);
+        foreach (pm_swarm($jobs, $cfg['parallel'], $tmp, $beat) as $r) {
+            if (!$r['ok']) {
+                $stats['errors']++;
+                pm_agent_log('Contact Finder', 'name search failed: ' . $r['error'], true);
+                continue;
+            }
+            foreach ((array)$r['data'] as $id => $d) {
+                if (isset($leads[$id])) {
+                    pm_apply_contact($leads[$id], $d); // their own page: the name; a role of owner or manager elsewhere: the name too; anything else: a name to confirm
+                    $stats['named_search'] = ($stats['named_search'] ?? 0) + (trim((string)($leads[$id]['contact'] ?? '')) !== '' ? 1 : 0);
+                }
+            }
         }
         $save();
     }
