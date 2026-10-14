@@ -6,6 +6,7 @@
 $isAdmin = pm_user_is_admin();
 $hasProposals = !empty(pm_brand_profile($vb)['proposals']);
 $a = fn(string $href, string $label): string => '<a href="' . pm_h($href) . '">' . pm_h($label) . '</a>';
+$ag = fn(string $d): string => pm_h(function_exists('pm_agent_first') ? pm_agent_first($d) : ucfirst($d)); // the agents by the names the admin gave them
 
 $team = [
     'start' => ['Start', [
@@ -15,17 +16,21 @@ $team = [
         'Nothing reaches a customer until someone presses Send, Approve or Publish.',
     ]],
     'day' => ['Every day', [
-        'Open the ' . $a('?tab=home', 'Overview') . '. "Needs you now" lists what is waiting.',
+        'Open the ' . $a('?tab=home', 'Overview') . '. "Needs you now" lists what is waiting. Under it is what the AI team decided this morning: ' . $ag('director') . '\'s meeting, the orders, and how the team is talking.',
         'Answer replies first: ' . $a('?tab=agents&status=awaiting', 'Sales › Leads › Needs reply') . '.',
         'Send the follow-ups that are due. They are in the Today list on ' . $a('?tab=agents', 'Leads') . '.',
         'Read the new drafts in ' . $a('?tab=agents&status=drafted', 'Draft ready') . ', tick Approve for sending on the good ones (or Select all on this page once you have read them), then press Approve selected. To hold them until a set time, fill in Not before first.',
         'Work the ' . $a('?tab=whatsapp', 'WhatsApp queue') . '.',
         'Approve this week\'s posts in ' . $a('?tab=social', 'Social › Plan') . ' and answer people in ' . $a('?tab=social&view=inbox', 'Social › Inbox') . '.',
+        'Reply to the people ' . $ag('social') . ' found asking for what we offer: ' . $a('?tab=agents&status=people', 'Leads › People looking') . '.',
         'Add a note to every lead you work on. The admin reads them.',
     ]],
     'leads' => ['Leads', [
         'To add a business, type its name in the Find box and press Find. To find new businesses, press Run the agents.',
-        'Leads come 10 to a page. Use Previous and Next under the list. An "open" link to a lead takes you straight to its page.',
+        'The tabs sort the work: Active (something to do now), People looking, Ready to send, Needs reply, No email, Missing details, Draft ready, Follow-ups, Contacted, Replied, Proposal sent, Won and Closed. Filter by town, details, score, folder and how many a page (10 to 200). The list changes without reloading the page.',
+        'Tick leads to work on several at once: Send now sends their emails straight away, Move to changes their stage, folders group them, and "Not right? Say why" with Turn down &amp; rewrite sends the drafts back to the writer with your reason. The writer learns from it.',
+        $a('?tab=agents&status=people', 'People looking') . ': people ' . $ag('social') . ' found in public posts asking for what we offer. Press Open their post, then Copy the reply, paste it under their post, and press I replied. No app is allowed to answer under other people\'s posts, so this step is yours.',
+        'Team sit-down on a lead lets the team talk it over and decide: send it, rewrite it with a new angle, wait, call them or drop them. The decision shows as a "Team:" chip, and the talk is on the lead. The busiest leads get a sit-down every morning by themselves.',
         'Open a lead to see what we know about the business, the conversation and the notes on the left, and the message on the right.',
         'Change the email or WhatsApp text if needed and press Save edits. Send me a test email shows you exactly what they will get.',
         'Send email sends it now. Approve for sending puts it in the queue, and it goes out during the ' . $a('?tab=targeting#sendschedule', 'sending hours') . '.',
@@ -63,6 +68,7 @@ $team = [
         'Campaign ideas: the top of Campaigns suggests what to run next (from your offers and their enquiries, What is selling, your free first step, and the AI once a week or when you press Suggest campaigns with the AI). Use this fills in the form. Each campaign\'s page shows What is happening: the steps done, the one thing to do next, when each item goes out, and the enquiries and reactions it brought.',
         'Campaign pictures: the drawn card and your own photo are free, and so is an AI picture made before. A new AI picture costs about 5 US cents. AI pictures show places and moods only, never your real rooms, products or people.',
         $a('?tab=social&view=inbox', 'Inbox') . ': comments and messages, each with a draft answer for you to check. "Answered by" shows who replied. A comment someone already answered, or a conversation answered in the last 30 minutes, is not answered twice.',
+        $a('?tab=social', 'Plan') . ' starts with ' . $ag('social') . '\'s day. Each morning ' . $ag('social') . ', head of Social, reads our Page\'s comments and messages, adds the buyers to Leads, searches public posts in our towns for people asking for what we offer, meets the department heads and sets the day\'s tasks and what today\'s posts lean on. Press Listen now for a fresh look.',
         $a('?tab=social&view=channels', 'Channels') . ': posts for places the app cannot post to. Press "I\'ll post this" so nobody else does, publish it there, then press Mark posted.',
         $a('?tab=social&view=ads', 'Ads') . ': paid campaigns. They are created paused and cost nothing until you start them.',
     ]],
@@ -70,6 +76,14 @@ $team = [
         $a('?tab=social&view=studio', 'Studio') . ' and ' . $a('?tab=social&view=kit', 'Brand kit') . ': covers and profile pictures.',
         $a('?tab=social&view=optimise', 'Profiles') . ': fix each channel\'s profile, and copy the text over where the app cannot change it.',
         $a('?tab=social&view=voice', 'Voice') . ': what the writers know about the business. Keep it true.',
+    ]],
+    'aiteam' => ['The AI team', [
+        'The AI agents work like departments: ' . $ag('director') . ' (Director) sets the day and gives orders; ' . $ag('scouts') . ' (Scout) finds businesses; ' . $ag('research') . ' (Researcher) studies them; ' . $ag('contact') . ' (Contact Finder) finds emails, numbers and owner names; '
+            . $ag('writers') . ' (Writer) writes the first emails; ' . $ag('followup') . ' (Follow-up) decides when to follow up; ' . $ag('replies') . ' (Replies) answers people who write back; ' . $ag('social') . ' (Social) runs the Page and finds people asking; '
+            . $ag('sender') . ' (Sender) sends what you approved; ' . $ag('advisor') . ' (Advisor) shows what is selling.',
+        'They talk to each other: a reply teaches the Writers how to open, ' . $ag('social') . ' tells the Writers what people ask for, the Director\'s orders reach every department. You see the notes on the ' . $a('?tab=home', 'Overview') . ' and can strike one that is wrong.',
+        'Every email is written to read as a real person\'s: professional, friendly, specific and useful. Code checks each one for anything that could look like spam or phishing (too many links, capitals, pressure words, a nameless greeting) and ' . $ag('sender') . ' raises it at the sit-down, so it is rewritten before you see it.',
+        'Nothing reaches a customer until a person presses Send, Approve or Publish. Opening a page never asks the AI, and the daily AI spend has a limit.',
     ]],
     'results' => ['Results', [
         $a('?tab=social&view=results', 'Insights › Results') . ': what brought enquiries and wins.',
@@ -89,6 +103,7 @@ $admin = [
         $a('?tab=targeting', 'Sales › Targeting and messages') . ': who to look for, the daily limits, the ' . $a('?tab=targeting#sendschedule', 'sending hours') . ' and the ' . $a('?tab=targeting#defaultmsg', 'default first message') . '.',
         $a('?tab=settings&section=business', 'Business details') . ': name, contacts, logo and documents to share.',
         $a('?tab=settings&section=email', 'Email') . ': the mailbox each business sends from. Check the mail login after any change.',
+        $a('?tab=settings&section=team#agentnames', 'Your AI team') . ': rename any AI agent (one word, no two alike). The new names show everywhere at once, also in past conversations.',
         $a('?tab=settings&section=connections', 'Connections') . ': Facebook, WhatsApp, other platforms and the AI keys. It also shows what the AI has cost in US dollars, today and over 30 days, and the daily spend limit (1 US dollar unless you change it). At the limit the AI stops until the next day.',
         $a('?tab=business&new=1', 'Add a business') . ': any kind of business. Give its name and what it does, plus its website and social pages if it has them. The AI reads them, searches the web for its listings, drafts its profile and who to sell to, and you check everything before it is saved.',
         'After it is created, the AI builds it up: it saves its social pages, draws its profile pictures and covers, suggests free offers, drafts the first posts and looks for its first leads. Follow the steps on its Build-up page (Operations › Businesses › Build-up). Nothing is sent or published until you approve it.',
@@ -97,6 +112,7 @@ $admin = [
         $a('?tab=audit', 'Activity log') . ': every sign-in, failed sign-in, action and page opened, by person. Filter it by period, person or business, or download it as CSV.',
         $a('?tab=audit&section=followups', 'Follow-ups') . ': first messages, follow-ups, on-time rate, replies and wins per day, week or month, per person. Late follow-ups are at the bottom.',
         $a('?tab=audit&section=ai', 'AI auditor') . ': a score, findings and what to check, for any period. Tick the box to get one every Monday.',
+        $a('?tab=audit&section=talk', 'Agent conversations') . ': what the AI agents said to each other and did, day by day, by name: the morning meeting, ' . $ag('social') . '\'s huddle, the sit-downs over leads and who told whom what. Delete a day you do not need.',
     ]],
     'week' => ['Every week', [
         'Monday: read the latest ' . $a('?tab=audit&section=ai', 'audit') . ' and talk through the findings with the team.',

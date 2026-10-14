@@ -7,12 +7,13 @@ Nothing goes to a customer until a person approves it. The AI runs on the cheape
 ## What it does
 
 - **Sales:** finds businesses, drafts the first email and the WhatsApp message, and handles follow-ups and replies. Proposals are signed online.
-- **Social:** plans posts and publishes them. One message can become a campaign with stories, a carousel, a WhatsApp broadcast and a printable flyer. It also handles comments, messages and ads.
+- **The AI team:** named agents work like departments (Director, Scout, Researcher, Contact Finder, Writer, Follow-up, Replies, Social, Sender, Advisor). They hold a morning meeting, talk each lead over at sit-downs, pass each other notes, and check every email so it could not look like spam. Rename them under **Operations › Team and currencies › Your AI team**.
+- **Social:** plans posts and publishes them. One message can become a campaign with stories, a carousel, a WhatsApp broadcast and a printable flyer. It also handles comments, messages and ads. Each morning the head of Social reads the Page's comments and messages, adds the buyers to the leads, searches public posts in the towns we cover for people asking for what we offer (Leads › People looking, with a reply to paste under their post) and sets the day's tasks.
 - **Brand:** covers, profile pictures, profile text and the voice the writers follow.
 - **Insights:** what brought enquiries and wins, and the next moves for each business.
 - **Any business:** add one by describing it. The AI reads its website and social pages, then builds it up for you to approve.
 - **Operations:** business details, email, connections, health checks and team accounts.
-- **Audit** (admin only): an activity log, follow-up counts and a weekly review.
+- **Audit** (admin only): an activity log, follow-up counts, a weekly review, and the agents' conversations day by day.
 
 The team's how-to is in the app itself: **your name (top right) › Guide**.
 

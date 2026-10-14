@@ -5,12 +5,44 @@
  * so a day can be deleted on its own; a deleted day is not rebuilt.
  */
 
-/** The agents by name (what the transcript calls them), and the department each name speaks for. */
-const PM_AGENT_NAMES = [
-    'director' => 'Amara (Director)', 'scouts' => 'Kwame (Scout)', 'research' => 'Nia (Researcher)', 'writers' => 'Tiwo (Writer)', 'followup' => 'Chiso (Follow-up)',
-    'replies' => 'Mphatso (Replies)', 'social' => 'Thandi (Social)', 'advisor' => 'Jabu (Advisor)', 'contact' => 'Zola (Contact Finder)', 'sender' => 'Pemba (Sender)',
-    'swarm' => 'The team', 'owner' => 'You', 'all' => 'everyone', 'email' => 'Pemba (Sender)', 'qualifier' => 'Nia (Researcher)', 'desks' => 'Thandi (Social)',
+/** The agents: each department's role, its usual name and what it does. The owner can rename them (Operations › Team and currencies › Your AI team). */
+const PM_AGENT_ROLES = ['director' => 'Director', 'scouts' => 'Scout', 'research' => 'Researcher', 'writers' => 'Writer', 'followup' => 'Follow-up', 'replies' => 'Replies',
+    'social' => 'Social', 'advisor' => 'Advisor', 'contact' => 'Contact Finder', 'sender' => 'Sender'];
+const PM_AGENT_FIRST = ['director' => 'Amara', 'scouts' => 'Kwame', 'research' => 'Nia', 'writers' => 'Tiwo', 'followup' => 'Chiso', 'replies' => 'Mphatso',
+    'social' => 'Thandi', 'advisor' => 'Jabu', 'contact' => 'Zola', 'sender' => 'Pemba'];
+const PM_AGENT_JOBS = [
+    'director' => 'Sets the day\'s strategy and gives each department its orders at the morning meeting.',
+    'scouts' => 'Finds new businesses to write to.',
+    'research' => 'Studies each lead: the business, its news, the owner\'s name and contacts.',
+    'writers' => 'Writes the first emails and messages.',
+    'followup' => 'Decides when to follow up and writes the follow-ups.',
+    'replies' => 'Reads what people write back and drafts the answers; tells the others what each reply teaches.',
+    'social' => 'Head of Social: reads the Page\'s comments and messages, finds people asking for what we offer, holds the morning huddle and sets the day\'s tasks.',
+    'advisor' => 'Shows what is selling and the next moves.',
+    'contact' => 'Finds missing emails, numbers and owner names.',
+    'sender' => 'Sends what you approved, checks every email could not look like spam, and keeps the mail ledger.',
 ];
+
+/** One agent's first name: the owner's choice, or the usual one. */
+function pm_agent_first(string $dept): string
+{
+    $own = trim((string)(((array)(pm_settings()['agent_names'] ?? []))[$dept] ?? ''));
+    return $own !== '' ? $own : (PM_AGENT_FIRST[$dept] ?? ucfirst($dept));
+}
+
+/** The agents by name (what the transcript calls them), and the department each name speaks for: ['director' => 'Amara (Director)', ...]. */
+function pm_agent_names(): array
+{
+    static $memo = null;
+    if ($memo !== null && empty($GLOBALS['PM_AGENT_NAMES_FRESH'])) {
+        return $memo;
+    }
+    $m = [];
+    foreach (PM_AGENT_ROLES as $d => $role) {
+        $m[$d] = pm_agent_first($d) . ' (' . $role . ')';
+    }
+    return $memo = $m + ['swarm' => 'The team', 'owner' => 'You', 'all' => 'everyone', 'email' => $m['sender'], 'qualifier' => $m['research'], 'desks' => $m['social']];
+}
 
 /** The name for whatever an agent calls itself in the logs ("Scout", "Follow-up", "Contact Finder", "Copy desk"...). */
 function pm_talk_name(string $who): string
@@ -21,7 +53,7 @@ function pm_talk_name(string $who): string
         'replies' => 'replies', 'social' => 'social', 'copy desk' => 'social', 'photo desk' => 'social', 'brand team' => 'social', 'idea room' => 'social', 'advisor' => 'advisor',
         'contact finder' => 'contact', 'sender' => 'sender', 'email' => 'sender', 'swarm' => 'swarm', 'owner' => 'owner', 'you' => 'owner', 'all' => 'all'];
     $d = $map[$k] ?? '';
-    return $d !== '' ? PM_AGENT_NAMES[$d] : ucfirst($who);
+    return $d !== '' ? pm_agent_names()[$d] : ucfirst($who);
 }
 
 function pm_talk_file(string $day): string

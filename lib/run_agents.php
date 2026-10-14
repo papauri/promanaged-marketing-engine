@@ -205,7 +205,7 @@ try {
 
     // ---- Social: Thandi meets the department heads, sets the day's tasks and finds people asking for what we offer (one short web search and one cheap call per business a day) ----
     if ($only === '' && function_exists('pm_listen_due') && pm_listen_due($brand) && pm_agents_ready()) {
-        $progress('Thandi (Social) meeting the heads and searching public posts for people asking for what we offer');
+        $progress(pm_agent_first('social') . ' (Social) meeting the heads and searching public posts for people asking for what we offer');
         try {
             $lr = pm_listen_run($brand, $all);
             $stats['people_found'] = $lr['kept'];

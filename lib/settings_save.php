@@ -131,6 +131,21 @@ function pm_settings_save(array $settings, string $vb): array
     if ($part('team')) {
         $new['currency'] = $text($in, 'currency');
         $new['team'] = array_values(array_unique(array_filter(array_map('trim', preg_split('/\R/', (string)($in['team'] ?? ''))))));
+        if (isset($in['agent_names']) && defined('PM_AGENT_ROLES')) { // the AI agents' names: one word each, no two alike (the usual name when left empty)
+            $an = [];
+            $taken = [];
+            foreach (array_keys(PM_AGENT_ROLES) as $d) {
+                $v = (string)preg_replace('/[^\p{L}\'-]+/u', '', (string)(preg_split('/\s+/u', trim((string)($in['agent_names'][$d] ?? '')))[0] ?? '')); // the first word, letters only
+                $v = mb_substr($v, 0, 20);
+                $v = $v !== '' ? mb_strtoupper(mb_substr($v, 0, 1)) . mb_substr($v, 1) : '';
+                $use = $v !== '' && !isset($taken[mb_strtolower($v)]) ? $v : PM_AGENT_FIRST[$d]; // a name already given goes back to the usual one
+                $taken[mb_strtolower($use)] = true;
+                if ($use !== PM_AGENT_FIRST[$d]) {
+                    $an[$d] = $use;
+                }
+            }
+            $new['agent_names'] = $an;
+        }
         $curs = [];
         foreach ((array)($in['currencies'] ?? []) as $c) {
             $code = strtoupper(trim((string)($c['code'] ?? '')));

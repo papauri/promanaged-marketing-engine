@@ -77,18 +77,19 @@ function pm_listen_search(string $brand, array $towns, array $skip): string
 }
 
 /** Thandi's instructions and her brief for today (no web: the search is done): [system, user]. */
-function pm_listen_prompt(string $brand, string $found, array $towns, array $drop = []): array
+function pm_listen_prompt(string $brand, string $found, array $towns, array $drop = [], array $page = []): array
 {
     $site = function_exists('pm_brand_site') ? pm_brand_site($brand) : '';
     $company = pm_brand_name($brand);
     $focusKeys = defined('PM_SOCIAL_FOCUS') ? implode('|', array_keys(PM_SOCIAL_FOCUS)) : 'mix';
     $st = pm_listen_state($brand);
-    $system = pm_agents_company_brief('tiny') . "\nYou are Thandi, head of Social: you know what people on social media want.\n"
+    $system = pm_agents_company_brief('tiny') . "\nYou are " . pm_agent_first('social') . ", head of Social: you know what people on social media want, on our own Page and everywhere else.\n"
         . '"people": from search_found only (this morning\'s search of public posts), each person who asks for what we offer, with the exact link given there; never invent one or a detail; '
         . 'skip a business advertising itself, anything older than 60 days or outside our areas, and every link in drop_links (too old or already answered: never talk about those either). Keep only what the post says. For each: who (the name shown, or empty), platform, url, posted (YYYY-MM-DD), town, '
         . 'wants (what they asked for, briefly, in their words), email and phone only if written in the post, '
         . "reply: our public answer under their post, at most 50 words, helpful first and specific to what they asked, from $company (we are a business: never pretend to be a customer, traveller or friend)"
         . ($site !== '' ? ", no link except $site" : ', no links') . ', no pressure, ending with an easy question. '
+        . '"our_page" is what people said on our own Facebook Page, Instagram and Messenger and who still waits for an answer: in the huddle say who answers them today (the replies desk), a complaint first, and turn what they keep asking into tasks. '
         . '"huddle": your morning sit-down with the department heads (director, scouts, research, writers, replies, followup). They talk to EACH OTHER about today: '
         . 'the director\'s orders and team notes, the social numbers and the people you found; every line names something concrete (a town, a person found, a number, an order) and nobody repeats the company pitch. '
         . '4 to 6 lines {"who","says"}, each one short first-person sentence, from the facts only; you speak first and last. '
@@ -96,6 +97,8 @@ function pm_listen_prompt(string $brand, string $found, array $towns, array $dro
         . "\"focus\": what today's posts lean on, one of $focusKeys. "
         . (defined('PM_TRUST_RULES') ? PM_TRUST_RULES . ' ' : '') . PM_AGENT_RULES;
     $user = json_encode(['today' => date('Y-m-d'), 'areas' => $towns, 'we_answer' => pm_listen_wants($brand), 'search_found' => $found !== '' ? $found : 'nobody asking today', 'drop_links' => $drop,
+            'our_page' => !empty($page['ready']) ? ['waiting_for_an_answer' => (int)$page['waiting_comments'] + (int)$page['waiting_messages'], 'comments_waiting' => (int)$page['waiting_comments'],
+                'messages_waiting' => (int)$page['waiting_messages'], 'complaints' => (int)$page['complaints'], 'buyers_added_to_leads' => (int)$page['buyers_added'], 'what_they_said' => $page['lines']] : 'not connected',
             'team_notes' => function_exists('pm_tb_line') ? pm_tb_line($brand, 'social', 6) : '', 'social_numbers' => function_exists('pm_director_social') ? pm_director_social($brand) : [],
             'firm' => function_exists('pm_firm_line') ? pm_firm_line($brand) : '', 'yesterday' => ['people_found' => (int)($st['day']['kept'] ?? 0)]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
         . "\nJSON {\"people\":[{\"who\",\"platform\",\"url\",\"posted\",\"town\",\"wants\",\"email\",\"phone\",\"reply\"}],\"huddle\":[{\"who\",\"says\"}],\"tasks\":[{\"to\",\"do\"}],\"focus\":\"\"} with at most 6 people (none is fine).";
@@ -133,10 +136,17 @@ function pm_listen_run(string $brand, array &$all): array
         }
         $live || $found = ''; // every link was old or known: nobody new asking
     }
-    [$system, $user] = pm_listen_prompt($brand, $found, $towns, array_slice($drop, 0, 12));
+    // our own Page first: comments and messages read, buyers into the leads, who is waiting for an answer
+    $page = pm_listen_page($brand);
+    if ($page['buyers_added']) {
+        foreach (pm_leads() as $k => $v) { // the buyers were saved to the leads file: keep them when the caller saves $all
+            $all[$k] ??= $v;
+        }
+    }
+    [$system, $user] = pm_listen_prompt($brand, $found, $towns, array_slice($drop, 0, 12), $page);
     $out = pm_agent_json($GLOBALS['PM_LISTEN_RAW'] = pm_claude($system, $user, false, 2200));
     if (!is_array($out)) {
-        throw new RuntimeException('Thandi\'s answer could not be read');
+        throw new RuntimeException('The head of Social\'s answer could not be read');
     }
 
     // the huddle, as the team said it (into the agents' conversation)
@@ -216,7 +226,8 @@ function pm_listen_run(string $brand, array &$all): array
         uasort($seen, fn($a, $b) => strcmp((string)($a[0] ?? ''), (string)($b[0] ?? '')));
         $seen = array_slice($seen, -500, null, true);
     }
-    $day = ['date' => date('Y-m-d'), 'at' => $now, 'huddle' => $huddle, 'tasks' => $tasks, 'focus' => $focus, 'found' => $nFound, 'kept' => $kept, 'names' => $names, 'error' => ''];
+    $day = ['date' => date('Y-m-d'), 'at' => $now, 'huddle' => $huddle, 'tasks' => $tasks, 'focus' => $focus, 'found' => $nFound, 'kept' => $kept, 'names' => $names, 'error' => '',
+        'page' => ['ready' => $page['ready'], 'comments' => $page['waiting_comments'], 'messages' => $page['waiting_messages'], 'complaints' => $page['complaints'], 'buyers' => $page['buyers_added']]];
     pm_update('listen', function (array $s) use ($brand, $seen, $day) {
         $s[$brand] = ['seen' => $seen, 'day' => $day];
         return $s;
@@ -225,11 +236,73 @@ function pm_listen_run(string $brand, array &$all): array
     // what Thandi tells the others: the Director hears it at tomorrow's meeting, the Writers what people ask for
     pm_agent_log('Social', $kept ? 'I searched the public posts in ' . count($towns) . ' towns and found ' . $kept . ' ' . ($kept === 1 ? 'person' : 'people') . ' asking for what we offer: ' . implode(', ', $names) . '. They are under Leads > People looking, each with a reply ready to paste under their post.'
         : 'I searched the public posts in ' . count($towns) . ' towns and found nobody new asking for what we offer today.');
+    $waiting = $page['waiting_comments'] + $page['waiting_messages'];
+    if ($page['ready']) {
+        pm_agent_log('Social', 'I read our Page: ' . $page['waiting_comments'] . ' comment' . ($page['waiting_comments'] === 1 ? '' : 's') . ' and ' . $page['waiting_messages'] . ' message' . ($page['waiting_messages'] === 1 ? '' : 's')
+            . ' waiting for an answer' . ($page['complaints'] ? ' (' . $page['complaints'] . ' unhappy)' : '') . ($page['buyers_added'] ? ', and ' . $page['buyers_added'] . ' buyer' . ($page['buyers_added'] === 1 ? '' : 's') . ' added to Leads' : '') . '.');
+        if ($waiting && function_exists('pm_tb_post')) {
+            pm_tb_post($brand, 'social', 'replies', 'On our Page ' . $waiting . ' ' . ($waiting === 1 ? 'person is' : 'people are') . ' waiting for an answer' . ($page['complaints'] ? ', ' . $page['complaints'] . ' of them unhappy: answer those first' : '') . ': ' . implode(' | ', array_slice($page['lines'], 0, 2)), 'thandi:page');
+        }
+    }
     if ($kept && function_exists('pm_tb_post')) {
         pm_tb_post($brand, 'social', 'director', 'I found ' . $kept . ' ' . ($kept === 1 ? 'person' : 'people') . ' asking on social media: ' . implode('; ', array_slice($wantsSeen, 0, 3)), 'thandi:found');
         pm_tb_post($brand, 'social', 'writers', 'People are asking on social media for: ' . implode('; ', array_slice($wantsSeen, 0, 3)) . '. Use what they want as the angle.', 'thandi:asks');
     }
-    return ['found' => $nFound, 'kept' => $kept, 'names' => $names, 'tasks' => count($tasks), 'links' => $live, 'dropped' => count($drop), 'error' => ''];
+    return ['found' => $nFound, 'kept' => $kept, 'names' => $names, 'tasks' => count($tasks), 'links' => $live, 'dropped' => count($drop), 'page' => $page, 'error' => ''];
+}
+
+/**
+ * Our own Page, read each morning by the head of Social: new comments are judged as the Inbox judges them (code first, the cheap model only for what code cannot tell),
+ * buyers become leads, and who still waits for an answer (comments and Messenger) goes into her huddle. Free when nothing is new.
+ * ['ready', 'waiting_comments', 'waiting_messages', 'complaints', 'buyers_added', 'lines' => ['Comment from Anna (buyer): ...'], 'error'].
+ */
+function pm_listen_page(string $brand): array
+{
+    $o = ['ready' => false, 'waiting_comments' => 0, 'waiting_messages' => 0, 'complaints' => 0, 'buyers_added' => 0, 'lines' => [], 'error' => ''];
+    if (!function_exists('pm_fb_capture_buyers') && is_file(__DIR__ . '/social_modules.php')) {
+        require_once __DIR__ . '/social_modules.php'; // the daily run does not load the social screens
+    }
+    if (!function_exists('pm_social_cfg') || !pm_social_cfg($brand)['ready']) {
+        return $o;
+    }
+    $o['ready'] = true;
+    $first = fn($n) => (string)(strtok(trim((string)$n), ' ') ?: 'Someone');
+    try {
+        function_exists('pm_agent_judge_safe') && pm_agent_judge_safe($brand);
+        $o['buyers_added'] = function_exists('pm_fb_capture_buyers') ? (int)pm_fb_capture_buyers($brand) : 0;
+    } catch (Throwable $e) {
+        $o['error'] = mb_substr($e->getMessage(), 0, 120);
+    }
+    $cut = time() - 7 * 86400;
+    foreach ((array)(pm_load('fb_judged', fn() => [])[$brand] ?? []) as $k) {
+        if (!in_array($k['verdict'] ?? '', ['buyer', 'question', 'complaint'], true) || ($k['state'] ?? '') !== '' || !empty($k['answered']) || !empty($k['private_reply_at'])
+            || (strtotime((string)($k['at'] ?? '')) ?: 0) < $cut) {
+            continue;
+        }
+        $o['waiting_comments']++;
+        $o['complaints'] += $k['verdict'] === 'complaint' ? 1 : 0;
+        if (count($o['lines']) < 4) {
+            $o['lines'][] = 'Comment from ' . $first($k['from'] ?? '') . ' (' . $k['verdict'] . '): ' . mb_substr(trim((string)($k['text'] ?? '')), 0, 90);
+        }
+    }
+    try {
+        foreach (function_exists('pm_fb_inbox') ? (array)pm_fb_inbox($brand)['threads'] : [] as $t) {
+            if (empty($t['waiting'])) {
+                continue;
+            }
+            $o['waiting_messages']++;
+            $lastIn = '';
+            foreach ((array)$t['messages'] as $m) {
+                $lastIn = empty($m['ours']) ? (string)$m['text'] : $lastIn;
+            }
+            if (count($o['lines']) < 6) {
+                $o['lines'][] = 'Message from ' . $first($t['who'] ?? '') . ': ' . mb_substr(trim($lastIn), 0, 90);
+            }
+        }
+    } catch (Throwable $e) {
+        $o['error'] = $o['error'] ?: mb_substr($e->getMessage(), 0, 120);
+    }
+    return $o;
 }
 
 /** A search result's redirect link (vertexaisearch...) as the real address of the post, free; the link itself when it is not one or cannot be followed. */
@@ -263,8 +336,9 @@ function pm_talk_dept(string $who): string
     $w = strtolower(trim($who));
     $w = (string)preg_replace('/^.*\((\w[\w -]*)\)$/', '$1', $w);
     $names = ['researcher' => 'research', 'researchers' => 'research', 'writer' => 'writers', 'follow-up' => 'followup', 'scout' => 'scouts', 'reply' => 'replies'];
-    foreach (defined('PM_AGENT_NAMES') ? PM_AGENT_NAMES : [] as $d => $label) { // "Kwame", "Nia": the agents' own names
-        $names[strtolower(strtok($label, ' '))] ??= $d;
+    foreach (array_keys(PM_AGENT_ROLES) as $d) { // "Kwame", "Nia": the agents' own names, as the owner named them and as they were
+        $names[strtolower(pm_agent_first($d))] ??= $d;
+        $names[strtolower(PM_AGENT_FIRST[$d])] ??= $d;
     }
     return $names[$w] ?? $w;
 }
@@ -283,8 +357,15 @@ function pm_panel_plan_top_listen(string $vb, array $ctx = []): string
 {
     $d = (array)(pm_listen_state($vb)['day'] ?? []);
     $open = count(array_filter(pm_leads(), fn($l) => ($l['brand'] ?? 'promanaged') === $vb && pm_listen_is($l) && ($l['status'] ?? '') === 'new'));
-    $h = '<div class="card" id="thandi"><h2>Thandi\'s day <span class="muted t-sm">· head of Social' . (!empty($d['at']) ? ' · ' . pm_h(date('j M, H:i', strtotime((string)$d['at']))) : '') . '</span></h2>'
-        . '<p class="hint mt-0">Every morning Thandi meets the department heads, sets the day\'s tasks and searches public posts in the towns we cover for people asking for what we offer. Each person she finds is a lead with a reply ready to paste under their post.</p>';
+    $nm = pm_agent_first('social');
+    $pg = (array)($d['page'] ?? []);
+    $h = '<div class="card" id="thandi"><h2>' . pm_h($nm) . '\'s day <span class="muted t-sm">· head of Social' . (!empty($d['at']) ? ' · ' . pm_h(date('j M, H:i', strtotime((string)$d['at']))) : '') . '</span></h2>'
+        . '<p class="hint mt-0">Every morning ' . pm_h($nm) . ' reads our Page\'s comments and messages, searches public posts in the towns we cover for people asking for what we offer, meets the department heads and sets the day\'s tasks. Buyers on our Page and each person found elsewhere become leads.</p>';
+    if (!empty($d['date'])) {
+        $h .= '<p class="hint">' . (!empty($pg['ready']) ? 'On our Page: <a href="?tab=social&amp;view=inbox">' . (int)$pg['comments'] . ' comment' . ((int)$pg['comments'] === 1 ? '' : 's') . ' and ' . (int)$pg['messages'] . ' message' . ((int)$pg['messages'] === 1 ? '' : 's') . ' waiting for an answer</a>'
+            . (!empty($pg['complaints']) ? ', ' . (int)$pg['complaints'] . ' unhappy' : '') . (!empty($pg['buyers']) ? '; ' . (int)$pg['buyers'] . ' buyer' . ((int)$pg['buyers'] === 1 ? '' : 's') . ' added to Leads' : '') . '.'
+            : '<a href="?tab=settings&amp;section=connections">Connect the Facebook Page</a> so ' . pm_h($nm) . ' can read its comments and messages too.') . '</p>';
+    }
     if (!empty($d['huddle'])) {
         $h .= '<ul class="talklist">' . implode('', array_map(fn($x) => '<li><time></time><b>' . pm_h(pm_talk_name((string)$x[0])) . ':</b><span>' . pm_h((string)$x[1]) . '</span></li>', (array)$d['huddle'])) . '</ul>';
     }
@@ -299,7 +380,7 @@ function pm_panel_plan_top_listen(string $vb, array $ctx = []): string
     }
     $csrf = (string)($_SESSION['csrf'] ?? '');
     $h .= '<div class="btns">' . ($open ? '<a class="btn primary" href="?tab=agents&amp;status=people">' . $open . ' ' . ($open === 1 ? 'person' : 'people') . ' looking, waiting for a reply</a>' : '')
-        . '<form method="post" data-confirm="Thandi meets the team and searches the public posts now (one short AI web search)?"><input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="listen_now">'
+        . '<form method="post" data-confirm="' . pm_h($nm) . ' reads our Page, searches the public posts and meets the team now (one short AI web search)?"><input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="listen_now">'
         . '<button class="btn"' . (pm_agents_ready() ? '' : ' disabled title="Add an AI key to .env first"') . '>' . (empty($d['date']) || $d['date'] !== date('Y-m-d') ? 'Listen now' : 'Listen again') . '</button></form></div></div>';
     return $h;
 }
@@ -314,7 +395,10 @@ function pm_do_listen_now(string $vb): array
     pm_brand_set($vb);
     $all = pm_leads();
     $r = pm_listen_run($vb, $all);
-    $r['kept'] && pm_leads_save($all);
-    return ['msg' => 'Thandi met the team and set ' . $r['tasks'] . ' task' . ($r['tasks'] === 1 ? '' : 's') . '. ' . ($r['kept'] ? 'She found ' . $r['kept'] . ' ' . ($r['kept'] === 1 ? 'person' : 'people') . ' asking for what we offer: ' . implode(', ', $r['names']) . '.' : 'Nobody new was asking today.'),
+    ($r['kept'] || $r['page']['buyers_added']) && pm_leads_save($all);
+    $pg = $r['page'];
+    return ['msg' => pm_agent_first('social') . ' met the team and set ' . $r['tasks'] . ' task' . ($r['tasks'] === 1 ? '' : 's') . '. '
+        . ($pg['ready'] ? 'On our Page ' . ($pg['waiting_comments'] + $pg['waiting_messages']) . ' waiting for an answer' . ($pg['buyers_added'] ? ', ' . $pg['buyers_added'] . ' buyer(s) added to Leads' : '') . '. ' : '')
+        . ($r['kept'] ? 'Found elsewhere: ' . $r['kept'] . ' ' . ($r['kept'] === 1 ? 'person' : 'people') . ' asking for what we offer: ' . implode(', ', $r['names']) . '.' : 'Nobody new asking in public posts today.'),
         'kind' => 'ok', 'to' => 'social'];
 }

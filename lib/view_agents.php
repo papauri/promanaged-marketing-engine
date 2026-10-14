@@ -294,7 +294,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     <div class="cols">
       <div class="lc-col">
         <?php if (!empty($l['listen'])): $lz = $l['listen']; ?>
-        <section class="lc"><h4 class="lc-h">What they asked for <span class="muted">· found by Thandi on <?= pm_h((string)$lz['platform']) ?><?= $lz['posted'] !== '' ? ', posted ' . pm_h(date('j M', strtotime((string)$lz['posted']))) : '' ?></span></h4>
+        <section class="lc"><h4 class="lc-h">What they asked for <span class="muted">· found by <?= pm_h(pm_agent_first('social')) ?> on <?= pm_h((string)$lz['platform']) ?><?= $lz['posted'] !== '' ? ', posted ' . pm_h(date('j M', strtotime((string)$lz['posted']))) : '' ?></span></h4>
           <p class="why">“<?= pm_h((string)$lz['wants']) ?>”</p>
           <p class="hint"><b>Our reply, to paste under their post:</b></p><p class="hook"><?= nl2br(pm_h((string)$lz['reply'])) ?></p>
           <p class="hint">Open the post, paste the reply and press "I replied". Facebook lets no app answer under other people's posts, so this one step is yours. Nothing else about them is looked up.</p>

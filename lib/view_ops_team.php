@@ -51,6 +51,14 @@ if (pm_user_is_admin()):
     <textarea name="s[team]" rows="4" placeholder="One name per line"><?= pm_h(implode("\n", (array)($settings['team'] ?? []))) ?></textarea>
     <p class="hint">Names leads can be given to as owner. Whoever is signed in works under their account name: messages are signed with it, leads they send get them as owner, and they can filter to "Mine".</p>
   </div>
+  <div class="card" id="agentnames"><h2>Your AI team</h2>
+    <p class="hint mt-0">The AI agents and what each one does. Give any of them a new name: one word, no two alike. Leave a box empty for the usual name. The new names show everywhere at once, also in the past conversations under Audit › Agent conversations.</p>
+    <table class="grid compact"><thead><tr><th>Agent</th><th>Name</th><th>What they do</th></tr></thead><tbody>
+    <?php foreach (PM_AGENT_ROLES as $ad => $arole): ?>
+      <tr><td><?= pm_h($arole) ?></td><td><input type="text" name="s[agent_names][<?= $ad ?>]" value="<?= pm_h((string)(((array)($settings['agent_names'] ?? []))[$ad] ?? '')) ?>" placeholder="<?= pm_h(PM_AGENT_FIRST[$ad]) ?>" maxlength="20" aria-label="Name for the <?= pm_h($arole) ?>"></td><td class="t-sm"><?= pm_h(PM_AGENT_JOBS[$ad]) ?></td></tr>
+    <?php endforeach; ?>
+    </tbody></table>
+  </div>
   <div class="card"><h2>Currencies</h2>
     <p class="hint mt-0">Prices are in <b><?= pm_h($settings['currency']) ?></b>. Another currency is one pick on a proposal.</p>
     <table class="grid compact" data-next="<?= count($settings['currencies']) ?>"><thead><tr><th>Code</th><th>Name</th><th><?= pm_h($settings['currency']) ?> per 1</th><th>Round to</th><th></th></tr></thead><tbody>
@@ -69,5 +77,5 @@ if (pm_user_is_admin()):
       <div><label>Rates checked on</label><input type="date" name="s[rates_date]" value="<?= pm_h($settings['rates_date'] ?? '') ?>"></div>
     </div>
   </div>
-  <div class="btns formbar"><button class="btn primary">Save the team and currencies</button></div>
+  <div class="btns formbar"><button class="btn primary">Save the team, names and currencies</button></div>
 </form>
