@@ -87,3 +87,45 @@ function pm_view_email_health(): void
     </div>
     <?php
 }
+
+/** Every email the app sent for this business (or all), with the result, the server it went through, whether a copy is in the Sent folder, and the fix for any problem. */
+function pm_view_sent_log(): void
+{
+    if (!function_exists('pm_ml_rows')) {
+        return;
+    }
+    $all = !empty($_GET['ml_all']);
+    $stF = preg_replace('/[^a-z]/', '', (string)($_GET['ml_st'] ?? ''));
+    $c = pm_ml_summary($all ? '' : pm_brand());
+    $rows = array_values(array_filter(pm_ml_rows(), fn($r) => ($all || ($r['brand'] ?? '') === pm_brand()) && ($stF === '' || ($stF === 'problem' ? in_array($r['status'] ?? '', ['failed', 'bounced', 'unknown'], true) || str_starts_with((string)($r['sent_folder'] ?? ''), 'not') || !empty($r['fix']) : ($r['status'] ?? '') === $stF))));
+    [$rows, $pager] = pm_ui_page($rows, 50, 'mlp');
+    $csrf = pm_h((string)($_SESSION['csrf'] ?? ''));
+    $chip = ['sent' => ['Sent', 'hot'], 'failed' => ['Failed', 'warn'], 'bounced' => ['Bounced', 'warn'], 'unknown' => ['Unknown', 'warn'], 'sending' => ['Sending', '']];
+    $kinds = ['first' => 'First email', 'followup' => 'Follow-up', 'winback' => 'Win-back', 'reply' => 'Reply', 'proposal' => 'Proposal', 'test' => 'Test', 'notify' => 'Alert to you', 'ack' => 'Receipt', 'social' => 'From Social', 'signed' => 'Signed copy', 'email' => 'Email'];
+    $link = fn(array $set) => '?' . pm_h(http_build_query(array_replace(array_diff_key($_GET, ['mlp' => 1]), $set))) . '#sentlog';
+    ?>
+    <div class="card" id="sentlog"><h2>Sent emails</h2>
+      <p class="hint mt-0">Every email the app sends is written here first, so it is never sent twice, and a copy goes into the mailbox's own Sent folder. Last 7 days<?= $all ? ', all businesses' : ' for ' . pm_h(pm_brand_name(pm_brand())) ?>:
+        <b><?= (int)$c['sent'] ?></b> sent, <b><?= (int)$c['failed'] ?></b> failed, <b><?= (int)$c['bounced'] ?></b> bounced<?= $c['unknown'] ? ', <b>' . (int)$c['unknown'] . '</b> unknown' : '' ?>; in the Sent folder: <?= (int)$c['saved'] ?><?= $c['not_saved'] ? ', <b>' . (int)$c['not_saved'] . ' not saved</b>' : '' ?>.</p>
+      <div class="cluster mb-2">
+        <?php foreach (['' => 'All', 'problem' => 'Problems', 'sent' => 'Sent', 'failed' => 'Failed', 'bounced' => 'Bounced', 'unknown' => 'Unknown'] as $k => $lbl): ?><a class="btn small<?= $stF === $k ? ' primary' : '' ?>" href="<?= $link(['ml_st' => $k]) ?>"><?= $lbl ?></a><?php endforeach; ?>
+        <a class="btn small ghost" href="<?= $link(['ml_all' => $all ? '' : '1']) ?>"><?= $all ? 'This business only' : 'All businesses' ?></a>
+        <form method="post" class="inline"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="mail_log"><input type="hidden" name="do" value="sync"><button class="btn small" title="Reads the Sent folder of each mailbox: leads emailed from the other copy of the app, or by hand, are marked contacted here">Read the Sent folders now</button></form>
+      </div>
+      <?php if (!$rows): ?><p class="hint">Nothing here yet.</p><?php else: ?>
+      <table class="grid" data-nopage><thead><tr><th>When</th><th>To</th><th>Subject</th><th>Type</th><th>Result</th><th>Sent folder</th></tr></thead><tbody>
+      <?php foreach ($rows as $r): [$cl, $cc] = $chip[$r['status'] ?? ''] ?? [(string)($r['status'] ?? ''), '']; $sf = (string)($r['sent_folder'] ?? ''); ?>
+        <tr><td class="t-sm"><?= pm_h(substr((string)$r['at'], 0, 16)) ?><?= $all ? '<br><span class="muted">' . pm_h(pm_brand_name((string)($r['brand'] ?? ''))) . '</span>' : '' ?></td>
+          <td class="t-sm"><?= pm_h((string)$r['to']) ?><?= !empty($r['lead']) ? '<br><a href="?tab=agents&amp;lead=' . pm_h((string)$r['lead']) . '">open the lead</a>' : '' ?></td>
+          <td class="t-sm"><?= pm_h((string)$r['subject']) ?><?= !empty($r['via']) ? '<br><span class="muted">via ' . pm_h((string)$r['via']) . '</span>' : '' ?></td>
+          <td class="t-sm"><?= pm_h($kinds[$r['kind'] ?? ''] ?? (string)($r['kind'] ?? '')) ?></td>
+          <td class="t-sm"><span class="pill <?= $cc ?>"><?= pm_h($cl) ?></span>
+            <?php if (!empty($r['err'])): ?><br><?= pm_h((string)$r['err']) ?><?php endif; ?>
+            <?php if (!empty($r['fix'])): ?><br><b>Fix:</b> <?= pm_h((string)$r['fix']) ?><?php endif; ?>
+            <?php if (in_array($r['status'] ?? '', ['unknown', 'sending'], true)): ?><form method="post" class="mt-1"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="mail_log"><input type="hidden" name="do" value="clear"><input type="hidden" name="id" value="<?= pm_h((string)$r['id']) ?>"><button class="btn small" data-confirm="Only if it is NOT in the Sent folder: mark it as not sent, so it can be sent again?">It did not go</button></form><?php endif; ?></td>
+          <td class="t-sm"><?= $sf === 'saved' ? '<span class="pill hot">Saved</span>' : ($sf === '' ? '<span class="muted">–</span>' : pm_h($sf)) ?></td></tr>
+      <?php endforeach; ?>
+      </tbody></table><?= $pager ?><?php endif; ?>
+    </div>
+    <?php
+}

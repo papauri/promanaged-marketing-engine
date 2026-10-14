@@ -550,7 +550,7 @@ function pm_send_test(array $lead, string $which, string $to, ?callable $mailer 
         $m = pm_outreach_message($lead, $which, $settings);
         $m['subject'] = '[Test] ' . $m['subject'];
         unset($m['headers']['List-Unsubscribe']);
-        [$ok, $why] = array_pad((array)$mailer($settings, ['to' => $to] + $m), 2, '');
+        [$ok, $why] = array_pad((array)$mailer($settings, ['to' => $to, 'kind' => 'test', 'lead' => (string)($lead['id'] ?? '')] + $m), 2, '');
         if (!$ok) {
             return [false, 'The test did not go: ' . (function_exists('pm_mail_fail') ? pm_mail_fail($settings, (string)$why) : (string)$why)];
         }
@@ -626,9 +626,40 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
         }
         $mailer = 'pm_mail';
     }
+    if ($which === 'drafts' && $mailer === 'pm_mail' && function_exists('pm_ml_sent_to')) { // the other copy of the app (or a person) may have written already: the Sent folder knows
+        $seen = pm_ml_sent_to((string)($lead['brand'] ?? pm_brand()), $email, 365);
+        if ($seen['found']) {
+            $L = &$leads[$id];
+            $L['sent'][] = $seen['at'] ?: date('Y-m-d H:i');
+            $L['thread'][] = ['dir' => 'out', 'at' => $seen['at'] ?: date('Y-m-d H:i'), 'text' => '(Found in the Sent folder) ' . $seen['subject']];
+            $L['last_contacted'] = $L['last_out'] = $seen['at'] ?: date('Y-m-d H:i');
+            $L['status'] = 'contacted';
+            unset($L['approved_at'], $L['send_after']);
+            pm_lead_note($L, 'Not sent: ' . $email . ' was already emailed on ' . ($seen['at'] ?: 'an earlier date') . ' ("' . $seen['subject'] . '"), found in the Sent folder');
+            unset($L);
+            pm_leads_save($leads);
+            return $no(($lead['name'] ?? 'This business') . ' was already emailed from this mailbox on ' . ($seen['at'] ?: 'an earlier date') . ' ("' . $seen['subject'] . '"): it is in the Sent folder, so it was not sent again. The lead is now marked contacted.', 'lead');
+        }
+    }
     $kitBlock = $which === 'drafts' && function_exists('pm_share_email_block') ? pm_share_email_block((string)$d['email_body']) : ''; // for the conversation record
-    $res = $mailer($settings, ['to' => $email] + pm_outreach_message($lead, $which, $settings));
+    $res = $mailer($settings, ['to' => $email, 'lead' => $id, 'kind' => ['drafts' => 'first', 'followup_draft' => 'followup', 'winback_draft' => 'winback'][$which] ?? 'email',
+        'dedupe' => ['drafts' => 'first:' . $id, 'followup_draft' => 'followup:' . $id . ':' . ((int)($lead['followups'] ?? 0) + 1), 'winback_draft' => 'winback:' . $id][$which] ?? '']
+        + pm_outreach_message($lead, $which, $settings));
     [$ok, $why, $mid] = array_pad((array)$res, 3, '');
+    if (!$ok && preg_match('/^This email was already sent to .+ on (\d{4}-\d\d-\d\d \d\d:\d\d)/', (string)$why, $was)) { // the ledger knows it went (the lead record was lost or is older): mend the lead
+        if ($which === 'drafts' && empty($leads[$id]['sent'])) {
+            $leads[$id]['sent'][] = $was[1];
+            $leads[$id]['last_contacted'] = $leads[$id]['last_out'] = $was[1];
+            $leads[$id]['status'] = 'contacted';
+            unset($leads[$id]['approved_at'], $leads[$id]['send_after']);
+            pm_lead_note($leads[$id], 'Marked contacted: the email log shows the first email went on ' . $was[1]);
+            pm_leads_save($leads);
+        }
+        return $no((string)$why . ' The lead is marked contacted.', 'lead');
+    }
+    if (!$ok && preg_match('/^(This email is being sent right now|An earlier try at)/', (string)$why)) {
+        return $no((string)$why, 'lead');
+    }
     if (!$ok) {
         return $no('Could not send: ' . (function_exists('pm_mail_fail') ? pm_mail_fail($settings, (string)$why) : $why), 'smtp');
     }
@@ -1022,7 +1053,7 @@ function pm_web_notify(array $lead, bool $merged): bool
             require_once __DIR__ . '/mail.php';
         }
         $to = trim((string)($s['email'] ?? ''));
-        return $to !== '' && pm_mail($s, ['to' => $to, 'subject' => $subject, 'body' => $body, 'bcc_self' => false])[0];
+        return $to !== '' && pm_mail($s, ['to' => $to, 'subject' => $subject, 'body' => $body, 'bcc_self' => false, 'kind' => 'notify'])[0];
     } catch (Throwable) {
         return false;
     }
@@ -1046,7 +1077,7 @@ function pm_web_ack(array $lead): bool
         }
         $first = trim(explode(' ', trim((string)($lead['contact'] ?? '')))[0] ?? '');
         $first = preg_replace('/[^\p{L}\' -]/u', '', $first);
-        $r = pm_mail($s, ['to' => $email, 'subject' => 'We received your message - ' . $s['company_name'], 'bcc_self' => false,
+        $r = pm_mail($s, ['to' => $email, 'subject' => 'We received your message - ' . $s['company_name'], 'bcc_self' => false, 'kind' => 'ack',
             'body' => ($first !== '' ? "Hello $first,\n\n" : "Hello,\n\n") . "Thank you for getting in touch with {$s['company_name']}. We have your message and a member of our team will read it and reply to you personally.\n\n"
                 . "If you did not send this message, please ignore this email; we will not contact you again.\n\n{$s['company_name']}\n" . implode('  ·  ', array_filter([$s['phone'] ?? '', $s['email'] ?? ''])),
             'headers' => ['Auto-Submitted' => 'auto-replied']]);

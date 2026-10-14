@@ -82,4 +82,5 @@ pm_brand_set($vb);
 <?php endif; ?>
 
 <?php function_exists('pm_view_email_health') && pm_view_email_health(); ?>
+<?php function_exists('pm_view_sent_log') && pm_view_sent_log(); ?>
 <p class="hint">Alerts (a reply, a bounce, a proposal opened) are emailed to the Email address under <a href="?tab=settings&amp;section=business">Business details</a>, from the mail login above, at most once per subject every 6 hours. Run <code>php lib/poll_run.php</code> every 15 minutes (schedule_agents.bat does this) to check replies without opening the app. The approved emails waiting to go out are in the send queue on <a href="?tab=agents">Sales &gt; Leads</a>.</p>

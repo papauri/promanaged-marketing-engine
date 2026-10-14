@@ -1,5 +1,6 @@
 <?php
 require_once PM_ROOT . '/vendor/autoload.php';
+require_once __DIR__ . '/maillog.php'; // every email logged, sent once, copied into the Sent folder
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as MailException;
@@ -110,10 +111,68 @@ function pm_mail(array $s, array $m): array
             }
         }
 
-        $mail->send();
-        return [true, '', (string)$mail->getLastMessageID()];
+        // ---- one send, logged, never twice (lib/maillog.php) ----
+        $key = pm_ml_key($m);
+        if (($why = pm_ml_blocked($m, $key)) !== '') {
+            return [false, $why, ''];
+        }
+        $lock = @fopen(PM_DATA . '/mail_send.lock', 'c'); // every copy of a send on this server waits its turn: two clicks or the scheduler and a person cannot both send it
+        $lock && flock($lock, LOCK_EX);
+        try {
+            if (($why = pm_ml_blocked($m, $key)) !== '') { // checked again inside the lock: another process may have just sent it
+                return [false, $why, ''];
+            }
+            $row = pm_ml_begin($s, $m, $key);
+            [$ok, $err, $via, $note] = pm_mail_send_via($mail, $smtp);
+            $mid = $ok ? (string)$mail->getLastMessageID() : '';
+            pm_ml_end($row, $ok ? ['status' => 'sent', 'mid' => $mid, 'via' => $via] + ($note !== '' ? ['fix' => $note] : [])
+                : ['status' => 'failed', 'err' => mb_substr($err, 0, 400), 'via' => $via, 'fix' => function_exists('pm_mail_fail') ? mb_substr(pm_mail_fail($s, $err), 0, 400) : '']);
+        } finally {
+            if ($lock) {
+                flock($lock, LOCK_UN);
+                fclose($lock);
+            }
+        }
+        if (!$ok) {
+            return [false, $err, ''];
+        }
+        if (($m['kind'] ?? '') !== 'notify') { // a copy in the mailbox's own Sent folder (SMTP keeps none); the owner's own alerts are not filed
+            $saved = pm_ml_save_sent(function_exists('pm_brand') ? pm_brand() : 'promanaged', (string)$mail->getSentMIMEMessage());
+            pm_ml_end($row, ['sent_folder' => $saved]);
+        }
+        return [true, '', $mid];
     } catch (MailException $e) {
         return [false, $mail->ErrorInfo ?: $e->getMessage(), ''];
+    }
+}
+
+/**
+ * Sends through the mailbox's server, as set up for this copy of the app (465 ssl or 587 tls). If the server cannot be reached on that port, the other one is tried
+ * once (nothing has been sent when a connection fails, so this never sends twice). Returns [ok, error, 'host:port security', a note for the log when the other port was used].
+ */
+function pm_mail_send_via(PHPMailer $mail, array $smtp): array
+{
+    $via = fn() => $mail->Host . ':' . $mail->Port . ' ' . ($mail->SMTPSecure ?: 'none');
+    try {
+        $mail->send();
+        return [true, '', $via(), ''];
+    } catch (MailException $e) {
+        $err = $mail->ErrorInfo ?: $e->getMessage();
+        $port = (int)$mail->Port;
+        if (!in_array($port, [465, 587], true) || !preg_match('/connect\(\)|could not connect|failed to connect|connection refused|timed out/i', $err)) {
+            return [false, $err, $via(), ''];
+        }
+        $mail->smtpClose();
+        $other = $port === 465 ? [587, PHPMailer::ENCRYPTION_STARTTLS, 'tls'] : [465, PHPMailer::ENCRYPTION_SMTPS, 'ssl'];
+        $mail->Port = $other[0];
+        $mail->SMTPSecure = $other[1];
+        $mail->SMTPAutoTLS = true;
+        try {
+            $mail->send();
+            return [true, '', $via(), "Port $port could not be reached from this server, so it went through port {$other[0]}. To skip the retry, set the port to {$other[0]} and security to {$other[2]} in this copy's .env."];
+        } catch (MailException $e2) {
+            return [false, $err . ' (port ' . $other[0] . ' also failed: ' . ($mail->ErrorInfo ?: $e2->getMessage()) . ')', $via(), ''];
+        }
     }
 }
 
@@ -142,7 +201,7 @@ function pm_notify_owner(string $subject, string $text): bool
             if (isset($st[$key])) {
                 return false;
             }
-            [$ok] = pm_mail($s, ['to' => $to, 'subject' => mb_substr($subject, 0, 150), 'body' => $text, 'bcc_self' => false]);
+            [$ok] = pm_mail($s, ['to' => $to, 'subject' => mb_substr($subject, 0, 150), 'body' => $text, 'bcc_self' => false, 'kind' => 'notify']);
             if ($ok) {
                 $st[$key] = $now;
                 pm_save('notify_state', $st);
@@ -162,7 +221,7 @@ function pm_notify_owner(string $subject, string $text): bool
 /** Older call style, kept for the Settings test email. */
 function pm_send_mail(array $s, string $to, string $cc, string $subject, string $body, string $pdfPath): array
 {
-    return pm_mail($s, ['to' => $to, 'cc' => $cc, 'subject' => $subject, 'body' => $body, 'attachments' => [$pdfPath]]);
+    return pm_mail($s, ['to' => $to, 'cc' => $cc, 'subject' => $subject, 'body' => $body, 'attachments' => [$pdfPath], 'kind' => 'proposal']);
 }
 
 /* ---------------- Why a mail login or a send failed, and a test email that tells the truth ---------------- */
@@ -293,7 +352,7 @@ function pm_mail_test(string $brand, string $to = ''): array
             return [false, 'There is no valid address to send the test to. Type one in the box beside the button.'];
         }
         $src = ['env' => '.env', 'settings' => 'Settings', 'shared' => "ProManaged IT's mailbox (this business has none of its own)", 'none' => 'nowhere'][pm_mail_source($brand)] ?? '';
-        [$ok, $err] = array_pad(pm_mail($s, ['to' => $to, 'subject' => 'Test email from ' . $name, 'bcc_self' => false, 'link' => function_exists('pm_link_card') ? pm_link_card() : null,
+        [$ok, $err] = array_pad(pm_mail($s, ['to' => $to, 'subject' => 'Test email from ' . $name, 'bcc_self' => false, 'kind' => 'test', 'link' => function_exists('pm_link_card') ? pm_link_card() : null,
             'body' => "This is a test from the $name mailbox.\n\nIt was sent " . date('j M Y, H:i') . ' as ' . ($sm['from_email'] ?: $sm['username']) . ' through ' . $sm['host'] . ':' . $sm['port'] . ' (' . ($sm['encryption'] ?: 'no') . " security).\n\nIf you can read this, email is working."]), 2, '');
         return $ok ? [true, "A test email was sent to $to as " . ($sm['from_email'] ?: $sm['username']) . " through {$sm['host']}:{$sm['port']} (login from $src). Check that inbox, and the spam folder."]
             : [false, 'The test email failed. ' . pm_smtp_explain($sm, (string)$err)];

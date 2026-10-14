@@ -717,6 +717,7 @@ function pm_apply_reply(array &$lead, string $text, array $r, string $mode, ?cal
     }
     switch ($intent) {
         case 'bounce':
+            function_exists('pm_ml_mark_bounce') && pm_ml_mark_bounce((string)($r['failed'] ?? '') ?: (string)($lead['email'] ?? ''), !empty($r['auth']) ? 'auth' : (($r['hard'] ?? true) ? 'hard' : 'soft'));
             if (!empty($r['auth']) && function_exists('pm_auth_failed')) {
                 return pm_auth_failed($lead);
             }
@@ -981,6 +982,9 @@ function pm_inbox_poll(?callable $send = null, ?array &$report = null): array
             }
         }
         $handled = pm_inbox_process($messages, $leads, $seen, $mode, $send, $report);
+        if (function_exists('pm_ml_sync_sent') && ($synced = pm_ml_sync_sent($leads))) {
+            $report['synced'] = $synced;
+        }
     } finally {
         pm_brand_set($was); // the inbox answers each lead as its own business: never leave the caller as another one
     }
@@ -1022,5 +1026,5 @@ function pm_send_reply(array $lead, string $subject, string $body, array $attach
         $to = $rt; // the colleague who wrote gets the answer
     }
     return pm_mail($s, ['to' => $to, 'subject' => $subject, 'body' => $body . "\n\n" . ($mine ?? "Kind regards,\n" . implode("\n", $sig)) . "\n\n(Reply STOP at any time and we will stop contacting you.)",
-        'headers' => $hdr, 'attachments' => $attachments]);
+        'headers' => $hdr, 'attachments' => $attachments, 'kind' => 'reply', 'lead' => (string)($lead['id'] ?? '')]);
 }

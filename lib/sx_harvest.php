@@ -233,7 +233,7 @@ function pm_send_postsign(array &$leads, string $id, string $which, ?callable $m
         }
         $from = ($settings['smtp']['from_email'] ?? '') ?: ($settings['email'] ?? '');
         $res = $mailer($settings, ['to' => $email, 'subject' => $subject, 'body' => $body . pm_outreach_footer($settings),
-            'headers' => ['List-Unsubscribe' => '<mailto:' . $from . '?subject=STOP>', 'Auto-Submitted' => 'no'], 'link' => null]);
+            'headers' => ['List-Unsubscribe' => '<mailto:' . $from . '?subject=STOP>', 'Auto-Submitted' => 'no'], 'link' => null, 'kind' => 'social']);
         [$ok, $why, $mid] = array_pad((array)$res, 3, '');
         if (!$ok) {
             return $no('Could not send: ' . (function_exists('pm_mail_fail') ? pm_mail_fail($settings, (string)$why) : $why));
