@@ -600,11 +600,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (in_array($_POST['bt'] ?? '', ['targeting', 'home', 'ops'], true)) { // the page the button was on
                 pm_redirect(['home' => 'home', 'ops' => 'settings&section=connections'][$_POST['bt']] ?? 'targeting', $m, $k);
             }
-            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after', 'dismiss_unmatched', 'folder_add', 'folder_remove', 'folder_rename', 'folder_delete', 'outbox_retry', 'outbox_discard'], true);
+            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after', 'dismiss_unmatched', 'folder_add', 'folder_remove', 'folder_rename', 'folder_delete', 'outbox_retry', 'outbox_discard', 'move_to'], true);
             if ($id !== '' && !$noLead) {
                 pm_redirect(!empty($_POST['rl']) ? 'agents&lead=' . $id : 'agents' . $keep . '&at=' . rawurlencode($id) . '#l' . $id, $m, $k); // at= opens the page of the list that holds the lead
             }
-            pm_redirect('agents' . (in_array($do, ['delete', 'plan', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after', 'folder_add', 'folder_remove', 'outbox_retry', 'outbox_discard'], true) ? $keep : ''), $m, $k);
+            pm_redirect('agents' . (in_array($do, ['delete', 'plan', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after', 'folder_add', 'folder_remove', 'outbox_retry', 'outbox_discard', 'move_to'], true) ? $keep : ''), $m, $k);
         };
 
         if ($do === 'run') {
@@ -782,6 +782,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $back('Could not read the inbox: ' . $e->getMessage(), 'err');
             }
             $back($msg);
+        }
+        if ($do === 'move_to') { // the ticked leads go to another stage by hand (Active to Contacted, Won, Lost...)
+            $mvIds = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? []))));
+            $mvTo = (string)($_POST['move_to'] ?? '');
+            if (!$mvIds || !array_key_exists($mvTo, PM_LEAD_STATUSES)) {
+                $back(!$mvIds ? 'Tick the leads first.' : 'Choose where to move them.', 'err');
+            }
+            $mvN = 0;
+            $mvNo = [];
+            foreach ($mvIds as $mi) {
+                if (!isset($leads[$mi])) {
+                    continue;
+                }
+                $err = pm_lead_set_status($leads[$mi], $mvTo, (string)($_POST['lost_reason'] ?? ''));
+                $err === '' ? $mvN++ : $mvNo[] = $err;
+            }
+            $mvN && pm_leads_save($leads);
+            $back("$mvN lead" . ($mvN === 1 ? '' : 's') . ' moved to ' . PM_LEAD_STATUSES[$mvTo] . '.' . ($mvTo === 'contacted' && $mvN ? ' They are out of Active, in the folder "Already contacted", and no first email goes to them again.' : '') . ($mvNo ? ' Not moved: ' . implode(' ', array_slice($mvNo, 0, 3)) : ''), $mvN ? 'ok' : 'err');
         }
         if (in_array($do, ['folder_add', 'folder_remove', 'folder_rename', 'folder_delete'], true)) { // the owner's own folders of leads (lib/leadfolders.php)
             $fIds = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? []))));
@@ -1348,26 +1366,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $back('Logged the WhatsApp message to ' . $lead['name'] . '.');
         }
         if ($do === 'status') {
-            $st = (string)($_POST['status'] ?? '');
-            if (array_key_exists($st, PM_LEAD_STATUSES)) {
-                $lr = (string)($_POST['lost_reason'] ?? '');
-                $leads[$id]['status'] = $st;
-                if ($st === 'lost') {
-                    $leads[$id]['lost_reason'] = isset(pm_lost_reasons()[$lr]) ? $lr : 'other';
-                } else {
-                    unset($leads[$id]['lost_reason']);
-                }
-                if ($st === 'won' && empty($lead['won_at'])) {
-                    $leads[$id]['won_at'] = date('Y-m-d H:i');
-                }
-                if ($st === 'optout' && ($lead['status'] ?? '') !== 'optout') {
-                    $leads[$id]['prev_status'] = (string)($lead['status'] ?? '');
-                    $leads[$id]['optout_at'] = date('Y-m-d H:i');
-                }
-                pm_lead_note($leads[$id], 'Marked ' . PM_LEAD_STATUSES[$st] . ($st === 'lost' ? ' (' . (pm_lost_reasons()[$leads[$id]['lost_reason']] ?? '') . ')' : ''));
-                pm_leads_save($leads);
-            }
-            $back();
+            $stErr = pm_lead_set_status($leads[$id], (string)($_POST['status'] ?? ''), (string)($_POST['lost_reason'] ?? ''));
+            $stErr === '' && pm_leads_save($leads);
+            $back($stErr === '' ? 'Moved to ' . (PM_LEAD_STATUSES[(string)$_POST['status']] ?? '') . '.' : $stErr, $stErr === '' ? 'ok' : 'err');
         }
         if ($do === 'note') {
             if (trim((string)$_POST['text']) !== '') {

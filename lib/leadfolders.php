@@ -85,3 +85,53 @@ function pm_folder_rename(array &$leads, string $brand, string $from, string $to
         }
     }
 }
+
+/**
+ * Moves a lead to another stage by hand (Active to Contacted, back to Draft ready, Won, Lost...). Returns '' when done, else why not.
+ * Contacted by hand is recorded as a send (date, out of Active, never emailed a first time again) and filed in "Already contacted"; a lead that was emailed cannot go back to
+ * Draft ready or Qualified, so its first email is never sent twice.
+ */
+function pm_lead_set_status(array &$lead, string $st, string $lostReason = ''): string
+{
+    if (!array_key_exists($st, PM_LEAD_STATUSES)) {
+        return 'That is not a stage.';
+    }
+    $was = (string)($lead['status'] ?? '');
+    if (in_array($st, ['new', 'qualified', 'drafted'], true) && !empty($lead['sent']) && !empty($lead['sent_by_hand']) && count((array)$lead['sent']) === 1) {
+        $lead['sent'] = []; // only marked contacted by hand (a mistake undone): no email went from the app, so the first email may go
+        unset($lead['sent_by_hand'], $lead['last_contacted'], $lead['last_out']);
+        $lead['folders'] = array_values(array_diff((array)($lead['folders'] ?? []), ['Already contacted']));
+    }
+    if (in_array($st, ['new', 'qualified', 'drafted'], true) && !empty($lead['sent'])) {
+        return ($lead['name'] ?? 'This lead') . ' was already emailed on ' . (string)end($lead['sent']) . ', so it stays past the first email (it is never sent twice).';
+    }
+    $lead['status'] = $st;
+    if ($st === 'lost') {
+        $lead['lost_reason'] = isset(pm_lost_reasons()[$lostReason]) ? $lostReason : ($lead['lost_reason'] ?? 'other');
+    } else {
+        unset($lead['lost_reason']);
+    }
+    if ($st === 'won' && empty($lead['won_at'])) {
+        $lead['won_at'] = date('Y-m-d H:i');
+    }
+    if ($st === 'optout' && $was !== 'optout') {
+        $lead['prev_status'] = $was;
+        $lead['optout_at'] = date('Y-m-d H:i');
+    }
+    if ($st === 'contacted') {
+        if (empty($lead['sent'])) { // contacted outside the app: recorded like a send, so follow-ups count from now and no first email goes again
+            $lead['sent'][] = date('Y-m-d H:i');
+            $lead['sent_by_hand'] = true; // so a mistake can be undone
+            $lead['last_contacted'] = $lead['last_out'] = date('Y-m-d H:i');
+        }
+        unset($lead['approved_at'], $lead['send_after']);
+        if (!in_array('Already contacted', (array)($lead['folders'] ?? []), true)) {
+            $lead['folders'][] = 'Already contacted';
+        }
+    }
+    if (in_array($st, ['won', 'lost', 'optout', 'replied', 'proposal'], true)) {
+        unset($lead['approved_at'], $lead['send_after']); // nothing cold goes to them from the queue
+    }
+    pm_lead_note($lead, 'Moved by hand from ' . (PM_LEAD_STATUSES[$was] ?? $was) . ' to ' . PM_LEAD_STATUSES[$st] . ($st === 'lost' ? ' (' . (pm_lost_reasons()[$lead['lost_reason']] ?? '') . ')' : ''));
+    return '';
+}
