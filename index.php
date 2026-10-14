@@ -576,7 +576,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // After any action, return to exactly where the user was: the same lead (focused or in the list) with the same filters.
         $ctxS = preg_match('/^[a-z]+$/', (string)($_POST['rs'] ?? '')) ? $_POST['rs'] : '';
         $ctxT = (string)($_POST['rt'] ?? '');
-        $keep = ($ctxS !== '' ? '&status=' . $ctxS : '') . ($ctxT !== '' ? '&type=' . urlencode($ctxT) : '') . ((int)($_POST['rp'] ?? 0) > 1 ? '&p=' . (int)$_POST['rp'] : '');
+        $keep = ($ctxS !== '' ? '&status=' . $ctxS : '') . ($ctxT !== '' ? '&type=' . urlencode($ctxT) : '') . ((int)($_POST['rp'] ?? 0) > 1 ? '&p=' . (int)$_POST['rp'] : '')
+            . (preg_match('/^(&(q|city|has|min|sort)=[A-Za-z0-9%._+-]*)*$/', (string)($_POST['rf'] ?? '')) ? (string)($_POST['rf'] ?? '') : ''); // the other filters of the list
         $back = function (string $m = '', string $k = 'ok') use (&$id, $do, $keep) {
             if (($_POST['bt'] ?? '') === 'whatsapp') {
                 pm_redirect('whatsapp', $m, $k);

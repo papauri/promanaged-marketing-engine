@@ -926,3 +926,5 @@ details.lead > summary .who { flex:1 1 auto; min-width:0; }
 .runbar[data-running="1"] { position:sticky; top:8px; z-index:21; box-shadow:var(--sh-pop); }
 .filters .typesel { display:flex; gap:var(--s-2); align-items:center; flex-wrap:nowrap; margin-left:auto; } .filters .typesel input[type=search] { width:200px; height:var(--ctl-sm); font-size:var(--fs-2); margin:0; }
 @media (max-width:760px) { .filters .typesel { flex-wrap:wrap; margin-left:0; width:100%; } .filters .typesel input[type=search] { flex:1 1 140px; width:auto; } }
+.filters .typesel { flex-wrap:wrap; width:100%; margin:var(--s-2) 0 0; justify-content:flex-start; } .filters .typesel select { max-width:200px; }
+.leadlist.dense details.lead { margin-bottom:4px; } .leadlist.dense details.lead > summary { padding:6px 14px; } .leadlist.dense details.lead > summary .who small { display:inline; margin-left:6px; }

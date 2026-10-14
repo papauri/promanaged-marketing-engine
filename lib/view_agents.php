@@ -15,6 +15,25 @@ $plan = pm_daily_plan($leadsAll, $acfg);
 $filter = (string)($_GET['status'] ?? 'active');
 $ftype = (string)($_GET['type'] ?? '');
 $fq = trim((string)($_GET['q'] ?? ''));
+$fcity = trim((string)($_GET['city'] ?? ''));
+$fhas = (string)($_GET['has'] ?? '');
+$fmin = (int)($_GET['min'] ?? 0);
+$fsort = (string)($_GET['sort'] ?? '');
+if (isset($_GET['per'])) { $_SESSION['leads_per'] = (int)$_GET['per']; } // the page size is remembered
+$fper = in_array((int)($_SESSION['leads_per'] ?? 25), [10, 25, 50, 100, 200], true) ? (int)($_SESSION['leads_per'] ?? 25) : 25;
+$leadHas = ['email' => 'Has an email', 'noemail' => 'No email yet', 'name' => 'Owner name known', 'noname' => 'No owner name yet', 'personal' => 'Has a personal opening', 'research' => 'Researched', 'noresearch' => 'Not researched yet', 'approved' => 'In the send queue'];
+$hasOk = fn($l) => match ($fhas) {
+    'email' => (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL), 'noemail' => !filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL),
+    'name' => trim((string)($l['contact'] ?? '')) !== '', 'noname' => trim((string)($l['contact'] ?? '')) === '', 'personal' => pm_lead_personal($l) !== '',
+    'research' => !empty($l['research']), 'noresearch' => empty($l['research']), 'approved' => !empty($l['approved_at']) && empty($l['sent']), default => true,
+};
+$fq2 = function (array $set = []) use ($ftype, $fq, $fcity, $fhas, $fmin, $fsort): string { // the filters, for a link
+    $out = '';
+    foreach (array_replace(['type' => $ftype, 'q' => $fq, 'city' => $fcity, 'has' => $fhas, 'min' => $fmin, 'sort' => $fsort], $set) as $k => $v) {
+        $out .= $v === '' || $v === 0 ? '' : '&' . $k . '=' . urlencode((string)$v);
+    }
+    return $out;
+};
 $focusId = isset($leadsAll[(string)($_GET['lead'] ?? '')]) ? (string)$_GET['lead'] : '';
 $who = (string)($GLOBALS['PM_WHO'] ?? '');
 $team = array_values(array_filter((array)($settings['team'] ?? [])));
@@ -22,7 +41,10 @@ $waiting = fn($l) => $l['status'] !== 'optout' && ($l['status'] === 'replied' ||
 $gaps = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted', 'contacted'], true) && pm_approach($l)['ready'] < 70; // too little known for a good approach
 $inStatus = fn($l, $f) => $f === 'all' ? true : ($f === 'mine' ? (($l['owner'] ?? '') === $who && (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l))) : ($f === 'awaiting' ? $waiting($l)
     : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l)) : $l['status'] === $f))));
-$inSearch = fn($l) => $fq === '' || mb_stripos($l['name'] . ' ' . $l['city'] . ' ' . ($l['contact'] ?? '') . ' ' . ($l['type'] ?? ''), $fq) !== false;
+$inSearch = fn($l) => ($fq === '' || mb_stripos($l['name'] . ' ' . $l['city'] . ' ' . ($l['contact'] ?? '') . ' ' . ($l['type'] ?? '') . ' ' . ($l['email'] ?? ''), $fq) !== false)
+    && ($fcity === '' || strcasecmp(trim((string)($l['city'] ?? '')), $fcity) === 0) && $hasOk($l) && (int)($l['score'] ?? 0) >= $fmin;
+$cities = array_count_values(array_filter(array_map(fn($l) => trim((string)($l['city'] ?? '')), $leadsAll)));
+ksort($cities);
 // business-type dropdown: similar types grouped (hotel, lodge, resort... -> Hotels & lodges), counted inside the chosen status
 $types = [];
 foreach ($leadsAll as $l) {
@@ -40,9 +62,15 @@ $counts['all'] = count($base);
 $counts['mine'] = $who === '' ? 0 : count(array_filter($base, fn($l) => $inStatus($l, 'mine')));
 $shown = array_filter($base, fn($l) => $inStatus($l, $filter));
 if ($focusId !== '') { $shown = [$focusId => $leadsAll[$focusId]]; }
-usort($shown, fn($a, $b) => [$waiting($b), $b['score'] ?? 0] <=> [$waiting($a), $a['score'] ?? 0]);
+usort($shown, match ($fsort) {
+    'new' => fn($a, $b) => strcmp((string)($b['created'] ?? ''), (string)($a['created'] ?? '')),
+    'name' => fn($a, $b) => strcasecmp((string)$a['name'], (string)$b['name']),
+    'city' => fn($a, $b) => [strtolower((string)$a['city']), -(int)($a['score'] ?? 0)] <=> [strtolower((string)$b['city']), -(int)($b['score'] ?? 0)],
+    'ready' => fn($a, $b) => pm_approach($b)['ready'] <=> pm_approach($a)['ready'],
+    default => fn($a, $b) => [$waiting($b), $b['score'] ?? 0] <=> [$waiting($a), $a['score'] ?? 0],
+});
 $atPos = array_search((string)($_GET['at'] ?? ''), array_column($shown, 'id'), true); // ?at=<id>: open the page that holds this lead
-[$shown, $pager] = pm_ui_page($shown, 10, 'p', $atPos === false ? 0 : intdiv((int)$atPos, 10) + 1);
+[$shown, $pager] = pm_ui_page($shown, $fper, 'p', $atPos === false ? 0 : intdiv((int)$atPos, $fper) + 1);
 $unmatched = pm_inbox_unmatched_list();
 $hasApprove = function_exists('pm_approve_for_send');
 $approvable = fn($l) => $hasApprove && in_array($l['status'], ['drafted', 'qualified'], true) && empty($l['approved_at']) && empty($l['sent']) && !empty($l['drafts']['email_body']) && filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL);
@@ -51,7 +79,7 @@ $sentToday = pm_sent_today($leadsAll);
 $agentLog = pm_load('agent_log', fn() => []);
 $hid = fn($n, $v) => '<input type="hidden" name="' . $n . '" value="' . pm_h((string)$v) . '">';
 $post = fn($id, $do, $extra = '') => '<input type="hidden" name="csrf" value="' . $csrf . '"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="' . $do . '">'
-    . $hid('rs', $filter) . $hid('rt', $ftype) . ((int)($_GET['p'] ?? 0) > 1 ? $hid('rp', (int)$_GET['p']) : '') . ($focusId !== '' ? $hid('rl', '1') : '') . ($id !== '' ? $hid('id', $id) : '') . $extra;
+    . $hid('rs', $filter) . $hid('rt', $ftype) . $hid('rf', $fq2(['type' => ''])) . ((int)($_GET['p'] ?? 0) > 1 ? $hid('rp', (int)$_GET['p']) : '') . ($focusId !== '' ? $hid('rl', '1') : '') . ($id !== '' ? $hid('id', $id) : '') . $extra;
 require_once __DIR__ . '/view_drafts.php';
 $waBiz = pm_wa_biz_cfg()['ready'];
 $waOn = pm_wa_on(pm_brand()); // no WhatsApp set up for this business: email only, no WhatsApp boxes or buttons
@@ -156,17 +184,23 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 
 <!-- 5. Leads -->
 <?php if ($focusId !== ''): ?>
-<div class="focusbar"><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?><?= $ftype !== '' ? '&type=' . urlencode($ftype) : '' ?><?= $fq !== '' ? '&q=' . urlencode($fq) : '' ?>&at=<?= pm_h(rawurlencode($focusId)) ?>#l<?= pm_h($focusId) ?>">← All leads</a> <span class="muted">Focused on <b><?= pm_h($leadsAll[$focusId]['name']) ?></b></span></div>
+<div class="focusbar"><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?><?= pm_h($fq2()) ?>&at=<?= pm_h(rawurlencode($focusId)) ?>#l<?= pm_h($focusId) ?>">← All leads</a> <span class="muted">Focused on <b><?= pm_h($leadsAll[$focusId]['name']) ?></b></span></div>
 <?php else: ?>
 <div class="filters">
   <?php foreach (($who !== '' ? ['mine' => 'Mine'] : []) + ['active' => 'Active', 'awaiting' => 'Needs reply', 'gaps' => 'Missing details', 'drafted' => 'Draft ready', 'contacted' => 'Contacted', 'replied' => 'Replied', 'proposal' => 'Proposal sent', 'won' => 'Won', 'all' => 'All'] as $k => $l): ?>
-    <a href="?tab=agents&status=<?= $k ?><?= $ftype !== '' ? '&type=' . urlencode($ftype) : '' ?><?= $fq !== '' ? '&q=' . urlencode($fq) : '' ?>" class="<?= $filter === $k ? 'on' : '' ?>"><?= $l ?> <small><?= (int)($counts[$k] ?? 0) ?></small></a>
+    <a href="?tab=agents&status=<?= $k ?><?= pm_h($fq2()) ?>" class="<?= $filter === $k ? 'on' : '' ?>"><?= $l ?> <small><?= (int)($counts[$k] ?? 0) ?></small></a>
   <?php endforeach; ?>
   <form method="get" class="typesel" data-noload="1"><input type="hidden" name="tab" value="agents"><input type="hidden" name="status" value="<?= pm_h($filter) ?>">
     <input type="search" name="q" value="<?= pm_h($fq) ?>" placeholder="Search leads" aria-label="Search leads by name, town or contact" class="narrow">
     <select name="type" onchange="this.form.submit()" aria-label="Business type"><option value="">All business types</option>
       <?php foreach ($types as $tk => $tn): ?><option value="<?= pm_h($tk) ?>" <?= $ftype === $tk ? 'selected' : '' ?>><?= pm_h($tk) ?> (<?= $tn ?>)</option><?php endforeach; ?></select>
-    <?php if ($ftype !== '' || $fq !== ''): ?><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?>">Clear</a><?php endif; ?></form>
+    <select name="city" onchange="this.form.submit()" aria-label="Town"><option value="">All towns</option>
+      <?php foreach ($cities as $ck => $cn): ?><option value="<?= pm_h($ck) ?>" <?= strcasecmp($fcity, (string)$ck) === 0 ? 'selected' : '' ?>><?= pm_h($ck) ?> (<?= $cn ?>)</option><?php endforeach; ?></select>
+    <select name="has" onchange="this.form.submit()" aria-label="What we know"><option value="">Any details</option><?php foreach ($leadHas as $hk => $hl): ?><option value="<?= $hk ?>" <?= $fhas === $hk ? 'selected' : '' ?>><?= pm_h($hl) ?></option><?php endforeach; ?></select>
+    <select name="min" onchange="this.form.submit()" aria-label="Lowest fit score"><?php foreach ([0 => 'Any score', 60 => 'Score 60+', 75 => 'Score 75+', 85 => 'Score 85+'] as $mk => $ml): ?><option value="<?= $mk ?>" <?= $fmin === $mk ? 'selected' : '' ?>><?= $ml ?></option><?php endforeach; ?></select>
+    <select name="sort" onchange="this.form.submit()" aria-label="Order"><?php foreach (['' => 'Best first', 'ready' => 'Most ready first', 'new' => 'Newest first', 'name' => 'Name A to Z', 'city' => 'By town'] as $sk => $sl): ?><option value="<?= $sk ?>" <?= $fsort === $sk ? 'selected' : '' ?>><?= $sl ?></option><?php endforeach; ?></select>
+    <select name="per" onchange="this.form.submit()" aria-label="Leads per page"><?php foreach ([10, 25, 50, 100, 200] as $pk): ?><option value="<?= $pk ?>" <?= $fper === $pk ? 'selected' : '' ?>><?= $pk ?> a page</option><?php endforeach; ?></select>
+    <?php if ($ftype !== '' || $fq !== '' || $fcity !== '' || $fhas !== '' || $fmin || $fsort !== ''): ?><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?>">Clear</a><?php endif; ?></form>
 </div>
 <?php endif; ?>
 <?php $isAdm = pm_user_is_admin(); $pickable = fn($l) => $approvable($l) || $isAdm; $nPick = count(array_filter($shown, $pickable)); ?>
@@ -186,7 +220,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <?php elseif (!$shown): ?><div class="card empty">No leads here yet. <?= $filter === 'active' ? 'Press <b>Run the agents</b> or find a business by name.' : '' ?></div><?php endif; ?>
 <?= $pager ?>
 <?php if ($running): ?><p class="flash runlock" id="runlock">The agents are working: sending, research and drafting on the leads wait until they finish, so two jobs never clash. The page unlocks by itself.</p><?php endif; ?>
-<div class="leadlist<?= $running ? ' locked' : '' ?>">
+<div class="leadlist<?= $running ? ' locked' : '' ?><?= $fper >= 50 ? ' dense' : '' ?>">
 <?php foreach ($shown as $l):
     $id = $l['id'];
     $which = ($l['status'] === 'contacted' && !empty($l['followup_draft'])) ? 'followup' : 'first';
