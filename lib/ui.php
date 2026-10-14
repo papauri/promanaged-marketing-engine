@@ -54,7 +54,7 @@ function pm_ui_nav(): array
             'Businesses' => ['?tab=business&new=1' => '+ Add a business']]],
     ] + (pm_ui_admin() ? [ // oversight of the team: only an admin sees this department (lib/view_audit.php)
         'audit' => ['label' => 'Audit', 'name' => 'Audit department', 'job' => 'Oversee the team and the work', 'color' => '#6b3a5c', 'href' => '?tab=audit', 'groups' => [
-            'Oversight' => ['?tab=audit' => 'Activity log', '?tab=audit&section=followups' => 'Follow-ups', '?tab=audit&section=ai' => 'AI auditor']]],
+            'Oversight' => ['?tab=audit' => 'Activity log', '?tab=audit&section=followups' => 'Follow-ups', '?tab=audit&section=ai' => 'AI auditor', '?tab=audit&section=talk' => 'Agent conversations']]],
     ] : []);
 }
 

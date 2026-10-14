@@ -6,7 +6,11 @@
  *   ai            AI auditor: the audit written by the AI from those numbers, the earlier audits, and the weekly switch
  * Needs $csrf, $section.
  */
-$asec = in_array($section ?? '', ['followups', 'ai'], true) ? $section : '';
+$asec = in_array($section ?? '', ['followups', 'ai', 'talk'], true) ? $section : '';
+if ($asec === 'talk') { // Agent conversations: a page of its own (no period or filters of the activity log)
+    require __DIR__ . '/view_agenttalk.php';
+    return;
+}
 $ar = pm_ta_range($_GET, $asec === 'followups' ? '30d' : '7d');
 $aBrand = in_array((string)($_GET['biz'] ?? ''), pm_brand_ids(), true) ? (string)$_GET['biz'] : '';
 $aHeads = [

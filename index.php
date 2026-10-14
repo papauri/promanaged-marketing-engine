@@ -399,6 +399,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         pm_redirect('settings&section=email#sentlog');
     }
+    if ($action === 'audit' && ($_POST['do'] ?? '') === 'talk_delete') { // Audit > Agent conversations: the admin deletes one day
+        $tdDay = preg_match('/^\d{4}-\d\d-\d\d$/', (string)($_POST['day'] ?? '')) ? (string)$_POST['day'] : '';
+        $tdOk = $tdDay !== '' && pm_talk_delete($tdDay);
+        pm_redirect('audit&section=talk', $tdOk ? 'The agents\' conversation of ' . date('j M Y', strtotime($tdDay)) . ' was deleted.' : 'That day could not be deleted.', $tdOk ? 'ok' : 'err');
+    }
     if ($action === 'audit') { // Audit department: run the AI audit now, the weekly audit on or off (lib/sx_teamaudit.php)
         [$auMsg, $auOk, $auTo] = pm_ta_action($_POST);
         pm_redirect($auTo, $auMsg, $auOk ? 'ok' : 'err');
@@ -594,6 +599,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $keep = ($ctxS !== '' ? '&status=' . $ctxS : '') . ($ctxT !== '' ? '&type=' . urlencode($ctxT) : '') . ((int)($_POST['rp'] ?? 0) > 1 ? '&p=' . (int)$_POST['rp'] : '')
             . (preg_match('/^(&(q|city|has|min|sort|folder)=[A-Za-z0-9%._+-]*)*$/', (string)($_POST['rf'] ?? '')) ? (string)($_POST['rf'] ?? '') : ''); // the other filters of the list
         $back = function (string $m = '', string $k = 'ok') use (&$id, $do, $keep) {
+            if ($m !== '' && function_exists('pm_talk') && in_array($do, ['send_now', 'approve_send', 'turn_down', 'move_to', 'send', 'outbox_retry', 'run', 'research', 'followups_ai', 'followup_ai', 'draft_outreach'], true)) {
+                pm_talk(pm_brand(), 'owner', html_entity_decode(strip_tags($m), ENT_QUOTES)); // what the owner decided, in the Audit's conversation
+            }
             if (($_POST['bt'] ?? '') === 'whatsapp') {
                 pm_redirect('whatsapp', $m, $k);
             }

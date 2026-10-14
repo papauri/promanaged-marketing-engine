@@ -294,6 +294,7 @@ function pm_agent_log(string $agent, string $msg, ?bool $error = null): void
     $row = ['at' => date('Y-m-d H:i:s'), 'agent' => $agent, 'msg' => (pm_brand() !== 'promanaged' ? '[' . pm_brand_name(pm_brand()) . '] ' : '') . $msg];
     $error ??= (bool)preg_match('/\b(fail(ed|ure)?|could not|error|time[sd]? ?out|crash(ed)?|stalled|unparseable|exception|stopped)\b/i', $msg) && !preg_match('/\b0 errors\b/i', $msg);
     pm_log_push('agent_log', $row, 300);
+    function_exists('pm_talk') && pm_talk(pm_brand(), $agent, pm_talk_say($agent, $msg)); // the Audit's conversation
     if (function_exists('pm_ta_log')) { // the activity log keeps every line for good (Audit department); agent_log keeps the last 300
         pm_ta_log('agent', $agent, $row['msg'], ['ok' => !$error, 'area' => 'Agents', 'user' => 'system', 'name' => $agent, 'role' => 'agent']);
     }
@@ -487,6 +488,7 @@ require_once __DIR__ . '/subjects.php';
 require_once __DIR__ . '/contacts.php';
 require_once __DIR__ . '/leadfolders.php'; // the owner's own folders of leads
 require_once __DIR__ . '/teamboard.php'; // how the departments talk to each other (no AI)
+require_once __DIR__ . '/agenttalk.php'; // the agents' conversation, day by day, for the Audit (no AI)
 require_once __DIR__ . '/personal.php'; // the market pulse, the study's personal line, drafts brought up to date with a found name
 
 /* ---------------- Spend control: every call is counted against a daily token budget ---------------- */

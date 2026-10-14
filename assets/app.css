@@ -939,3 +939,10 @@ details.lead > summary .who { flex:1 1 auto; min-width:0; }
 .lead .tags .pill.folder { background:var(--surface-2); color:var(--ink-2); text-decoration:none; }
 @media (max-width:760px) { .outbox .obrow { flex-direction:column; } }
 main.swapping { opacity:.55; pointer-events:none; transition:opacity .12s; }
+.talklist { list-style:none; margin:0; padding:0; }
+.talklist li { display:grid; grid-template-columns:48px 1fr; gap:2px var(--s-2); padding:var(--s-2) 0; border-top:1px solid var(--line); font-size:var(--fs-3); }
+.talklist li:first-child { border-top:0; }
+.talklist li time { color:var(--muted); font-size:var(--fs-1); grid-row:span 2; padding-top:2px; }
+.talklist li b { color:var(--ink); }
+.talklist li span { color:var(--ink-2); }
+.talklist li.you b { color:var(--ok); }
