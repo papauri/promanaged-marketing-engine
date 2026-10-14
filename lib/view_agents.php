@@ -168,25 +168,23 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     <?php if ($ftype !== '' || $fq !== ''): ?><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?>">Clear</a><?php endif; ?></form>
 </div>
 <?php endif; ?>
-<?php if ($nApprovable): ?>
-<form method="post" id="approveform" class="approvebar"><?= $post('', 'approve_send') ?>
-  <span><b><?= $nApprovable ?></b> draft<?= $nApprovable === 1 ? '' : 's' ?> on this page ready to approve. Tick <i>Approve for sending</i> on the ones you have read.</span>
-  <label class="tick"><input type="checkbox" data-pick-all=".appick"> Select all <?= $nApprovable ?> on this page</label>
-  <label>Not before <input type="datetime-local" name="send_after" aria-label="Send no earlier than (optional)"></label>
-  <button class="btn primary">Approve selected</button>
-  <span class="hint">They go out one at a time in the <a href="?tab=targeting#sendschedule">sending hours</a>.</span></form>
-<?php endif; ?>
-<?php if ($shown && pm_user_is_admin()): $adBack = 'agents&status=' . preg_replace('/[^a-z_]/', '', (string)$filter); ?>
-<form method="post" id="delform" class="approvebar admbar"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="admin_delete"><input type="hidden" name="what" value="leads"><input type="hidden" name="back" value="<?= pm_h($adBack) ?>">
-  <label class="tick"><input type="checkbox" data-pick-all=".delpick input"> Select all <?= count($shown) ?> on this page</label>
-  <span class="hint">Admin: tick leads on the list to delete them (junk, tests, duplicates). A STOP is still remembered.</span>
-  <button class="btn small danger" data-confirm="Delete the ticked leads? This cannot be undone.">Delete ticked</button></form>
+<?php $isAdm = pm_user_is_admin(); $pickable = fn($l) => $approvable($l) || $isAdm; $nPick = count(array_filter($shown, $pickable)); ?>
+<?php if ($nPick): ?>
+<form method="post" id="leadsel" class="selbar<?= $running ? ' locked' : '' ?>"><?= $post('', '') ?>
+  <label class="tick"><input type="checkbox" data-pick-all=".lsel" aria-label="Tick every lead on this page"> All on this page</label>
+  <b class="selcount" data-pick-count=".lsel">0 ticked</b>
+  <?php if ($nApprovable): ?><label class="selwhen">Not before <input type="datetime-local" name="send_after" aria-label="Send no earlier than (optional)"></label>
+  <button class="btn primary" name="do" value="approve_send" title="Each ticked email goes out on its own, one at a time, in the sending hours">Send the ticked emails</button><?php endif; ?>
+  <?php if ($isAdm): ?><button class="btn small danger" name="do" value="delete_ticked" data-confirm="Delete the ticked leads? This cannot be undone.">Delete ticked</button><?php endif; ?>
+  <span class="hint"><?= $nApprovable ? $nApprovable . ' draft' . ($nApprovable === 1 ? '' : 's') . ' on this page can be sent. Read a draft, tick it, then press Send. They go out one at a time in the <a href="?tab=targeting#sendschedule">sending hours</a>.' : 'Nothing on this page is ready to send yet.' ?></span>
+</form>
 <?php endif; ?>
 <?php if ($hasApprove && function_exists('pm_view_send_queue') && count(array_filter($leadsAll, fn($x) => !empty($x['approved_at'])))) { pm_view_send_queue(pm_leads()); } ?>
 <?php if (!$shown && ($ftype !== '' || $fq !== '')): ?><div class="card empty">No <?= pm_h($ftype ?: 'leads') ?><?= $fq !== '' ? ' matching "' . pm_h($fq) . '"' : '' ?> in this list. <a href="?tab=agents&status=all<?= $ftype !== '' ? '&type=' . urlencode($ftype) : '' ?><?= $fq !== '' ? '&q=' . urlencode($fq) : '' ?>">Look in All</a></div>
 <?php elseif (!$shown): ?><div class="card empty">No leads here yet. <?= $filter === 'active' ? 'Press <b>Run the agents</b> or find a business by name.' : '' ?></div><?php endif; ?>
 <?= $pager ?>
-<div class="leadlist">
+<?php if ($running): ?><p class="flash runlock" id="runlock">The agents are working: sending, research and drafting on the leads wait until they finish, so two jobs never clash. The page unlocks by itself.</p><?php endif; ?>
+<div class="leadlist<?= $running ? ' locked' : '' ?>">
 <?php foreach ($shown as $l):
     $id = $l['id'];
     $which = ($l['status'] === 'contacted' && !empty($l['followup_draft'])) ? 'followup' : 'first';
@@ -197,6 +195,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 ?>
 <details class="lead" id="l<?= pm_h($id) ?>" <?= ($which === 'followup' || $waiting($l) || $focusId === $id) ? 'open' : '' ?>>
   <summary>
+    <?php if ($pickable($l)): ?><label class="lpick" onclick="event.stopPropagation()" title="<?= $approvable($l) ? 'Tick to send this email' : 'Admin: tick to delete' ?>"><input type="checkbox" class="lsel" form="leadsel" name="ids[]" value="<?= pm_h($id) ?>" aria-label="Tick <?= pm_h($l['name']) ?>"></label><?php else: ?><span class="lpick none"></span><?php endif; ?>
     <span class="who"><b><?= pm_h($l['name']) ?></b><small><?= pm_h($l['type']) ?> · <?= pm_h($l['city']) ?></small></span>
     <span class="tags">
       <?php if ($hasReply): ?><span class="pill warn">reply waiting</span><?php elseif ($waiting($l)): ?><span class="pill warn">they wrote</span><?php elseif ($which === 'followup'): ?><span class="pill warn">follow-up ready</span><?php endif; ?>
@@ -204,17 +203,17 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <?php if (!empty($l['snooze_until']) && $l['snooze_until'] >= date('Y-m-d')): ?><span class="pill" title="No follow-ups until then">paused to <?= pm_h(date('j M', strtotime($l['snooze_until']))) ?></span><?php endif; ?>
       <?php if (!empty($l['email_bad'])): ?><span class="pill warn" title="<?= pm_h((string)$l['email_bad']) ?> bounced: find another contact">email bounced</span><?php endif; ?>
       <?php $apx = pm_approach($l); $gapOpen = in_array($l['status'] ?? '', ['new', 'qualified', 'drafted', 'contacted'], true); ?>
-      <?php if ($gapOpen): ?><span class="pill <?= $apx['ready'] >= 80 ? 'ok' : ($apx['ready'] < 50 ? 'warn' : '') ?>" title="<?= pm_h($apx['missing'] ? 'Missing: ' . implode(', ', $apx['missing']) : 'Everything a good approach needs is there') ?>"><?= $apx['ready'] ?>% ready</span><?php endif; ?>
       <?php if (!empty($l['view_count'])): ?><span class="pill hot" title="They opened the proposal page">opened proposal</span><?php endif; ?>
       <?php if (!empty($l['approved_at'])): ?><span class="pill hot"><?= pm_h(function_exists('pm_approved_eta') ? (pm_approved_eta($l) ?: 'approved') : 'approved') ?></span><?php endif; ?>
-      <?php if (pm_user_is_admin()): ?><label class="pick delpick" onclick="event.stopPropagation()" title="Admin: tick to delete"><input type="checkbox" form="delform" name="ids[]" value="<?= pm_h($id) ?>" aria-label="Select <?= pm_h($l['name']) ?> to delete"></label><?php endif; ?>
-      <?php if ($approvable($l)): ?><label class="pick" onclick="event.stopPropagation()"><input type="checkbox" class="appick" form="approveform" name="ids[]" value="<?= pm_h($id) ?>"> Approve for sending</label><?php endif; ?>
       <?php if ($l['status'] === 'lost' && !empty($l['lost_reason'])): ?><span class="pill"><?= pm_h(pm_lost_reasons()[$l['lost_reason']] ?? $l['lost_reason']) ?></span><?php endif; ?>
       <?php if (!empty($l['proposal_ai'])): ?><span class="pill hot">proposal ready</span><?php endif; ?>
       <?= pm_lead_touch_chip($l) ?>
       <?php if (!empty($l['owner'])): ?><span class="pill" title="Owner of this lead"><?= pm_h($l['owner']) ?></span><?php endif; ?>
-      <span class="pill <?= ($l['score'] ?? 0) >= 70 ? 'hot' : '' ?>"><?= (int)($l['score'] ?? 0) ?></span>
-      <span class="pill"><?= pm_h(PM_LEAD_STATUSES[$l['status']] ?? $l['status']) ?></span>
+      <span class="fixcols"><?php /* always last and the same width, so they line up down the list */ ?>
+        <span class="pill c-ready <?= $gapOpen ? ($apx['ready'] >= 80 ? 'ok' : ($apx['ready'] < 50 ? 'warn' : '')) : 'blank' ?>"<?= $gapOpen ? ' title="' . pm_h($apx['missing'] ? 'Missing: ' . implode(', ', $apx['missing']) : 'Everything a good approach needs is there') . '"' : '' ?>><?= $gapOpen ? $apx['ready'] . '% ready' : '' ?></span>
+        <span class="pill c-score <?= ($l['score'] ?? 0) >= 70 ? 'hot' : '' ?>" title="How good a fit, out of 100"><?= (int)($l['score'] ?? 0) ?></span>
+        <span class="pill c-status"><?= pm_h(PM_LEAD_STATUSES[$l['status']] ?? $l['status']) ?></span>
+      </span>
     </span>
   </summary>
   <div class="body">
@@ -309,13 +308,18 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     </div>
 
     <div class="actions">
+      <div class="agrp main" aria-label="Reach them">
       <?php if ($canMail): ?><form method="post" onsubmit="return confirm('Send this email to <?= pm_h(addslashes($l['email'])) ?> now?')"><?= $post($id, 'send', $hid('which', $which)) ?><button class="btn primary"><?= $which === 'followup' ? 'Send follow-up' : 'Send email' ?></button></form><?php endif; ?>
       <?php if ($wa): $waFull = pm_wa_text($l, $dr['whatsapp'], $which === 'first'); ?><a class="btn" data-wa-log data-first data-id="<?= pm_h($id) ?>" data-csrf="<?= pm_h($csrf) ?>" data-text="<?= pm_h($waFull) ?>" data-url="<?= pm_h(pm_wa_link($l, '')) ?>" href="<?= pm_h(pm_wa_link($l, $waFull)) ?>" target="_blank" rel="noopener noreferrer" title="Checked and logged like the WhatsApp page: daily limit, STOP and the wording rules">WhatsApp</a><?php endif; ?>
       <?php if ($tel = pm_tel_link($l)): ?><a class="btn" href="<?= pm_h($tel) ?>">Call</a><?php endif; ?>
       <?php if (($l['status'] ?? '') === 'contacted' && !pm_lead_email_dead($l) && pm_agents_ready()): ?><form method="post"<?= empty($l['followup_draft']) ? '' : ' data-confirm="Write a new follow-up in place of the one shown?"' ?>><?= $post($id, 'followup_ai') ?><button class="btn" title="The Follow-up agent writes a follow-up for you to read; nothing is sent"><?= empty($l['followup_draft']) ? 'Draft follow-up with AI' : 'Draft a new follow-up' ?></button></form><?php endif; ?>
+      </div>
+      <div class="agrp" aria-label="Prepare the message">
       <form method="post"><?= $post($id, 'research') ?><button class="btn" title="Website, Facebook, Instagram, reviews and recent news"><?= empty($l['research']) ? 'Research' : 'Research again' ?></button></form>
       <?php if (empty($dr['email_body'])): ?><form method="post"><?= $post($id, 'draft_outreach') ?><button class="btn">Draft outreach</button></form><?php endif; ?>
       <?php if ($which === 'first' && in_array($l['status'], ['new', 'qualified', 'drafted'], true)): ?><form method="post"<?= !empty($dr['email_body']) ? ' data-confirm="Replace the draft with the default message?"' : '' ?>><?= $post($id, 'use_default') ?><button class="btn" title="The default email and WhatsApp message of this business, no AI (Sales > Targeting and messages), opening with the detail the study found about them">Use default message</button><?php if (pm_lead_personal($l) !== ''): ?><button class="btn" name="plain" value="1" title="The default message with its usual opening, without the personal detail">Plain default</button><?php endif; ?></form><?php endif; ?>
+      </div>
+      <div class="agrp" aria-label="More for this lead">
       <?php if (pm_brand_is_custom((string)($l['brand'] ?? ''))): $op = pm_onepager_status((string)$l['brand']); [$osub, $obody] = pm_onepager_default_mail($l); ?>
       <details class="more drop"><summary class="btn">One-page offer</summary>
         <div class="menu" style="min-width:280px">
@@ -350,6 +354,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
           <form method="post" onsubmit="return confirm('Forget this lead everywhere (privacy)? Their data is removed; signed history is anonymised.')"><?= $post($id, 'lead_forget') ?><button class="btn small danger">Forget lead (privacy)</button></form><?php endif; ?>
         </div>
       </details>
+      </div>
     </div>
   </div>
 </details>

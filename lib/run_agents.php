@@ -62,11 +62,16 @@ $progress = function (string $phase) use (&$run) {
     }
     $run['steps'] = 8;
     $run['phase'] = $phase;
+    unset($run['done'], $run['total']); // a new step: its own count of jobs
     $run['beat'] = time();
     pm_run_state($run);
 };
-$beat = function () use (&$run) { // heartbeat while workers are busy, so the dead-man check can tell "busy" from "dead"
+$beat = function (?int $done = null, ?int $total = null) use (&$run) { // heartbeat while workers are busy, so the dead-man check can tell "busy" from "dead"; with the step's jobs done, for the progress bar
     $run['beat'] = time();
+    if ($total) {
+        $run['done'] = $done;
+        $run['total'] = $total;
+    }
     pm_run_state($run);
 };
 pm_run_state($run);

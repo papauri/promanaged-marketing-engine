@@ -349,7 +349,7 @@ if (isset($_GET['runstatus'])) {
         }
     }
     header('Content-Type: application/json');
-    echo json_encode(['state' => $rs['state'] ?? 'idle', 'phase' => $rs['phase'] ?? '', 'step' => (int)($rs['step'] ?? 0), 'steps' => (int)($rs['steps'] ?? 7), 'new_leads' => $new]);
+    echo json_encode(['state' => $rs['state'] ?? 'idle', 'phase' => $rs['phase'] ?? '', 'step' => (int)($rs['step'] ?? 0), 'steps' => (int)($rs['steps'] ?? 7), 'done' => (int)($rs['done'] ?? 0), 'total' => (int)($rs['total'] ?? 0), 'new_leads' => $new]);
     exit;
 }
 
@@ -375,6 +375,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         pm_redirect($tab, 'Your session expired. Please try again.', 'err');
     }
     $action = $_POST['action'] ?? '';
+    if ($action === 'agents' && ($_POST['do'] ?? '') === 'delete_ticked') { // the leads list has one tick box per lead: its Delete ticked button is the admin's delete (checked just below)
+        $action = $_POST['action'] = 'admin_delete';
+        $_POST['what'] = 'leads';
+        $_POST['back'] = 'agents&status=' . preg_replace('/[^a-z_]/', '', (string)($_POST['rs'] ?? 'active'));
+    }
     register_shutdown_function(fn() => pm_ta_post_done((string)$action, $_POST, $vb)); // the activity log: who did what, and what the app said back (Audit department)
     if (($action === 'agents' && in_array($_POST['do'] ?? '', ['delete', 'lead_forget'], true)) || in_array($action, ['admin_delete', 'access', 'brand_create', 'brand_archive', 'brand_unhide', 'brand_delete', 'archive_restore', 'audit'], true) && !pm_user_is_admin()) {
         pm_redirect('home', 'Only an admin can do that.', 'err'); // accounts, adding or removing a business, restoring data, the audit
@@ -785,7 +790,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $n = pm_approve_for_send($leads, $ids);
             $when = pm_ss_parse((string)($_POST['send_after'] ?? '')); // optional: not before this time
             $when !== '' && pm_ss_set_after($leads, array_diff($ids, $was), $when);
-            $back($n . ' of ' . count($ids) . ' approved. They go out slowly in the sending hours' . ($when !== '' ? ', not before ' . $when : '') . ($n < count($ids) ? '; the rest need a verified email address and a clean draft.' : '.'), $n ? 'ok' : 'err');
+            $back($n . ' of ' . count($ids) . ' ticked email' . (count($ids) === 1 ? ' is' : 's are') . ' in the send queue. They go out one at a time in the sending hours' . ($when !== '' ? ', not before ' . $when : '') . ($n < count($ids) ? '; the rest need a verified email address and a clean draft.' : '.'), $n ? 'ok' : 'err');
         }
         if ($do === 'set_send_after') { // the send queue: give approved emails a "not before" time, or clear it
             $ids = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? []))));

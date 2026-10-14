@@ -41,7 +41,7 @@ function pm_swarm(array $jobs, int $parallel, string $tmp, ?callable $beat = nul
         foreach ($jobs as $i => $job) {
             $results[$i] = pm_agent_job($job + ['brand' => pm_brand()]);
             if ($beat) {
-                $beat();
+                $beat(count($results), count($jobs)); // jobs done of jobs, for the progress bar
             }
         }
         ksort($results);
@@ -54,6 +54,7 @@ function pm_swarm(array $jobs, int $parallel, string $tmp, ?callable $beat = nul
     $limit = max(5, (int)(pm_agents_config('promanaged')['worker_timeout'] ?? 240));
     $parallel = max(1, $parallel);
     $lastBeat = 0;
+    $lastDone = -1;
     while ($queue || $running) {
         while ($queue && count($running) < $parallel) {
             $i = array_shift($queue);
@@ -95,9 +96,10 @@ function pm_swarm(array $jobs, int $parallel, string $tmp, ?callable $beat = nul
             @unlink("$file.log");
             unset($running[$i]);
         }
-        if ($beat && time() - $lastBeat >= 10) {
-            $beat();
+        if ($beat && (time() - $lastBeat >= 10 || count($results) !== $lastDone)) { // a job finished: the progress bar moves now
+            $beat(count($results), count($jobs));
             $lastBeat = time();
+            $lastDone = count($results);
         }
         usleep(400000);
     }

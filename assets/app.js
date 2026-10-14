@@ -9,7 +9,7 @@
     lookup: 'Searching the web for this business',
     splan: 'Planning posts and drawing the pictures', publish: 'Publishing to Facebook', approve: 'Approving and drawing the picture', approve_all: 'Approving and drawing the pictures', approve_selected: 'Approving and drawing the pictures', hold: 'Holding back', request_approval: 'Sending for approval', request_changes: 'Sending the note', mark_posted: 'Saving', ig_url_test: 'Checking the Instagram picture address', redraw: 'Drawing the picture', draft_reply: 'Writing a reply', reply: 'Posting the reply', social_check: 'Checking the Facebook connection',
     kit: 'Making the profile pictures and covers', apply_profile: 'Updating the Facebook profile picture', apply_cover: 'Updating the Facebook cover',
-    research: 'Studying their website, social pages and the news',
+    research: 'Studying their website, social pages and the news (about a minute; wait here)',
     audit: 'Auditing the Facebook Page', judge: 'Checking everything people put on the Page', group: 'Working through the list on Facebook', item: 'Doing it on Facebook', playbook: 'Working out who to engage today', cleanup: 'Reviewing every post on the Page', cleanup_apply: 'Changing the Page', ads_plan: 'Planning targeted ads', ads_create: 'Creating the campaign in Ads Manager (paused)', autopilot_now: 'Running the autopilot', capture: 'Looking for buyers', profile_apply: 'Updating the Page profile', connect: 'Connecting to Facebook', draft_message: 'Writing an answer', message: 'Sending the answer', edit: 'Updating the post', delete: 'Deleting', delete_comment: 'Deleting the comment', hide: 'Hiding the comment', unhide: 'Showing the comment', like: 'Liking', unlike: 'Removing the like',
     run: 'Starting the agents', find_names: 'Starting the name search',
     polish: 'Writing a tailored proposal',
@@ -18,7 +18,7 @@
     paste_reply: 'Reading their reply',
     director: 'Reviewing the pipeline',
     refresh_models: 'Refreshing the model list',
-    attach_unmatched: 'Reading the reply', dismiss_unmatched: 'Dismissing', approve_send: 'Approving for sending', unapprove_send: 'Updating the send queue',
+    attach_unmatched: 'Reading the reply', dismiss_unmatched: 'Dismissing', approve_send: 'Putting the ticked emails in the send queue', delete_ticked: 'Deleting the ticked leads', unapprove_send: 'Updating the send queue',
     send: 'Sending the email', send_reply: 'Sending the reply', email: 'Creating the proposal and sending it',
     download: 'Creating the PDF', smtp_check: 'Logging in to the mail server',
     save_draft: 'Saving', save_reply: 'Saving', config: 'Saving', proposal: 'Preparing the proposal'
@@ -170,12 +170,12 @@
 
   document.addEventListener('change', function (e) {         // post selection: "select all" and the live count in the action bar
     var all = e.target.closest('[data-pick-all]');
-    var sel = all ? all.getAttribute('data-pick-all') : (e.target.matches('.sx-pick') ? '.sx-pick' : '');
+    var sel = all ? all.getAttribute('data-pick-all') : (e.target.matches('.sx-pick') ? '.sx-pick' : (e.target.matches('.lsel') ? '.lsel' : ''));
     if (!sel) return;
     if (all) document.querySelectorAll(sel).forEach(function (c) { c.checked = all.checked; });
     document.querySelectorAll('[data-pick-count]').forEach(function (n) {
       var k = document.querySelectorAll(n.getAttribute('data-pick-count') + ':checked').length;
-      n.textContent = k + ' selected';
+      n.textContent = k + (n.closest('.selbar') ? ' ticked' : ' selected');
       n.parentNode.classList.toggle('on', k > 0);
     });
   });
@@ -302,12 +302,16 @@
   // Live progress while the agents search.
   var rb = document.getElementById('runbar');
   if (rb && rb.dataset.running === '1') {
+    document.querySelectorAll('.leadlist.locked form button, .leadlist.locked form input[type=checkbox], .selbar.locked button, .selbar.locked input, .lsel').forEach(function (b) { // one job at a time: lead actions wait for the run
+      b.disabled = true; b.title = 'Wait for the agents to finish';
+    });
     var fill = document.getElementById('runfill'), sub = document.getElementById('runsub');
     var tick = function () {
       fetch('index.php?runstatus=1', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (s) {
         if (s.state !== 'running') { location.reload(); return; }
-        if (sub) sub.textContent = (s.phase || 'Working') + (s.new_leads ? ' · ' + s.new_leads + ' new leads so far' : '');
-        if (fill) fill.style.width = Math.max(6, Math.round(100 * (s.step || 0) / Math.max(1, s.steps || 7))) + '%';
+        if (sub) sub.textContent = (s.phase || 'Working') + (s.total ? ' · ' + s.done + ' of ' + s.total + ' done' : '') + (s.new_leads ? ' · ' + s.new_leads + ' new leads so far' : '');
+        var st = Math.max(1, s.steps || 7), part = s.total ? Math.min(1, (s.done || 0) / s.total) : 0; // inside a step, its jobs done move the bar on
+        if (fill) fill.style.width = Math.max(6, Math.round(100 * (Math.max(0, (s.step || 1) - 1) + part) / st)) + '%';
         setTimeout(tick, 2000);
       }).catch(function () { setTimeout(tick, 4000); });
     };
