@@ -361,65 +361,87 @@ function pm_ml_sent_to(string $brand, string $to, int $days = 365): array
 }
 
 /**
- * Reads the Sent folder of every business's mailbox (new messages only) and brings the leads up to date: a lead written to from the other copy of the app, or by hand,
- * is marked contacted here with the date and subject, so nobody writes to it again. Called by the replies check. Returns how many leads were updated.
+ * Compares the Sent folder of every business's mailbox (the whole last year, every time) with the leads: a lead written to from the other copy of the app, by hand, or before a
+ * data folder was copied over, is marked contacted with the date and subject (so it leaves Active and is never written to again) and put in the folder "Already contacted".
+ * Returns how many leads were newly marked contacted; $report says what was read, found, marked and filed.
  */
-function pm_ml_sync_sent(array &$leads): int
+function pm_ml_sync_sent(array &$leads, int $days = 365, ?array &$report = null): int
 {
+    $report = ['read' => 0, 'found' => [], 'marked' => [], 'foldered' => [], 'boxes' => []];
     if (!function_exists('pm_imap_boxes')) {
-        return 0;
+        require_once __DIR__ . '/engage.php';
     }
     $n = 0;
-    $st = pm_load('mail_state', fn() => []);
     foreach (pm_imap_boxes() as $box) {
         $brand = (string)($box['brands'][0] ?? 'promanaged');
         try {
             [$fp, $acct] = pm_ml_imap($brand);
             if (!$fp) {
+                $report['boxes'][] = $box['user'] . ': ' . $acct;
                 continue;
             }
             $name = pm_ml_sent_box($fp, $acct);
             if ($name === '' || !str_contains(pm_imap_cmd($fp, 'E2', 'EXAMINE "' . addcslashes($name, '"\\') . '"'), 'E2 OK')) {
+                $report['boxes'][] = $box['user'] . ': no Sent folder';
                 continue;
             }
-            $from = (int)($st['sent_uid'][$acct] ?? 0);
-            $res = pm_imap_cmd($fp, 'Q3', $from > 0 ? 'UID SEARCH UID ' . ($from + 1) . ':*' : 'UID SEARCH SINCE ' . date('d-M-Y', strtotime('-30 days')));
+            // the whole folder for the period, every time (no "already read" marker): a copied or restored data folder can never make the app forget who was emailed
+            $res = pm_imap_cmd($fp, 'Q3', 'UID SEARCH SINCE ' . date('d-M-Y', strtotime("-$days days")));
             preg_match('/\* SEARCH([\d ]*)/', $res, $m);
-            $uids = array_values(array_filter(array_map('intval', explode(' ', trim($m[1] ?? ''))), fn($u) => $u > $from));
+            $uids = array_slice(array_values(array_filter(array_map('intval', explode(' ', trim($m[1] ?? ''))))), -1500);
+            $report['boxes'][] = $box['user'] . ': ' . count($uids) . ' sent emails read';
+            $report['read'] += count($uids);
+            if (!$uids) {
+                continue;
+            }
             $byMail = [];
             foreach ($leads as $id => $l) {
-                if (in_array((string)($l['brand'] ?? 'promanaged'), (array)$box['brands'], true) && filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL)) {
-                    $byMail[strtolower((string)$l['email'])] = $id;
+                if (!in_array((string)($l['brand'] ?? 'promanaged'), (array)$box['brands'], true)) {
+                    continue;
                 }
-            }
-            $max = $from;
-            foreach (array_slice($uids, -200) as $k => $uid) {
-                $max = max($max, $uid);
-                $h = pm_imap_cmd($fp, 'H' . $k, "UID FETCH $uid (BODY.PEEK[HEADER.FIELDS (TO DATE SUBJECT)])");
-                preg_match_all('/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/', preg_match('/^To:\s*(.+(?:\r?\n[ \t].+)*)/mi', $h, $tm) ? $tm[1] : '', $am);
-                $at = preg_match('/^Date:\s*(.+)$/mi', $h, $dm) && ($t = strtotime(trim($dm[1]))) ? date('Y-m-d H:i', $t) : date('Y-m-d H:i');
-                $subj = preg_match('/^Subject:\s*(.+)$/mi', $h, $sm) ? mb_substr(trim(mb_decode_mimeheader($sm[1])), 0, 120) : '';
-                foreach (array_unique(array_map('strtolower', $am[0])) as $addr) {
-                    $id = $byMail[$addr] ?? null;
-                    if ($id === null || !empty($leads[$id]['sent']) || !in_array($leads[$id]['status'] ?? '', ['new', 'qualified', 'drafted'], true)) {
-                        continue; // not a lead, this copy already knows it was written to, or past the first email (a reply to their enquiry is not a cold email)
+                foreach (array_merge([(string)($l['email'] ?? '')], array_map('strval', (array)($l['alt_emails'] ?? []))) as $em) {
+                    if (filter_var($em, FILTER_VALIDATE_EMAIL)) {
+                        $byMail[strtolower($em)] = $id;
                     }
-                    $leads[$id]['sent'][] = $at;
-                    $leads[$id]['thread'][] = ['dir' => 'out', 'at' => $at, 'text' => '(Found in the Sent folder) ' . $subj];
-                    $leads[$id]['last_contacted'] = $leads[$id]['last_out'] = $at;
-                    $leads[$id]['status'] = 'contacted';
-                    unset($leads[$id]['approved_at'], $leads[$id]['send_after']);
-                    pm_lead_note($leads[$id], 'Marked contacted: an email to ' . $addr . ' on ' . $at . ' ("' . $subj . '") is in the Sent folder, sent from another copy of the app or by hand');
-                    $n++;
                 }
             }
-            if ($max > $from) {
-                pm_update('mail_state', function (array $d) use ($acct, $max) {
-                    $d['sent_uid'][$acct] = $max;
-                    return $d;
-                }, fn() => []);
+            $first = []; // lead id => the earliest email to it in the folder [at, subject]
+            foreach (array_chunk($uids, 300) as $ci => $chunk) {
+                $raw = pm_imap_cmd($fp, 'H' . $ci, 'UID FETCH ' . implode(',', $chunk) . ' (BODY.PEEK[HEADER.FIELDS (TO CC DATE SUBJECT)])');
+                foreach (preg_split('/\r?\n(?=\* \d+ FETCH )/', $raw) as $msg) {
+                    $tl = preg_match('/^To:\s*(.+(?:\r?\n[ \t].+)*)/mi', $msg, $tm) ? $tm[1] : '';
+                    $tl .= preg_match('/^Cc:\s*(.+(?:\r?\n[ \t].+)*)/mi', $msg, $cm) ? ' ' . $cm[1] : '';
+                    preg_match_all('/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/', $tl, $am);
+                    $at = preg_match('/^Date:\s*(.+)$/mi', $msg, $dm) && ($t = strtotime(trim($dm[1]))) ? date('Y-m-d H:i', $t) : '';
+                    $subj = preg_match('/^Subject:\s*(.+)$/mi', $msg, $sm) ? mb_substr(trim(mb_decode_mimeheader($sm[1])), 0, 120) : '';
+                    foreach (array_unique(array_map('strtolower', $am[0])) as $addr) {
+                        $id = $byMail[$addr] ?? null;
+                        if ($id !== null && $at !== '' && (!isset($first[$id]) || $at < $first[$id][0])) {
+                            $first[$id] = [$at, $subj, $addr];
+                        }
+                    }
+                }
+            }
+            foreach ($first as $id => [$at, $subj, $addr]) {
+                $report['found'][] = (string)$id;
+                if (function_exists('pm_folder_add') && !in_array('Already contacted', (array)($leads[$id]['folders'] ?? []), true)) {
+                    pm_folder_add($leads, [(string)$id], 'Already contacted', (string)($leads[$id]['brand'] ?? 'promanaged'));
+                    $report['foldered'][] = (string)$id;
+                }
+                if (!empty($leads[$id]['sent']) || !in_array($leads[$id]['status'] ?? '', ['new', 'qualified', 'drafted'], true)) {
+                    continue; // this copy already knows, or the lead is past the first email (a reply to their enquiry is not a cold email)
+                }
+                $leads[$id]['sent'][] = $at;
+                $leads[$id]['thread'][] = ['dir' => 'out', 'at' => $at, 'text' => '(Found in the Sent folder) ' . $subj];
+                $leads[$id]['last_contacted'] = $leads[$id]['last_out'] = $at;
+                $leads[$id]['status'] = 'contacted';
+                unset($leads[$id]['approved_at'], $leads[$id]['send_after']);
+                pm_lead_note($leads[$id], 'Marked contacted: an email to ' . $addr . ' on ' . $at . ' ("' . $subj . '") is in the Sent folder');
+                $report['marked'][] = (string)$id;
+                $n++;
             }
         } catch (Throwable $e) {
+            $report['boxes'][] = $box['user'] . ': ' . mb_substr($e->getMessage(), 0, 120);
             if (function_exists('pm_agent_log')) {
                 pm_agent_log('Email', 'Sent folder check failed for ' . $box['user'] . ': ' . $e->getMessage());
             }
@@ -750,8 +772,8 @@ function pm_ml_autosync(): int
             require_once __DIR__ . '/engage.php';
         }
         $leads = pm_leads();
-        $n = pm_ml_sync_sent($leads);
-        $n && pm_leads_save($leads);
+        $n = pm_ml_sync_sent($leads, 365, $rep);
+        ($n || !empty($rep['foldered'])) && pm_leads_save($leads);
         return $n;
     } catch (Throwable) {
         return 0;

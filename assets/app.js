@@ -11,7 +11,7 @@
     kit: 'Making the profile pictures and covers', apply_profile: 'Updating the Facebook profile picture', apply_cover: 'Updating the Facebook cover',
     research: 'Studying their website, social pages and the news (about a minute; wait here)',
     audit: 'Auditing the Facebook Page', judge: 'Checking everything people put on the Page', group: 'Working through the list on Facebook', item: 'Doing it on Facebook', playbook: 'Working out who to engage today', cleanup: 'Reviewing every post on the Page', cleanup_apply: 'Changing the Page', ads_plan: 'Planning targeted ads', ads_create: 'Creating the campaign in Ads Manager (paused)', autopilot_now: 'Running the autopilot', capture: 'Looking for buyers', profile_apply: 'Updating the Page profile', connect: 'Connecting to Facebook', draft_message: 'Writing an answer', message: 'Sending the answer', edit: 'Updating the post', delete: 'Deleting', delete_comment: 'Deleting the comment', hide: 'Hiding the comment', unhide: 'Showing the comment', like: 'Liking', unlike: 'Removing the like',
-    run: 'Starting the agents', find_names: 'Starting the name search',
+    run: 'Starting the agents', find_names: 'Starting the name search', sync: 'Comparing your Sent folders with the leads',
     polish: 'Writing a tailored proposal',
     check_replies: 'Checking your inbox for replies',
     draft_outreach: 'Writing the outreach',

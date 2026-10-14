@@ -393,9 +393,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($mlDo === 'sync') {
             @set_time_limit(120);
             $mlLeads = pm_leads();
-            $mlN = pm_ml_sync_sent($mlLeads);
-            $mlN && pm_leads_save($mlLeads);
-            pm_redirect('settings&section=email#sentlog', $mlN ? "$mlN lead" . ($mlN === 1 ? ' was' : 's were') . ' emailed from another copy of the app or by hand: now marked contacted here.' : 'The Sent folders were read: every lead emailed from them is already marked contacted here.');
+            $mlN = pm_ml_sync_sent($mlLeads, 365, $mlRep);
+            ($mlN || !empty($mlRep['foldered'])) && pm_leads_save($mlLeads);
+            pm_redirect((string)($_POST['back'] ?? '') === 'agents' ? 'agents&status=contacted' : 'settings&section=email#sentlog', 'Compared ' . (int)$mlRep['read'] . ' emails in the Sent folders with the leads: ' . count($mlRep['found']) . ' lead' . (count($mlRep['found']) === 1 ? ' was' : 's were') . ' emailed, ' . $mlN . ' of them newly marked contacted (out of Active), and all of them are in the folder "Already contacted".' . ($mlRep['boxes'] ? ' ' . implode('; ', $mlRep['boxes']) . '.' : ''));
         }
         pm_redirect('settings&section=email#sentlog');
     }
