@@ -2,7 +2,7 @@
 /**
  * Slow drip sender. Run every 15 minutes (schedule_agents.bat): sends AT MOST ONE owner-approved email per run,
  * only in the days and hours each business chose (default Mon-Fri 08:00-16:30), then waits about the business's own spacing (lib/sendschedule.php). Owner approval (approved_at) is the consent; no auto switch needed.
- * Stops at the warm-up daily cap and when the bounce breaker trips. Command line only.
+ * No daily limit: the owner decides. Also retries the Outbox (emails a server hiccup stopped). Command line only.
  */
 if (PHP_SAPI !== 'cli') {
     http_response_code(404);
@@ -23,18 +23,18 @@ $lock = @fopen(PM_DATA . '/send_due.lock', 'c');
 if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
     exit(0); // another run is in progress
 }
+if (function_exists('pm_ml_retry_due') && ($again = pm_ml_retry_due())) { // the Outbox: emails a server hiccup stopped are tried again by themselves
+    pm_agent_log('Sender', "$again email" . ($again === 1 ? '' : 's') . ' from the Outbox went on a new try');
+}
 $state = pm_ob_read('send_state');
 if ($now < (int)($state['next_send_at'] ?? 0)) {
     exit(0);
 }
 $leads = pm_leads();
 $br = pm_send_breaker($leads);
-if ($br['blocked']) {
-    if (($state['paused_note'] ?? '') !== $br['why']) { // say it once, not every 15 minutes
-        pm_agent_log('Sender', $br['why']);
-        pm_ob_update('send_state', function ($s) use ($br) { $s['paused_note'] = $br['why']; return $s; });
-    }
-    exit(0);
+if ($br['blocked'] && ($state['paused_note'] ?? '') !== $br['why']) { // advice, said once: the owner approved these emails, so they still go
+    pm_agent_log('Sender', $br['why']);
+    pm_ob_update('send_state', function ($s) use ($br) { $s['paused_note'] = $br['why']; return $s; });
 }
 
 $cands = [];
@@ -43,9 +43,7 @@ foreach (pm_brand_ids() as $b) {
     if (!pm_send_window($now, $b)) {
         continue; // this business is closed for sending now (its own days and hours, or paused)
     }
-    if (pm_sent_today($leads) >= pm_effective_send_cap(pm_agents_config())) {
-        continue; // today's (warm-up) limit for this brand is used up
-    }
+
     foreach (pm_send_queue($leads, $b) as $id => $l) {
         if (pm_ss_due($l, $now)) { // an email told to wait for a time waits for it
             $cands[] = [$id, (int)($l['score'] ?? 0)];

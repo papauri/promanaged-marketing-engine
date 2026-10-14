@@ -423,6 +423,7 @@ try {
     // Order: replies asking for a proposal, follow-ups due today, today's first messages, leads still missing an email and a phone, then the best new leads. Web search, so inside the day's allowance.
     try { // what is happening where we sell (forex, fuel, the season...): one short web call a week, read by the study and every writer
         pm_market_pulse($brand, true);
+        function_exists('pm_send_advice_refresh') && pm_send_advice_refresh($brand); // the sending advice reads the latest numbers (one small call, only when they changed)
     } catch (Throwable) {
     }
     $unstudied = fn($l) => empty($l['research']['at']) || (strtotime((string)$l['research']['at']) ?: 0) < strtotime('-60 days');

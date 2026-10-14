@@ -137,7 +137,7 @@ function pm_home_data(string $brand): array
             'ops' => ['ai' => pm_agents_ready(), 'scheduler_age' => function_exists('pm_social_heartbeat_age') ? pm_social_heartbeat_age() : null, 'mail' => $okOf('smtp_' . $brand), 'imap' => $okOf('imap_' . $brand),
                 'essentials_ok' => $hOk, 'essentials' => $hNeed, 'businesses' => count(pm_brand_ids())],
             'activity' => pm_home_activity($brand),
-            'today' => ['sent' => (int)$ps['sent_today'], 'cap' => function_exists('pm_effective_send_cap') ? pm_effective_send_cap($cfg) : (int)($cfg['send_cap'] ?? 0), 'queue' => $queue,
+            'today' => ['sent' => (int)$ps['sent_today'], 'cap' => (int)($cfg['send_cap'] ?? 0), 'queue' => $queue, // cap: the day's plan, not a limit
                 'next' => $next ? pm_ss_fmt($next) : ($queue ? 'paused' : ''), 'wa' => pm_wa_sent_today($mine), 'wa_cap' => (int)($cfg['wa_cap'] ?? 0), 'posts' => $postsToday,
                 'pb_done' => ($pb['day'] ?? '') === $today ? count(array_filter((array)$pb['tasks'], fn($t) => !empty($t['done']))) : 0, 'pb_total' => ($pb['day'] ?? '') === $today ? count((array)$pb['tasks']) : 0,
                 'people' => $waitingPeople, 'goal' => pm_firm_goal($brand), 'ai' => pm_usage_brand_today($brand), 'ai_budget' => pm_budget(), 'memory' => $cacheHits],

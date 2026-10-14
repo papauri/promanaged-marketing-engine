@@ -79,7 +79,13 @@ function pm_ml_begin(array $s, array $m, string $key): string
         'to' => strtolower(trim((string)($m['to'] ?? ''))), 'cc' => (string)($m['cc'] ?? ''), 'subject' => mb_substr((string)($m['subject'] ?? ''), 0, 200),
         'from' => (string)(($s['smtp']['from_email'] ?? '') ?: ($s['smtp']['username'] ?? '')), 'key' => $key, 'status' => 'sending',
         'by' => (string)($GLOBALS['PM_WHO'] ?? (PHP_SAPI === 'cli' ? 'scheduler' : ''))];
-    pm_ml_write(function (array $rows) use ($row) {
+    pm_ml_write(function (array $rows) use (&$row) {
+        foreach ($rows as $i => $r) { // an earlier failed try of the same email leaves the Outbox: this try replaces it
+            if (($r['key'] ?? '') === $row['key'] && ($r['status'] ?? '') === 'failed' && empty($r['resolved'])) {
+                $rows[$i]['resolved'] = 'tried again ' . date('Y-m-d H:i');
+                $row['tries'] = max((int)($row['tries'] ?? 0), (int)($r['tries'] ?? 0));
+            }
+        }
         $rows[] = $row;
         return $rows;
     });
@@ -154,6 +160,42 @@ function pm_ml_mark_bounce(string $addr, string $kind, string $why = ''): void
         }
         return $rows;
     });
+}
+
+/**
+ * Can the copy of a sent email go into the Sent folder (so no extra copy to the inbox is needed)? Yes when an inbox login is set up and the last try to save worked.
+ */
+function pm_ml_can_save_sent(string $brand): bool
+{
+    if (strtolower((string)(pm_env()['MAIL_SAVE_SENT'] ?? 'on')) === 'off') {
+        return false;
+    }
+    if (!function_exists('pm_imap_settings')) {
+        require_once __DIR__ . '/engage.php';
+    }
+    $c = pm_imap_settings($brand);
+    if ($c['host'] === '' || $c['user'] === '' || $c['pass'] === '') {
+        return false;
+    }
+    $ok = pm_load('mail_state', fn() => [])['save_ok'][strtolower($c['host'] . '|' . $c['user'])] ?? true; // until a save fails, trust it
+    return (bool)$ok;
+}
+
+/** Remembers whether saving to the Sent folder worked for a mailbox (when it does not, the inbox copy is used again). */
+function pm_ml_save_result(string $brand, bool $ok): void
+{
+    if (!function_exists('pm_imap_settings')) {
+        return;
+    }
+    $c = pm_imap_settings($brand);
+    $acct = strtolower($c['host'] . '|' . $c['user']);
+    try {
+        pm_update('mail_state', function (array $d) use ($acct, $ok) {
+            $d['save_ok'][$acct] = $ok;
+            return $d;
+        }, fn() => []);
+    } catch (Throwable) {
+    }
 }
 
 /* ---------------- the mailbox's own Sent folder (IMAP) ---------------- */
@@ -401,4 +443,213 @@ function pm_ml_summary(string $brand = ''): array
         }
     }
     return $c;
+}
+
+/* ---------------- advice instead of limits ---------------- */
+
+/** The numbers behind the sending advice, from what really happened (the email log, the leads and the domain check). */
+function pm_send_facts(string $brand): array
+{
+    $rows = array_filter(pm_ml_rows(), fn($r) => ($r['brand'] ?? '') === $brand && !in_array($r['kind'] ?? '', ['test', 'notify'], true));
+    $age = fn($r) => time() - (int)strtotime((string)$r['at']);
+    $sent = array_filter($rows, fn($r) => in_array($r['status'] ?? '', ['sent', 'bounced'], true));
+    $first = $sent ? min(array_map(fn($r) => (int)strtotime((string)$r['at']), $sent)) : 0;
+    $days = $first ? max(1, (int)ceil((time() - $first) / 86400)) : 0;
+    $today = count(array_filter($sent, fn($r) => substr((string)$r['at'], 0, 10) === date('Y-m-d')));
+    $d14 = array_filter($sent, fn($r) => $age($r) < 14 * 86400);
+    $bounced = count(array_filter($d14, fn($r) => ($r['status'] ?? '') === 'bounced' && ($r['bounce'] ?? '') !== 'auth'));
+    $replied = 0;
+    $sent30 = 0;
+    foreach (pm_leads_read() as $l) {
+        $last = (array)($l['sent'] ?? []);
+        if (($l['brand'] ?? 'promanaged') !== $brand || !$last || strtotime((string)end($last)) < strtotime('-30 days')) {
+            continue;
+        }
+        $sent30++;
+        $replied += function_exists('pm_lead_replied') && pm_lead_replied($l) ? 1 : 0;
+    }
+    $prev = $days > 1 ? (count($sent) - $today) / max(1, $days - 1) : 0;
+    $s = pm_settings();
+    $auth = function_exists('pm_email_auth_check') ? pm_email_auth_check(pm_email_domain((string)(($s['smtp']['from_email'] ?? '') ?: ($s['email'] ?? '')))) : ['checked' => false];
+    return ['sent_today' => $today, 'average_per_day_before' => round($prev, 1), 'days_sending' => $days, 'sent_14d' => count($d14), 'bounced_14d' => $bounced,
+        'bounce_rate_14d' => count($d14) ? round(100 * $bounced / count($d14), 1) : 0, 'emailed_30d' => $sent30, 'replied_30d' => $replied,
+        'outbox' => count(array_filter($rows, fn($r) => in_array($r['status'] ?? '', ['failed', 'unknown'], true) && empty($r['resolved']))),
+        'not_in_sent_folder_7d' => count(array_filter($sent, fn($r) => $age($r) < 7 * 86400 && str_starts_with((string)($r['sent_folder'] ?? ''), 'not'))),
+        'spf' => !empty($auth['checked']) ? $auth['spf']['status'] : 'unknown', 'dkim' => !empty($auth['checked']) ? $auth['dkim']['status'] : 'unknown'];
+}
+
+/** What the numbers say, in plain words (code, no AI): the fallback, and what the AI is given. */
+function pm_send_advice_plain(array $f): array
+{
+    $out = [];
+    if ($f['spf'] !== 'ok' && $f['dkim'] !== 'ok' && $f['spf'] !== 'unknown') {
+        $out[] = 'Gmail refuses mail from a domain whose SPF and DKIM both fail: fix that first (Operations > Email), or most of what you send is lost.';
+    }
+    if ($f['sent_14d'] >= 10 && $f['bounce_rate_14d'] >= 3) {
+        $out[] = "{$f['bounced_14d']} of the last {$f['sent_14d']} emails bounced ({$f['bounce_rate_14d']}%). Mail providers start filtering a sender whose bounces climb: check the addresses before sending more.";
+    }
+    if ($f['days_sending'] > 0 && $f['days_sending'] < 21 && $f['sent_today'] > max(20, 3 * $f['average_per_day_before'])) {
+        $out[] = "{$f['sent_today']} emails today from a mailbox that has sent for {$f['days_sending']} days (about {$f['average_per_day_before']} a day before). A sudden jump can look like bulk mail to Gmail; it is your call, and spreading them over a few days is safer.";
+    }
+    if ($f['emailed_30d'] >= 15 && $f['replied_30d'] === 0) {
+        $out[] = "No replies yet from {$f['emailed_30d']} businesses emailed in 30 days: the opening or subject may need a different angle before sending more of the same.";
+    }
+    if ($f['outbox'] > 0) {
+        $out[] = "{$f['outbox']} email" . ($f['outbox'] === 1 ? ' is' : 's are') . ' in the Outbox because they did not go: see the Outbox on the Leads page.';
+    }
+    if ($f['not_in_sent_folder_7d'] > 0) {
+        $out[] = "{$f['not_in_sent_folder_7d']} sent email" . ($f['not_in_sent_folder_7d'] === 1 ? ' is' : 's are') . ' not in the Sent folder: Operations > Email shows why.';
+    }
+    return $out;
+}
+
+function pm_send_advice_sig(array $f): string
+{
+    return sha1(json_encode([$f['sent_today'] >= 20 ? intdiv($f['sent_today'], 10) : 0, $f['bounced_14d'], $f['outbox'], $f['replied_30d'], intdiv($f['emailed_30d'], 5), $f['spf'], $f['dkim'], date('Y-m-d')]));
+}
+
+/** The advice to show: the AI's reading when it was made for these numbers, else the plain one. Never asks the AI (no AI on a page load). */
+function pm_send_advice(string $brand): array
+{
+    $f = pm_send_facts($brand);
+    $saved = (array)(pm_load('mail_state', fn() => [])['advice'][$brand] ?? []);
+    if (($saved['sig'] ?? '') === pm_send_advice_sig($f) && !empty($saved['lines'])) {
+        return ['lines' => (array)$saved['lines'], 'ai' => true, 'facts' => $f];
+    }
+    return ['lines' => pm_send_advice_plain($f), 'ai' => false, 'facts' => $f];
+}
+
+/**
+ * The AI reads the numbers and advises: one small cheap call, only when the numbers changed, after a send or in the morning run (never on a page load).
+ * The advice never stops a send: the owner decides.
+ */
+function pm_send_advice_refresh(string $brand): void
+{
+    if (!function_exists('pm_agents_ready') || !(pm_agents_ready() || isset($GLOBALS['PM_AI_STUB']))) {
+        return;
+    }
+    $f = pm_send_facts($brand);
+    $sig = pm_send_advice_sig($f);
+    if ((pm_load('mail_state', fn() => [])['advice'][$brand]['sig'] ?? '') === $sig) {
+        return; // the same numbers: the same advice, no AI call
+    }
+    try {
+        $sys = 'You are an email deliverability adviser for a small business that sends cold first emails one at a time from its own mailbox. The owner decides how many to send; you never set a limit. '
+            . 'From the numbers, give 1 to 3 short, specific pieces of advice (each one sentence, plain words, quoting the numbers that matter). If nothing is worrying, say so in one line. Never invent a number. JSON only.';
+        $out = pm_agent_json(pm_claude($sys, json_encode(['numbers' => $f, 'what_the_rules_see' => pm_send_advice_plain($f)], JSON_UNESCAPED_UNICODE) . "\nJSON: {\"advice\":[\"\"]}", false, 300, 'cheap'));
+        $lines = array_values(array_filter(array_map(fn($x) => mb_substr(trim(strip_tags((string)$x)), 0, 300), (array)($out['advice'] ?? []))));
+        if ($lines) {
+            pm_update('mail_state', function (array $d) use ($brand, $sig, $lines) {
+                $d['advice'][$brand] = ['sig' => $sig, 'lines' => array_slice($lines, 0, 3), 'at' => date('Y-m-d H:i')];
+                return $d;
+            }, fn() => []);
+        }
+    } catch (Throwable) {
+        // the plain advice is shown instead
+    }
+}
+
+/* ---------------- the Outbox: emails that did not go ---------------- */
+
+/** Emails that did not go (failed, or stopped half-way) and were not dealt with: newest first. */
+function pm_ml_outbox(string $brand = ''): array
+{
+    pm_ml_settle();
+    return array_values(array_filter(pm_ml_rows(), fn($r) => ($brand === '' || ($r['brand'] ?? '') === $brand) && in_array($r['status'] ?? '', ['failed', 'unknown'], true)
+        && empty($r['resolved']) && !in_array($r['kind'] ?? '', ['test', 'notify'], true)));
+}
+
+/** Is a failure worth trying again by itself (a server or connection hiccup), or does it need a person (a refused address, a login, a domain problem)? */
+function pm_ml_transient(string $err): bool
+{
+    return (bool)preg_match('/connect|timed? ?out|temporar|try again|\b4\d\d\b|busy|reset by peer|could not reach|unavailable|greylist/i', $err)
+        && !preg_match('/authenticat|password|5\.7\.|not sent twice|already sent|stopped half-way/i', $err);
+}
+
+/** Marks an Outbox row as dealt with (sent again, or discarded). */
+function pm_ml_resolve(string $id, string $how): void
+{
+    pm_ml_write(function (array $rows) use ($id, $how) {
+        foreach ($rows as $i => $r) {
+            if (($r['id'] ?? '') === $id) {
+                $rows[$i]['resolved'] = $how . ' ' . date('Y-m-d H:i');
+                if (($r['status'] ?? '') === 'unknown') {
+                    $rows[$i]['status'] = 'failed';
+                }
+            }
+        }
+        return $rows;
+    });
+}
+
+/**
+ * Tries one Outbox email again: a lead's first email, follow-up or win-back through the normal send (every check, the current draft); any other email with the words it
+ * had. Returns [ok, message].
+ */
+function pm_ml_retry(string $id): array
+{
+    $row = null;
+    foreach (pm_ml_rows() as $r) {
+        if (($r['id'] ?? '') === $id) {
+            $row = $r;
+            break;
+        }
+    }
+    if (!$row || !empty($row['resolved'])) {
+        return [false, 'That email is no longer in the Outbox.'];
+    }
+    if (($row['status'] ?? '') === 'unknown') {
+        return [false, 'It is not known whether this one went out. Look in the Sent folder first; if it is not there, press "It did not go", then try again.'];
+    }
+    $was = pm_brand();
+    pm_brand_set((string)($row['brand'] ?? $was));
+    try {
+        $lead = (string)($row['lead'] ?? '');
+        if ($lead !== '' && in_array($row['kind'] ?? '', ['first', 'followup', 'winback'], true)) {
+            $leads = pm_leads();
+            if (!isset($leads[$lead])) {
+                return [false, 'That lead no longer exists.'];
+            }
+            $res = pm_send_first($leads, $lead, ['first' => 'drafts', 'followup' => 'followup_draft', 'winback' => 'winback_draft'][$row['kind']]);
+            if (!empty($res['ok'])) {
+                pm_leads_save($leads);
+                pm_ml_resolve($id, 'sent again');
+            }
+            return [!empty($res['ok']), (string)$res['msg']];
+        }
+        $m = (array)($row['payload'] ?? []);
+        if (!$m || empty($m['to'])) {
+            return [false, 'This email cannot be rebuilt here: send it again from where it was written.'];
+        }
+        [$ok, $err] = array_pad(pm_mail(pm_settings(), $m), 2, '');
+        $ok && pm_ml_resolve($id, 'sent again');
+        return [(bool)$ok, $ok ? 'Sent again to ' . $m['to'] . '.' : 'Still not sent: ' . (function_exists('pm_mail_fail') ? pm_mail_fail(pm_settings(), (string)$err) : $err)];
+    } finally {
+        pm_brand_set($was);
+    }
+}
+
+/** The scheduler tries the Outbox again by itself, for hiccups only: up to 3 tries, waiting 15 minutes, then 1 hour, then 4 hours. Returns how many went. */
+function pm_ml_retry_due(): int
+{
+    $n = 0;
+    foreach (pm_ml_outbox() as $r) {
+        $tries = (int)($r['tries'] ?? 0);
+        $wait = [900, 3600, 14400][$tries] ?? null;
+        if ($wait === null || ($r['status'] ?? '') !== 'failed' || !pm_ml_transient((string)($r['err'] ?? '')) || time() - (int)strtotime((string)($r['done'] ?? $r['at'])) < $wait) {
+            continue;
+        }
+        pm_ml_write(function (array $rows) use ($r) {
+            foreach ($rows as $i => $x) {
+                if (($x['id'] ?? '') === $r['id']) {
+                    $rows[$i]['tries'] = (int)($x['tries'] ?? 0) + 1;
+                    $rows[$i]['done'] = date('Y-m-d H:i:s');
+                }
+            }
+            return $rows;
+        });
+        [$ok] = pm_ml_retry((string)$r['id']);
+        $n += $ok ? 1 : 0;
+    }
+    return $n;
 }

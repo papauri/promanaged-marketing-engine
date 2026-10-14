@@ -216,9 +216,7 @@ function pm_send_postsign(array &$leads, string $id, string $which, ?callable $m
         if (function_exists('pm_suppressed') && pm_suppressed($leads, $email, $id)) {
             return $no('That address or company asked not to be contacted.');
         }
-        if (function_exists('pm_send_breaker') && ($b = pm_send_breaker())['blocked']) {
-            return $no($b['why']);
-        }
+
         $settings = pm_settings();
         $subject = pm_postsign_subject($which, (string)$settings['company_name']);
         $lint = array_values(array_filter(pm_outreach_lint($subject, $body, false), fn($x) => !str_starts_with($x, 'The message is'))); // a short thank-you is fine

@@ -294,18 +294,7 @@ function pm_verify_email(string $email, string $website = '', bool $fetch = true
 /** Daily cap that ramps with the age of the mailbox's sending: 3 on day 0, +2 a week, never above the configured send_cap. Then nudged by the trailing bounce rate (adaptive). */
 function pm_effective_send_cap(array $cfg): int
 {
-    if (!empty($cfg['no_limit'])) { // the owner's choice (Sales > Targeting > Limits per day): no daily limit and no warm-up
-        return 100000;
-    }
-    $cap = (int)($cfg['send_cap'] ?? 10);
-    $st = pm_ob_read('send_stats');
-    $fs = (string)($st['brands'][pm_brand()]['first_send'] ?? '');
-    $days = $fs === '' ? 0 : max(0, (int)floor((strtotime(date('Y-m-d')) - strtotime($fs)) / 86400));
-    $base = max(0, min($cap, 3 + 2 * intdiv($days, 7)));
-    if (function_exists('pm_adaptive_send_cap')) { // MARKETING.md MG-G02: bounce-aware drift within the ceiling
-        return pm_adaptive_send_cap($base, pm_brand());
-    }
-    return $base;
+    return 100000; // the owner decides how many emails go out: no daily limit, no warm-up. pm_send_advice() says what the numbers suggest instead.
 }
 
 function pm_send_stats_mark(): void
@@ -572,6 +561,9 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     if (($lead['status'] ?? '') === 'optout') {
         return $no(($lead['name'] ?? 'This business') . ' asked not to be contacted.');
     }
+    if ($which === 'drafts' && !empty($lead['sent'])) {
+        return $no(($lead['name'] ?? 'This business') . ' already had its first email on ' . (string)end($lead['sent']) . ': it is not sent twice. Use a follow-up instead.');
+    }
     if ($which === 'drafts' && !in_array($lead['status'] ?? '', ['new', 'qualified', 'drafted'], true)) {
         return $no(($lead['name'] ?? 'This business') . ' is past the cold first email (they wrote back, have a proposal, or the lead is closed): answer them personally instead.');
     }
@@ -581,15 +573,12 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     if ($which === 'drafts' && pm_lead_is_client($lead)) {
         return $no(($lead['name'] ?? 'This business') . ' is already a client: message them personally, not with a cold email.');
     }
+    $advice = []; // never a limit: said with the result, the owner decides
     if (($b = pm_send_breaker())['blocked']) {
-        return $no($b['why'], 'breaker');
+        $advice[] = $b['why'];
     }
     if (($why = pm_send_auth_block()) !== '') {
-        return $no($why, 'breaker');
-    }
-    $cap = pm_effective_send_cap($cfg);
-    if (pm_sent_today($leads) >= $cap) {
-        return $no("You have reached today's limit of $cap emails (it rises each week as the mailbox warms up; the most you allowed is {$cfg['send_cap']}).", 'cap');
+        $advice[] = $why;
     }
     $email = trim((string)($lead['email'] ?? ''));
     if (empty($d['email_body']) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -604,14 +593,14 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     if ($which === 'drafts' && !empty($lead['sent'])) {
         return $no('You have already sent this business a first email. Use a follow-up instead.');
     }
-    if ($which !== 'drafts' && ($t = pm_lead_other_touch(pm_load('leads', fn() => [])[$id] ?? $lead))) { // a teammate already wrote to them today
-        return $no(pm_lead_other_touch_msg($lead, $t));
+    if ($which !== 'drafts' && ($t = pm_lead_other_touch(pm_load('leads', fn() => [])[$id] ?? $lead))) { // a teammate already wrote to them today: said, not stopped
+        $advice[] = $t[0] . ' also wrote to ' . ($lead['name'] ?? 'them') . ' ' . $t[2] . ' ' . $t[1] . '.';
     }
     if (!($v = pm_verify_email($email, (string)($lead['website'] ?? ''), false))['ok']) {
         return $no('Not sent: ' . $v['why']);
     }
     if (($who = pm_company_contacted_with($leads, $lead, 7)) !== null) {
-        return $no("This company was already contacted this week ($who). Wait a week so one company is not contacted twice.");
+        $advice[] = "This company was also contacted this week ($who).";
     }
     if ($problems = pm_outreach_lint((string)($d['email_subject'] ?? ''), (string)$d['email_body'], $which === 'drafts')) {
         return $no('Not sent. ' . implode(' ', $problems) . ' Edit the draft and try again.');
@@ -699,7 +688,7 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
 ", FILE_APPEND);
         return pm_ob_res(false, 'The email to ' . ($lead['name'] ?? 'the lead') . ' WAS sent, but the app could not save that (' . mb_substr($e->getMessage(), 0, 120) . '). Do NOT send it again. Check that the data folder is writable (Operations > Health), then mark the lead contacted by hand.', 'smtp');
     }
-    return pm_ob_res(true, 'Sent to ' . ($lead['name'] ?? 'the lead') . '.', 'ok');
+    return pm_ob_res(true, 'Sent to ' . ($lead['name'] ?? 'the lead') . '.' . ($advice ? ' Note: ' . implode(' ', array_unique($advice)) : ''), 'ok');
 }
 
 /** Owner approves drafts for the slow drip: only drafted/qualified leads with a valid, verified address and a clean draft. Returns how many were approved. */

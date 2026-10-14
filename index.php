@@ -592,7 +592,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ctxS = preg_match('/^[a-z]+$/', (string)($_POST['rs'] ?? '')) ? $_POST['rs'] : '';
         $ctxT = (string)($_POST['rt'] ?? '');
         $keep = ($ctxS !== '' ? '&status=' . $ctxS : '') . ($ctxT !== '' ? '&type=' . urlencode($ctxT) : '') . ((int)($_POST['rp'] ?? 0) > 1 ? '&p=' . (int)$_POST['rp'] : '')
-            . (preg_match('/^(&(q|city|has|min|sort)=[A-Za-z0-9%._+-]*)*$/', (string)($_POST['rf'] ?? '')) ? (string)($_POST['rf'] ?? '') : ''); // the other filters of the list
+            . (preg_match('/^(&(q|city|has|min|sort|folder)=[A-Za-z0-9%._+-]*)*$/', (string)($_POST['rf'] ?? '')) ? (string)($_POST['rf'] ?? '') : ''); // the other filters of the list
         $back = function (string $m = '', string $k = 'ok') use (&$id, $do, $keep) {
             if (($_POST['bt'] ?? '') === 'whatsapp') {
                 pm_redirect('whatsapp', $m, $k);
@@ -600,11 +600,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (in_array($_POST['bt'] ?? '', ['targeting', 'home', 'ops'], true)) { // the page the button was on
                 pm_redirect(['home' => 'home', 'ops' => 'settings&section=connections'][$_POST['bt']] ?? 'targeting', $m, $k);
             }
-            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after', 'dismiss_unmatched'], true);
+            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after', 'dismiss_unmatched', 'folder_add', 'folder_remove', 'folder_rename', 'folder_delete', 'outbox_retry', 'outbox_discard'], true);
             if ($id !== '' && !$noLead) {
                 pm_redirect(!empty($_POST['rl']) ? 'agents&lead=' . $id : 'agents' . $keep . '&at=' . rawurlencode($id) . '#l' . $id, $m, $k); // at= opens the page of the list that holds the lead
             }
-            pm_redirect('agents' . (in_array($do, ['delete', 'plan', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after'], true) ? $keep : ''), $m, $k);
+            pm_redirect('agents' . (in_array($do, ['delete', 'plan', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after', 'folder_add', 'folder_remove', 'outbox_retry', 'outbox_discard'], true) ? $keep : ''), $m, $k);
         };
 
         if ($do === 'run') {
@@ -783,28 +783,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $back($msg);
         }
-        if ($do === 'send_now') { // the ticked first emails, sent now one after another, each with every check a single Send has (limit, STOP, bounces, wording)
-            $ids = array_slice(array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? [])))), 0, 25);
+        if (in_array($do, ['folder_add', 'folder_remove', 'folder_rename', 'folder_delete'], true)) { // the owner's own folders of leads (lib/leadfolders.php)
+            $fIds = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? []))));
+            $fb = pm_brand();
+            if ($do === 'folder_add') {
+                $fName = pm_folder_name((string)($_POST['folder_new'] ?? '')) ?: pm_folder_name((string)($_POST['folder_to'] ?? ''));
+                if ($fName === '' || !$fIds) {
+                    $back($fName === '' ? 'Choose a folder or type a new folder name.' : 'Tick the leads first.', 'err');
+                }
+                $fn = pm_folder_add($leads, $fIds, $fName, $fb);
+                pm_leads_save($leads);
+                $back("$fn lead" . ($fn === 1 ? '' : 's') . " put in the folder \"$fName\".");
+            }
+            if ($do === 'folder_remove') {
+                $fName = (string)($_POST['folder_to'] ?? '');
+                $fn = pm_folder_remove($leads, $fIds, $fName);
+                $fn && pm_leads_save($leads);
+                $back($fn ? "$fn lead" . ($fn === 1 ? '' : 's') . " taken out of \"$fName\"." : 'None of the ticked leads were in that folder.', $fn ? 'ok' : 'err');
+            }
+            $fFrom = (string)($_POST['folder_from'] ?? '');
+            $fTo = $do === 'folder_delete' ? '' : pm_folder_name((string)($_POST['folder_new'] ?? ''));
+            if ($fFrom === '' || ($do === 'folder_rename' && $fTo === '')) {
+                $back('Type the new name first.', 'err');
+            }
+            pm_folder_rename($leads, $fb, $fFrom, $fTo);
+            pm_leads_save($leads);
+            pm_redirect('agents', $do === 'folder_delete' ? "The folder \"$fFrom\" was deleted; its leads are still in the list." : "Renamed to \"$fTo\".");
+        }
+        if ($do === 'outbox_retry' || $do === 'outbox_discard') { // the Outbox: an email that did not go is sent again, or put aside
+            $obId = (string)($_POST['ob'] ?? '');
+            if ($do === 'outbox_discard') {
+                pm_ml_resolve($obId, 'put aside by ' . ((string)($GLOBALS['PM_WHO'] ?? '') ?: 'the owner'));
+                $back('Taken out of the Outbox.');
+            }
+            @set_time_limit(120);
+            [$obOk, $obMsg] = pm_ml_retry($obId);
+            function_exists('pm_send_advice_refresh') && pm_send_advice_refresh(pm_brand());
+            $back($obMsg, $obOk ? 'ok' : 'err');
+        }
+        if ($do === 'send_now') { // the ticked first emails, sent now one after another, each with every check a single Send has (STOP, bounces, wording, never twice); no daily limit
+            $ids = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? [])))); // as many as were ticked: the owner decides
             if (!$ids) {
                 $back('Tick the leads first.', 'err');
             }
-            @set_time_limit(300);
+            @set_time_limit(0);
+            @ignore_user_abort(true); // a long batch finishes even if the browser stops waiting
             $sent = 0;
             $why = [];
+            $notes = [];
             foreach ($ids as $i2) {
                 $res = pm_send_first($leads, $i2, 'drafts');
                 if (!empty($res['ok'])) {
                     $sent++;
                     unset($leads[$i2]['awaiting_reply_since'], $leads[$i2]['approved_at'], $leads[$i2]['send_after']);
                     pm_leads_save($leads); // saved after each one: a stop half-way never loses what went out
+                    if (str_contains((string)$res['msg'], ' Note: ')) {
+                        $notes[] = substr((string)$res['msg'], strpos((string)$res['msg'], ' Note: ') + 7);
+                    }
                     continue;
                 }
                 $why[] = ($leads[$i2]['name'] ?? 'A lead') . ': ' . $res['msg'];
-                if (in_array($res['kind'] ?? '', ['cap', 'breaker', 'smtp'], true)) { // the limit, the safety stop or the mail server: the rest would fail the same way
+                if (($res['kind'] ?? '') === 'smtp') { // the mail server refused: the rest would fail the same way (they wait in the Outbox)
                     break;
                 }
             }
-            $back($sent . ' of ' . count($ids) . ' email' . (count($ids) === 1 ? '' : 's') . ' sent now.' . ($why ? ' Not sent: ' . implode(' ', array_slice($why, 0, 3)) . (count($why) > 3 ? ' And ' . (count($why) - 3) . ' more.' : '') : ''), $sent ? 'ok' : 'err');
+            function_exists('pm_send_advice_refresh') && pm_send_advice_refresh(pm_brand()); // the advice reads the new numbers
+            $back($sent . ' of ' . count($ids) . ' email' . (count($ids) === 1 ? '' : 's') . ' sent now.' . ($why ? ' Not sent: ' . implode(' ', array_slice($why, 0, 3)) . (count($why) > 3 ? ' And ' . (count($why) - 3) . ' more (see the Outbox).' : '') : '') . ($notes ? ' Note: ' . implode(' ', array_slice(array_unique($notes), 0, 2)) : ''), $sent ? 'ok' : 'err');
         }
         if ($do === 'approve_send' || $do === 'unapprove_send') {
             $ids = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? []))));

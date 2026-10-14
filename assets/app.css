@@ -928,3 +928,13 @@ details.lead > summary .who { flex:1 1 auto; min-width:0; }
 @media (max-width:760px) { .filters .typesel { flex-wrap:wrap; margin-left:0; width:100%; } .filters .typesel input[type=search] { flex:1 1 140px; width:auto; } }
 .filters .typesel { flex-wrap:wrap; width:100%; margin:var(--s-2) 0 0; justify-content:flex-start; } .filters .typesel select { max-width:200px; }
 .leadlist.dense details.lead { margin-bottom:4px; } .leadlist.dense details.lead > summary { padding:6px 14px; } .leadlist.dense details.lead > summary .who small { display:inline; margin-left:6px; }
+/* Leads: the Outbox, folders and the sending advice */
+.outbox { border-color:var(--warn-line); }
+.outbox .obrow { display:flex; justify-content:space-between; gap:var(--s-3); align-items:flex-start; padding:var(--s-2) 0; border-top:1px solid var(--line); }
+.outbox .obrow:first-of-type { border-top:0; }
+.outbox .obrow .btns { flex:0 0 auto; }
+.selbar .selfolder { display:inline-flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.selbar .selfolder select, .selbar .selfolder input { height:var(--ctl-sm); font-size:var(--fs-2); width:auto; max-width:170px; margin:0; }
+.selbar .advice { flex:1 1 100%; color:var(--ink-2); }
+.lead .tags .pill.folder { background:var(--surface-2); color:var(--ink-2); text-decoration:none; }
+@media (max-width:760px) { .outbox .obrow { flex-direction:column; } }

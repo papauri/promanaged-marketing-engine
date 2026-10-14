@@ -485,6 +485,7 @@ require_once __DIR__ . '/firm.php'; // one goal, what wins, one contact timeline
 require_once __DIR__ . '/followups.php';
 require_once __DIR__ . '/subjects.php';
 require_once __DIR__ . '/contacts.php';
+require_once __DIR__ . '/leadfolders.php'; // the owner's own folders of leads
 require_once __DIR__ . '/personal.php'; // the market pulse, the study's personal line, drafts brought up to date with a found name
 
 /* ---------------- Spend control: every call is counted against a daily token budget ---------------- */
@@ -1836,7 +1837,7 @@ function pm_daily_plan(array $leads, array $cfg): array
         }
         return false;
     };
-    $cap = max(0, (function_exists('pm_effective_send_cap') ? pm_effective_send_cap($cfg) : (int)$cfg['send_cap']) - pm_sent_today($leads)); // the limit in force today (warm-up), not the ceiling
+    $cap = max(0, (int)($cfg['send_cap'] ?? 10) - pm_sent_today($leads)); // the owner's plan for the day (never a limit on sending)
     // existing ProManaged clients are never cold-pitched: they get a check-in that looks for the next job instead
     $clients = (array)(pm_agents_config(pm_brand_is_custom(pm_brand()) ? pm_brand() : 'promanaged')['existing_clients'] ?? []); // an added business has its own clients
     $isClient = fn($l) => (bool)array_filter($clients, fn($x) => $x !== '' && stripos((string)$l['name'], (string)$x) !== false);

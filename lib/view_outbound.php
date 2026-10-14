@@ -12,7 +12,7 @@ function pm_view_send_queue(array $leads): void
     $br = pm_send_breaker();
     ?>
     <div class="card"><h2>Send queue <span class="pill"><?= count($q) ?></span></h2>
-      <p class="hint">Approved emails go out one at a time, <?= pm_h(pm_ss_summary(pm_brand())) ?>. Today: <?= pm_sent_today($leads) ?> sent, room for <?= $left ?> more (the daily limit rises as the mailbox warms up).
+      <p class="hint">Approved emails go out one at a time, <?= pm_h(pm_ss_summary(pm_brand())) ?>. Today: <?= pm_sent_today($leads) ?> sent. No daily limit: you decide.
         <?= pm_send_window() ? '' : 'Sending is closed now.' ?> <a href="?tab=targeting#sendschedule">Change the schedule</a></p>
       <?php if ($br['blocked']): ?><p class="flash err"><?= pm_h($br['why']) ?></p><?php endif; ?>
       <?php if (!$q): ?><p class="hint">Nothing approved yet. Approve drafts to start the drip.</p><?php endif; ?>
@@ -75,8 +75,8 @@ function pm_view_email_health(): void
       <p class="hint">Sending from <b><?= pm_h($from ?: 'no From address set') ?></b>.</p>
       <?php if ($a['checked']): ?><p><?= $chip('SPF', $a['spf']) . $chip('DMARC', $a['dmarc']) . $chip('DKIM', $a['dkim']) ?></p><?php endif; ?>
       <?php foreach ($a['advice'] as $t): ?><p class="hint"><?= pm_h($t) ?></p><?php endforeach; ?>
-      <?php if (!empty($cfg['no_limit'])): ?><p>Daily limit: <b>none</b> <span class="muted">(your choice, Sales &gt; Targeting &gt; Limits per day)</span></p><?php else: ?>
-      <p>Daily limit now: <b><?= $cap ?></b> <span class="muted">(you allowed up to <?= (int)$cfg['send_cap'] ?>; it starts at 3 and rises by 2 each week of sending<?= $fs !== '' ? ', first email sent ' . pm_h($fs) : ', no email sent yet' ?>)</span></p><?php endif; ?>
+      <?php $adv = function_exists('pm_send_advice') ? pm_send_advice(pm_brand()) : ['lines' => []]; ?><p><b>No daily limit</b> <span class="muted">(you decide how many go out)</span></p>
+      <?php if ($adv['lines']): ?><div class="hint"><b>Advice<?= !empty($adv['ai']) ? '' : ' from the numbers' ?>:</b><ul class="mt-0"><?php foreach ($adv['lines'] as $al): ?><li><?= pm_h((string)$al) ?></li><?php endforeach; ?></ul></div><?php else: ?><p class="hint">Nothing in your numbers is worrying.</p><?php endif; ?>
       <p><span class="pill <?= $br['blocked'] ? 'warn' : 'hot' ?>"><?= $br['blocked'] ? 'Sending paused' : 'Bounce check OK' ?></span> <span class="muted"><?= pm_h($br['why']) ?></span></p>
       <?php if (function_exists('pm_bounce_rate7')): $tr = pm_bounce_rate7(pm_leads(), pm_brand()); ?>
         <p class="hint">Last 14 days: <?= (int)$tr['sends'] ?> sent, <?= (int)$tr['bounces'] ?> bounced (<?= $tr['sends'] ? round(100 * $tr['rate'], 1) : 0 ?>%). The daily limit drifts down on bouncy weeks and up on clean ones.</p>

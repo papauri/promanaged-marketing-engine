@@ -19,6 +19,8 @@ $fcity = trim((string)($_GET['city'] ?? ''));
 $fhas = (string)($_GET['has'] ?? '');
 $fmin = (int)($_GET['min'] ?? 0);
 $fsort = (string)($_GET['sort'] ?? '');
+$ffolder = (string)($_GET['folder'] ?? '');
+$folders = pm_folders(pm_brand(), $leadsAll);
 if (isset($_GET['per'])) { $_SESSION['leads_per'] = (int)$_GET['per']; } // the page size is remembered
 $fper = in_array((int)($_SESSION['leads_per'] ?? 25), [10, 25, 50, 100, 200], true) ? (int)($_SESSION['leads_per'] ?? 25) : 25;
 $leadHas = ['email' => 'Has an email', 'noemail' => 'No email yet', 'name' => 'Owner name known', 'noname' => 'No owner name yet', 'personal' => 'Has a personal opening', 'research' => 'Researched', 'noresearch' => 'Not researched yet', 'approved' => 'In the send queue'];
@@ -27,9 +29,9 @@ $hasOk = fn($l) => match ($fhas) {
     'name' => trim((string)($l['contact'] ?? '')) !== '', 'noname' => trim((string)($l['contact'] ?? '')) === '', 'personal' => pm_lead_personal($l) !== '',
     'research' => !empty($l['research']), 'noresearch' => empty($l['research']), 'approved' => !empty($l['approved_at']) && empty($l['sent']), default => true,
 };
-$fq2 = function (array $set = []) use ($ftype, $fq, $fcity, $fhas, $fmin, $fsort): string { // the filters, for a link
+$fq2 = function (array $set = []) use ($ftype, $fq, $fcity, $fhas, $fmin, $fsort, $ffolder): string { // the filters, for a link
     $out = '';
-    foreach (array_replace(['type' => $ftype, 'q' => $fq, 'city' => $fcity, 'has' => $fhas, 'min' => $fmin, 'sort' => $fsort], $set) as $k => $v) {
+    foreach (array_replace(['type' => $ftype, 'q' => $fq, 'city' => $fcity, 'has' => $fhas, 'min' => $fmin, 'sort' => $fsort, 'folder' => $ffolder], $set) as $k => $v) {
         $out .= $v === '' || $v === 0 ? '' : '&' . $k . '=' . urlencode((string)$v);
     }
     return $out;
@@ -39,10 +41,14 @@ $who = (string)($GLOBALS['PM_WHO'] ?? '');
 $team = array_values(array_filter((array)($settings['team'] ?? [])));
 $waiting = fn($l) => $l['status'] !== 'optout' && ($l['status'] === 'replied' || !empty($l['awaiting_reply_since']));
 $gaps = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted', 'contacted'], true) && pm_approach($l)['ready'] < 70; // too little known for a good approach
+$fuDue = array_flip(array_map('strval', array_keys(pm_followup_due($leadsAll, $acfg, false))));
+$todo = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted', 'replied', 'proposal'], true) || $waiting($l)
+    || ($l['status'] === 'contacted' && (!empty($l['followup_draft']) || isset($fuDue[(string)$l['id']]))); // Active: something to do now
 $inStatus = fn($l, $f) => $f === 'all' ? true : ($f === 'mine' ? (($l['owner'] ?? '') === $who && (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l))) : ($f === 'awaiting' ? $waiting($l)
-    : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l)) : $l['status'] === $f))));
+    : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? $todo($l) : $l['status'] === $f))));
 $inSearch = fn($l) => ($fq === '' || mb_stripos($l['name'] . ' ' . $l['city'] . ' ' . ($l['contact'] ?? '') . ' ' . ($l['type'] ?? '') . ' ' . ($l['email'] ?? ''), $fq) !== false)
-    && ($fcity === '' || strcasecmp(trim((string)($l['city'] ?? '')), $fcity) === 0) && $hasOk($l) && (int)($l['score'] ?? 0) >= $fmin;
+    && ($fcity === '' || strcasecmp(trim((string)($l['city'] ?? '')), $fcity) === 0) && $hasOk($l) && (int)($l['score'] ?? 0) >= $fmin
+    && ($ffolder === '' || in_array($ffolder, (array)($l['folders'] ?? []), true));
 $cities = array_count_values(array_filter(array_map(fn($l) => trim((string)($l['city'] ?? '')), $leadsAll)));
 ksort($cities);
 // business-type dropdown: similar types grouped (hotel, lodge, resort... -> Hotels & lodges), counted inside the chosen status
@@ -166,7 +172,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 
 <!-- 4. Today's tasks -->
 <?php if ($plan): ?>
-<details class="card today"><summary><b>Today</b> · <?= $ndone ?> of <?= count($plan) ?> done <span class="muted">· <?= $sentToday ?><?= !empty($acfg['no_limit']) ? '' : ' of ' . (int)pm_effective_send_cap($acfg) ?> emails sent today</span></summary>
+<details class="card today"><summary><b>Today</b> · <?= $ndone ?> of <?= count($plan) ?> done <span class="muted">· <?= $sentToday ?> emails sent today (your plan: <?= (int)$acfg['send_cap'] ?>)</span></summary>
   <?php foreach (array_slice($plan, 0, 6) as $t): ?>
     <div class="task <?= $t['done'] ? 'done' : '' ?>">
       <form method="post"><?= $post('', 'plan', $hid('task', $t['id']) . ($t['done'] ? '' : $hid('done', 1))) ?><button title="Mark done" aria-label="Mark done"><?= $t['done'] ? '✓' : '' ?></button></form>
@@ -199,24 +205,34 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     <select name="has" onchange="this.form.submit()" aria-label="What we know"><option value="">Any details</option><?php foreach ($leadHas as $hk => $hl): ?><option value="<?= $hk ?>" <?= $fhas === $hk ? 'selected' : '' ?>><?= pm_h($hl) ?></option><?php endforeach; ?></select>
     <select name="min" onchange="this.form.submit()" aria-label="Lowest fit score"><?php foreach ([0 => 'Any score', 60 => 'Score 60+', 75 => 'Score 75+', 85 => 'Score 85+'] as $mk => $ml): ?><option value="<?= $mk ?>" <?= $fmin === $mk ? 'selected' : '' ?>><?= $ml ?></option><?php endforeach; ?></select>
     <select name="sort" onchange="this.form.submit()" aria-label="Order"><?php foreach (['' => 'Best first', 'ready' => 'Most ready first', 'new' => 'Newest first', 'name' => 'Name A to Z', 'city' => 'By town'] as $sk => $sl): ?><option value="<?= $sk ?>" <?= $fsort === $sk ? 'selected' : '' ?>><?= $sl ?></option><?php endforeach; ?></select>
+    <?php if ($folders): ?><select name="folder" onchange="this.form.submit()" aria-label="Folder"><option value="">All folders</option><?php foreach ($folders as $fk => $fn): ?><option value="<?= pm_h((string)$fk) ?>" <?= $ffolder === (string)$fk ? 'selected' : '' ?>><?= pm_h((string)$fk) ?> (<?= (int)$fn ?>)</option><?php endforeach; ?></select><?php endif; ?>
     <select name="per" onchange="this.form.submit()" aria-label="Leads per page"><?php foreach ([10, 25, 50, 100, 200] as $pk): ?><option value="<?= $pk ?>" <?= $fper === $pk ? 'selected' : '' ?>><?= $pk ?> a page</option><?php endforeach; ?></select>
-    <?php if ($ftype !== '' || $fq !== '' || $fcity !== '' || $fhas !== '' || $fmin || $fsort !== ''): ?><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?>">Clear</a><?php endif; ?></form>
+    <?php if ($ftype !== '' || $fq !== '' || $fcity !== '' || $fhas !== '' || $fmin || $fsort !== '' || $ffolder !== ''): ?><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?>">Clear</a><?php endif; ?></form>
 </div>
 <?php endif; ?>
-<?php $isAdm = pm_user_is_admin(); $pickable = fn($l) => $approvable($l) || $isAdm; $nPick = count(array_filter($shown, $pickable)); ?>
+<?php $isAdm = pm_user_is_admin(); $pickable = fn($l) => true; $nPick = count($shown); $adv = function_exists('pm_send_advice') ? pm_send_advice(pm_brand()) : ['lines' => []]; $outbox = function_exists('pm_ml_outbox') ? pm_ml_outbox(pm_brand()) : []; ?>
+<?php if ($outbox): ?>
+<div class="card outbox" id="outbox"><h2>Outbox <span class="pill warn"><?= count($outbox) ?></span></h2>
+  <p class="hint mt-0">Emails that did not go. A server hiccup is tried again by itself (up to 3 times); the rest wait for you. Nothing here is sent twice.</p>
+  <?php foreach (array_slice($outbox, 0, 20) as $ob): ?><div class="obrow"><div><b><?= pm_h($leadsAll[$ob['lead'] ?? '']['name'] ?? $ob['to']) ?></b> <span class="muted">· <?= pm_h((string)$ob['to']) ?> · <?= pm_h(substr((string)$ob['at'], 0, 16)) ?><?= !empty($ob['tries']) ? ' · tried ' . (int)$ob['tries'] . ' more time' . ((int)$ob['tries'] === 1 ? '' : 's') : '' ?></span><br><span class="t-sm"><?= pm_h((string)$ob['subject']) ?></span><br><span class="t-sm warnt"><?= pm_h((string)($ob['err'] ?? '')) ?></span><?php if (!empty($ob['fix'])): ?><br><span class="t-sm"><b>Fix:</b> <?= pm_h((string)$ob['fix']) ?></span><?php endif; ?></div>
+    <div class="btns"><form method="post" class="inline"><?= $post('', 'outbox_retry', $hid('ob', $ob['id'])) ?><button class="btn small primary">Try again</button></form><form method="post" class="inline"><?= $post('', 'outbox_discard', $hid('ob', $ob['id'])) ?><button class="btn small">Put aside</button></form><?php if (!empty($ob['lead']) && isset($leadsAll[$ob['lead']])): ?><a class="btn small ghost" href="?tab=agents&amp;lead=<?= pm_h((string)$ob['lead']) ?>">Open</a><?php endif; ?></div></div><?php endforeach; ?>
+</div>
+<?php endif; ?>
 <?php if ($nPick): ?>
 <form method="post" id="leadsel" class="selbar<?= $running ? ' locked' : '' ?>"><?= $post('', '') ?>
   <label class="tick"><input type="checkbox" data-pick-all=".lsel" aria-label="Tick every lead on this page"> All on this page</label>
   <b class="selcount" data-pick-count=".lsel">0 ticked</b>
-  <?php if ($nApprovable): ?><button class="btn primary" name="do" value="send_now" data-confirm="Send the ticked emails now? Each one goes through the usual checks (daily limit, STOP, bounces, wording)." title="Sends each ticked email now, one after another">Send now</button>
+  <?php if ($nApprovable): ?><button class="btn primary" name="do" value="send_now" data-confirm="Send the ticked emails now? No daily limit: each one still gets the usual checks (STOP, bounced address, wording) and is never sent twice." title="Sends each ticked email now, one after another">Send now</button>
   <label class="selwhen">or from <input type="datetime-local" name="send_after" aria-label="Send no earlier than (optional)"></label>
   <button class="btn" name="do" value="approve_send" title="Each ticked email goes out on its own, one at a time, in the sending hours (or from the time given)">Send in the sending hours</button><?php endif; ?>
+  <span class="selfolder"><select name="folder_to" aria-label="Folder"><option value="">Folder…</option><?php foreach ($folders as $fk => $fn): ?><option value="<?= pm_h((string)$fk) ?>" <?= $ffolder === (string)$fk ? 'selected' : '' ?>><?= pm_h((string)$fk) ?></option><?php endforeach; ?></select><input type="text" name="folder_new" placeholder="or a new folder" aria-label="New folder name" maxlength="40"><button class="btn small" name="do" value="folder_add">Put in folder</button><?php if ($folders): ?><button class="btn small ghost" name="do" value="folder_remove">Take out</button><?php endif; ?></span>
   <?php if ($isAdm): ?><button class="btn small danger" name="do" value="delete_ticked" data-confirm="Delete the ticked leads? This cannot be undone.">Delete ticked</button><?php endif; ?>
+  <?php if ($adv['lines']): ?><span class="hint advice"><b>Advice<?= !empty($adv['ai']) ? '' : ' from the numbers' ?>:</b> <?= pm_h(implode(' ', array_slice($adv['lines'], 0, 2))) ?> You decide: nothing here stops a send.</span><?php endif; ?>
   <span class="hint"><?= $nApprovable ? $nApprovable . ' email' . ($nApprovable === 1 ? '' : 's') . ' on this page can be sent. Read, tick, then <b>Send now</b>, or let them go out one at a time in the <a href="?tab=targeting#sendschedule">sending hours</a>.' : 'Nothing on this page is ready to send yet.' ?></span>
 </form>
 <?php endif; ?>
 <?php if ($hasApprove && function_exists('pm_view_send_queue') && count(array_filter($leadsAll, fn($x) => !empty($x['approved_at'])))) { pm_view_send_queue(pm_leads()); } ?>
-<?php if (!$shown && ($ftype !== '' || $fq !== '')): ?><div class="card empty">No <?= pm_h($ftype ?: 'leads') ?><?= $fq !== '' ? ' matching "' . pm_h($fq) . '"' : '' ?> in this list. <a href="?tab=agents&status=all<?= $ftype !== '' ? '&type=' . urlencode($ftype) : '' ?><?= $fq !== '' ? '&q=' . urlencode($fq) : '' ?>">Look in All</a></div>
+<?php if (!$shown && ($ftype !== '' || $fq !== '' || $fcity !== '' || $fhas !== '' || $fmin || $ffolder !== '')): ?><div class="card empty">No <?= pm_h($ftype ?: 'leads') ?><?= $fq !== '' ? ' matching "' . pm_h($fq) . '"' : '' ?> in this list. <a href="?tab=agents&status=all<?= $ftype !== '' ? '&type=' . urlencode($ftype) : '' ?><?= $fq !== '' ? '&q=' . urlencode($fq) : '' ?>">Look in All</a></div>
 <?php elseif (!$shown): ?><div class="card empty">No leads here yet. <?= $filter === 'active' ? 'Press <b>Run the agents</b> or find a business by name.' : '' ?></div><?php endif; ?>
 <?= $pager ?>
 <?php if ($running): ?><p class="flash runlock" id="runlock">The agents are working: sending, research and drafting on the leads wait until they finish, so two jobs never clash. The page unlocks by itself.</p><?php endif; ?>
@@ -245,6 +261,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <?php if (!empty($l['proposal_ai'])): ?><span class="pill hot">proposal ready</span><?php endif; ?>
       <?= pm_lead_touch_chip($l) ?>
       <?php if (!empty($l['owner'])): ?><span class="pill" title="Owner of this lead"><?= pm_h($l['owner']) ?></span><?php endif; ?>
+      <?php foreach ((array)($l['folders'] ?? []) as $lf): ?><a class="pill folder" href="?tab=agents&amp;status=all&amp;folder=<?= pm_h(rawurlencode((string)$lf)) ?>" onclick="event.stopPropagation()" title="Show this folder">▸ <?= pm_h((string)$lf) ?></a><?php endforeach; ?>
       <span class="fixcols"><?php /* always last and the same width, so they line up down the list */ ?>
         <span class="pill c-ready <?= $gapOpen ? ($apx['ready'] >= 80 ? 'ok' : ($apx['ready'] < 50 ? 'warn' : '')) : 'blank' ?>"<?= $gapOpen ? ' title="' . pm_h($apx['missing'] ? 'Missing: ' . implode(', ', $apx['missing']) : 'Everything a good approach needs is there') . '"' : '' ?>><?= $gapOpen ? $apx['ready'] . '% ready' : '' ?></span>
         <span class="pill c-score <?= ($l['score'] ?? 0) >= 70 ? 'hot' : '' ?>" title="How good a fit, out of 100"><?= (int)($l['score'] ?? 0) ?></span>

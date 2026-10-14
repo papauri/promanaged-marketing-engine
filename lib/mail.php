@@ -54,7 +54,7 @@ function pm_mail(array $s, array $m): array
                 $mail->addCC($c);
             }
         }
-        if (($m['bcc_self'] ?? !empty($smtp['bcc_self'])) && strcasecmp($m['to'], $from) !== 0) {
+        if (($m['bcc_self'] ?? !empty($smtp['bcc_self'])) && strcasecmp($m['to'], $from) !== 0 && !pm_ml_can_save_sent(function_exists('pm_brand') ? pm_brand() : 'promanaged')) { // the copy goes to the Sent folder instead of the inbox when it can
             $mail->addBCC($from);
         }
 
@@ -126,7 +126,8 @@ function pm_mail(array $s, array $m): array
             [$ok, $err, $via, $note] = pm_mail_send_via($mail, $smtp);
             $mid = $ok ? (string)$mail->getLastMessageID() : '';
             pm_ml_end($row, $ok ? ['status' => 'sent', 'mid' => $mid, 'via' => $via] + ($note !== '' ? ['fix' => $note] : [])
-                : ['status' => 'failed', 'err' => mb_substr($err, 0, 400), 'via' => $via, 'fix' => function_exists('pm_mail_fail') ? mb_substr(pm_mail_fail($s, $err), 0, 400) : '']);
+                : ['status' => 'failed', 'err' => mb_substr($err, 0, 400), 'via' => $via, 'fix' => function_exists('pm_mail_fail') ? mb_substr(pm_mail_fail($s, $err), 0, 400) : '',
+                    'payload' => array_intersect_key($m, array_flip(['to', 'cc', 'subject', 'body', 'attachments', 'button', 'link', 'headers', 'kind', 'lead', 'dedupe', 'dedupe_days']))]); // kept so the Outbox can send it again
         } finally {
             if ($lock) {
                 flock($lock, LOCK_UN);
@@ -139,6 +140,7 @@ function pm_mail(array $s, array $m): array
         if (($m['kind'] ?? '') !== 'notify') { // a copy in the mailbox's own Sent folder (SMTP keeps none); the owner's own alerts are not filed
             $saved = pm_ml_save_sent(function_exists('pm_brand') ? pm_brand() : 'promanaged', (string)$mail->getSentMIMEMessage());
             pm_ml_end($row, ['sent_folder' => $saved]);
+            pm_ml_save_result(function_exists('pm_brand') ? pm_brand() : 'promanaged', $saved === 'saved');
         }
         return [true, '', $mid];
     } catch (MailException $e) {

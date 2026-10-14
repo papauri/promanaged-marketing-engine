@@ -38,13 +38,12 @@ echo function_exists('pm_adv_card') ? pm_adv_card($vb, $csrf) : '';
     <div class="row">
       <div><label>New leads</label><input type="number" name="cfg[new_per_day]" value="<?= (int)$acfg['new_per_day'] ?>"></div>
       <div><label>Searches</label><input type="number" name="cfg[scouts_per_day]" value="<?= (int)$acfg['scouts_per_day'] ?>"></div>
-      <div><label>Emails</label><input type="number" name="cfg[send_cap]" value="<?= (int)$acfg['send_cap'] ?>"></div>
+      <div><label>Emails to plan a day <span class="muted">(a plan, never a limit)</span></label><input type="number" name="cfg[send_cap]" value="<?= (int)$acfg['send_cap'] ?>"></div>
       <div><label>WhatsApp first messages</label><input type="number" name="cfg[wa_cap]" value="<?= (int)$acfg['wa_cap'] ?>"></div>
       <div><label>Follow up after (days)</label><input type="number" name="cfg[followup_days]" value="<?= (int)$acfg['followup_days'] ?>"></div>
       <div><label>Follow-ups at most</label><input type="number" name="cfg[max_followups]" value="<?= (int)$acfg['max_followups'] ?>"></div>
     </div>
-    <label class="check"><input type="checkbox" name="cfg[no_limit]" value="1" <?= !empty($acfg['no_limit']) ? 'checked' : '' ?>> No daily email limit: I decide how many go out (no warm-up)</label>
-    <p class="hint"><?= !empty($acfg['no_limit']) ? 'No daily limit: every email you send or approve goes out. The other checks stay (STOP, bounced addresses, one company once a week, the wording rules, and the pause when many bounce). Many emails a day from a new mailbox can land in spam, so watch <a href="?tab=settings&amp;section=email">Operations &gt; Email</a>.' : 'The email limit starts low on purpose and rises as the mailbox proves it delivers: <a href="?tab=settings&amp;section=email">Operations &gt; Email</a> shows the limit in force. Tick the box above to send as many as you decide.' ?></p>
+    <p class="hint">There is no daily email limit: you decide how many go out. The number above only sets how many first emails the day's plan lines up. Each email is still checked (STOP, a bounced address, the wording) and never sent twice; the advice on the Leads page and in <a href="?tab=settings&amp;section=email">Operations &gt; Email</a> reads your real numbers and says what it thinks.</p>
   </div>
 
   <div class="card">
