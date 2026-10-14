@@ -8,6 +8,7 @@ $_SESSION['abrand'] = pm_brand_norm($bsel);
 pm_brand_set($_SESSION['abrand']);
 $bname = pm_brand_title(pm_settings(), pm_brand());
 $acfg = pm_agents_config();
+$synced = function_exists('pm_ml_autosync') ? pm_ml_autosync() : 0; // the Sent folders are read at most every 5 minutes (no AI): a lead emailed from the other copy is not in Active
 $leadsAll = array_filter(pm_leads(), fn($l) => ($l['brand'] ?? 'promanaged') === pm_brand());
 $run = pm_run_state();
 $running = ($run['state'] ?? '') === 'running';
@@ -96,6 +97,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
 ?>
 <?= pm_ui_head('Leads · ' . pm_h($bname), 'Find businesses, let the agents draft the messages, and send what you approve. Nothing goes out without you.') ?>
 <?= pm_ui_strip('agents') ?>
+<?php if ($synced): ?><div class="flash ok"><?= $synced ?> lead<?= $synced === 1 ? '' : 's' ?> found in the Sent folder (emailed from the other copy of the app or by hand) and marked contacted.</div><?php endif; ?>
 <?php if (!pm_agents_ready()): ?>
   <div class="flash err"><b>One thing to set up first.</b> Add <code><?= pm_h(pm_agents_missing_key()) ?>=...</code> to <code>.env</code>, then reload.</div>
 <?php endif; ?>
@@ -210,7 +212,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     <?php if ($ftype !== '' || $fq !== '' || $fcity !== '' || $fhas !== '' || $fmin || $fsort !== '' || $ffolder !== ''): ?><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?>">Clear</a><?php endif; ?></form>
 </div>
 <?php endif; ?>
-<?php $isAdm = pm_user_is_admin(); $pickable = fn($l) => true; $nPick = count($shown); $adv = function_exists('pm_send_advice') ? pm_send_advice(pm_brand()) : ['lines' => []]; $outbox = function_exists('pm_ml_outbox') ? pm_ml_outbox(pm_brand()) : []; ?>
+<?php $isAdm = pm_user_is_admin(); $pickable = fn($l) => true; $nPick = count($shown); $adv = function_exists('pm_send_advice') ? pm_send_advice(pm_brand()) : ['lines' => []]; $outbox = array_values(array_filter(function_exists('pm_ml_outbox') ? pm_ml_outbox(pm_brand()) : [], fn($r) => empty($leadsAll[$r['lead'] ?? '']['approved_at']) && !(($r['kind'] ?? '') === 'first' && !empty($leadsAll[$r['lead'] ?? '']['sent'])))); // a lead queued again, or whose first email has since gone, is not shown twice ?>
 <?php if ($outbox): ?>
 <div class="card outbox" id="outbox"><h2>Outbox <span class="pill warn"><?= count($outbox) ?></span></h2>
   <p class="hint mt-0">Emails that did not go. A server hiccup is tried again by itself (up to 3 times); the rest wait for you. Nothing here is sent twice.</p>

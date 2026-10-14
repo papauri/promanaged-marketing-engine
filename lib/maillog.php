@@ -475,7 +475,8 @@ function pm_send_facts(string $brand): array
         'bounce_rate_14d' => count($d14) ? round(100 * $bounced / count($d14), 1) : 0, 'emailed_30d' => $sent30, 'replied_30d' => $replied,
         'outbox' => count(array_filter($rows, fn($r) => in_array($r['status'] ?? '', ['failed', 'unknown'], true) && empty($r['resolved']))),
         'not_in_sent_folder_7d' => count(array_filter($sent, fn($r) => $age($r) < 7 * 86400 && str_starts_with((string)($r['sent_folder'] ?? ''), 'not'))),
-        'spf' => !empty($auth['checked']) ? $auth['spf']['status'] : 'unknown', 'dkim' => !empty($auth['checked']) ? $auth['dkim']['status'] : 'unknown'];
+        'spf' => !empty($auth['checked']) ? $auth['spf']['status'] : 'unknown', 'dkim' => !empty($auth['checked']) ? $auth['dkim']['status'] : 'unknown',
+        'provider_per_hour' => (int)(pm_ml_provider_rate($brand)['per_hour'] ?? 0)];
 }
 
 /** What the numbers say, in plain words (code, no AI): the fallback, and what the AI is given. */
@@ -493,6 +494,9 @@ function pm_send_advice_plain(array $f): array
     }
     if ($f['emailed_30d'] >= 15 && $f['replied_30d'] === 0) {
         $out[] = "No replies yet from {$f['emailed_30d']} businesses emailed in 30 days: the opening or subject may need a different angle before sending more of the same.";
+    }
+    if ($f['provider_per_hour'] > 0) {
+        $out[] = "Your mail provider refused more after about {$f['provider_per_hour']} emails in an hour: Send now sends that many and queues the rest to go out by themselves after the hour (the provider's limit, not the app's).";
     }
     if ($f['outbox'] > 0) {
         $out[] = "{$f['outbox']} email" . ($f['outbox'] === 1 ? ' is' : 's are') . ' in the Outbox because they did not go: see the Outbox on the Leads page.';
@@ -562,6 +566,9 @@ function pm_ml_outbox(string $brand = ''): array
 /** Is a failure worth trying again by itself (a server or connection hiccup), or does it need a person (a refused address, a login, a domain problem)? */
 function pm_ml_transient(string $err): bool
 {
+    if (function_exists('pm_smtp_rate_limited') && pm_smtp_rate_limited($err)) {
+        return true; // the provider's hourly allowance: it goes once the hour has passed
+    }
     return (bool)preg_match('/connect|timed? ?out|temporar|try again|\b4\d\d\b|busy|reset by peer|could not reach|unavailable|greylist/i', $err)
         && !preg_match('/authenticat|password|5\.7\.|not sent twice|already sent|stopped half-way/i', $err);
 }
@@ -635,7 +642,11 @@ function pm_ml_retry_due(): int
     $n = 0;
     foreach (pm_ml_outbox() as $r) {
         $tries = (int)($r['tries'] ?? 0);
-        $wait = [900, 3600, 14400][$tries] ?? null;
+        $limited = function_exists('pm_smtp_rate_limited') && pm_smtp_rate_limited((string)($r['err'] ?? ''));
+        $wait = $limited ? ([3900, 3900, 3900, 7200, 14400, 28800][$tries] ?? null) : ([900, 3600, 14400][$tries] ?? null); // a provider limit waits past the hour each time
+        if ($limited && $wait !== null && ($room = pm_ml_room_now((string)($r['brand'] ?? 'promanaged'))) !== null && $room < 1) {
+            continue; // the provider's hour is still full
+        }
         if ($wait === null || ($r['status'] ?? '') !== 'failed' || !pm_ml_transient((string)($r['err'] ?? '')) || time() - (int)strtotime((string)($r['done'] ?? $r['at'])) < $wait) {
             continue;
         }
@@ -652,4 +663,97 @@ function pm_ml_retry_due(): int
         $n += $ok ? 1 : 0;
     }
     return $n;
+}
+
+/* ---------------- the mail provider's own pace (learned, not set by the app) ---------------- */
+
+/**
+ * How many emails left this mailbox in the last 60 minutes, counted in its Sent folder (so every copy of the app, and mail sent by hand, is counted). null when the
+ * folder cannot be read.
+ */
+function pm_ml_sent_last_hour(string $brand): ?int
+{
+    try {
+        [$fp, $acct] = pm_ml_imap($brand);
+        if (!$fp || ($box = pm_ml_sent_box($fp, $acct)) === '' || !str_contains(pm_imap_cmd($fp, 'E3', 'EXAMINE "' . addcslashes($box, '"\\') . '"'), 'E3 OK')) {
+            return null;
+        }
+        $res = pm_imap_cmd($fp, 'Q4', 'UID SEARCH SINCE ' . date('d-M-Y', time() - 3600));
+        preg_match('/\* SEARCH([\d ]*)/', $res, $m);
+        $uids = array_slice(array_values(array_filter(explode(' ', trim($m[1] ?? '')))), -300);
+        if (!$uids) {
+            return 0;
+        }
+        $res = pm_imap_cmd($fp, 'Q5', 'UID FETCH ' . implode(',', $uids) . ' (INTERNALDATE)');
+        preg_match_all('/INTERNALDATE "([^"]+)"/', $res, $dm);
+        return count(array_filter($dm[1], fn($d) => ($t = strtotime($d)) && $t > time() - 3600));
+    } catch (Throwable) {
+        return null;
+    }
+}
+
+/** The provider refused for sending too much: remember how many it had taken in the hour before (its real allowance, learned from what happened). */
+function pm_ml_learn_rate(string $brand): void
+{
+    $n = pm_ml_sent_last_hour($brand);
+    if ($n === null || !function_exists('pm_imap_settings')) {
+        return;
+    }
+    $c = pm_imap_settings($brand);
+    $acct = strtolower($c['host'] . '|' . $c['user']);
+    try {
+        pm_update('mail_state', function (array $d) use ($acct, $n) {
+            $was = (array)($d['provider_rate'][$acct] ?? []);
+            $d['provider_rate'][$acct] = ['per_hour' => max(1, $n), 'seen' => date('Y-m-d H:i'), 'times' => (int)($was['times'] ?? 0) + 1,
+                'lowest' => min($n ?: 1, (int)($was['lowest'] ?? PHP_INT_MAX))];
+            return $d;
+        }, fn() => []);
+    } catch (Throwable) {
+    }
+}
+
+/** What the provider is known to allow per hour for this mailbox, learned from its refusals: ['per_hour' => n, 'seen' => when] or []. */
+function pm_ml_provider_rate(string $brand): array
+{
+    if (!function_exists('pm_imap_settings')) {
+        require_once __DIR__ . '/engage.php';
+    }
+    $c = pm_imap_settings($brand);
+    $r = (array)(pm_load('mail_state', fn() => [])['provider_rate'][strtolower($c['host'] . '|' . $c['user'])] ?? []);
+    return isset($r['per_hour']) ? ['per_hour' => (int)min($r['per_hour'], $r['lowest'] ?? $r['per_hour']), 'seen' => (string)$r['seen']] : [];
+}
+
+/** How many more the provider will take in this hour: null while its allowance is not known (send, and learn from a refusal). */
+function pm_ml_room_now(string $brand): ?int
+{
+    $r = pm_ml_provider_rate($brand);
+    if (!$r) {
+        return null;
+    }
+    $sent = pm_ml_sent_last_hour($brand);
+    return $sent === null ? null : max(0, $r['per_hour'] - $sent);
+}
+
+/** Reads the Sent folders at most every 5 minutes when the Leads list opens (no AI: a short mailbox read), so a lead emailed from the other copy of the app is not in Active. */
+function pm_ml_autosync(): int
+{
+    $st = pm_load('mail_state', fn() => []);
+    if (time() - (int)($st['sync_at'] ?? 0) < 300) {
+        return 0;
+    }
+    try {
+        pm_update('mail_state', function (array $d) {
+            $d['sync_at'] = time();
+            return $d;
+        }, fn() => []);
+        if (!function_exists('pm_imap_boxes')) {
+            require_once __DIR__ . '/engage.php';
+        }
+        $leads = pm_leads();
+        $n = pm_ml_sync_sent($leads);
+        $n && pm_leads_save($leads);
+        return $n;
+    } catch (Throwable) {
+        return 0;
+    }
 }

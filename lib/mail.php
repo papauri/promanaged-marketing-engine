@@ -135,6 +135,9 @@ function pm_mail(array $s, array $m): array
             }
         }
         if (!$ok) {
+            if (pm_smtp_rate_limited($err)) {
+                pm_ml_learn_rate(function_exists('pm_brand') ? pm_brand() : 'promanaged'); // how many it took in the hour before it refused: its real allowance
+            }
             return [false, $err, ''];
         }
         if (($m['kind'] ?? '') !== 'notify') { // a copy in the mailbox's own Sent folder (SMTP keeps none); the owner's own alerts are not filed
@@ -300,7 +303,9 @@ function pm_smtp_explain(array $sm, string $err): string
                 $out[] = "This server cannot reach $host on ports 465, 587 or 25. Web hosts often block outgoing mail connections to other servers: ask your host to allow outgoing connections to $host, or use a mailbox on the same host, or an email-sending service.";
             }
         }
-    } elseif (preg_match('/authenticat|\b53[45]\b|username and password|invalid login|not accepted|credentials|auth/', $e)) {
+    } elseif (pm_smtp_rate_limited($err)) {
+        $out[] = "Your mail provider ($host) refused it because this mailbox sent too many emails in a short time: that is the provider's own limit, not the app's. Nothing is lost: it waits in the Outbox and goes again by itself once the hour has passed.";
+    } elseif (preg_match('/authenticat|\b53[45]\b|username and password|invalid login|credentials|auth (failed|error)/', $e)) {
         $out[] = "$host refused the login for " . (string)($sm['username'] ?? '') . ': check the username (usually the full email address) and the password.';
     } elseif (preg_match('/ssl|tls|certificate|handshake|crypto/', $e)) {
         $out[] = "The secure connection to $host failed. Port 465 goes with security ssl and port 587 with tls; yours is $enc on port $port. If the certificate is for another name, use the mail server name your host gives you.";
@@ -308,6 +313,12 @@ function pm_smtp_explain(array $sm, string $err): string
         $out[] = 'The server refused the sender address: send from the address you log in with, or one this mailbox is allowed to use.';
     }
     return implode(' ', $out);
+}
+
+/** The mail provider refused because the mailbox sent too many emails in a short time (its own hourly or daily allowance). */
+function pm_smtp_rate_limited(string $err): bool
+{
+    return (bool)preg_match('/too many (messages|emails|mails|recipients)|rate.?limit|sending limit|limit exceeded|exceeded the (maximum|limit|quota)|quota exceeded|message limit|in last \d+ minutes|per hour/i', $err);
 }
 
 /** A send failure for a screen or a log: what the mail library said, plus what it means and what to do (when it can tell). */

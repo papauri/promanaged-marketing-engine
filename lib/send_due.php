@@ -73,6 +73,10 @@ foreach (array_slice($cands, 0, 15) as [$id]) {
         }
         $which = 'followup_draft';
     }
+    if (function_exists('pm_ml_room_now') && ($room = pm_ml_room_now((string)($l['brand'] ?? 'promanaged'))) !== null && $room < 1) {
+        echo "the mail provider's hour is full\n";
+        break; // the provider's own hourly allowance is used up: the next run tries again
+    }
     $r = pm_send_first($leads, $id, $which);
     pm_brand_set((string)($l['brand'] ?? 'promanaged'));
     if ($r['ok']) {
@@ -88,6 +92,13 @@ foreach (array_slice($cands, 0, 15) as [$id]) {
     }
     if ($r['kind'] === 'cap') {
         continue; // approval stays for tomorrow
+    }
+    if ($r['kind'] === 'smtp' && function_exists('pm_smtp_rate_limited') && pm_smtp_rate_limited((string)$r['msg'])) { // the provider's hourly allowance: it waits an hour, not a day
+        $leads[$id]['send_after'] = date('Y-m-d H:i', time() + 3900);
+        pm_lead_note($leads[$id], 'The mail provider refused more emails this hour: tried again after ' . $leads[$id]['send_after']);
+        $dirty = true;
+        $done = true;
+        break;
     }
     if ($r['kind'] === 'smtp') { // the mail server failed, not the lead: it keeps its approval and is tried again tomorrow
         $leads[$id]['send_fail_at'] = date('Y-m-d');

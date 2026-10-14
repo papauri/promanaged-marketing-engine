@@ -831,7 +831,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sent = 0;
             $why = [];
             $notes = [];
-            foreach ($ids as $i2) {
+            $queued = [];
+            $room = function_exists('pm_ml_room_now') ? pm_ml_room_now(pm_brand()) : null; // what the mail provider takes in this hour (learned from its refusals); null = not known yet
+            foreach ($ids as $qi => $i2) {
+                if ($room !== null && $sent >= $room) { // the provider's own hour is full: the rest wait their turn instead of being refused
+                    $queued = array_slice($ids, $qi);
+                    break;
+                }
                 $res = pm_send_first($leads, $i2, 'drafts');
                 if (!empty($res['ok'])) {
                     $sent++;
@@ -843,9 +849,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     continue;
                 }
                 $why[] = ($leads[$i2]['name'] ?? 'A lead') . ': ' . $res['msg'];
-                if (($res['kind'] ?? '') === 'smtp') { // the mail server refused: the rest would fail the same way (they wait in the Outbox)
+                if (($res['kind'] ?? '') === 'smtp') { // the mail server refused: the rest would fail the same way
+                    if (pm_smtp_rate_limited((string)$res['msg'])) {
+                        array_pop($why); // not a fault of that lead: it is queued with the others
+                        $queued = array_slice($ids, $qi);
+                    }
                     break;
                 }
+            }
+            if ($queued) { // they go out by themselves, one at a time, from just after the provider's hour
+                $qn = pm_approve_for_send($leads, $queued);
+                pm_ss_set_after($leads, $queued, date('Y-m-d H:i', time() + 3900));
+                pm_leads_save($leads);
+                $rate = function_exists('pm_ml_provider_rate') ? pm_ml_provider_rate(pm_brand()) : [];
+                $notes[] = 'Your mail provider only takes ' . (isset($rate['per_hour']) ? 'about ' . $rate['per_hour'] . ' emails' : 'so many emails') . ' an hour from this mailbox, so ' . $qn . ' more ' . ($qn === 1 ? 'is' : 'are') . ' queued and go out by themselves from ' . date('H:i', time() + 3900) . ', one at a time. Nothing needs doing.';
             }
             function_exists('pm_send_advice_refresh') && pm_send_advice_refresh(pm_brand()); // the advice reads the new numbers
             $back($sent . ' of ' . count($ids) . ' email' . (count($ids) === 1 ? '' : 's') . ' sent now.' . ($why ? ' Not sent: ' . implode(' ', array_slice($why, 0, 3)) . (count($why) > 3 ? ' And ' . (count($why) - 3) . ' more (see the Outbox).' : '') : '') . ($notes ? ' Note: ' . implode(' ', array_slice(array_unique($notes), 0, 2)) : ''), $sent ? 'ok' : 'err');
