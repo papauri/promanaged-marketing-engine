@@ -158,7 +158,7 @@ function pm_swarm_retry(array $jobs, int $parallel, string $tmp, ?callable $beat
 $all = [];
 $leads = [];
 $loaded = false; // nothing is ever written back before the leads were read successfully
-$isMine = fn($l) => is_array($l) && ($l['brand'] ?? 'promanaged') === $brand;
+$isMine = fn($l) => is_array($l) && ($l['brand'] ?? 'promanaged') === $brand && empty($l['listen']); // people found on a public post are answered there, not by the outreach pipeline (they stay in $all)
 $save = function () use (&$all, &$leads, &$loaded) { // only this brand's leads are changed; the rest are written back untouched
     if (!$loaded) {
         return;
@@ -201,6 +201,19 @@ try {
         pm_agent_log('Director', !empty($brief['error']) ? 'Could not run: ' . $brief['error'] : $brief['headline'], !empty($brief['error']));
     } catch (Throwable $e) {
         pm_agent_log('Director', 'Could not run: ' . $e->getMessage(), true);
+    }
+
+    // ---- Social: Thandi meets the department heads, sets the day's tasks and finds people asking for what we offer (one short web search and one cheap call per business a day) ----
+    if ($only === '' && function_exists('pm_listen_due') && pm_listen_due($brand) && pm_agents_ready()) {
+        $progress('Thandi (Social) meeting the heads and searching public posts for people asking for what we offer');
+        try {
+            $lr = pm_listen_run($brand, $all);
+            $stats['people_found'] = $lr['kept'];
+            $save();
+        } catch (Throwable $e) {
+            pm_agent_log('Social', 'Could not hold the morning huddle: ' . mb_substr($e->getMessage(), 0, 120), true);
+            pm_update('listen', fn(array $s) => array_replace_recursive($s, [$brand => ['day' => ['date' => date('Y-m-d'), 'error' => mb_substr($e->getMessage(), 0, 160)]]]), fn() => []); // once a day, even when it failed
+        }
     }
 
     // ---- 0. Replies from businesses we have already written to ----

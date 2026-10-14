@@ -17,7 +17,7 @@ function pm_tb_post(string $brand, string $from, string $to, string $text, strin
     if ($text === '' || !isset(PM_TB_DEPTS[$to])) {
         return;
     }
-    function_exists('pm_talk') && pm_talk($brand, $from, $text, $to); // the Audit's conversation: who told whom
+    function_exists('pm_talk') && pm_talk($brand, $from, $text, $to === $from ? '' : $to); // the Audit's conversation: who told whom
     try {
         pm_update('team_board', function (array $all) use ($brand, $from, $to, $text, $key) {
             $rows = array_values(array_filter((array)($all[$brand] ?? []), fn($r) => ($key === '' || ($r['key'] ?? '') !== $key) && strtotime((string)$r['at']) > strtotime('-14 days')));

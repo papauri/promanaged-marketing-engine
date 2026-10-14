@@ -528,6 +528,9 @@ function pm_social_focus_for(string $brand): string
         if ($sb['enough'] && $sb['eng_rate'] !== null && $sb['eng_rate'] < 0.5 && ($sb['followers']['now'] ?? 0) >= 100 && $valid('tips')) {
             return 'tips';
         }
+        if (function_exists('pm_listen_focus') && $valid($tf = pm_listen_focus($brand))) { // Thandi, head of Social, set it at this morning's huddle
+            return $tf;
+        }
         $d = (array)(pm_load('director', fn() => [])[$brand] ?? []);
         if ($valid($d['social_focus'] ?? null) && ($d['social_at'] ?? '') >= date('Y-m-d', strtotime('-3 days'))) {
             return (string)$d['social_focus'];

@@ -42,17 +42,18 @@ $focusId = isset($leadsAll[(string)($_GET['lead'] ?? '')]) ? (string)$_GET['lead
 $who = (string)($GLOBALS['PM_WHO'] ?? '');
 $team = array_values(array_filter((array)($settings['team'] ?? [])));
 $waiting = fn($l) => $l['status'] !== 'optout' && ($l['status'] === 'replied' || !empty($l['awaiting_reply_since']));
-$gaps = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted'], true) && empty($l['sent']) && pm_approach($l)['ready'] < 70; // not written to yet, and too little known for a good approach
+$gaps = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted'], true) && empty($l['sent']) && empty($l['listen']) && pm_approach($l)['ready'] < 70;
+$people = fn($l) => !empty($l['listen']) && in_array($l['status'], ['new', 'contacted', 'replied'], true); // found by Thandi on a public post: answered there // not written to yet, and too little known for a good approach
 $fuDue = array_flip(array_map('strval', array_keys(pm_followup_due($leadsAll, $acfg, false))));
 $todo = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted', 'replied', 'proposal'], true) || $waiting($l)
     || ($l['status'] === 'contacted' && (!empty($l['followup_draft']) || isset($fuDue[(string)$l['id']]))); // Active: something to do now
 $hasMail = fn($l) => (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) && !(!empty($l['email_bad']) && strcasecmp((string)$l['email_bad'], (string)$l['email']) === 0);
 $readySend = fn($l) => $hasMail($l) && empty($l['approved_at']) && $l['status'] !== 'optout'
     && ((in_array($l['status'], ['new', 'qualified', 'drafted'], true) && empty($l['sent']) && !empty($l['drafts']['email_body'])) || ($l['status'] === 'contacted' && !empty($l['followup_draft']['email_body']))); // Ready to send: an email address and a message, nothing in the way
-$inStatus = fn($l, $f) => $f === 'all' ? true : ($f === 'mine' ? (($l['owner'] ?? '') === $who && (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l))) : ($f === 'awaiting' ? $waiting($l)
-    : ($f === 'ready' ? $readySend($l) : ($f === 'noemail' ? (!$hasMail($l) && !in_array($l['status'], ['won', 'lost', 'optout'], true))
+$inStatus = fn($l, $f) => $f === 'people' ? $people($l) : ($f === 'all' ? true : ($f === 'mine' ? (($l['owner'] ?? '') === $who && (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l))) : ($f === 'awaiting' ? $waiting($l)
+    : ($f === 'ready' ? $readySend($l) : ($f === 'noemail' ? (!$hasMail($l) && empty($l['listen']) && !in_array($l['status'], ['won', 'lost', 'optout'], true))
     : ($f === 'followups' ? ($l['status'] === 'contacted' && (!empty($l['followup_draft']) || isset($fuDue[(string)$l['id']]))) : ($f === 'closed' ? in_array($l['status'], ['lost', 'optout'], true)
-    : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? $todo($l) : $l['status'] === $f))))))));
+    : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? $todo($l) : $l['status'] === $f)))))))));
 $inSearch = fn($l) => ($fq === '' || mb_stripos($l['name'] . ' ' . $l['city'] . ' ' . ($l['contact'] ?? '') . ' ' . ($l['type'] ?? '') . ' ' . ($l['email'] ?? ''), $fq) !== false)
     && ($fcity === '' || strcasecmp(trim((string)($l['city'] ?? '')), $fcity) === 0) && $hasOk($l) && (int)($l['score'] ?? 0) >= $fmin
     && ($ffolder === '' || in_array($ffolder, (array)($l['folders'] ?? []), true));
@@ -74,6 +75,7 @@ $counts['gaps'] = count(array_filter($base, $gaps));
 $counts['followups'] = count(array_filter($base, fn($l) => $inStatus($l, 'followups')));
 $counts['ready'] = count(array_filter($base, $readySend));
 $counts['noemail'] = count(array_filter($base, fn($l) => $inStatus($l, 'noemail')));
+$counts['people'] = count(array_filter($base, $people));
 $counts['closed'] = count(array_filter($base, fn($l) => $inStatus($l, 'closed')));
 $counts['all'] = count($base);
 $counts['mine'] = $who === '' ? 0 : count(array_filter($base, fn($l) => $inStatus($l, 'mine')));
@@ -208,7 +210,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <div class="focusbar"><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?><?= pm_h($fq2()) ?>&at=<?= pm_h(rawurlencode($focusId)) ?>#l<?= pm_h($focusId) ?>">← All leads</a> <span class="muted">Focused on <b><?= pm_h($leadsAll[$focusId]['name']) ?></b></span></div>
 <?php else: ?>
 <div class="filters">
-  <?php foreach (($who !== '' ? ['mine' => 'Mine'] : []) + ['active' => 'Active', 'ready' => 'Ready to send', 'awaiting' => 'Needs reply', 'noemail' => 'No email', 'gaps' => 'Missing details', 'drafted' => 'Draft ready', 'followups' => 'Follow-ups', 'contacted' => 'Contacted', 'replied' => 'Replied', 'proposal' => 'Proposal sent', 'won' => 'Won', 'closed' => 'Closed', 'all' => 'All'] as $k => $l): ?>
+  <?php foreach (($who !== '' ? ['mine' => 'Mine'] : []) + ['active' => 'Active', 'people' => 'People looking', 'ready' => 'Ready to send', 'awaiting' => 'Needs reply', 'noemail' => 'No email', 'gaps' => 'Missing details', 'drafted' => 'Draft ready', 'followups' => 'Follow-ups', 'contacted' => 'Contacted', 'replied' => 'Replied', 'proposal' => 'Proposal sent', 'won' => 'Won', 'closed' => 'Closed', 'all' => 'All'] as $k => $l): ?>
     <a href="?tab=agents&status=<?= $k ?><?= pm_h($fq2()) ?>" class="<?= $filter === $k ? 'on' : '' ?>"><?= $l ?> <small><?= (int)($counts[$k] ?? 0) ?></small></a>
   <?php endforeach; ?>
   <form method="get" class="typesel" data-noload="1"><input type="hidden" name="tab" value="agents"><input type="hidden" name="status" value="<?= pm_h($filter) ?>">
@@ -288,10 +290,17 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     </span>
   </summary>
   <div class="body">
-    <?= !in_array($l['status'], ['won', 'lost', 'optout'], true) ? pm_approach_html($l, $post, $hid) : '' ?>
+    <?= !in_array($l['status'], ['won', 'lost', 'optout'], true) && empty($l['listen']) ? pm_approach_html($l, $post, $hid) : '' ?>
     <div class="cols">
       <div class="lc-col">
-        <section class="lc"><h4 class="lc-h">Their business</h4>
+        <?php if (!empty($l['listen'])): $lz = $l['listen']; ?>
+        <section class="lc"><h4 class="lc-h">What they asked for <span class="muted">· found by Thandi on <?= pm_h((string)$lz['platform']) ?><?= $lz['posted'] !== '' ? ', posted ' . pm_h(date('j M', strtotime((string)$lz['posted']))) : '' ?></span></h4>
+          <p class="why">“<?= pm_h((string)$lz['wants']) ?>”</p>
+          <p class="hint"><b>Our reply, to paste under their post:</b></p><p class="hook"><?= nl2br(pm_h((string)$lz['reply'])) ?></p>
+          <p class="hint">Open the post, paste the reply and press "I replied". Facebook lets no app answer under other people's posts, so this one step is yours. Nothing else about them is looked up.</p>
+        </section>
+        <?php endif; ?>
+        <section class="lc"><h4 class="lc-h"><?= empty($l['listen']) ? 'Their business' : 'Who they are' ?></h4>
         <?php if (!empty($l['contact'])): ?><p class="person"><b><?= pm_h($l['contact']) ?></b><?= !empty($l['contact_title']) ? ' · ' . pm_h($l['contact_title']) : '' ?></p><?php endif; ?>
         <?php if (!empty($l['pitch_response'])): $pr = $l['pitch_response']; ?><p class="hint warnt">On the proposal page they chose "<?= $pr['act'] === 'yes' ? 'Yes, send me the agreement' : 'I have a question' ?>"<?= $pr['msg'] !== '' ? ': ' . pm_h($pr['msg']) : '' ?>.</p><?php endif; ?>
         <?php if (!empty($l['view_count'])): ?><p class="hint">Opened the proposal <?= (int)$l['view_count'] ?> time<?= (int)$l['view_count'] === 1 ? '' : 's' ?>, last on <?= pm_h(date('j M, H:i', strtotime((string)($l['last_viewed_at'] ?? $l['viewed_at'])))) ?>.</p><?php endif; ?>
@@ -386,17 +395,19 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 
     <div class="actions">
       <div class="agrp main" aria-label="Reach them">
+      <?php if (!empty($l['listen'])): ?><a class="btn primary" href="<?= pm_h((string)$l['listen']['url']) ?>" target="_blank" rel="noopener noreferrer">Open their post</a><button type="button" class="btn" data-copy="<?= pm_h((string)$l['listen']['reply']) ?>">Copy the reply</button>
+        <?php if ($l['status'] === 'new'): ?><form method="post"><?= $post($id, 'status', $hid('status', 'contacted')) ?><button class="btn" title="You answered under their post: it moves to Contacted">I replied</button></form><?php endif; ?><?php endif; ?>
       <?php if ($canMail): ?><form method="post" onsubmit="return confirm('Send this email to <?= pm_h(addslashes($l['email'])) ?> now?')"><?= $post($id, 'send', $hid('which', $which)) ?><button class="btn primary"><?= $which === 'followup' ? 'Send follow-up' : 'Send email' ?></button></form><?php endif; ?>
       <?php if ($wa): $waFull = pm_wa_text($l, $dr['whatsapp'], $which === 'first'); ?><a class="btn" data-wa-log data-first data-id="<?= pm_h($id) ?>" data-csrf="<?= pm_h($csrf) ?>" data-text="<?= pm_h($waFull) ?>" data-url="<?= pm_h(pm_wa_link($l, '')) ?>" href="<?= pm_h(pm_wa_link($l, $waFull)) ?>" target="_blank" rel="noopener noreferrer" title="Checked and logged like the WhatsApp page: daily limit, STOP and the wording rules">WhatsApp</a><?php endif; ?>
       <?php if ($tel = pm_tel_link($l)): ?><a class="btn" href="<?= pm_h($tel) ?>">Call</a><?php endif; ?>
       <?php if (($l['status'] ?? '') === 'contacted' && !pm_lead_email_dead($l) && pm_agents_ready()): ?><form method="post"<?= empty($l['followup_draft']) ? '' : ' data-confirm="Write a new follow-up in place of the one shown?"' ?>><?= $post($id, 'followup_ai') ?><button class="btn" title="The Follow-up agent writes a follow-up for you to read; nothing is sent"><?= empty($l['followup_draft']) ? 'Draft follow-up with AI' : 'Draft a new follow-up' ?></button></form><?php endif; ?>
       </div>
-      <div class="agrp" aria-label="Prepare the message">
+      <?php if (empty($l['listen'])): ?><div class="agrp" aria-label="Prepare the message">
       <?php if (!in_array($l['status'], ['won', 'lost', 'optout'], true)): ?><form method="post"><?= $post($id, 'sitdown') ?><button class="btn" title="The team talks this lead over and decides how best to approach it (one small AI call)">Team sit-down</button></form><?php endif; ?>
       <form method="post"><?= $post($id, 'research') ?><button class="btn" title="Website, Facebook, Instagram, reviews and recent news"><?= empty($l['research']) ? 'Research' : 'Research again' ?></button></form>
       <?php if (empty($dr['email_body'])): ?><form method="post"><?= $post($id, 'draft_outreach') ?><button class="btn">Draft outreach</button></form><?php endif; ?>
       <?php if ($which === 'first' && in_array($l['status'], ['new', 'qualified', 'drafted'], true)): ?><form method="post"<?= !empty($dr['email_body']) ? ' data-confirm="Replace the draft with the default message?"' : '' ?>><?= $post($id, 'use_default') ?><button class="btn" title="The default email and WhatsApp message of this business, no AI (Sales > Targeting and messages), opening with the detail the study found about them">Use default message</button><?php if (pm_lead_personal($l) !== ''): ?><button class="btn" name="plain" value="1" title="The default message with its usual opening, without the personal detail">Plain default</button><?php endif; ?></form><?php endif; ?>
-      </div>
+      </div><?php endif; ?>
       <div class="agrp" aria-label="More for this lead">
       <?php if (pm_brand_is_custom((string)($l['brand'] ?? ''))): $op = pm_onepager_status((string)$l['brand']); [$osub, $obody] = pm_onepager_default_mail($l); ?>
       <details class="more drop"><summary class="btn">One-page offer</summary>

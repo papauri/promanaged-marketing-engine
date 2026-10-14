@@ -249,7 +249,7 @@ function pm_dm_ready_all(?array &$leads = null): int
             $n++;
             continue;
         }
-        if (!filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) || trim((string)($l['drafts']['email_body'] ?? '')) !== '' || !empty($l['sent']) || !empty($l['rewrite_reason'])
+        if (!filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) || trim((string)($l['drafts']['email_body'] ?? '')) !== '' || !empty($l['sent']) || !empty($l['rewrite_reason']) || !empty($l['listen'])
             || !in_array($l['status'] ?? '', ['new', 'qualified', 'drafted'], true) || (function_exists('pm_lead_is_client') && pm_lead_is_client($l))
             || (!empty($l['email_bad']) && strcasecmp((string)$l['email_bad'], (string)$l['email']) === 0)) {
             continue;

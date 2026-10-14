@@ -13,7 +13,7 @@ function pm_followup_due(array $leads, array $cfg, bool $withDraft = true): arra
 {
     $out = [];
     foreach ($leads as $k => $l) {
-        if (($l['status'] ?? '') !== 'contacted' || (int)($l['followups'] ?? 0) >= (int)($cfg['max_followups'] ?? 3) || pm_lead_snoozed($l) || pm_lead_email_dead($l)) {
+        if (($l['status'] ?? '') !== 'contacted' || (int)($l['followups'] ?? 0) >= (int)($cfg['max_followups'] ?? 3) || pm_lead_snoozed($l) || pm_lead_email_dead($l) || !empty($l['listen'])) {
             continue;
         }
         $t = strtotime((string)($l['last_contacted'] ?? ''));
