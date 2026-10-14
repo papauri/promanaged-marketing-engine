@@ -47,6 +47,16 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
   <?= $tile('AI today', number_format($td['ai']) . ' tokens', ($td['ai_budget'] ? 'budget ' . number_format($td['ai_budget']) . ' (all businesses)' : 'no daily limit') . ($td['memory'] ? ' · ' . $td['memory'] . ' from memory' : ''), '?tab=social&view=results#ai') ?>
 </section>
 
+<?php $bd = function_exists('pm_board') ? pm_board($vb) : []; if (!empty($bd['reports'])): ?>
+<section class="card" id="board" aria-label="Today's board">
+  <h2>Today's board <span class="muted t-sm">· put together by <?= pm_h(pm_agent_first('director')) ?> with the department heads<?= !empty($bd['standup']) ? ' at the ' . pm_h($bd['standup']) . ' stand-up' : '' ?>, checked <?= pm_h(date('H:i', strtotime((string)$bd['at']))) ?></span></h2>
+  <p class="hq-headline"><?= pm_h((string)$bd['headline']) ?></p>
+  <?php if ($bd['you']): ?><div class="btns"><?php foreach ($bd['you'] as [$yt, $yh, $yu]): ?><a class="btn small<?= $yu ? ' primary' : '' ?>" href="<?= pm_h($yh) ?>"><?= pm_h($yt) ?></a><?php endforeach; ?></div><?php endif; ?>
+  <ul class="talklist"><?php foreach ($bd['reports'] as [$rd, $rt, $rh]): ?><li><time></time><b><?= pm_h(pm_talk_name($rd)) ?>:</b><span><?= $rh !== '' ? '<a href="' . pm_h($rh) . '">' . pm_h($rt) . '</a>' : pm_h($rt) ?></span></li><?php endforeach; ?></ul>
+  <?php if ($bd['checks']): ?><p class="hint"><b><?= pm_h(pm_agent_first('director')) ?> checked the board against what we have:</b></p><ul class="t-sm"><?php foreach ($bd['checks'] as [$ct, $ch]): ?><li><a href="<?= pm_h($ch) ?>"><?= pm_h($ct) ?></a></li><?php endforeach; ?></ul><?php endif; ?>
+</section>
+<?php endif; ?>
+
 <div class="hq-top">
   <section class="card hq-brief" id="brief">
     <h2>Today's brief from the Director</h2>

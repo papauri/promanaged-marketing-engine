@@ -490,6 +490,7 @@ require_once __DIR__ . '/leadfolders.php'; // the owner's own folders of leads
 require_once __DIR__ . '/teamboard.php'; // how the departments talk to each other (no AI)
 require_once __DIR__ . '/agenttalk.php'; // the agents' conversation, day by day, for the Audit (no AI)
 require_once __DIR__ . '/sitdown.php'; // the team's sit-down about a lead: how best to approach it
+require_once __DIR__ . '/board.php'; // today's board: each head reports to the Director, who keeps the Overview true (no AI)
 require_once __DIR__ . '/sx_listen.php'; // Thandi, head of Social: her morning huddle and the people asking for what we offer
 require_once __DIR__ . '/personal.php'; // the market pulse, the study's personal line, drafts brought up to date with a found name
 

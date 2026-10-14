@@ -16,7 +16,7 @@ $team = [
         'Nothing reaches a customer until someone presses Send, Approve or Publish.',
     ]],
     'day' => ['Every day', [
-        'Open the ' . $a('?tab=home', 'Overview') . '. "Needs you now" lists what is waiting. Under it is what the AI team decided this morning: ' . $ag('director') . '\'s meeting, the orders, and how the team is talking.',
+        'Open the ' . $a('?tab=home', 'Overview') . '. "Today\'s board" at the top is put together by ' . $ag('director') . ' with the department heads at the end of the morning run: each head says what they did and what waits for you, ' . $ag('director') . ' checks it against what we really have (the run happened, the Page and mailbox work, nothing stuck in the Outbox) and puts your few things first as buttons. It is checked again every hour. "Needs you now" lists what is waiting by department. Under it is what the AI team decided this morning: ' . $ag('director') . '\'s meeting, the orders, and how the team is talking.',
         'Answer replies first: ' . $a('?tab=agents&status=awaiting', 'Sales › Leads › Needs reply') . '.',
         'Send the follow-ups that are due. They are in the Today list on ' . $a('?tab=agents', 'Leads') . '.',
         'Read the new drafts in ' . $a('?tab=agents&status=drafted', 'Draft ready') . ', tick Approve for sending on the good ones (or Select all on this page once you have read them), then press Approve selected. To hold them until a set time, fill in Not before first.',
@@ -81,7 +81,7 @@ $team = [
         'The AI agents work like departments: ' . $ag('director') . ' (Director) sets the day and gives orders; ' . $ag('scouts') . ' (Scout) finds businesses; ' . $ag('research') . ' (Researcher) studies them; ' . $ag('contact') . ' (Contact Finder) finds emails, numbers and owner names; '
             . $ag('writers') . ' (Writer) writes the first emails; ' . $ag('followup') . ' (Follow-up) decides when to follow up; ' . $ag('replies') . ' (Replies) answers people who write back; ' . $ag('social') . ' (Social) runs the Page and finds people asking; '
             . $ag('sender') . ' (Sender) sends what you approved; ' . $ag('advisor') . ' (Advisor) shows what is selling.',
-        'They talk to each other: a reply teaches the Writers how to open, ' . $ag('social') . ' tells the Writers what people ask for, the Director\'s orders reach every department. You see the notes on the ' . $a('?tab=home', 'Overview') . ' and can strike one that is wrong.',
+        'They report to ' . $ag('director') . ' at a stand-up at the end of the morning run, and that becomes Today\'s board on the Overview. They talk to each other: a reply teaches the Writers how to open, ' . $ag('social') . ' tells the Writers what people ask for, the Director\'s orders reach every department. You see the notes on the ' . $a('?tab=home', 'Overview') . ' and can strike one that is wrong.',
         'Every email is written to read as a real person\'s: professional, friendly, specific and useful. Code checks each one for anything that could look like spam or phishing (too many links, capitals, pressure words, a nameless greeting) and ' . $ag('sender') . ' raises it at the sit-down, so it is rewritten before you see it.',
         'Nothing reaches a customer until a person presses Send, Approve or Publish. Opening a page never asks the AI, and the daily AI spend has a limit.',
     ]],

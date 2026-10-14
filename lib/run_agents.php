@@ -862,6 +862,10 @@ try {
             pm_playbook_ensure($brand);
         } catch (Throwable) {
         }
+        try { // the stand-up: each head reports to the Director, who puts today's board together for the Overview (no AI)
+            pm_board_refresh($brand, true);
+        } catch (Throwable) {
+        }
     }
     pm_run_state(['state' => 'done', 'started' => $run['started'], 'finished' => date('Y-m-d H:i:s'), 'stats' => $stats, 'beat' => time()]);
 } catch (Throwable $e) {

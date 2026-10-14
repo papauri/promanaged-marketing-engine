@@ -51,7 +51,7 @@ function pm_talk_name(string $who): string
     $map = ['director' => 'director', 'scout' => 'scouts', 'scouts' => 'scouts', 'directory' => 'scouts', 'watch' => 'scouts', 'researcher' => 'research', 'research' => 'research',
         'qualifier' => 'research', 'writer' => 'writers', 'writers' => 'writers', 'follow-up' => 'followup', 'followup' => 'followup', 'win-back' => 'followup', 'reply' => 'replies',
         'replies' => 'replies', 'social' => 'social', 'copy desk' => 'social', 'photo desk' => 'social', 'brand team' => 'social', 'idea room' => 'social', 'advisor' => 'advisor',
-        'contact finder' => 'contact', 'sender' => 'sender', 'email' => 'sender', 'swarm' => 'swarm', 'owner' => 'owner', 'you' => 'owner', 'all' => 'all'];
+        'contact finder' => 'contact', 'contact' => 'contact', 'sender' => 'sender', 'email' => 'sender', 'swarm' => 'swarm', 'owner' => 'owner', 'you' => 'owner', 'all' => 'all'];
     $d = $map[$k] ?? '';
     return $d !== '' ? pm_agent_names()[$d] : ucfirst($who);
 }
