@@ -18,7 +18,7 @@
     paste_reply: 'Reading their reply',
     director: 'Reviewing the pipeline',
     refresh_models: 'Refreshing the model list',
-    attach_unmatched: 'Reading the reply', dismiss_unmatched: 'Dismissing', approve_send: 'Putting the ticked emails in the send queue', delete_ticked: 'Deleting the ticked leads', unapprove_send: 'Updating the send queue',
+    attach_unmatched: 'Reading the reply', dismiss_unmatched: 'Dismissing', approve_send: 'Putting the ticked emails in the send queue', send_now: 'Sending the ticked emails, one after another', delete_ticked: 'Deleting the ticked leads', unapprove_send: 'Updating the send queue',
     send: 'Sending the email', send_reply: 'Sending the reply', email: 'Creating the proposal and sending it',
     download: 'Creating the PDF', smtp_check: 'Logging in to the mail server',
     save_draft: 'Saving', save_reply: 'Saving', config: 'Saving', proposal: 'Preparing the proposal'

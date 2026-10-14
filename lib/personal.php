@@ -200,3 +200,14 @@ function pm_dm_greet(array &$lead): bool
     }
     return $did;
 }
+
+/**
+ * Is WhatsApp set up for this business: a WhatsApp number (or phone) of ours in Business details, or a connected WhatsApp Business number. When it is not, the business works
+ * by email only: no WhatsApp boxes or buttons on the leads, and the writers do not spend tokens writing WhatsApp messages nobody will send.
+ */
+function pm_wa_on(string $brand = ''): bool
+{
+    $brand = $brand !== '' ? $brand : pm_brand();
+    static $memo = [];
+    return $memo[$brand] ??= pm_dm_as($brand, fn() => pm_our_wa_number(pm_settings()) !== '') || (function_exists('pm_wa_biz_cfg') && pm_wa_biz_cfg($brand)['ready']);
+}

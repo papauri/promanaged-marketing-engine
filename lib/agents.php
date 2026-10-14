@@ -1201,7 +1201,7 @@ function pm_agent_write(array $leads): array
         'evidence' => array_slice($l['evidence'] ?? [], 0, 2), 'online_gaps' => array_slice($l['social_gaps'] ?? [], 0, 2), 'research' => pm_research_brief($l), 'lead_with' => $l['pain'] ?? '', 'how_it_stops' => pm_fix_for((string)($l['pain'] ?? '')),
         'subject_style' => pm_subject_style(pm_email_exp_arm((string)$l['id'], $brand))], $leads);
     return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
-        . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}. Never greet with the business name.", false, 2500, 'write'))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);
+        . "\nJSON array of {\"id\",\"email_subject\",\"email_body\"" . (pm_wa_on() ? ",\"whatsapp\"" : '') . "}. Never greet with the business name." . (pm_wa_on() ? '' : ' Email only: no WhatsApp message.'), false, 2500, 'write'))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);
 }
 
 /**
@@ -1234,7 +1234,8 @@ function pm_starter_draft(array $lead): ?array
         $subj = trim((string)($st['subject'] ?? ''));
         $first = mb_strtolower(trim((string)strtok($body, "\n")));
         $n = str_word_count($body);
-        if ($subj === '' || $n < 40 || $n > 120 || str_word_count($wa) < 15 || pm_has_price($body . ' ' . $wa)
+        if ($subj === '' || $n < 40 || $n > 120 || (pm_wa_on() && str_word_count($wa) < 15) || // no WhatsApp set up: the starter needs no WhatsApp version
+             pm_has_price($body . ' ' . $wa)
             || ($name !== '' && str_contains($first, $name))) { // the Writer is told never to greet with the business name
             continue;
         }
@@ -1265,7 +1266,7 @@ function pm_agent_followup(array $leads): array
         'their_last_message' => $last($l, 'in'), 'our_last_message' => $last($l, 'out'), 'followups_already_sent' => (int)($l['followups'] ?? 0),
         'state' => pm_lead_engagement((array)$l), 'views' => (int)($l['view_count'] ?? 0), 'last_seen' => (string)($l['last_viewed_at'] ?? ''),
         'subject_style' => pm_subject_style(pm_followup_arm((array)$l))] + (!empty($l['research']) ? ['what_we_know' => pm_research_brief($l)] : []), $leads); // the morning study: real facts and news to build the new angle on
-    return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}", false, 1800))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);
+    return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"email_subject\",\"email_body\"" . (pm_wa_on() ? ",\"whatsapp\"" : '') . "}" . (pm_wa_on() ? '' : ' Email only: no WhatsApp message.'), false, 1800))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);
 }
 
 /** One word for the follow-up writer: 'replied', 'opened' or 'silent'. */
@@ -2398,7 +2399,7 @@ function pm_agent_compose(array $lead, string $channel, string $tone, string $le
 }
 
 /** The picker shown above a message box. $target tells the script which fields to fill. */
-function pm_compose_controls(string $leadId, string $csrf, bool $both = true, string $tone = ''): string
+function pm_compose_controls(string $leadId, string $csrf, bool $both = true, string $tone = '', bool $wa = true): string // $wa false: WhatsApp is not set up, no Write WhatsApp
 {
     $tone = $tone !== '' ? $tone : (pm_win_best_fmt(pm_brand()) ?: 'found'); // the format that has won the most replies, once there is enough to say
     $opt = fn(array $a, string $sel) => implode('', array_map(fn($k, $v) => '<option value="' . $k . '"' . ($k === $sel ? ' selected' : '') . '>' . pm_h($v) . '</option>', array_keys($a), $a));
@@ -2408,7 +2409,7 @@ function pm_compose_controls(string $leadId, string $csrf, bool $both = true, st
         . '<select data-k="angle" aria-label="Angle">' . $opt(PM_COMPOSE_ANGLES, 'need') . '</select>'
         . '<select data-k="lang" aria-label="Language"><option value="english">English</option><option value="chichewa">Chichewa greeting</option></select></div>'
         . '<div class="btns">' . ($both ? '<button type="button" class="btn small aigen" data-channel="email">Write email</button>' : '')
-        . '<button type="button" class="btn small aigen" data-channel="whatsapp">Write WhatsApp</button><span class="hint cmsg"></span></div></div>';
+        . ($wa ? '<button type="button" class="btn small aigen" data-channel="whatsapp">Write WhatsApp</button>' : '') . '<span class="hint cmsg"></span></div></div>';
 }
 
 
@@ -2650,7 +2651,7 @@ function pm_agent_research(array $lead): array
         . "Step 3, through our eyes: at most 3 short lines on what is weak or missing online and where we could genuinely help (for our team only). "
         . "Step 4, write 2 hooks: one real observation plus a curious question that makes the owner want to reply, WITHOUT handing over the solution or offering to fix it. Friendly, never critical or creepy, business information only. "
         . ($nStart ? "Step 5, write 1 conversation starter, built on the best hook, ready to send:" : '') . ($nStart ? " an email (subject of max 7 words, then a body of 45 to 80 words: a greeting line" . ($first !== '' ? " to $first" : '') . ", one line saying who we are"
-        . ", the observation, one easy question about how they handle it today; ONE question only, no offer to fix it, no prices, no feature list, no sign-off) and a WhatsApp version of 25 to 40 words. " : '')
+        . ", the observation, one easy question about how they handle it today; ONE question only, no offer to fix it, no prices, no feature list, no sign-off)" . (pm_wa_on() ? ' and a WhatsApp version of 25 to 40 words' : '') . ". " : '')
         . 'Step 5b, personal: the line our first email opens with, at most 25 words, no greeting, number, price or link: ONE true, specific detail about them from a confirmed fact (their rooms, setting, a recent review, news), then '
         . (pm_brand() === 'travel' ? 'that we would love them to be part of what we are building. Never name yourself, never say or suggest you were looking for a stay or travelling. ' : 'why it made us write to them. ')
         . 'personal_subject: under 45 characters, specific to them, a capital letter first and on names only. ' . pm_market_pulse_line() . ' '

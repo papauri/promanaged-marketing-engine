@@ -584,11 +584,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (in_array($_POST['bt'] ?? '', ['targeting', 'home', 'ops'], true)) { // the page the button was on
                 pm_redirect(['home' => 'home', 'ops' => 'settings&section=connections'][$_POST['bt']] ?? 'targeting', $m, $k);
             }
-            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'unapprove_send', 'set_send_after', 'dismiss_unmatched'], true);
+            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after', 'dismiss_unmatched'], true);
             if ($id !== '' && !$noLead) {
                 pm_redirect(!empty($_POST['rl']) ? 'agents&lead=' . $id : 'agents' . $keep . '&at=' . rawurlencode($id) . '#l' . $id, $m, $k); // at= opens the page of the list that holds the lead
             }
-            pm_redirect('agents' . (in_array($do, ['delete', 'plan', 'approve_send', 'unapprove_send', 'set_send_after'], true) ? $keep : ''), $m, $k);
+            pm_redirect('agents' . (in_array($do, ['delete', 'plan', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after'], true) ? $keep : ''), $m, $k);
         };
 
         if ($do === 'run') {
@@ -766,6 +766,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $back($msg);
         }
+        if ($do === 'send_now') { // the ticked first emails, sent now one after another, each with every check a single Send has (limit, STOP, bounces, wording)
+            $ids = array_slice(array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? [])))), 0, 25);
+            if (!$ids) {
+                $back('Tick the leads first.', 'err');
+            }
+            @set_time_limit(300);
+            $sent = 0;
+            $why = [];
+            foreach ($ids as $i2) {
+                $res = pm_send_first($leads, $i2, 'drafts');
+                if (!empty($res['ok'])) {
+                    $sent++;
+                    unset($leads[$i2]['awaiting_reply_since'], $leads[$i2]['approved_at'], $leads[$i2]['send_after']);
+                    pm_leads_save($leads); // saved after each one: a stop half-way never loses what went out
+                    continue;
+                }
+                $why[] = ($leads[$i2]['name'] ?? 'A lead') . ': ' . $res['msg'];
+                if (in_array($res['kind'] ?? '', ['cap', 'breaker', 'smtp'], true)) { // the limit, the safety stop or the mail server: the rest would fail the same way
+                    break;
+                }
+            }
+            $back($sent . ' of ' . count($ids) . ' email' . (count($ids) === 1 ? '' : 's') . ' sent now.' . ($why ? ' Not sent: ' . implode(' ', array_slice($why, 0, 3)) . (count($why) > 3 ? ' And ' . (count($why) - 3) . ' more.' : '') : ''), $sent ? 'ok' : 'err');
+        }
         if ($do === 'approve_send' || $do === 'unapprove_send') {
             $ids = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? []))));
             if (!$ids) {
@@ -929,7 +952,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($do === 'save_draft') {
             $key = ($_POST['which'] ?? '') === 'followup' ? 'followup_draft' : 'drafts';
             $oldBody = trim((string)($lead[$key]['email_body'] ?? ''));
-            $leads[$id][$key] = array_replace((array)($lead[$key] ?? []), ['email_subject' => trim((string)$_POST['email_subject']), 'email_body' => trim((string)$_POST['email_body']), 'whatsapp' => trim((string)$_POST['whatsapp'])]); // other draft details (source, checks) are kept
+            $leads[$id][$key] = array_replace((array)($lead[$key] ?? []), ['email_subject' => trim((string)$_POST['email_subject']), 'email_body' => trim((string)$_POST['email_body']), 'whatsapp' => trim((string)($_POST['whatsapp'] ?? ($lead[$key]['whatsapp'] ?? '')))]); // no WhatsApp box when WhatsApp is off: the text is kept // other draft details (source, checks) are kept
             if (isset(PM_COMPOSE_TONES[(string)($_POST['fmt'] ?? '')])) {
                 $leads[$id][$key]['fmt'] = (string)$_POST['fmt']; // written with Write with AI in this format: the firm learns which formats win replies
             }

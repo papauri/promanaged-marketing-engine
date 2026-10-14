@@ -28,12 +28,13 @@ function pm_approach(array $l): array
     $r = (array)($l['research'] ?? []);
     $fresh = !empty($r['at']) && strtotime((string)$r['at']) > strtotime('-30 days');
     $mail = (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) && empty($l['email_bad']);
-    $wa = pm_wa_best($l)[0] !== '';
+    $waOn = pm_wa_on((string)($l['brand'] ?? pm_brand())); // no WhatsApp set up: the approach is by email (and a call)
+    $wa = $waOn && pm_wa_best($l)[0] !== '';
     $phone = trim((string)($l['phone'] ?? '') . (string)($l['whatsapp'] ?? '')) !== '';
     $named = trim((string)($l['contact'] ?? '')) !== '';
     $title = trim((string)($l['contact_title'] ?? '')) !== '';
     $online = preg_match('#^https?://#i', (string)($l['website'] ?? '')) || preg_match('#facebook\.com/#i', (string)($l['facebook'] ?? '')) || preg_match('#instagram\.com/#i', (string)($l['instagram'] ?? ''));
-    $hooks = array_values(array_filter(array_merge((array)($r['hooks'] ?? []), [(string)($l['pain'] ?? '')], (array)($l['social_gaps'] ?? []))));
+    $hooks = array_values(array_filter(array_merge([pm_lead_personal($l)], (array)($r['hooks'] ?? []), [(string)($l['pain'] ?? '')], (array)($l['social_gaps'] ?? []))));
     $first = in_array($st, ['new', 'qualified', 'drafted'], true);
     $draft = $st === 'contacted' ? !empty($l['followup_draft']['email_body']) || !empty($l['followup_draft']['whatsapp']) : !empty($l['drafts']['email_body']) || !empty($l['drafts']['whatsapp']);
     // weight = how much it matters to a good first approach
@@ -45,8 +46,11 @@ function pm_approach(array $l): array
         ['research', 'Researched (last 30 days)', $fresh && ($r['sure'] ?? true), 14, $fresh ? count((array)($r['discoveries'] ?? [])) . ' facts found ' . substr((string)$r['at'], 0, 10) . (isset($r['sure']) && !$r['sure'] ? ', but not confirmed as this business' : '') : 'Knowing their business is what makes the first line land', $fresh ? null : ['research', empty($r) ? 'Research them' : 'Research again']],
         ['hook', 'A personal opening', (bool)$hooks, 14, $hooks ? '"' . mb_substr((string)$hooks[0], 0, 120) . '"' : 'One real thing about them to open with', $hooks ? null : ['research', 'Research them']],
         ['message', $st === 'contacted' ? 'The follow-up written' : 'The first message written', $draft, 14, $draft ? 'Ready to read' : 'Drafted from what we know, for you to read', $draft || !in_array($st, ['new', 'qualified', 'drafted', 'contacted'], true) ? null : [$st === 'contacted' ? 'followup_ai' : 'draft_outreach', $st === 'contacted' ? 'Draft the follow-up' : 'Draft the message']],
-        ['approved', 'Approved to go out', !empty($l['approved_at']) || !$first || !$mail, 14, !empty($l['approved_at']) ? 'In the send queue' : ($first ? 'Read it, then tick Approve for sending' : 'Sent'), null],
+        ['approved', 'Approved to go out', !empty($l['approved_at']) || !$first || !$mail, 14, !empty($l['approved_at']) ? 'In the send queue' : ($first ? 'Read it, then tick it and press Send' : 'Sent'), null],
     ];
+    if (!$waOn) {
+        $checks = array_values(array_filter($checks, fn($c) => $c[0] !== 'whatsapp'));
+    }
     $tot = array_sum(array_column($checks, 3));
     $got = array_sum(array_map(fn($c) => $c[2] ? $c[3] : 0, $checks));
     $missing = array_values(array_map(fn($c) => $c[1], array_filter($checks, fn($c) => !$c[2])));

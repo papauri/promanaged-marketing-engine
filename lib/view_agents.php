@@ -54,6 +54,7 @@ $post = fn($id, $do, $extra = '') => '<input type="hidden" name="csrf" value="' 
     . $hid('rs', $filter) . $hid('rt', $ftype) . ((int)($_GET['p'] ?? 0) > 1 ? $hid('rp', (int)$_GET['p']) : '') . ($focusId !== '' ? $hid('rl', '1') : '') . ($id !== '' ? $hid('id', $id) : '') . $extra;
 require_once __DIR__ . '/view_drafts.php';
 $waBiz = pm_wa_biz_cfg()['ready'];
+$waOn = pm_wa_on(pm_brand()); // no WhatsApp set up for this business: email only, no WhatsApp boxes or buttons
 @set_time_limit(120);
 $dir = pm_director_brief(false, false) + ['headline' => '', 'priorities' => [], 'focus' => [], 'drop' => [], 'experiment' => '']; // a new business has no advice yet
 $ds = $dir['stats'];
@@ -173,10 +174,11 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <form method="post" id="leadsel" class="selbar<?= $running ? ' locked' : '' ?>"><?= $post('', '') ?>
   <label class="tick"><input type="checkbox" data-pick-all=".lsel" aria-label="Tick every lead on this page"> All on this page</label>
   <b class="selcount" data-pick-count=".lsel">0 ticked</b>
-  <?php if ($nApprovable): ?><label class="selwhen">Not before <input type="datetime-local" name="send_after" aria-label="Send no earlier than (optional)"></label>
-  <button class="btn primary" name="do" value="approve_send" title="Each ticked email goes out on its own, one at a time, in the sending hours">Send the ticked emails</button><?php endif; ?>
+  <?php if ($nApprovable): ?><button class="btn primary" name="do" value="send_now" data-confirm="Send the ticked emails now? Each one goes through the usual checks (daily limit, STOP, bounces, wording)." title="Sends each ticked email now, one after another">Send now</button>
+  <label class="selwhen">or from <input type="datetime-local" name="send_after" aria-label="Send no earlier than (optional)"></label>
+  <button class="btn" name="do" value="approve_send" title="Each ticked email goes out on its own, one at a time, in the sending hours (or from the time given)">Send in the sending hours</button><?php endif; ?>
   <?php if ($isAdm): ?><button class="btn small danger" name="do" value="delete_ticked" data-confirm="Delete the ticked leads? This cannot be undone.">Delete ticked</button><?php endif; ?>
-  <span class="hint"><?= $nApprovable ? $nApprovable . ' draft' . ($nApprovable === 1 ? '' : 's') . ' on this page can be sent. Read a draft, tick it, then press Send. They go out one at a time in the <a href="?tab=targeting#sendschedule">sending hours</a>.' : 'Nothing on this page is ready to send yet.' ?></span>
+  <span class="hint"><?= $nApprovable ? $nApprovable . ' email' . ($nApprovable === 1 ? '' : 's') . ' on this page can be sent. Read, tick, then <b>Send now</b>, or let them go out one at a time in the <a href="?tab=targeting#sendschedule">sending hours</a>.' : 'Nothing on this page is ready to send yet.' ?></span>
 </form>
 <?php endif; ?>
 <?php if ($hasApprove && function_exists('pm_view_send_queue') && count(array_filter($leadsAll, fn($x) => !empty($x['approved_at'])))) { pm_view_send_queue(pm_leads()); } ?>
@@ -190,7 +192,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     $which = ($l['status'] === 'contacted' && !empty($l['followup_draft'])) ? 'followup' : 'first';
     $dr = $which === 'followup' ? $l['followup_draft'] : ($l['drafts'] ?? []);
     $canMail = !empty($dr['email_body']) && filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) && $l['status'] !== 'optout';
-    $wa = !empty($dr['whatsapp']) && ($l['status'] ?? '') !== 'optout' ? pm_wa_link($l, $dr['whatsapp']) : ''; // nobody who said STOP gets a WhatsApp button
+    $wa = $waOn && !empty($dr['whatsapp']) && ($l['status'] ?? '') !== 'optout' ? pm_wa_link($l, $dr['whatsapp']) : ''; // nobody who said STOP gets a WhatsApp button
     $hasReply = !empty($l['reply_draft']);
 ?>
 <details class="lead" id="l<?= pm_h($id) ?>" <?= ($which === 'followup' || $waiting($l) || $focusId === $id) ? 'open' : '' ?>>
@@ -228,7 +230,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
         <?php foreach (array_slice((array)($l['evidence'] ?? []), 0, 3) as $e): ?><p class="hint ev">• <?= preg_replace('#(https?://[^\s<]+)#', '<a href="$1" target="_blank" rel="noopener noreferrer">source</a>', pm_h((string)$e)) ?></p><?php endforeach; ?>
         <p class="hint"><?= pm_h(implode(' · ', array_filter([$l['website'] ?? '', $l['phone'] ?? '', $l['email'] ?? '']))) ?: 'No contact details found yet' ?>
           <?php foreach (['facebook' => 'Facebook', 'instagram' => 'Instagram'] as $sk => $sl): if (!empty($l[$sk]) && preg_match('#^https?://#', $l[$sk])): ?> · <a href="<?= pm_h($l[$sk]) ?>" target="_blank" rel="noopener noreferrer"><?= $sl ?></a><?php endif; endforeach; ?></p>
-        <?php if (trim((string)($l['phone'] ?? '') . (string)($l['whatsapp'] ?? '')) !== ''): ?><p class="hint wa-optin"><?= pm_h(pm_wa_optin_line($l)) ?></p><?php endif; ?>
+        <?php if ($waOn && trim((string)($l['phone'] ?? '') . (string)($l['whatsapp'] ?? '')) !== ''): ?><p class="hint wa-optin"><?= pm_h(pm_wa_optin_line($l)) ?></p><?php endif; ?>
         <?php if (!empty($l['social_gaps'])): ?><p class="hint gaps"><b>Where they lack online:</b> <?= pm_h(implode(' · ', array_slice($l['social_gaps'], 0, 3))) ?></p><?php endif; ?>
         </section>
         <?php if (!empty($l['research'])): $rz = $l['research']; ?>
@@ -243,7 +245,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
           <?php if (!empty($rz['starters'])): ?><details class="sx-more"><summary><?= count($rz['starters']) ?> conversation starters, ready to send</summary>
             <?php foreach ($rz['starters'] as $sz): ?><div class="starter"><b><?= pm_h($sz['angle']) ?></b><?= $sz['subject'] !== '' ? ' · <span class="muted">' . pm_h($sz['subject']) . '</span>' : '' ?><p><?= nl2br(pm_h($sz['email'])) ?></p>
               <div class="btns"><button type="button" class="btn small primary" data-fill="email" data-subject="<?= pm_h($sz['subject']) ?>" data-text="<?= pm_h($sz['email']) ?>">Put in email</button>
-              <?php if ($sz['whatsapp'] !== ''): ?><button type="button" class="btn small" data-fill="whatsapp" data-text="<?= pm_h($sz['whatsapp']) ?>">Put in WhatsApp</button><?php endif; ?></div></div><?php endforeach; ?></details>
+              <?php if ($waOn && $sz['whatsapp'] !== ''): ?><button type="button" class="btn small" data-fill="whatsapp" data-text="<?= pm_h($sz['whatsapp']) ?>">Put in WhatsApp</button><?php endif; ?></div></div><?php endforeach; ?></details>
           <?php elseif (!empty($rz['hooks'])): ?><p class="opp"><b>Conversation hooks:</b></p><?php foreach (array_slice($rz['hooks'], 0, 3) as $hz): ?><p class="hook">“<?= pm_h($hz) ?>” <button type="button" class="btn small" data-copy="<?= pm_h($hz) ?>">Copy</button></p><?php endforeach; ?><?php endif; ?>
         </div></section>
         <?php endif; ?>
@@ -266,12 +268,12 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
           <textarea name="body" rows="5" aria-label="Reply by email"><?= pm_h($rp['body'] ?? '') ?></textarea>
           <?= pm_share_reply_controls((string)($l['brand'] ?? pm_brand()), (array)($rp['attach'] ?? [])) ?>
           <?php else: ?><span class="hint">No email address for this lead: answer on WhatsApp<?= $rpWa === '' ? ' (no mobile number either; add one in the box on the right)' : '' ?>.</span><?php endif; ?>
-          <?php if ($rpWa !== '' || !$rpMail): ?><label class="hint">WhatsApp answer <?= $rpWaText === '' && trim((string)($rp['body'] ?? '')) === '' ? '(write it, or press Draft my answer under More → Paste their reply)' : '' ?></label>
+          <?php if ($waOn && ($rpWa !== '' || !$rpMail)): ?><label class="hint">WhatsApp answer <?= $rpWaText === '' && trim((string)($rp['body'] ?? '')) === '' ? '(write it, or press Draft my answer under More → Paste their reply)' : '' ?></label>
           <textarea name="whatsapp" rows="2" aria-label="Reply on WhatsApp"><?= pm_h($rpWaText) ?></textarea><?= pm_share_reply_controls((string)($l['brand'] ?? pm_brand()), [], 'wa') ?><?php endif; ?>
           <div class="btns"><button class="btn small">Save</button><?= pm_regen_lead_buttons($l, 'reply_draft') ?>
             <?php if ($rpMail && trim((string)($rp['body'] ?? '')) !== ''): ?><button class="btn small primary" formaction="?tab=agents" name="do" value="send_reply" onclick="return confirm('Send this reply now?')">Send reply</button><?php endif; ?>
             <?php if ($waBiz && trim($rpWaText) !== '' && pm_wa_biz_window_open($l)): ?><button class="btn small primary" formaction="?tab=agents" name="do" value="send_reply_wa" onclick="return confirm('Send this answer on WhatsApp now?')">Send on WhatsApp Business</button><?php endif; ?>
-            <?php if ($rpWa !== ''): ?><a class="btn small" data-wa-log data-id="<?= pm_h($id) ?>" data-csrf="<?= pm_h($csrf) ?>" data-url="<?= pm_h($rpWa) ?>" href="<?= pm_h($rpWa) ?>" target="_blank" rel="noopener noreferrer">Reply on WhatsApp</a><?php endif; ?></div>
+            <?php if ($waOn && $rpWa !== ''): ?><a class="btn small" data-wa-log data-id="<?= pm_h($id) ?>" data-csrf="<?= pm_h($csrf) ?>" data-url="<?= pm_h($rpWa) ?>" href="<?= pm_h($rpWa) ?>" target="_blank" rel="noopener noreferrer">Reply on WhatsApp</a><?php endif; ?></div>
         </form>
         <?php endif; ?>
         <?php if ($dr || $l['status'] !== 'new' || !empty($l['research']['starters'])): ?>
@@ -279,16 +281,16 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
           <div class="mp-head"><h4 class="lc-h"><?= $which === 'followup' ? 'The follow-up' : 'The first message' ?></h4></div>
           <details class="mp-to"><summary>To: <?= pm_h(implode(' · ', array_filter([(string)($l['contact'] ?? ''), (string)($l['email'] ?? '') ?: 'no email', (string)($l['phone'] ?? '')]))) ?></summary>
             <div class="two"><input type="text" name="email" value="<?= pm_h($l['email'] ?? '') ?>" placeholder="Email"><input type="text" name="contact" value="<?= pm_h($l['contact'] ?? '') ?>" placeholder="Contact name"></div>
-            <input type="text" name="phone" value="<?= pm_h($l['phone'] ?? '') ?>" placeholder="Phone / WhatsApp"></details>
-          <?= pm_compose_controls($id, $csrf) ?>
+            <input type="text" name="phone" value="<?= pm_h($l['phone'] ?? '') ?>" placeholder="<?= $waOn ? 'Phone / WhatsApp' : 'Phone' ?>"></details>
+          <?= pm_compose_controls($id, $csrf, true, '', $waOn) ?>
           <label>Email</label>
           <input type="text" name="email_subject" value="<?= pm_h($dr['email_subject'] ?? '') ?>" placeholder="Subject">
           <textarea name="email_body" rows="6" placeholder="Message"><?= pm_h($dr['email_body'] ?? '') ?></textarea>
           <div class="sigprev" title="Added under every email when it is sent"><span>Added when sent · <a href="?tab=targeting#defaultmsg">change the signature</a></span><pre><?= pm_h(trim(pm_outreach_footer(pm_settings()))) ?></pre></div>
           <?= $which === 'first' ? pm_share_added_hint('email', (string)($l['brand'] ?? pm_brand())) : '' ?>
-          <label>WhatsApp</label>
-          <textarea name="whatsapp" rows="2"><?= pm_h($dr['whatsapp'] ?? '') ?></textarea>
-          <?php if (trim((string)($dr['whatsapp'] ?? '')) !== ''): ?><details class="aibox"><summary>The WhatsApp as it goes out (greeting and sign-off added)</summary><pre class="t-sm"><?= pm_h(pm_wa_text($l, (string)$dr['whatsapp'], $which === 'first')) ?></pre></details><?php endif; ?>
+          <?php if ($waOn): ?><label>WhatsApp</label>
+          <textarea name="whatsapp" rows="2"><?= pm_h($dr['whatsapp'] ?? '') ?></textarea><?php endif; ?>
+          <?php if ($waOn && trim((string)($dr['whatsapp'] ?? '')) !== ''): ?><details class="aibox"><summary>The WhatsApp as it goes out (greeting and sign-off added)</summary><pre class="t-sm"><?= pm_h(pm_wa_text($l, (string)$dr['whatsapp'], $which === 'first')) ?></pre></details><?php endif; ?>
           <div class="btns"><button class="btn small">Save edits</button><?= pm_regen_lead_buttons($l, $which === 'followup' ? 'followup_draft' : 'drafts') ?></div>
           <?php
             $tsS = pm_settings();
@@ -299,7 +301,8 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
           <div class="testbar"><b>Test before it goes</b>
             <input type="email" name="test_to" value="<?= pm_h($testTo) ?>" placeholder="Your email address" aria-label="Send the test email to">
             <button class="btn small" name="do" value="send_test" title="Sends this exact email (signature, links and attachments included) to the address on the left. Your edits are saved first. Nothing is recorded on the lead.">Send me a test email</button>
-            <?php if (trim($waSaved) !== '' && $myWa !== ''): ?><a class="btn small" href="https://wa.me/<?= pm_h($myWa) ?>?text=<?= rawurlencode(pm_wa_text($l, $waSaved, $which === 'first')) ?>" target="_blank" rel="noopener noreferrer" data-wa-saved="<?= pm_h($waSaved) ?>" title="Opens WhatsApp to your own number with the message exactly as the lead will get it">Test the WhatsApp on my phone</a>
+            <?php if (!$waOn): ?>
+            <?php elseif (trim($waSaved) !== '' && $myWa !== ''): ?><a class="btn small" href="https://wa.me/<?= pm_h($myWa) ?>?text=<?= rawurlencode(pm_wa_text($l, $waSaved, $which === 'first')) ?>" target="_blank" rel="noopener noreferrer" data-wa-saved="<?= pm_h($waSaved) ?>" title="Opens WhatsApp to your own number with the message exactly as the lead will get it">Test the WhatsApp on my phone</a>
             <?php elseif (trim($waSaved) !== ''): ?><span class="hint">Add a mobile number under Business details to test the WhatsApp on your phone.</span><?php endif; ?>
           </div>
         </form>
@@ -337,7 +340,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
         <div class="menu">
           <?php if ($wa): ?><form method="post"><?= $post($id, 'whatsapp_sent') ?><button class="btn small" title="For a message you sent from your phone without the button above">I sent a WhatsApp from my phone</button></form><?php endif; ?>
           <?php if (!empty($dr['email_body'])): ?><button type="button" class="btn small" data-copy="<?= pm_h(($dr['email_subject'] ?? '') . "\n\n" . $dr['email_body']) ?>">Copy the email text</button><?php endif; ?>
-          <?php if (!empty($dr['whatsapp'])): ?><button type="button" class="btn small" data-copy="<?= pm_h($dr['whatsapp']) ?>">Copy the WhatsApp text</button><?php endif; ?>
+          <?php if ($waOn && !empty($dr['whatsapp'])): ?><button type="button" class="btn small" data-copy="<?= pm_h($dr['whatsapp']) ?>">Copy the WhatsApp text</button><?php endif; ?>
           <?php if ($team): ?><form method="post" class="assign"><?= $post($id, 'assign') ?><select name="owner" onchange="this.form.requestSubmit()" aria-label="Assign to"><option value="">Assign to…</option><?php foreach ($team as $m): ?><option <?= ($l['owner'] ?? '') === $m ? 'selected' : '' ?>><?= pm_h($m) ?></option><?php endforeach; ?></select></form><?php endif; ?>
           <?php foreach (['replied' => 'They replied', 'proposal' => 'Proposal sent', 'won' => 'Won', 'optout' => 'Do not contact'] as $k => $lab): if ($l['status'] === $k) continue; ?>
             <form method="post"><?= $post($id, 'status', $hid('status', $k)) ?><button class="btn small"><?= $lab ?></button></form>
@@ -345,11 +348,12 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
           <?php if ($l['status'] !== 'lost'): ?><form method="post" class="lostf"><?= $post($id, 'status', $hid('status', 'lost')) ?>
             <select name="lost_reason" aria-label="Why we lost it"><?php foreach (pm_lost_reasons() as $lk => $ll): ?><option value="<?= $lk ?>"><?= pm_h($ll) ?></option><?php endforeach; ?></select><button class="btn small">Lost</button></form><?php endif; ?>
           <?php if (!empty($l['approved_at'])): ?><form method="post"><?= $post($id, 'unapprove_send', $hid('ids[]', $id)) ?><button class="btn small">Take out of the send queue</button></form><?php endif; ?>
-          <?php if (pm_wa_optin($l)): ?><form method="post"><?= $post($id, 'wa_optin_clear') ?><button class="btn small" title="They changed their mind about WhatsApp, but did not say STOP">Remove WhatsApp opt-in</button></form>
+          <?php if (!$waOn): ?>
+          <?php elseif (pm_wa_optin($l)): ?><form method="post"><?= $post($id, 'wa_optin_clear') ?><button class="btn small" title="They changed their mind about WhatsApp, but did not say STOP">Remove WhatsApp opt-in</button></form>
           <?php else: ?><form method="post"><?= $post($id, 'wa_optin') ?><button class="btn small" title="Press only when they told you it is fine to message them on WhatsApp">They agreed to WhatsApp messages</button></form><?php endif; ?>
           <details class="more"><summary class="btn small">Paste their reply</summary>
             <form method="post"><?= $post($id, 'paste_reply') ?><textarea name="text" rows="3" placeholder="Paste what they wrote (WhatsApp or another inbox)"></textarea>
-              <select name="ch" aria-label="Where they wrote"><option value="wa">They wrote on WhatsApp</option><option value="email">They wrote by email</option></select><button class="btn small">Draft my answer</button></form></details>
+              <select name="ch" aria-label="Where they wrote"><?php if ($waOn): ?><option value="wa">They wrote on WhatsApp</option><?php endif; ?><option value="email">They wrote by email</option></select><button class="btn small">Draft my answer</button></form></details>
           <?php if (pm_user_is_admin()): // deleting is the admin's ?><form method="post" onsubmit="return confirm('Remove this lead?')"><?= $post($id, 'delete') ?><button class="btn small danger">Remove lead</button></form>
           <form method="post" onsubmit="return confirm('Forget this lead everywhere (privacy)? Their data is removed; signed history is anonymised.')"><?= $post($id, 'lead_forget') ?><button class="btn small danger">Forget lead (privacy)</button></form><?php endif; ?>
         </div>
