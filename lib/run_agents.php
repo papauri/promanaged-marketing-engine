@@ -429,6 +429,8 @@ try {
     $dayList = array_merge(
         array_values(array_filter($leads, fn($l) => $l['status'] === 'replied' && !empty($l['want_proposal']) && empty($l['proposal_ai']))),
         $best(array_values(pm_followup_due($leads, $cfg, false))),
+        // drafts waiting to go out (even while new leads are held): studied so their draft gets the personal line and the owner's name before it is sent
+        array_slice($best(array_filter($leads, fn($l) => $l['status'] === 'drafted' && empty($l['sent']) && empty($l['approved_at']) && empty($l['drafts']['edited_at']) && !pm_lead_is_client($l))), 0, max(1, (int)($cfg['send_cap'] ?? 10))),
         $hold ? [] : array_slice($best(array_filter($leads, fn($l) => $cold($l) && (!empty($l['email']) || !empty($l['phone'])) && empty($l['drafts']))), 0, max(1, (int)($cfg['send_cap'] ?? 10))), // as many first messages as go out today
         $hold ? [] : $best(array_filter($leads, fn($l) => $cold($l) && empty($l['email']) && empty($l['phone']))),
         $hold ? [] : $best(array_filter($leads, fn($l) => $l['status'] === 'new' && ($l['score'] ?? 0) >= 65)),

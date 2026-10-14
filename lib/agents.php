@@ -1113,7 +1113,7 @@ function pm_apply_contact(array &$lead, array $d): void
         return;
     }
     $src = trim((string)($d['source'] ?? $d['contact_source'] ?? ''));
-    if (pm_trusted_source($src, (string)($lead['website'] ?? '')) || pm_owner_listing_source($src, $title)) { // their own pages, or their own listing naming the owner or host
+    if (pm_trusted_source($src, (string)($lead['website'] ?? '')) || pm_owner_listing_source($src, $title) || !empty($d['owner_ok'])) { // their own pages, or their own listing naming the owner or host
         $lead['contact'] = $name;
         if ($title !== '' && empty($lead['contact_title'])) {
             $lead['contact_title'] = $title;
@@ -2753,7 +2753,8 @@ function pm_apply_research(array &$lead, array $r): void
         usort($people, fn($a, $b) => $rank((string)$a['role']) <=> $rank((string)$b['role']));
         $p = $people[0] ?? [];
         $reach = (array)($r['reach'] ?? []);
-        $added = pm_contact_apply($lead, ['contact' => (string)($p['name'] ?? ''), 'contact_title' => (string)($p['role'] ?? ''), 'source' => (string)($p['source'] ?? ''),
+        $own = fn(array $x) => !empty($r['sure']) && (bool)preg_match('/owner|founder|proprietor/i', (string)($x['role'] ?? '')); // the study confirmed the business and a page names this person its owner: greet them by name
+        $added = pm_contact_apply($lead, ['contact' => (string)($p['name'] ?? ''), 'contact_title' => (string)($p['role'] ?? ''), 'source' => (string)($p['source'] ?? ''), 'owner_ok' => $p && $own($p),
             'email' => (string)($reach['email'] ?? ''), 'phone' => (string)($reach['phone'] ?? ''), 'whatsapp' => (string)($reach['whatsapp'] ?? '')]);
         foreach (array_slice($people, 1) as $q) { // the first name came from a page we cannot trust: the next person on a trusted page is the owner's real name
             if (trim((string)($lead['contact'] ?? '')) !== '') {
@@ -2761,7 +2762,7 @@ function pm_apply_research(array &$lead, array $r): void
             }
             $hint = $lead['contact_hint'] ?? null;
             unset($lead['contact_hint']);
-            pm_apply_contact($lead, ['contact' => (string)$q['name'], 'contact_title' => (string)$q['role'], 'source' => (string)$q['source']]);
+            pm_apply_contact($lead, ['contact' => (string)$q['name'], 'contact_title' => (string)$q['role'], 'source' => (string)$q['source'], 'owner_ok' => $own($q)]);
             if (trim((string)($lead['contact'] ?? '')) === '') {
                 $lead['contact_hint'] = $hint ?? $lead['contact_hint'] ?? null;
             } else {

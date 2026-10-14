@@ -126,6 +126,14 @@ function pm_dm_personalise(array &$lead): bool
                 break;
             }
         }
+        if (!str_contains($body, $p) && $brand === 'travel') { // an earlier writer's opening ("We came across your lodge..."): the paragraph between the greeting and the standard part
+            $paras = explode("\n\n", str_replace("\r", '', $body));
+            $intro = trim((string)(pm_dm_as($brand, fn() => pm_tm_email_cfg())['intro'] ?? ''));
+            if (count($paras) > 3 && $intro !== '' && trim($paras[2]) === $intro && preg_match('/^(Hello|Hi|Good day|Dear)\b[^\n]{0,40},$/u', trim($paras[0]))) {
+                $paras[1] = $p;
+                $body = implode("\n\n", $paras);
+            }
+        }
     }
     $first = pm_dm_first($lead);
     if ($first !== '') {
