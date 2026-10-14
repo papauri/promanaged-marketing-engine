@@ -161,7 +161,7 @@ function pm_reply_precheck(array $lead, string $text, array $m = []): ?array
         return $mk('stop', 'STOP request');
     }
     if (!empty($m['dsn'])) {
-        return $mk('bounce', 'Delivery failure notice', ['failed' => (string)($m['failed'] ?? ''), 'hard' => ($m['dsn_kind'] ?? 'hard') !== 'soft']);
+        return $mk('bounce', 'Delivery failure notice', ['failed' => (string)($m['failed'] ?? ''), 'hard' => ($m['dsn_kind'] ?? 'hard') !== 'soft', 'auth' => ($m['dsn_kind'] ?? '') === 'auth']);
     }
     if (!empty($m['auto']) && preg_match('/out of office|auto.?reply|automatic reply|vacation|away from (the )?office/i', ($m['subject'] ?? '') . ' ' . $text)) {
         return $mk('out_of_office', 'Automatic out-of-office reply');
@@ -548,6 +548,9 @@ function pm_dsn_info(string $raw, string $head, string $from, string $subject, s
     } elseif (preg_match('/mailbox (is )?full|over quota|quota exceeded|temporar|try again later|deferred|greylist/i', mb_substr($raw, 0, 20000))) {
         $kind = 'soft';
     }
+    if ($kind === 'hard' && preg_match('/5\.7\.2[3-7]\b|sender is unauthenticated|requires all senders to authenticate|(SPF|DKIM|DMARC)\b[^\n]{0,80}\b(fail|did not pass|not pass)/i', mb_substr($raw, 0, 30000))) {
+        $kind = 'auth'; // refused because OUR domain is not authenticated: the address is not to blame
+    }
     preg_match_all('/^Message-ID:\s*(<[^>\s]+>)/mi', $raw, $oi);
     return ['dsn' => true, 'dsn_kind' => $kind, 'failed' => $c[0] ?? '', 'failed_all' => array_slice($c, 0, 8), 'orig_ids' => array_values(array_unique($oi[1]))];
 }
@@ -714,6 +717,9 @@ function pm_apply_reply(array &$lead, string $text, array $r, string $mode, ?cal
     }
     switch ($intent) {
         case 'bounce':
+            if (!empty($r['auth']) && function_exists('pm_auth_failed')) {
+                return pm_auth_failed($lead);
+            }
             pm_mark_bounced($lead, (string)($r['failed'] ?? ''), $r['hard'] ?? true);
             return !empty($lead['email_bad']) && ($r['hard'] ?? true) ? 'email bounced; address cleared' : 'temporary delivery problem';
         case 'out_of_office':

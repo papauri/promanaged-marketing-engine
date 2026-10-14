@@ -294,6 +294,9 @@ function pm_verify_email(string $email, string $website = '', bool $fetch = true
 /** Daily cap that ramps with the age of the mailbox's sending: 3 on day 0, +2 a week, never above the configured send_cap. Then nudged by the trailing bounce rate (adaptive). */
 function pm_effective_send_cap(array $cfg): int
 {
+    if (!empty($cfg['no_limit'])) { // the owner's choice (Sales > Targeting > Limits per day): no daily limit and no warm-up
+        return 100000;
+    }
     $cap = (int)($cfg['send_cap'] ?? 10);
     $st = pm_ob_read('send_stats');
     $fs = (string)($st['brands'][pm_brand()]['first_send'] ?? '');
@@ -361,9 +364,58 @@ function pm_send_breaker(?array $leads = null): array
 }
 
 /** SPF, DMARC and DKIM for the From domain, with plain-language advice. Cached 6 hours. */
-function pm_email_auth_check(string $domain, bool $fresh = false): array
+/** The SPF include each known mail server needs, by the SMTP host name. */
+const PM_SPF_INCLUDES = ['privateemail.com' => 'spf.privateemail.com', 'gmail.com' => '_spf.google.com', 'google.com' => '_spf.google.com', 'office365.com' => 'spf.protection.outlook.com',
+    'outlook.com' => 'spf.protection.outlook.com', 'zoho.com' => 'zoho.com', 'webhostingireland.ie' => 'spf.webhostingireland.ie', 'mailgun.org' => 'mailgun.org', 'sendgrid.net' => 'sendgrid.net'];
+
+/** What is wrong with one SPF record, in plain words: [] when it is fine. $host is the SMTP server we send through. */
+function pm_spf_problems(string $spf, string $host = ''): array
+{
+    $bad = [];
+    foreach (preg_split('/\s+/', trim($spf)) ?: [] as $i => $t) {
+        if ($i === 0 || $t === '') {
+            continue;
+        }
+        if (!preg_match('/^[+\-~?]?(all|include:[a-z0-9_][a-z0-9._-]*\.[a-z]{2,}|a(:[a-z0-9._-]+)?(\/\d+)?|mx(:[a-z0-9._-]+)?(\/\d+)?|ip4:[0-9.]+(\/\d+)?|ip6:[0-9a-f:]+(\/\d+)?|exists:\S+|ptr(:\S+)?|redirect=[a-z0-9._-]+|exp=\S+)$/i', $t)) {
+            $bad[] = '"' . $t . '" is not a valid SPF part';
+        }
+    }
+    if (preg_match('/[~\-?+]?all\b\s+\S/i', $spf)) {
+        $bad[] = 'there is text after "all", which mail servers ignore or reject';
+    }
+    $host = strtolower(trim($host));
+    foreach (PM_SPF_INCLUDES as $h => $inc) {
+        if ($host !== '' && ($host === $h || str_ends_with($host, '.' . $h)) && stripos($spf, 'include:' . $inc) === false) {
+            $bad[] = 'it does not include ' . $inc . ', the server your emails go out through (' . $host . ')';
+        }
+    }
+    return $bad;
+}
+
+/** The SPF record to put in place: the parts that are valid, plus the sending server's include, ending in ~all. */
+function pm_spf_suggest(array $records, string $host = ''): string
+{
+    $keep = [];
+    foreach ($records as $spf) {
+        foreach (preg_split('/\s+/', trim($spf)) ?: [] as $i => $t) {
+            if ($i > 0 && !preg_match('/^[+\-~?]?all$/i', $t) && !pm_spf_problems('v=spf1 ' . $t)) {
+                $keep[strtolower($t)] = $t;
+            }
+        }
+    }
+    $host = strtolower(trim($host));
+    foreach (PM_SPF_INCLUDES as $h => $inc) {
+        if ($host !== '' && ($host === $h || str_ends_with($host, '.' . $h))) {
+            $keep['include:' . $inc] = 'include:' . $inc;
+        }
+    }
+    return trim('v=spf1 ' . implode(' ', $keep) . ' ~all');
+}
+
+function pm_email_auth_check(string $domain, bool $fresh = false, string $host = ''): array
 {
     $domain = strtolower(trim($domain));
+    $host = $host !== '' ? $host : (string)(pm_settings()['smtp']['host'] ?? '');
     $out = ['domain' => $domain, 'spf' => ['status' => 'missing', 'detail' => ''], 'dmarc' => ['status' => 'missing', 'detail' => ''], 'dkim' => ['status' => 'missing', 'detail' => ''], 'advice' => [], 'checked' => false];
     if ($domain === '' || !str_contains($domain, '.')) {
         $out['advice'][] = 'Set a From address on your own domain (Operations > Email).';
@@ -391,15 +443,21 @@ function pm_email_auth_check(string $domain, bool $fresh = false): array
         return $o;
     };
     $spf = array_values(array_filter($txt($domain), fn($t) => stripos($t, 'v=spf1') === 0));
+    $fix = pm_spf_suggest($spf, $host);
     if (count($spf) > 1) {
         $out['spf'] = ['status' => 'weak', 'detail' => 'More than one SPF record'];
-        $out['advice'][] = 'Your domain has more than one SPF record, which makes SPF fail. Merge them into one.';
+        $out['advice'][] = 'Your domain has ' . count($spf) . ' SPF records, which makes SPF fail everywhere (Gmail blocks the mail). Delete them all and add this one TXT record (host @): ' . $fix;
     } elseif ($spf) {
-        $weak = preg_match('/\+all|\?all/i', $spf[0]) || !preg_match('/[~-]all/i', $spf[0]);
+        $probs = pm_spf_problems($spf[0], $host);
+        $weak = $probs || preg_match('/\+all|\?all/i', $spf[0]) || !preg_match('/[~-]all/i', $spf[0]);
         $out['spf'] = ['status' => $weak ? 'weak' : 'ok', 'detail' => $spf[0]];
-        $weak && $out['advice'][] = 'Your SPF record should end in ~all or -all so forged mail is rejected.';
+        if ($probs) {
+            $out['advice'][] = 'Your SPF record is broken: ' . implode('; ', $probs) . '. Gmail treats your mail as unauthenticated. Replace it with this TXT record (host @): ' . $fix;
+        } elseif ($weak) {
+            $out['advice'][] = 'Your SPF record should end in ~all or -all so forged mail is rejected.';
+        }
     } else {
-        $out['advice'][] = 'No SPF record: receiving servers cannot tell your mail is genuine and may send it to spam. Ask your email host for the SPF record to add.';
+        $out['advice'][] = 'No SPF record: Gmail blocks unauthenticated mail. Add this TXT record (host @): ' . $fix;
     }
     $dm = array_values(array_filter($txt('_dmarc.' . $domain), fn($t) => stripos($t, 'v=DMARC1') === 0));
     if ($dm) {
@@ -417,7 +475,9 @@ function pm_email_auth_check(string $domain, bool $fresh = false): array
         }
     }
     if ($out['dkim']['status'] === 'missing') {
-        $out['advice'][] = 'No DKIM key found under the common selector names. If your host uses another selector this may be a false alarm; otherwise ask your email host to switch DKIM signing on.';
+        $out['advice'][] = str_contains(strtolower($host), 'privateemail.com')
+            ? 'No DKIM key: in Namecheap open Private Email, switch DKIM on for this domain and add the TXT record it gives you (host default._domainkey) in Advanced DNS.'
+            : 'No DKIM key found under the common selector names. If your host uses another selector this may be a false alarm; otherwise ask your email host to switch DKIM signing on.';
     }
     pm_ob_update('email_verify', function ($d) use ($domain, $out) {
         $d['auth'][$domain] = ['at' => time(), 'r' => $out];
@@ -523,6 +583,9 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     }
     if (($b = pm_send_breaker())['blocked']) {
         return $no($b['why'], 'breaker');
+    }
+    if (($why = pm_send_auth_block()) !== '') {
+        return $no($why, 'breaker');
     }
     $cap = pm_effective_send_cap($cfg);
     if (pm_sent_today($leads) >= $cap) {
@@ -1001,4 +1064,47 @@ foreach (['sx_replies', 'sx_inbound', 'sx_attrib', 'sx_links', 'sx_magnet'] as $
 }
 if (is_file(__DIR__ . '/view_outbound.php')) {
     require_once __DIR__ . '/view_outbound.php'; // echo-functions for the Agents and Settings screens
+}
+
+/**
+ * A server refused our email because the sending domain is not authenticated (Gmail's 550 5.7.26: SPF and DKIM did not pass). That is our setup, not the lead's address:
+ * the address is kept, the first email counts as not sent (so it can go again), and this business stops sending until its SPF and DKIM pass again (checked here, so it
+ * lifts by itself once the DNS is fixed).
+ */
+function pm_auth_failed(array &$lead): string
+{
+    $brand = (string)($lead['brand'] ?? pm_brand());
+    pm_ob_update('send_stats', function ($d) use ($brand) {
+        $d['brands'][$brand]['auth_fail'] = time();
+        return $d;
+    });
+    if (count((array)($lead['sent'] ?? [])) === 1 && (int)($lead['followups'] ?? 0) === 0 && ($lead['status'] ?? '') === 'contacted') {
+        $lead['sent'] = [];
+        $lead['status'] = 'drafted'; // never reached them: the same draft goes again once the domain passes
+        unset($lead['last_contacted'], $lead['last_out']);
+    }
+    pm_lead_note($lead, 'Not delivered: the receiving server blocked it because our domain failed SPF/DKIM. Their address is fine. Fix the DNS (Operations > Email), then send again.');
+    return 'not delivered: our domain failed SPF/DKIM (their address is fine)';
+}
+
+/** Why this business may not send now because its domain failed authentication, or '' (no failure, or the DNS now passes). */
+function pm_send_auth_block(): string
+{
+    $at = (int)(pm_ob_read('send_stats')['brands'][pm_brand()]['auth_fail'] ?? 0);
+    if ($at === 0) {
+        return '';
+    }
+    $s = pm_settings();
+    $dom = function_exists('pm_email_domain') ? pm_email_domain((string)(($s['smtp']['from_email'] ?? '') ?: ($s['email'] ?? ''))) : '';
+    static $a = null; // one DNS look per page or run
+    $a ??= pm_email_auth_check($dom, time() - $at >= 600); // looked again: once SPF or DKIM passes (what Gmail asks for), sending carries on
+    if ($a['checked'] && ($a['spf']['status'] === 'ok' || $a['dkim']['status'] === 'ok')) {
+        pm_ob_update('send_stats', function ($d) {
+            unset($d['brands'][pm_brand()]['auth_fail']);
+            return $d;
+        });
+        return '';
+    }
+    return 'Sending is paused for ' . pm_brand_name(pm_brand()) . ': a receiving server (Gmail) blocked our email because ' . ($dom ?: 'our domain') . ' fails SPF/DKIM. '
+        . 'Fix the DNS as Operations > Email shows; sending starts again by itself once the check passes.';
 }

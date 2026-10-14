@@ -43,7 +43,8 @@ echo function_exists('pm_adv_card') ? pm_adv_card($vb, $csrf) : '';
       <div><label>Follow up after (days)</label><input type="number" name="cfg[followup_days]" value="<?= (int)$acfg['followup_days'] ?>"></div>
       <div><label>Follow-ups at most</label><input type="number" name="cfg[max_followups]" value="<?= (int)$acfg['max_followups'] ?>"></div>
     </div>
-    <p class="hint">The email limit starts low on purpose and rises as the mailbox proves it delivers: <a href="?tab=settings&amp;section=email">Operations &gt; Email</a> shows the limit in force.</p>
+    <label class="check"><input type="checkbox" name="cfg[no_limit]" value="1" <?= !empty($acfg['no_limit']) ? 'checked' : '' ?>> No daily email limit: I decide how many go out (no warm-up)</label>
+    <p class="hint"><?= !empty($acfg['no_limit']) ? 'No daily limit: every email you send or approve goes out. The other checks stay (STOP, bounced addresses, one company once a week, the wording rules, and the pause when many bounce). Many emails a day from a new mailbox can land in spam, so watch <a href="?tab=settings&amp;section=email">Operations &gt; Email</a>.' : 'The email limit starts low on purpose and rises as the mailbox proves it delivers: <a href="?tab=settings&amp;section=email">Operations &gt; Email</a> shows the limit in force. Tick the box above to send as many as you decide.' ?></p>
   </div>
 
   <div class="card">

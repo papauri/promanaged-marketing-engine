@@ -166,7 +166,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 
 <!-- 4. Today's tasks -->
 <?php if ($plan): ?>
-<details class="card today"><summary><b>Today</b> · <?= $ndone ?> of <?= count($plan) ?> done <span class="muted">· <?= $sentToday ?> of <?= (int)$acfg['send_cap'] ?> emails sent</span></summary>
+<details class="card today"><summary><b>Today</b> · <?= $ndone ?> of <?= count($plan) ?> done <span class="muted">· <?= $sentToday ?><?= !empty($acfg['no_limit']) ? '' : ' of ' . (int)pm_effective_send_cap($acfg) ?> emails sent today</span></summary>
   <?php foreach (array_slice($plan, 0, 6) as $t): ?>
     <div class="task <?= $t['done'] ? 'done' : '' ?>">
       <form method="post"><?= $post('', 'plan', $hid('task', $t['id']) . ($t['done'] ? '' : $hid('done', 1))) ?><button title="Mark done" aria-label="Mark done"><?= $t['done'] ? '✓' : '' ?></button></form>

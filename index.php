@@ -628,6 +628,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $grp = ($_POST['cfg']['_group'] ?? 'targeting') === 'ai' ? 'ai' : 'targeting'; // the Sales form saves who to look for, limits and replies; Operations saves the AI settings
             $c = $acfg;
             if ($grp === 'targeting') { $c['cities'] = $list('cities'); }
+            if ($grp === 'targeting') { $c['no_limit'] = !empty($_POST['cfg']['no_limit']); } // the owner decides how many emails go out a day: no limit, no warm-up
             if ($grp === 'targeting' && isset($_POST['cfg']['markets'])) { $c['markets'] = $list('markets') ?: ['Malawi']; }
             if ($grp === 'targeting') { $c['sectors'] = $list('sectors'); }
             if ($grp === 'targeting') { $c['offerings'] = array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($_POST['cfg']['offerings'] ?? ''))))); }
@@ -638,7 +639,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($grp === 'targeting') { $c['reply_mode'] = ($_POST['cfg']['reply_mode'] ?? '') === 'auto' ? 'auto' : 'draft'; }
             if ($grp === 'targeting') { $c['wa_reply_mode'] = ($_POST['cfg']['wa_reply_mode'] ?? '') === 'draft' ? 'draft' : 'auto'; }
             if ($grp === 'ai') { $c['gemini_model'] = ($gm === 'auto' || $gm === 'economy' || preg_match('/^gemini-[a-z0-9.\-]+$/', $gm)) ? $gm : 'economy'; }
-            foreach (($grp === 'ai' ? ['parallel' => [1, 6]] : ['new_per_day' => [1, 50], 'scouts_per_day' => [1, 12], 'send_cap' => [0, 50], 'wa_cap' => [0, 150], 'followup_days' => [1, 30], 'max_followups' => [0, 5]]) as $k => [$lo, $hi]) {
+            foreach (($grp === 'ai' ? ['parallel' => [1, 6]] : ['new_per_day' => [1, 50], 'scouts_per_day' => [1, 12], 'send_cap' => [0, 2000], 'wa_cap' => [0, 150], 'followup_days' => [1, 30], 'max_followups' => [0, 5]]) as $k => [$lo, $hi]) {
                 $c[$k] = max($lo, min($hi, (int)($_POST['cfg'][$k] ?? $c[$k])));
             }
             foreach ($grp === 'targeting' ? array_keys($c['enabled']) : [] as $k) {
@@ -653,7 +654,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $raw['daily_token_budget'] = $c['daily_token_budget'];
                 $raw['daily_usd_budget'] = $c['daily_usd_budget'];
                 $raw['quality'] = $c['quality'];
-                $own = ['sectors', 'cities', 'markets', 'new_per_day', 'scouts_per_day', 'send_cap', 'wa_cap', 'followup_days', 'max_followups', 'proposals_per_day', 'enabled'];
+                $own = ['sectors', 'cities', 'markets', 'new_per_day', 'scouts_per_day', 'send_cap', 'no_limit', 'wa_cap', 'followup_days', 'max_followups', 'proposals_per_day', 'enabled'];
                 if (pm_brand_is_custom(pm_brand())) {
                     $own = array_merge($own, ['offerings', 'existing_clients']);
                     if ($grp === 'targeting') { $c['existing_clients'] = array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($_POST['cfg']['existing_clients'] ?? ''))))); }
