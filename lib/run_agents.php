@@ -442,7 +442,7 @@ try {
         $hold ? [] : $best(array_filter($leads, fn($l) => $l['status'] === 'new' && ($l['score'] ?? 0) >= 65)),
         function_exists('pm_research_queue') ? pm_research_queue($leads, 2) : []
     );
-    $rsRoom = max(0, (int)($cfg['research_per_day'] ?? 20) - count(array_filter($leads, fn($l) => str_starts_with((string)($l['research']['at'] ?? ''), $today)))); // a day's allowance, not a run's
+    $rsRoom = max(0, (int)($cfg['research_per_day'] ?? 30) - count(array_filter($leads, fn($l) => str_starts_with((string)($l['research']['at'] ?? ''), $today)))); // a day's allowance, not a run's
     $rs = [];
     foreach ($dayList as $l) {
         if (count($rs) < $rsRoom && $unstudied($l) && !isset($rs[(string)$l['id']])) {
@@ -452,19 +452,23 @@ try {
     $rs = array_values($rs);
     if (($cfg['enabled']['research'] ?? true) && $rs) {
         $progress("Researchers studying today's " . count($rs) . ' leads: business, news, names and contacts');
-        $jobs = array_map(fn($l) => ['agent' => 'research', 'lead' => $l], $rs);
+        $batches = array_chunk($rs, 4); // four businesses to one web call: the instructions and the web search are paid for once per four, not once per lead
+        $jobs = array_map(fn($b) => ['agent' => 'research_batch', 'leads' => $b], $batches);
         foreach (pm_swarm($jobs, $cfg['parallel'], $tmp, $beat) as $i => $r) {
-            $id = $rs[$i]['id'];
-            if (!$r['ok']) {
-                $stats['errors']++;
-                pm_agent_log('Researcher', $leads[$id]['name'] . ' failed: ' . $r['error'], true);
-                continue;
-            }
-            $was = (string)($leads[$id]['requalified_at'] ?? '');
-            pm_apply_research($leads[$id], $r['data']); // also applies the re-score the study returned, so step 3c does not ask again
-            $stats['researched'] = ($stats['researched'] ?? 0) + 1;
-            if ((string)($leads[$id]['requalified_at'] ?? '') !== $was) {
-                $stats['requalified'] = ($stats['requalified'] ?? 0) + 1;
+            $got = $r['ok'] && is_array($r['data']) ? $r['data'] : [];
+            foreach ($batches[$i] as $l0) {
+                $id = (string)$l0['id'];
+                if (!isset($got[$id])) { // not in the answer: it is studied again at the next run (the day's allowance is counted from what was studied)
+                    $stats['errors']++;
+                    pm_agent_log('Researcher', $leads[$id]['name'] . ' was not studied: ' . ($r['ok'] ? 'missing from the answer' : $r['error']), true);
+                    continue;
+                }
+                $was = (string)($leads[$id]['requalified_at'] ?? '');
+                pm_apply_research($leads[$id], $got[$id]); // also applies the re-score the study returned, so step 3c does not ask again
+                $stats['researched'] = ($stats['researched'] ?? 0) + 1;
+                if ((string)($leads[$id]['requalified_at'] ?? '') !== $was) {
+                    $stats['requalified'] = ($stats['requalified'] ?? 0) + 1;
+                }
             }
         }
         $save();

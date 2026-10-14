@@ -18,6 +18,7 @@ function pm_agent_job(array $job): array
             'write'    => pm_agent_write($job['leads']),
             'followup' => pm_agent_followup($job['leads']),
             'research' => pm_agent_research($job['lead']),
+            'research_batch' => pm_agent_research_batch($job['leads']),
             'polish'   => pm_agent_polish($job['p'], $job['line'], $job['package'], $job['lead']),
             'watch'    => pm_agent_watch($job['brand'], $job['known'] ?? []),
             'reverify' => pm_agent_reverify($job['leads']),

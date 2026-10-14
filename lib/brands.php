@@ -497,11 +497,12 @@ function pm_magnet_keyword_line(string $brand): string
  */
 function pm_job_brand_agent_run(string $brand): string
 {
-    if (!pm_brand_is_custom($brand) || empty(pm_brands_custom()[$brand]['daily_run'])) {
-        return '';
+    if (strtolower((string)(pm_env()['AGENTS_DAILY'] ?? 'on')) === 'off' || (pm_brand_is_custom($brand) && empty(pm_brands_custom()[$brand]['daily_run']))) {
+        return ''; // AGENTS_DAILY=off: this copy of the app leaves the daily run to the other copy (so the study is never paid for twice)
     }
     $now = function_exists('pm_now') ? pm_now() : time();
-    if ((int)date('N', $now) > 5 || date('H:i', $now) < '07:30' || date('H:i', $now) > '17:00') {
+    // the built-in businesses have their own 07:30 schedule (Windows task or server cron); this is the safety net when it did not run, so the day's leads are studied before you start
+    if ((int)date('N', $now) > 5 || date('H:i', $now) < (pm_brand_is_custom($brand) ? '07:30' : '07:50') || date('H:i', $now) > '17:00') {
         return '';
     }
     if (!function_exists('pm_agents_ready') || !pm_agents_ready() || (PHP_SAPI !== 'cli' && !function_exists('pm_agents_launch'))) {

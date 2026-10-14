@@ -551,7 +551,7 @@ function pm_playbook_pick(string $brand, int $max = 8, array $skip = []): array
 function pm_playbook_research(array $picked): array
 {
     $today = date('Y-m-d'); // one research allowance a day for the business (Sales > Targeting), shared with the morning run, which studies the day's leads first
-    $room = max(0, (int)(pm_agents_config()['research_per_day'] ?? 20) - count(array_filter(pm_leads(), fn($l) => ($l['brand'] ?? 'promanaged') === pm_brand() && str_starts_with((string)($l['research']['at'] ?? ''), $today))));
+    $room = max(0, (int)(pm_agents_config()['research_per_day'] ?? 30) - count(array_filter(pm_leads(), fn($l) => ($l['brand'] ?? 'promanaged') === pm_brand() && str_starts_with((string)($l['research']['at'] ?? ''), $today))));
     $due = array_slice(array_values(array_filter($picked, fn($l) => empty($l['research']['at']) || strtotime((string)$l['research']['at']) < strtotime('-30 days'))), 0, min(PM_PB_RESEARCH_MAX, $room));
     if (!$due || !pm_agents_ready()) {
         return [0, []];
@@ -562,18 +562,22 @@ function pm_playbook_research(array $picked): array
         mkdir($tmp, 0775, true);
     }
     @set_time_limit(300);
-    $res = pm_swarm(array_map(fn($l) => ['agent' => 'research', 'lead' => $l], $due), max(2, min(PM_PB_RESEARCH_MAX, (int)(pm_agents_config()['parallel'] ?? 3))), $tmp);
+    $batches = array_chunk($due, 4); // four businesses to one web call, as the morning study does
+    $res = pm_swarm(array_map(fn($b) => ['agent' => 'research_batch', 'leads' => $b], $batches), max(2, min(PM_PB_RESEARCH_MAX, (int)(pm_agents_config()['parallel'] ?? 3))), $tmp);
     $leads = pm_leads();
     $n = 0;
     $err = [];
     foreach ($res as $i => $r) {
-        $id = $due[$i]['id'];
-        if (!empty($r['ok']) && is_array($r['data']) && isset($leads[$id])) {
-            pm_apply_research($leads[$id], $r['data']);
-            pm_lead_note($leads[$id], 'Researched for the social playbook: ' . count((array)($r['data']['discoveries'] ?? [])) . ' discoveries');
-            $n++;
-        } else {
-            $err[] = $due[$i]['name'] . ': ' . mb_substr((string)($r['error'] ?? 'no answer'), 0, 80);
+        $got = !empty($r['ok']) && is_array($r['data']) ? $r['data'] : [];
+        foreach ($batches[$i] as $l0) {
+            $id = (string)$l0['id'];
+            if (isset($got[$id], $leads[$id])) {
+                pm_apply_research($leads[$id], $got[$id]);
+                pm_lead_note($leads[$id], 'Researched for the social playbook: ' . count((array)($got[$id]['discoveries'] ?? [])) . ' discoveries');
+                $n++;
+            } else {
+                $err[] = $l0['name'] . ': ' . mb_substr((string)($r['error'] ?? 'no answer'), 0, 80);
+            }
         }
     }
     if ($n) {
