@@ -47,6 +47,20 @@ function pm_camp_ai_reuse(string $brand, string $cid): array
     }, fn() => []);
     return ['campaigns/' . $cid . '/ai.png', ''];
 }
+/** The parts a campaign can have; the owner ticks the ones to make (old campaigns without a list had every part). */
+const PM_CAMP_PARTS = ['feed' => 'Feed post (Facebook, Instagram, LinkedIn)', 'stories' => '3 story frames (Facebook and Instagram stories)', 'carousel' => 'Carousel the next day',
+    'status' => 'WhatsApp Status (the story frames, posted by hand)', 'broadcast' => 'WhatsApp broadcast to people who agreed', 'flyer' => 'Flyer (print and share)'];
+
+/** Where the posts go. 'others' = the hand-post channels beyond the three (X, Google profile, TikTok, YouTube Shorts, your own LinkedIn). */
+const PM_CAMP_NETS = ['facebook' => 'Facebook', 'instagram' => 'Instagram', 'linkedin' => 'LinkedIn', 'others' => 'Other channels posted by hand (X, Google profile, TikTok…)'];
+const PM_CAMP_OTHERS = ['x', 'google', 'tiktok', 'youtube_short', 'linkedin_personal'];
+
+/** The parts of a campaign. */
+function pm_camp_parts(array $camp): array
+{
+    return isset($camp['parts']) ? array_values(array_intersect(array_keys(PM_CAMP_PARTS), (array)$camp['parts'])) : array_keys(PM_CAMP_PARTS);
+}
+
 const PM_CAMP_ROLES = ['feed' => 'Feed post', 'story1' => 'Story 1 · the hook', 'story2' => 'Story 2 · the offer', 'story3' => 'Story 3 · what to do', 'carousel' => 'Carousel (next day)'];
 
 /* ---------------- storage ---------------- */
@@ -131,8 +145,29 @@ function pm_camp_cta(string $brand, array $camp): array
     $site = trim((string)(pm_settings()['website'] ?? ''));
     pm_brand_set($was);
     $site = $site !== '' ? (preg_match('#^https?://#i', $site) ? $site : 'https://' . $site) : '';
-    return ['site' => $site, 'keyword' => $kw, 'line' => $kw !== '' ? 'Send ' . $kw . ' on WhatsApp' : 'Message us on WhatsApp', 'button' => $kw !== '' ? 'WhatsApp ' . $kw : 'Send WhatsApp message',
-        'link' => $page !== '' ? $page : ($wa !== '' ? $wa : $site), 'wa' => $wa, 'phone' => $phone];
+    // what the person gets for messaging: the offer, else the business's free first step
+    $what = trim((string)($o['title'] ?? '')) ?: trim((string)pm_brand_profile($brand)['magnet']);
+    $what = $what !== '' ? mb_strtoupper(mb_substr($what, 0, 1)) . mb_substr($what, 1) : '';
+    $to = $phone !== '' ? ' to ' . $phone : '';
+    $send = $kw !== '' ? 'WhatsApp the word ' . $kw . $to : 'Send us a WhatsApp message' . $to;
+    $whatLc = preg_match('/^\p{Lu}\p{Ll}/u', $what) ? mb_strtolower(mb_substr($what, 0, 1)) . mb_substr($what, 1) : $what; // "Free check" -> "free check", "IT check" stays
+    $line = ($what !== '' ? $what . ': ' . $send : $send) . ' and a person from ' . pm_brand_name($brand) . ' will reply';
+    return ['site' => $site, 'keyword' => $kw, 'what' => $what, 'what_lc' => $whatLc, 'line' => $line,
+        'short' => $kw !== '' ? 'WhatsApp ' . $kw . $to : 'WhatsApp us' . $to, // a story frame, a slide, the flyer
+        'reply' => $kw !== '' ? 'Reply ' . $kw . ' to this message' . ($what !== '' ? ' for ' . $whatLc : '') : 'Reply to this message' . ($what !== '' ? ' for ' . $whatLc : ''), // the broadcast is already a chat
+        'button' => $kw !== '' ? 'WhatsApp ' . $kw : 'Send WhatsApp message', 'link' => $page !== '' ? $page : ($wa !== '' ? $wa : $site), 'wa' => $wa, 'phone' => $phone];
+}
+
+/** Makes sure a text ends with the specific call to action (the AI sometimes writes a vague "message us"): adds $line when the number or keyword is missing. */
+function pm_camp_with_cta(string $t, array $cta, string $line): string
+{
+    $need = $cta['phone'] !== '' ? preg_replace('/\D/', '', $cta['phone']) : $cta['keyword'];
+    $have = $cta['phone'] !== '' ? str_contains(preg_replace('/\D/', '', $t), $need) : ($need === '' || str_contains($t, $need));
+    if ($have) {
+        return $t;
+    }
+    $t = rtrim($t);
+    return $t . ($t === '' || preg_match('/[.!?]$/u', $t) ? '' : '.') . "\n\n" . $line . '.';
 }
 
 /** The owner's own words for a campaign (always safe to use), and the text any AI wording is checked against. */
@@ -166,10 +201,10 @@ function pm_camp_copy_plain(array $own, array $cta): array
     $caption = trim($h . "\n\n" . ($m !== '' ? $m . "\n\n" : '') . ($pts ? implode("\n", array_map(fn($x) => '• ' . $x, $pts)) . "\n\n" : '') . $cta['line'] . '.');
     return [
         'feed' => ['headline' => $h, 'sub' => $m, 'caption' => $caption, 'bullets' => array_slice(array_values($pts), 0, 3)],
-        'stories' => [['headline' => $h, 'sub' => ''], ['headline' => $m !== '' ? $m : $h, 'sub' => $pts[0] ?? ''], ['headline' => $cta['line'], 'sub' => '']],
-        'carousel' => ['headline' => $h, 'caption' => $caption, 'slides' => array_map(fn($x) => ['h' => $x, 't' => ''], array_slice(array_values(array_merge($pts, [$cta['line']])), 0, 4))],
+        'stories' => [['headline' => $h, 'sub' => ''], ['headline' => $m !== '' ? $m : $h, 'sub' => $pts[0] ?? ''], ['headline' => $cta['short'], 'sub' => $cta['what']]],
+        'carousel' => ['headline' => $h, 'caption' => $caption, 'slides' => array_merge(array_map(fn($x) => ['h' => $x, 't' => ''], array_slice(array_values($pts), 0, 3)), [['h' => $cta['short'], 't' => $cta['what']]])],
         'status' => trim($h . ($m !== '' ? ' ' . $m : '') . ' ' . $cta['line'] . '.'),
-        'broadcast' => trim('Hi {first_name}, ' . lcfirst($h) . ($m !== '' ? '. ' . $m : '') . '. ' . $cta['line'] . '. Reply STOP to stop these messages.'),
+        'broadcast' => trim('Hi {first_name}, ' . lcfirst($h) . ($m !== '' ? '. ' . $m : '') . '. ' . $cta['reply'] . '. Reply STOP to stop these messages.'),
         'flyer' => ['headline' => $h, 'sub' => $m, 'points' => array_slice(array_values($pts), 0, 3)],
     ];
 }
@@ -184,14 +219,14 @@ function pm_camp_copy(string $brand, array $own, array $cta): array
     try {
         $system = 'You write one coordinated marketing campaign for a small business in ' . (pm_brand_profile($brand)['market'] ?? 'Malawi') . ': a feed post, three story frames, a carousel, a WhatsApp Status line, '
             . 'a WhatsApp broadcast and a flyer, all saying the same thing. Use ONLY the facts and the owner\'s words you are given. Never invent numbers, prices, discounts, deadlines, '
-            . 'awards, customers or guarantees, and never use the words best, cheapest, fastest, guaranteed or 24/7. Say "we", never "our team". Short plain words, written for a phone screen. '
+            . 'awards, customers or guarantees, and never use the words best, cheapest, fastest, guaranteed or 24/7. Say "we", never "our team". Short plain words, written for a phone screen. Always tell people exactly what to do, using the call to action you are given: never a vague "contact us" or a keyword without the number. '
             . 'Voice: ' . ($own['voice'] !== '' ? $own['voice'] : 'friendly and plain') . '.' . ($own['never'] !== '' ? ' Never: ' . $own['never'] : '') . ' Reply with JSON only.';
         $user = json_encode(['business' => pm_brand_name($brand), 'about' => $own['about'], 'headline' => $own['headline'], 'message' => $own['message'], 'true_facts' => $own['facts'],
-                'call_to_action' => $cta['line']], JSON_UNESCAPED_UNICODE)
-            . "\nJSON: {\"feed\":{\"headline\":\"under 9 words\",\"sub\":\"one short line\",\"caption\":\"the post text, 2 to 5 short lines, ending with the call to action\",\"bullets\":[\"3 short points\"]},"
-            . "\"stories\":[{\"headline\":\"a hook that stops the thumb, under 8 words\",\"sub\":\"\"},{\"headline\":\"the offer in under 9 words\",\"sub\":\"one line\"},{\"headline\":\"what to do now, under 7 words\",\"sub\":\"\"}],"
-            . "\"carousel\":{\"headline\":\"cover, under 8 words\",\"caption\":\"2 to 4 lines\",\"slides\":[{\"h\":\"slide title\",\"t\":\"one line\"}] (3 or 4 slides, the last one is the call to action)},"
-            . "\"status\":\"one WhatsApp Status line\",\"broadcast\":\"a WhatsApp message to past customers, under 60 words, starting Hi {first_name}, ending with: Reply STOP to stop these messages.\","
+                'call_to_action' => $cta['line'], 'reply_line' => $cta['reply']], JSON_UNESCAPED_UNICODE)
+            . "\nJSON: {\"feed\":{\"headline\":\"under 9 words\",\"sub\":\"one short line\",\"caption\":\"the post text, 2 to 5 short lines, ending with call_to_action word for word\",\"bullets\":[\"3 short points\"]},"
+            . "\"stories\":[{\"headline\":\"a hook that stops the thumb, under 8 words\",\"sub\":\"\"},{\"headline\":\"the offer in under 9 words\",\"sub\":\"one line\"},{\"headline\":\"why it is worth it, under 8 words\",\"sub\":\"\"}],"
+            . "\"carousel\":{\"headline\":\"cover, under 8 words\",\"caption\":\"2 to 4 lines\",\"slides\":[{\"h\":\"slide title\",\"t\":\"one line\"}] (2 or 3 slides; the call to action slide is added for you)},"
+            . "\"status\":\"one WhatsApp Status line ending with call_to_action word for word\",\"broadcast\":\"a WhatsApp message to past customers, under 60 words, starting Hi {first_name}, then reply_line word for word, ending with: Reply STOP to stop these messages.\","
             . "\"flyer\":{\"headline\":\"under 8 words\",\"sub\":\"one line\",\"points\":[\"3 short points\"]}}";
         $r = pm_agent_json(pm_claude($system, $user, false, 1800, 'write'));
     } catch (Throwable) {
@@ -200,7 +235,7 @@ function pm_camp_copy(string $brand, array $own, array $cta): array
     if (!is_array($r)) {
         return $plain + ['ai' => false];
     }
-    $src = $own['source'] . ' ' . mb_strtolower($cta['line']);
+    $src = $own['source'] . ' ' . mb_strtolower($cta['line'] . ' ' . $cta['reply'] . ' ' . $cta['short']);
     $ok = function (mixed $v, int $max) use ($src): string {
         $t = trim(preg_replace('/\s+/u', ' ', strip_tags(is_scalar($v) ? (string)$v : '')));
         return $t === '' || pm_brand_unsourced_number($t, $src) || preg_match('/\b(best|cheapest|fastest|guarantee[sd]?|24\s?\/\s?7)\b/i', $t) ? '' : mb_substr($t, 0, $max);
@@ -219,20 +254,25 @@ function pm_camp_copy(string $brand, array $own, array $cta): array
         $s = (array)(((array)($r['stories'] ?? []))[$i] ?? []);
         $out['stories'][$i] = ['headline' => $ok($s['headline'] ?? '', 70) ?: $plain['stories'][$i]['headline'], 'sub' => $ok($s['sub'] ?? '', 120)];
     }
+    $out['stories'][2] = $plain['stories'][2]; // the last frame always says exactly what to do: the keyword, the number, what they get
     $out['carousel']['headline'] = $ok($r['carousel']['headline'] ?? '', 70) ?: $plain['carousel']['headline'];
     $cc = trim((string)preg_replace("/[ \t]+/", ' ', strip_tags(is_scalar($r['carousel']['caption'] ?? null) ? (string)$r['carousel']['caption'] : '')));
     $out['carousel']['caption'] = $cc !== '' && !pm_brand_unsourced_number($cc, $src) ? mb_substr($cc, 0, 900) : $plain['carousel']['caption'];
     $sl = [];
-    foreach (array_slice((array)($r['carousel']['slides'] ?? []), 0, 4) as $s) {
+    foreach (array_slice((array)($r['carousel']['slides'] ?? []), 0, 3) as $s) {
         $h = $ok(is_array($s) ? ($s['h'] ?? '') : '', 60);
         if ($h !== '') {
             $sl[] = ['h' => $h, 't' => $ok($s['t'] ?? '', 120)];
         }
     }
-    $out['carousel']['slides'] = count($sl) >= 2 ? $sl : $plain['carousel']['slides'];
+    $out['carousel']['slides'] = $sl ? array_merge($sl, [end($plain['carousel']['slides'])]) : $plain['carousel']['slides'];
     $out['status'] = $ok($r['status'] ?? '', 250) ?: $plain['status'];
     $bc = $ok($r['broadcast'] ?? '', 600);
-    $out['broadcast'] = $bc !== '' && str_contains(strtolower($bc), 'stop') ? $bc : $plain['broadcast'];
+    $out['broadcast'] = $bc !== '' && str_contains(strtolower($bc), 'stop') && ($cta['keyword'] === '' || str_contains($bc, $cta['keyword'])) ? $bc : $plain['broadcast'];
+    foreach (['feed', 'carousel'] as $k) { // a caption without the number or keyword gets the full call to action
+        $out[$k]['caption'] = pm_camp_with_cta($out[$k]['caption'], $cta, $cta['line']);
+    }
+    $out['status'] = pm_camp_with_cta($out['status'], $cta, $cta['line']);
     $out['flyer'] = ['headline' => $ok($r['flyer']['headline'] ?? '', 70) ?: $plain['flyer']['headline'], 'sub' => $ok($r['flyer']['sub'] ?? '', 140) ?: $plain['flyer']['sub'],
         'points' => $okList($r['flyer']['points'] ?? [], 3, 70) ?: $plain['flyer']['points']];
     return $out + ['ai' => true];
@@ -498,8 +538,8 @@ function pm_camp_flyer_draw(array $camp, int $W, int $H, string $file): string
         $qr = (int)round($ctaH - 44 * $k);
         $hasQr = pm_camp_qr($im, (string)$cta['link'], $W - $pad - (int)(22 * $k) - $qr, $ctaTop + (int)(22 * $k), $qr);
         $tw = $W - 2 * $pad - (int)(80 * $k) - ($hasQr ? $qr + (int)(30 * $k) : 0);
-        $l1 = $cta['line'];
-        $l2 = $cta['phone'] !== '' ? 'WhatsApp ' . $cta['phone'] : preg_replace('#^https?://(www\.)?#i', '', (string)($s['website'] ?? ''));
+        $l1 = $cta['keyword'] !== '' ? 'WhatsApp the word ' . $cta['keyword'] : 'Send us a WhatsApp message';
+        $l2 = $cta['phone'] !== '' ? 'to ' . $cta['phone'] . ($cta['what'] !== '' ? ' for ' . $cta['what_lc'] : '') : preg_replace('#^https?://(www\.)?#i', '', (string)($s['website'] ?? ''));
         $room = $ctaH - (int)(48 * $k) - ($l2 !== '' ? (int)(68 * $k) : 0) - ($hasQr ? (int)(46 * $k) : 0); // the headline gets what the other lines leave, so nothing spills out of the panel
         [$apx, $al] = pm_card_fit($l1, $f['serifb'], (int)(64 * $k), (int)(26 * $k), $tw, max((int)(40 * $k), min((int)($ctaH * 0.5), $room)), 1.1);
         $blockH = (int)(count($al) * $apx * 1.1) + ($l2 !== '' ? (int)(54 * $k) : 0) + ($hasQr ? (int)(40 * $k) : 0);
@@ -593,10 +633,22 @@ function pm_camp_create(string $brand, array $in): array
     $o = ($in['offer'] ?? '') !== '' && function_exists('pm_lp_get') ? pm_lp_get((string)$in['offer']) : null;
     $kw = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string)($in['keyword'] ?? ''))) ?: strtoupper((string)($o['keyword'] ?? '')) ?: (string)pm_brand_profile($brand)['cta_keyword'];
     $when = preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', (string)($in['when'] ?? '')) ? (string)$in['when'] : date('Y-m-d H:00', time() + 3600);
+    $parts = array_values(array_intersect(array_keys(PM_CAMP_PARTS), (array)($in['parts'] ?? array_keys(PM_CAMP_PARTS))));
+    $notes = [];
+    if (in_array('status', $parts, true) && !in_array('stories', $parts, true)) {
+        $parts[] = 'stories'; // WhatsApp Status uses the story frames
+        $notes[] = 'WhatsApp Status uses the story frames, so they were made too.';
+    }
+    if (!array_diff($parts, ['status'])) {
+        return [null, 'Tick at least one part: the feed post, the stories, the carousel, the WhatsApp broadcast or the flyer.'];
+    }
+    $nets = array_values(array_intersect(array_keys(PM_CAMP_NETS), (array)($in['nets'] ?? array_keys(PM_CAMP_NETS))));
+    if (array_intersect(['feed', 'stories', 'carousel'], $parts) && !array_intersect(['facebook', 'instagram', 'linkedin'], $nets)) {
+        return [null, 'Tick Facebook, Instagram or LinkedIn for the posts, or untick the feed post, the stories and the carousel.'];
+    }
     $camp = ['id' => $id, 'brand' => $brand, 'name' => mb_substr(trim((string)($in['name'] ?? '')) ?: $own['headline'], 0, 60), 'headline' => $own['headline'], 'message' => $own['message'],
         'keyword' => mb_substr($kw, 0, 12), 'offer' => $o ? (string)$o['id'] : '', 'pic' => isset(PM_CAMP_PICS[$in['pic'] ?? '']) ? (string)$in['pic'] : 'card', 'bg' => '', 'bg_ai' => false,
-        'when' => $when, 'status' => 'draft', 'created' => date('Y-m-d H:i'), 'by' => trim((string)($GLOBALS['PM_WHO'] ?? '')) ?: 'owner', 'posts' => [], 'wac' => '', 'note' => ''];
-    $notes = [];
+        'when' => $when, 'status' => 'draft', 'created' => date('Y-m-d H:i'), 'by' => trim((string)($GLOBALS['PM_WHO'] ?? '')) ?: 'owner', 'posts' => [], 'wac' => '', 'note' => '', 'parts' => $parts, 'nets' => $nets];
     if ($camp['pic'] === 'photo') {
         $rel = is_array($in['photo'] ?? null) ? pm_camp_save_photo($id, (array)$in['photo']) : '';
         if ($rel !== '') {
@@ -618,6 +670,7 @@ function pm_camp_create(string $brand, array $in): array
     $camp['facts'] = array_values(array_unique(array_filter(array_map('trim', array_merge([$own['headline'], $own['message'], $own['about']], $own['facts'],
         $o && function_exists('pm_lp_facts') ? (array)pm_lp_facts($o) : [])))));
     $cta = pm_camp_cta($brand, $camp);
+    $camp['facts'] = array_values(array_unique(array_merge($camp['facts'], [$cta['line'], $cta['short'], $cta['reply']]))); // the number in the call to action is a fact
     $copy = pm_camp_copy($brand, $own, $cta);
     $camp['ai'] = (bool)$copy['ai'];
     unset($copy['ai']);
@@ -625,7 +678,17 @@ function pm_camp_create(string $brand, array $in): array
     $pool = pm_social_posts();
     $rows = [];
     foreach (pm_camp_fields($copy, $cta, $when, $camp['bg'] !== '') as $role => $f) {
-        $p = pm_camp_lint(pm_camp_post($brand, $camp, $role, $f), $pool);
+        if (!in_array(str_starts_with($role, 'story') ? 'stories' : $role, $parts, true)) {
+            continue;
+        }
+        $p = pm_camp_post($brand, $camp, $role, $f);
+        $wa = array_intersect(['status', 'broadcast'], $parts);
+        $skip = array_merge(in_array('status', $parts, true) ? [] : ['whatsapp_status'], $wa ? [] : ['whatsapp_channel'], array_values(array_diff(['facebook', 'instagram', 'linkedin'], $nets)),
+            in_array('others', $nets, true) ? [] : PM_CAMP_OTHERS);
+        if ($skip) {
+            $p['ch_skip'] = $skip; // the channels the owner did not tick: no publishing there, no hand-post task
+        }
+        $p = pm_camp_lint($p, $pool);
         $rows[] = $p;
         $pool[] = $p;
         $camp['posts'][$role] = $p['id'];
@@ -641,18 +704,19 @@ function pm_camp_create(string $brand, array $in): array
             pm_card_render($p, $p['format'] === 'story' ? 'story' : ($p['format'] === 'carousel' ? '4x5' : 'sq'));
         }
     }
-    $files = pm_camp_flyer($camp);
-    if (!isset($files['share'])) {
+    $files = array_intersect(['flyer', 'broadcast'], $parts) ? pm_camp_flyer($camp) : []; // the broadcast sends the flyer's share picture
+    if (array_intersect(['flyer', 'broadcast'], $parts) && !isset($files['share'])) {
         $notes[] = 'The flyer could not be drawn (the server needs GD and the fonts).';
     }
-    $camp['wac'] = pm_camp_broadcast_draft($camp, (array)($in['statuses'] ?? ['contacted', 'replied', 'proposal', 'won']), $files['share'] ?? '');
+    $camp['wac'] = in_array('broadcast', $parts, true) ? pm_camp_broadcast_draft($camp, (array)($in['statuses'] ?? ['contacted', 'replied', 'proposal', 'won']), $files['share'] ?? '') : '';
     $camp['note'] = implode(' ', $notes);
     pm_camp_update(function (array $all) use ($camp) {
         $all[] = $camp;
         return $all;
     });
     $held = count(array_filter($rows, fn($p) => !empty($p['lint'])));
-    return [$camp, 'Campaign ready to check: ' . count($rows) . ' posts, a flyer' . ($camp['wac'] !== '' ? ' and a WhatsApp broadcast' : '') . ($camp['ai'] ? ', written by the AI from your facts' : ', from your own words')
+    $made = array_filter([$rows ? count($rows) . ' post' . (count($rows) === 1 ? '' : 's') : '', in_array('flyer', $parts, true) ? 'a flyer' : '', $camp['wac'] !== '' ? 'a WhatsApp broadcast' : '']);
+    return [$camp, 'Campaign ready to check: ' . implode(', ', $made) . ($camp['ai'] ? ', written by the AI from your facts' : ', from your own words')
         . '. Nothing goes out until you approve it.' . ($held ? " $held item(s) need an edit first." : '') . ($notes ? ' ' . implode(' ', $notes) : '')];
 }
 
@@ -1026,6 +1090,10 @@ function pm_do_camp_create(string $vb): array
     $in = ['name' => (string)($_POST['name'] ?? ''), 'headline' => mb_substr(trim((string)($_POST['headline'] ?? '')), 0, 90), 'message' => mb_substr(trim((string)($_POST['message'] ?? '')), 0, 240),
         'keyword' => (string)($_POST['keyword'] ?? ''), 'offer' => preg_replace('/[^a-f0-9]/', '', (string)($_POST['offer'] ?? '')), 'pic' => (string)($_POST['pic'] ?? 'card'),
         'photo' => $_FILES['photo'] ?? null, 'when' => $ts && $ts > time() - 3600 ? date('Y-m-d H:i', $ts) : '', 'statuses' => (array)($_POST['statuses'] ?? [])];
+    if (isset($_POST['parts_shown'])) { // the form had the ticks: nothing ticked means nothing, not everything
+        $in['parts'] = array_map('strval', (array)($_POST['parts'] ?? []));
+        $in['nets'] = array_map('strval', (array)($_POST['nets'] ?? []));
+    }
     [$camp, $msg] = pm_camp_create($vb, $in);
     return pm_camp_back($msg, $camp ? 'ok' : 'err', $camp ? (string)$camp['id'] : '');
 }

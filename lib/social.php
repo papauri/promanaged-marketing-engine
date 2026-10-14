@@ -1752,6 +1752,10 @@ function pm_social_publish(array &$p): array
     $li = function_exists('pm_linkedin_cfg') && !empty($ch['linkedin']) && pm_linkedin_cfg($p['brand'])['ready'];
     $fbOn = $c['ready'] && !empty($ch['facebook']);
     $igOn = !empty($ch['instagram']) && $c['ig_id'] !== '' && $c['token'] !== '';
+    $skip = (array)($p['ch_skip'] ?? []); // networks this post should not go to (a campaign the owner kept to some channels)
+    $fbOn = $fbOn && !in_array('facebook', $skip, true);
+    $igOn = $igOn && !in_array('instagram', $skip, true);
+    $li = $li && !in_array('linkedin', $skip, true);
     if (!$fbOn && !$li && !$igOn) {
         $p['status'] = 'failed';
         $p['error'] = 'No social account is connected for ' . (pm_brand_name($p['brand'])) . ' yet (Operations > Connections).';

@@ -83,6 +83,8 @@ function pm_publish_ext(array &$p, array $c, string $media): ?array
     $brand = pm_ch_brand((string)($p['brand'] ?? 'promanaged'));
     pm_brand_set($brand);
     [$fbOn, $igOn] = pm_ch_flags($brand, $c);
+    $fbOn = $fbOn && !in_array('facebook', (array)($p['ch_skip'] ?? []), true);
+    $igOn = $igOn && !in_array('instagram', (array)($p['ch_skip'] ?? []), true);
     $fb = (string)($p['fb_id'] ?? '');
     $ig = (string)($p['ig'] ?? '');
     $err = '';

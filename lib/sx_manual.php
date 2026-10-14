@@ -83,7 +83,7 @@ function pm_manual_channels(array $p): array
     $li = function_exists('pm_social_settings') ? !empty(pm_social_settings($brand)['channels']['linkedin']) : false;
     $out = [];
     foreach (PM_CH_MANUAL as $ch) {
-        if (!empty($cfg['ticks']['off_' . $ch])) {
+        if (!empty($cfg['ticks']['off_' . $ch]) || in_array($ch, (array)($p['ch_skip'] ?? []), true)) { // off for the business, or not wanted for this post (a campaign without WhatsApp)
             continue;
         }
         $ok = match ($ch) {

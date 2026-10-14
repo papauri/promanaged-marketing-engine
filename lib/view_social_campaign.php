@@ -22,10 +22,16 @@ if ($camp):
     $fl = (array)($camp['copy']['flyer'] ?? []);
     $v = '&amp;v=' . substr(md5((string)@filemtime($files['share'] ?? '')), 0, 6);
     $guide = pm_camp_guide($camp, $items);
+    $parts = pm_camp_parts($camp);
+    $nets = isset($camp['nets']) ? (array)$camp['nets'] : array_keys(PM_CAMP_NETS);
+    $cta = pm_camp_cta($vb, $camp);
+    $goes = array_merge(array_intersect(['feed', 'stories', 'carousel'], $parts) ? [implode(', ', array_map(fn($n) => PM_CAMP_NETS[$n], array_intersect(['facebook', 'instagram', 'linkedin'], $nets)))] : [],
+        array_map(fn($k) => ['status' => 'WhatsApp Status', 'broadcast' => 'WhatsApp broadcast', 'flyer' => 'the flyer'][$k], array_values(array_intersect(['status', 'broadcast', 'flyer'], $parts))));
     ?>
 <div class="card">
   <div class="cluster"><h2 class="m-0"><?= pm_h((string)$camp['name']) ?></h2> <?= $stateChip(match ((string)$camp['status']) { 'approved' => 'approved', 'partly approved' => 'held', default => 'draft' }) ?>
     <span class="muted t-sm">starts <?= pm_h(date('D j M, H:i', strtotime((string)$camp['when']))) ?> · <?= pm_h(PM_CAMP_PICS[$camp['pic'] ?? 'card'] ?? '') ?><?= !empty($camp['ai']) ? ' · words by the AI from your facts' : ' · your own words' ?></span></div>
+  <p class="hint mt-1">Goes to: <?= pm_h(implode(' · ', $goes)) ?>. People are asked to: <b><?= pm_h($cta['line']) ?></b>.</p>
   <?php if (($camp['note'] ?? '') !== ''): ?><p class="hint"><?= pm_h((string)$camp['note']) ?></p><?php endif; ?>
   <p class="mt-1"><b>Next:</b> <?= pm_h($guide['next']) ?></p>
   <div class="btns">
@@ -48,7 +54,7 @@ if ($camp):
     <table class="grid" data-nopage><thead><tr><th>Item</th><th>Goes out</th><th>State</th></tr></thead><tbody>
     <?php foreach ($guide['times'] as [$tl, $tw, $ts]): ?><tr><td><?= pm_h($tl) ?></td><td><?= $tw !== '' ? pm_h(date('D j M, H:i', strtotime($tw))) : '–' ?></td><td><?= $stateChip($ts) ?></td></tr><?php endforeach; ?>
     </tbody></table>
-    <p class="hint">Story frames also become WhatsApp Status hand-post tasks. The broadcast goes only to people who agreed to WhatsApp messages, a few at a time in working hours. Nothing goes out until it is approved.</p>
+    <p class="hint"><?= in_array('status', $parts, true) ? 'Story frames also become WhatsApp Status hand-post tasks. ' : '' ?><?= in_array('broadcast', $parts, true) ? 'The broadcast goes only to people who agreed to WhatsApp messages, a few at a time in working hours. ' : '' ?>Nothing goes out until it is approved.</p>
   </details>
   <?php endif; ?>
 </div>
@@ -82,6 +88,7 @@ if ($camp):
   </div>
   <?php endforeach; ?>
 
+  <?php if (in_array('flyer', $parts, true)): ?>
   <div class="btkit" id="flyer">
     <?php if (isset($files['share'])): ?><img class="cppv" src="?camp=<?= pm_h($camp['id']) ?>&amp;f=share<?= $v ?>" alt="The flyer" loading="lazy"><?php else: ?><p class="hint">The flyer could not be drawn on this server (it needs GD and the fonts).</p><?php endif; ?>
     <div class="cluster"><b>Flyer</b> <span class="chip">print and share</span></div>
@@ -94,8 +101,9 @@ if ($camp):
       <label>Three points (one per line)</label><textarea name="f_points" rows="3" aria-label="Flyer points"><?= pm_h(implode("\n", (array)($fl['points'] ?? []))) ?></textarea>
       <div class="btns"><button class="btn small">Save and redraw the flyer</button></div>
     </form>
-    <p class="hint m-0">The QR code opens <?= pm_h(pm_camp_cta($vb, $camp)['link'] !== '' ? (str_contains(pm_camp_cta($vb, $camp)['link'], 'wa.me') ? 'a WhatsApp chat with you' : 'the offer\'s landing page') : 'nothing yet: add a mobile number in Business details') ?>. The share picture also goes with the WhatsApp broadcast.</p>
+    <p class="hint m-0">The QR code opens <?= pm_h(pm_camp_cta($vb, $camp)['link'] !== '' ? (str_contains(pm_camp_cta($vb, $camp)['link'], 'wa.me') ? 'a WhatsApp chat with you' : 'the offer\'s landing page') : 'nothing yet: add a mobile number in Business details') ?>.<?= in_array('broadcast', $parts, true) ? ' The share picture also goes with the WhatsApp broadcast.' : '' ?></p>
   </div>
+  <?php endif; ?>
 </div>
 <?php
     return;
@@ -134,15 +142,24 @@ $aiOn = function_exists('pm_agents_ready') && pm_agents_ready();
     </div>
     <label>One more line (optional)</label><input type="text" name="message" maxlength="240" value="<?= pm_h((string)($pick['message'] ?? '')) ?>" placeholder="What you do for them, in plain words">
     <div class="row">
-      <div><label>WhatsApp keyword</label><input type="text" name="keyword" maxlength="12" value="<?= pm_h((string)(($pick['keyword'] ?? '') ?: $prof['cta_keyword'])) ?>" placeholder="QUOTE"></div>
+      <div><label>Word they send you on WhatsApp</label><input type="text" name="keyword" maxlength="12" value="<?= pm_h((string)(($pick['keyword'] ?? '') ?: $prof['cta_keyword'])) ?>" placeholder="QUOTE"></div>
       <div><label>Starts</label><input type="datetime-local" name="when" value="<?= pm_h(date('Y-m-d\TH:00', time() + 3600)) ?>"></div>
       <div><label>Picture</label><select name="pic"><?php foreach (PM_CAMP_PICS as $k => $l): if (($k === 'ai' && !$aiPic) || ($k === 'ailib' && !pm_camp_ai_library($vb))) { continue; } ?><option value="<?= $k ?>"><?= pm_h($l) ?></option><?php endforeach; ?></select></div>
       <div><label>Your photo (if you picked it)</label><input type="file" name="photo" accept="image/jpeg,image/png,image/webp"></div>
     </div>
+    <?php $ctaNow = pm_camp_cta($vb, ['keyword' => ($pick['keyword'] ?? '') ?: $prof['cta_keyword'], 'offer' => (string)($pick['offer'] ?? '')]); ?>
+    <p class="hint mt-0">People are asked to: <b><?= pm_h($ctaNow['line']) ?></b>. The keyword tells you which campaign they came from<?= $ctaNow['phone'] === '' ? '. Add your WhatsApp number in Business details so they know where to send it' : '' ?>.</p>
+    <input type="hidden" name="parts_shown" value="1">
+    <label>What to make</label>
+    <div class="checks mt-0"><?php foreach (PM_CAMP_PARTS as $k => $l): ?><label class="check"><input type="checkbox" name="parts[]" value="<?= $k ?>" checked> <?= pm_h($l) ?></label><?php endforeach; ?></div>
+    <label>Posts go to</label>
+    <?php $netOn = function_exists('pm_social_settings') ? (array)pm_social_settings($vb)['channels'] : []; ?>
+    <div class="checks mt-0"><?php foreach (PM_CAMP_NETS as $k => $l): if ($k === 'linkedin' && empty($netOn['linkedin'])) { continue; } ?><label class="check"><input type="checkbox" name="nets[]" value="<?= $k ?>" checked> <?= pm_h($l) ?></label><?php endforeach; ?></div>
+    <p class="hint mt-0">Untick what you do not want: for socials only, untick the two WhatsApp parts and the flyer; for WhatsApp only, untick the feed post, stories and carousel.</p>
     <label>WhatsApp broadcast goes to <span class="muted">(only people who agreed to WhatsApp messages<?= $waOn ? '' : '; WhatsApp Business is not connected yet, so it is kept as a draft' ?>)</span></label>
     <div class="checks mt-0"><?php foreach (PM_WAC_AUDIENCE_STATUSES as $k => $l): ?><label class="check"><input type="checkbox" name="statuses[]" value="<?= $k ?>" <?= in_array($k, ($pick['statuses'] ?? []) ?: ['contacted', 'replied', 'proposal', 'won'], true) ? 'checked' : '' ?>> <?= pm_h($l) ?></label><?php endforeach; ?></div>
     <div class="btns"><button class="btn primary">Make the campaign</button></div>
-    <p class="hint">Makes a feed post, three story frames, a carousel, a WhatsApp broadcast and a flyer (A4 and A5 PDF, share picture), all saying the same thing. The words use only your facts<?= $aiPic ? '' : '; AI pictures appear here once they are set up' ?>. You check everything and approve it with one press.</p>
+    <p class="hint">Makes the parts you ticked, all saying the same thing. The words use only your facts<?= $aiPic ? '' : '; AI pictures appear here once they are set up' ?>. You check everything and approve it with one press.</p>
   </form>
 </div>
 
