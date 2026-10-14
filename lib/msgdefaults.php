@@ -239,6 +239,16 @@ function pm_dm_ready_all(?array &$leads = null): int
     }
     $n = 0;
     foreach ($leads as $id => $l) {
+        if (!empty($l['sent']) && in_array($l['status'] ?? '', ['new', 'qualified', 'drafted'], true)) { // emailed, but still showing as not written to: put right
+            $leads[$id]['status'] = 'contacted';
+            unset($leads[$id]['approved_at'], $leads[$id]['send_after']);
+            if (!in_array('Already contacted', (array)($l['folders'] ?? []), true)) {
+                $leads[$id]['folders'][] = 'Already contacted';
+            }
+            pm_lead_note($leads[$id], 'Moved to Contacted: it was emailed on ' . (string)end($l['sent']));
+            $n++;
+            continue;
+        }
         if (!filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) || trim((string)($l['drafts']['email_body'] ?? '')) !== '' || !empty($l['sent'])
             || !in_array($l['status'] ?? '', ['new', 'qualified', 'drafted'], true) || (function_exists('pm_lead_is_client') && pm_lead_is_client($l))
             || (!empty($l['email_bad']) && strcasecmp((string)$l['email_bad'], (string)$l['email']) === 0)) {

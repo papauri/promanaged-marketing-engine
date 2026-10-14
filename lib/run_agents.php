@@ -753,12 +753,11 @@ try {
                 if (isset($fresh[$id]) && (($fresh[$id]['status'] ?? '') !== 'contacted' || !empty($fresh[$id]['followup_draft']) || !empty($fresh[$id]['awaiting_reply_since']))) {
                     continue;
                 }
-                if (isset($leads[$id]) && !empty($w['email_body'])) {
-                    $leads[$id]['followup_draft'] = ['email_subject' => (string)$w['email_subject'], 'email_body' => (string)$w['email_body'], 'whatsapp' => (string)($w['whatsapp'] ?? '')];
-                    if (function_exists('pm_followup_arm')) {
-                        $leads[$id]['followup_arm'] = pm_followup_arm($leads[$id], $brand); // C2-A03: which subject style this follow-up used
-                    }
-                    $stats['followups']++;
+                if (isset($leads[$id])) { // the agent decided: send (draft stored, ready from the list), wait (paused until its day) or stop (closed as no response)
+                    $dec = pm_followup_apply($leads[$id], $w, $brand);
+                    $stats['followups'] += $dec === 'send' ? 1 : 0;
+                    $stats['followup_wait'] = ($stats['followup_wait'] ?? 0) + ($dec === 'wait' ? 1 : 0);
+                    $stats['followup_stop'] = ($stats['followup_stop'] ?? 0) + ($dec === 'stop' ? 1 : 0);
                 }
             }
         }

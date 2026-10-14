@@ -856,7 +856,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $queued = array_slice($ids, $qi);
                     break;
                 }
-                $res = pm_send_first($leads, $i2, 'drafts');
+                $res = pm_send_first($leads, $i2, ($leads[$i2]['status'] ?? '') === 'contacted' && !empty($leads[$i2]['followup_draft']['email_body']) ? 'followup_draft' : 'drafts'); // a contacted lead with its follow-up ready gets the follow-up
                 if (!empty($res['ok'])) {
                     $sent++;
                     unset($leads[$i2]['awaiting_reply_since'], $leads[$i2]['approved_at'], $leads[$i2]['send_after']);

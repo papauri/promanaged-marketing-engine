@@ -25,6 +25,33 @@ function pm_followup_due(array $leads, array $cfg, bool $withDraft = true): arra
     return $out;
 }
 
+/**
+ * What the Follow-up agent decided for one lead, applied: 'send' stores the follow-up draft (ready to send from the list), 'wait' pauses the lead until the day it chose,
+ * 'stop' closes it as no response (Move to puts it back any time). Returns 'send', 'wait' or 'stop'.
+ */
+function pm_followup_apply(array &$lead, array $w, string $brand): string
+{
+    $d = strtolower(trim((string)($w['decision'] ?? 'send')));
+    $why = mb_substr(trim(strip_tags((string)($w['why'] ?? ''))), 0, 200);
+    if ($d === 'wait') {
+        $days = max(2, min(21, (int)($w['wait_days'] ?? 5)));
+        $lead['snooze_until'] = date('Y-m-d', strtotime("+$days days"));
+        pm_lead_note($lead, 'Follow-up agent: wait until ' . $lead['snooze_until'] . ($why !== '' ? " ($why)" : ''));
+        return 'wait';
+    }
+    if ($d === 'stop' && (int)($lead['followups'] ?? 0) >= 1 && function_exists('pm_lead_set_status')) {
+        pm_lead_set_status($lead, 'lost', 'no_response');
+        pm_lead_note($lead, 'Follow-up agent: stop following up' . ($why !== '' ? " ($why)" : '') . '. Move it back with Move to if you disagree.');
+        return 'stop';
+    }
+    if (trim((string)($w['email_body'] ?? '')) === '') {
+        return 'wait'; // nothing written: tried again at the next run
+    }
+    pm_followup_store($lead, $w, $brand);
+    $why !== '' && pm_lead_note($lead, 'Follow-up agent: send now (' . $why . ')');
+    return 'send';
+}
+
 /** The AI's follow-up for one lead stored on the lead: subject, email, WhatsApp, and the subject style it used (so the follow-up experiment can score it). */
 function pm_followup_store(array &$lead, array $w, string $brand): void
 {
@@ -39,7 +66,7 @@ function pm_followup_store(array &$lead, array $w, string $brand): void
  * Drafts follow-ups with the AI now for the current business: the due ones with no draft yet (at most $max, six to a call), or only $ids when given.
  * A lead that was sent, replied or got a draft while this ran is left alone. Returns ['drafted' => n, 'failed' => n, 'due' => n].
  */
-function pm_followup_draft_now(array $ids = [], int $max = 12): array
+function pm_followup_draft_now(array $ids = [], int $max = 60): array
 {
     $brand = pm_brand();
     $mine = array_filter(pm_leads(), fn($l) => ($l['brand'] ?? 'promanaged') === $brand);
@@ -63,7 +90,7 @@ function pm_followup_draft_now(array $ids = [], int $max = 12): array
         }
         $by = [];
         foreach ($out as $w) {
-            if (is_array($w) && isset($w['id']) && is_scalar($w['id']) && trim((string)($w['email_body'] ?? '')) !== '') {
+            if (is_array($w) && isset($w['id']) && is_scalar($w['id']) && (trim((string)($w['email_body'] ?? '')) !== '' || in_array(strtolower((string)($w['decision'] ?? '')), ['wait', 'stop'], true))) {
                 $by[(string)$w['id']] = $w;
             }
         }
@@ -72,8 +99,7 @@ function pm_followup_draft_now(array $ids = [], int $max = 12): array
                 if (!isset($cur[$id]) || ($cur[$id]['status'] ?? '') !== 'contacted' || !empty($cur[$id]['followup_draft'])) {
                     continue;
                 }
-                pm_followup_store($cur[$id], $w, $brand);
-                $drafted++;
+                $drafted += pm_followup_apply($cur[$id], $w, $brand) === 'send' ? 1 : 0;
             }
             return $cur;
         }, fn() => []);
@@ -109,6 +135,7 @@ function pm_followup_draft_one(string $id): array
     if (!is_array($w) || trim((string)($w['email_body'] ?? '')) === '') {
         return [false, 'The agent did not return a draft. Try again.'];
     }
+    $w['decision'] = 'send'; // asked for by hand: the owner decided, so it is written whatever the agent thought
     pm_update('leads', function (array $cur) use ($id, $w, $brand) {
         if (isset($cur[$id]) && ($cur[$id]['status'] ?? '') === 'contacted') {
             pm_followup_store($cur[$id], $w, $brand);

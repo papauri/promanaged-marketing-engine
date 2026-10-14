@@ -1257,7 +1257,10 @@ function pm_agent_followup(array $leads): array
     $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou are the Follow-up agent for {$s['company_name']}. Write a 40-word follow-up email and 25-word WhatsApp that add ONE new angle (a different gain, or a one-page plan offer).  Read their_last_message and our_last_message: never repeat our last message, never quote words they did not write, and if their_last_message is empty never say they said anything. followups_already_sent tells you how many nudges came before: each one must add a different reason."
         . "Match the state: for \"opened\" (they opened our proposal or email but stayed quiet) gently reference what they saw and add one new, true reason; for \"silent\" (never engaged) be shorter and lead with one specific fact about their business (from what_we_know when given: our research's facts, news and hooks; never invent one);for \"replied\" pick up their last words, never repeat a whole earlier message. "
         . "No prices, no guilt, no pressure, no urgency. Plain text, no sign-off. Each item has subject_style: write that item's email subject in that style, $subjectRule. "
-        . pm_email_exp_followup_example(pm_brand()) . ' ' . pm_market_pulse_line() . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
+        . pm_email_exp_followup_example(pm_brand()) . ' ' . pm_market_pulse_line() . ' '
+        . 'Before writing, DECIDE for each item what is best for winning this business: "send" (a follow-up now: write it), "wait" (too soon, or a better moment is coming: give wait_days 2 to 21 and leave the texts empty), '
+        . 'or "stop" (a poor fit, or enough follow-ups have gone with no sign of interest; only when followups_already_sent is 1 or more). Use days_since_our_last_email, followups_already_sent, state, views, score and what_we_know. Default to "send". Give a short why. '
+        . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $last = function (array $l, string $dir): string { // the latest message each way, so "pick up their last words" has their words to pick up
         foreach (array_reverse((array)($l['thread'] ?? [])) as $m) {
             if (($m['dir'] ?? '') === $dir && trim((string)($m['text'] ?? '')) !== '') {
@@ -1268,9 +1271,10 @@ function pm_agent_followup(array $leads): array
     };
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'contact' => $l['contact'] ?? '', 'used' => mb_substr($l['drafts']['email_body'] ?? '', 0, 220),
         'their_last_message' => $last($l, 'in'), 'our_last_message' => $last($l, 'out'), 'followups_already_sent' => (int)($l['followups'] ?? 0),
-        'state' => pm_lead_engagement((array)$l), 'views' => (int)($l['view_count'] ?? 0), 'last_seen' => (string)($l['last_viewed_at'] ?? ''),
+        'state' => pm_lead_engagement((array)$l), 'views' => (int)($l['view_count'] ?? 0), 'last_seen' => (string)($l['last_viewed_at'] ?? ''), 'score' => (int)($l['score'] ?? 0),
+        'days_since_our_last_email' => ($lt = strtotime((string)($l['last_contacted'] ?? ''))) ? (int)floor((time() - $lt) / 86400) : null,
         'subject_style' => pm_subject_style(pm_followup_arm((array)$l))] + (!empty($l['research']) ? ['what_we_know' => pm_research_brief($l)] : []), $leads); // the morning study: real facts and news to build the new angle on
-    return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"email_subject\",\"email_body\"" . (pm_wa_on() ? ",\"whatsapp\"" : '') . "}" . (pm_wa_on() ? '' : ' Email only: no WhatsApp message.'), false, 1800))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);
+    return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"decision\":\"send|wait|stop\",\"wait_days\",\"why\",\"email_subject\",\"email_body\"" . (pm_wa_on() ? ",\"whatsapp\"" : '') . "}" . (pm_wa_on() ? '' : ' Email only: no WhatsApp message.'), false, 1800))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);
 }
 
 /** One word for the follow-up writer: 'replied', 'opened' or 'silent'. */

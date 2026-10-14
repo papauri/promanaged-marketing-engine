@@ -593,7 +593,7 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     if ($which === 'drafts' && !empty($lead['sent'])) {
         return $no('You have already sent this business a first email. Use a follow-up instead.');
     }
-    if ($which !== 'drafts' && ($t = pm_lead_other_touch(pm_load('leads', fn() => [])[$id] ?? $lead))) { // a teammate already wrote to them today: said, not stopped
+    if ($which !== 'drafts' && ($t = pm_lead_other_touch(pm_load('leads', fn() => [])[$id] ?? $lead)) && $t[0] !== 'Someone') { // a named teammate already wrote to them today: said, not stopped
         $advice[] = $t[0] . ' also wrote to ' . ($lead['name'] ?? 'them') . ' ' . $t[2] . ' ' . $t[1] . '.';
     }
     if (!($v = pm_verify_email($email, (string)($lead['website'] ?? ''), false))['ok']) {
@@ -697,6 +697,13 @@ function pm_approve_for_send(array &$leads, array $ids): int
     $n = 0;
     foreach (array_unique($ids) as $id) {
         $l = $leads[$id] ?? null;
+        if ($l && ($l['status'] ?? '') === 'contacted' && !empty($l['followup_draft']['email_body']) && empty($l['approved_at']) && filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL)) {
+            $leads[$id]['approved_at'] = date('Y-m-d H:i:s'); // a follow-up: the drip sends it in the sending hours
+            $leads[$id]['followup_approved'] = true;
+            pm_lead_note($leads[$id], 'Follow-up approved for sending (goes out in the sending hours)');
+            $n++;
+            continue;
+        }
         $d = (array)($l['drafts'] ?? []);
         if (!$l || !in_array($l['status'] ?? '', ['drafted', 'qualified'], true) || !empty($l['approved_at']) || !empty($l['sent']) || empty($d['email_body']) || pm_lead_is_client($l)) {
             continue;

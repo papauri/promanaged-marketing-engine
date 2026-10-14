@@ -406,6 +406,7 @@ function pm_ml_sync_sent(array &$leads, int $days = 365, ?array &$report = null)
                 }
             }
             $first = []; // lead id => the earliest email to it in the folder [at, subject]
+            $all = []; // lead id => every email to it [at => subject]
             foreach (array_chunk($uids, 300) as $ci => $chunk) {
                 $raw = pm_imap_cmd($fp, 'H' . $ci, 'UID FETCH ' . implode(',', $chunk) . ' (BODY.PEEK[HEADER.FIELDS (TO CC DATE SUBJECT)])');
                 foreach (preg_split('/\r?\n(?=\* \d+ FETCH )/', $raw) as $msg) {
@@ -419,6 +420,9 @@ function pm_ml_sync_sent(array &$leads, int $days = 365, ?array &$report = null)
                         if ($id !== null && $at !== '' && (!isset($first[$id]) || $at < $first[$id][0])) {
                             $first[$id] = [$at, $subj, $addr];
                         }
+                        if ($id !== null && $at !== '') {
+                            $all[$id][$at] = $subj;
+                        }
                     }
                 }
             }
@@ -427,6 +431,25 @@ function pm_ml_sync_sent(array &$leads, int $days = 365, ?array &$report = null)
                 if (function_exists('pm_folder_add') && !in_array('Already contacted', (array)($leads[$id]['folders'] ?? []), true)) {
                     pm_folder_add($leads, [(string)$id], 'Already contacted', (string)($leads[$id]['brand'] ?? 'promanaged'));
                     $report['foldered'][] = (string)$id;
+                }
+                if (!empty($leads[$id]['sent']) && ($leads[$id]['status'] ?? '') === 'contacted') { // follow-ups sent from the other copy: counted, so the next one is timed right and never repeats
+                    $known = array_map(fn($x) => substr((string)$x, 0, 16), (array)$leads[$id]['sent']);
+                    $near = fn(string $t) => (bool)array_filter($known, fn($k) => abs(strtotime($k) - strtotime($t)) <= 180);
+                    $newer = array_filter(array_keys($all[$id] ?? []), fn($t) => !$near($t) && $t > max($known));
+                    if ($newer) {
+                        sort($newer);
+                        foreach ($newer as $t) {
+                            $leads[$id]['sent'][] = $t;
+                            $leads[$id]['thread'][] = ['dir' => 'out', 'at' => $t, 'text' => '(Found in the Sent folder) ' . $all[$id][$t]];
+                        }
+                        $leads[$id]['followups'] = max((int)($leads[$id]['followups'] ?? 0), count($leads[$id]['sent']) - 1);
+                        $leads[$id]['last_contacted'] = $leads[$id]['last_out'] = end($newer);
+                        unset($leads[$id]['followup_draft'], $leads[$id]['followup_approved'], $leads[$id]['approved_at'], $leads[$id]['send_after']); // that follow-up already went
+                        pm_lead_note($leads[$id], count($newer) . ' later email' . (count($newer) === 1 ? '' : 's') . ' to them found in the Sent folder (last ' . end($newer) . '): follow-ups counted, the waiting draft cleared');
+                        $report['marked'][] = (string)$id;
+                        $n++;
+                    }
+                    continue;
                 }
                 if (!empty($leads[$id]['sent']) || !in_array($leads[$id]['status'] ?? '', ['new', 'qualified', 'drafted'], true)) {
                     continue; // this copy already knows, or the lead is past the first email (a reply to their enquiry is not a cold email)

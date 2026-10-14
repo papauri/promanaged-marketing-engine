@@ -42,12 +42,13 @@ $focusId = isset($leadsAll[(string)($_GET['lead'] ?? '')]) ? (string)$_GET['lead
 $who = (string)($GLOBALS['PM_WHO'] ?? '');
 $team = array_values(array_filter((array)($settings['team'] ?? [])));
 $waiting = fn($l) => $l['status'] !== 'optout' && ($l['status'] === 'replied' || !empty($l['awaiting_reply_since']));
-$gaps = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted', 'contacted'], true) && pm_approach($l)['ready'] < 70; // too little known for a good approach
+$gaps = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted'], true) && empty($l['sent']) && pm_approach($l)['ready'] < 70; // not written to yet, and too little known for a good approach
 $fuDue = array_flip(array_map('strval', array_keys(pm_followup_due($leadsAll, $acfg, false))));
 $todo = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted', 'replied', 'proposal'], true) || $waiting($l)
     || ($l['status'] === 'contacted' && (!empty($l['followup_draft']) || isset($fuDue[(string)$l['id']]))); // Active: something to do now
 $inStatus = fn($l, $f) => $f === 'all' ? true : ($f === 'mine' ? (($l['owner'] ?? '') === $who && (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l))) : ($f === 'awaiting' ? $waiting($l)
-    : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? $todo($l) : $l['status'] === $f))));
+    : ($f === 'followups' ? ($l['status'] === 'contacted' && (!empty($l['followup_draft']) || isset($fuDue[(string)$l['id']]))) : ($f === 'closed' ? in_array($l['status'], ['lost', 'optout'], true)
+    : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? $todo($l) : $l['status'] === $f))))));
 $inSearch = fn($l) => ($fq === '' || mb_stripos($l['name'] . ' ' . $l['city'] . ' ' . ($l['contact'] ?? '') . ' ' . ($l['type'] ?? '') . ' ' . ($l['email'] ?? ''), $fq) !== false)
     && ($fcity === '' || strcasecmp(trim((string)($l['city'] ?? '')), $fcity) === 0) && $hasOk($l) && (int)($l['score'] ?? 0) >= $fmin
     && ($ffolder === '' || in_array($ffolder, (array)($l['folders'] ?? []), true));
@@ -66,6 +67,8 @@ foreach ($base as $l) { $counts[$l['status']] = ($counts[$l['status']] ?? 0) + 1
 $counts['active'] = count(array_filter($base, fn($l) => $inStatus($l, 'active')));
 $counts['awaiting'] = count(array_filter($base, fn($l) => $waiting($l)));
 $counts['gaps'] = count(array_filter($base, $gaps));
+$counts['followups'] = count(array_filter($base, fn($l) => $inStatus($l, 'followups')));
+$counts['closed'] = count(array_filter($base, fn($l) => $inStatus($l, 'closed')));
 $counts['all'] = count($base);
 $counts['mine'] = $who === '' ? 0 : count(array_filter($base, fn($l) => $inStatus($l, 'mine')));
 $shown = array_filter($base, fn($l) => $inStatus($l, $filter));
@@ -81,7 +84,8 @@ $atPos = array_search((string)($_GET['at'] ?? ''), array_column($shown, 'id'), t
 [$shown, $pager] = pm_ui_page($shown, $fper, 'p', $atPos === false ? 0 : intdiv((int)$atPos, $fper) + 1);
 $unmatched = pm_inbox_unmatched_list();
 $hasApprove = function_exists('pm_approve_for_send');
-$approvable = fn($l) => $hasApprove && in_array($l['status'], ['drafted', 'qualified'], true) && empty($l['approved_at']) && empty($l['sent']) && !empty($l['drafts']['email_body']) && filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL);
+$approvable = fn($l) => $hasApprove && empty($l['approved_at']) && filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL)
+    && ((in_array($l['status'], ['drafted', 'qualified'], true) && empty($l['sent']) && !empty($l['drafts']['email_body'])) || ($l['status'] === 'contacted' && !empty($l['followup_draft']['email_body']))); // a first email or a follow-up ready to go
 $nApprovable = count(array_filter($shown, $approvable));
 $sentToday = pm_sent_today($leadsAll);
 $agentLog = pm_load('agent_log', fn() => []);
@@ -98,7 +102,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
 ?>
 <?= pm_ui_head('Leads · ' . pm_h($bname), 'Find businesses, let the agents draft the messages, and send what you approve. Nothing goes out without you.') ?>
 <?= pm_ui_strip('agents') ?>
-<?php if ($readied): ?><div class="flash ok"><?= $readied ?> lead<?= $readied === 1 ? '' : 's' ?> with an email had no first email yet: <?= $readied === 1 ? 'it is' : 'they are' ?> now written from your default message and ready to send.</div><?php endif; ?>
+<?php if ($readied): ?><div class="flash ok"><?= $readied ?> lead<?= $readied === 1 ? ' was' : 's were' ?> put in order: a lead with an email but no first email now has one ready (from your default message), and a lead that was already emailed is under Contacted.</div><?php endif; ?>
 <?php if ($synced): ?><div class="flash ok"><?= $synced ?> lead<?= $synced === 1 ? '' : 's' ?> found in the Sent folder (emailed from the other copy of the app or by hand) and marked contacted.</div><?php endif; ?>
 <?php if (!pm_agents_ready()): ?>
   <div class="flash err"><b>One thing to set up first.</b> Add <code><?= pm_h(pm_agents_missing_key()) ?>=...</code> to <code>.env</code>, then reload.</div>
@@ -198,7 +202,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <div class="focusbar"><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?><?= pm_h($fq2()) ?>&at=<?= pm_h(rawurlencode($focusId)) ?>#l<?= pm_h($focusId) ?>">← All leads</a> <span class="muted">Focused on <b><?= pm_h($leadsAll[$focusId]['name']) ?></b></span></div>
 <?php else: ?>
 <div class="filters">
-  <?php foreach (($who !== '' ? ['mine' => 'Mine'] : []) + ['active' => 'Active', 'awaiting' => 'Needs reply', 'gaps' => 'Missing details', 'drafted' => 'Draft ready', 'contacted' => 'Contacted', 'replied' => 'Replied', 'proposal' => 'Proposal sent', 'won' => 'Won', 'all' => 'All'] as $k => $l): ?>
+  <?php foreach (($who !== '' ? ['mine' => 'Mine'] : []) + ['active' => 'Active', 'awaiting' => 'Needs reply', 'gaps' => 'Missing details', 'drafted' => 'Draft ready', 'followups' => 'Follow-ups', 'contacted' => 'Contacted', 'replied' => 'Replied', 'proposal' => 'Proposal sent', 'won' => 'Won', 'closed' => 'Closed', 'all' => 'All'] as $k => $l): ?>
     <a href="?tab=agents&status=<?= $k ?><?= pm_h($fq2()) ?>" class="<?= $filter === $k ? 'on' : '' ?>"><?= $l ?> <small><?= (int)($counts[$k] ?? 0) ?></small></a>
   <?php endforeach; ?>
   <form method="get" class="typesel" data-noload="1"><input type="hidden" name="tab" value="agents"><input type="hidden" name="status" value="<?= pm_h($filter) ?>">
