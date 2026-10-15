@@ -268,7 +268,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     $id = $l['id'];
     $fuReady = $l['status'] === 'contacted' && empty($l['followup_draft']) ? pm_followup_ready($l) : null; // written ahead by the Follow-up head: shown and editable, sent by Follow up
     $which = ($l['status'] === 'contacted' && (!empty($l['followup_draft']) || $fuReady)) ? 'followup' : 'first';
-    $dr = $which === 'followup' ? ($l['followup_draft'] ?? $fuReady) : ($l['drafts'] ?? []);
+    $dr = $which === 'followup' ? pm_followup_for_send($l) : ($l['drafts'] ?? []); // as it will go: "I wrote to you yesterday" from the real date
     $canMail = !empty($dr['email_body']) && filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) && $l['status'] !== 'optout';
     $wa = $waOn && !empty($dr['whatsapp']) && ($l['status'] ?? '') !== 'optout' ? pm_wa_link($l, $dr['whatsapp']) : ''; // nobody who said STOP gets a WhatsApp button
     $hasReply = !empty($l['reply_draft']);

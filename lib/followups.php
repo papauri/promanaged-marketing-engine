@@ -27,6 +27,36 @@ function pm_followup_due(array $leads, array $cfg, bool $withDraft = true): arra
 
 /* ---------------- prepared ahead by the Follow-up head ---------------- */
 
+/** When we last wrote to them, in plain words, from the real date: "earlier today", "yesterday", "on Tuesday", "last week", "a few weeks ago". */
+function pm_followup_when(array $l, ?int $now = null): string
+{
+    $t = strtotime((string)($l['last_contacted'] ?? '')) ?: strtotime((string)end($l['sent'])) ?: 0;
+    if (!$t) {
+        return 'recently';
+    }
+    $now = $now ?? (function_exists('pm_now') ? pm_now() : time());
+    $days = (int)floor((strtotime(date('Y-m-d', $now)) - strtotime(date('Y-m-d', $t))) / 86400); // calendar days, not hours: "yesterday" means the day before today
+    return match (true) {
+        $days <= 0 => 'earlier today',
+        $days === 1 => 'yesterday',
+        $days < 7 => 'on ' . date('l', $t),
+        $days < 14 => 'last week',
+        $days < 45 => 'a few weeks ago',
+        default => 'a while ago',
+    };
+}
+
+/**
+ * The Follow-up head's check before anything goes: a follow-up is written ahead, so how long ago we wrote is set from the real date at the moment it is shown or sent
+ * ("I wrote to you a few days ago" the day after becomes "I wrote to you yesterday"). Only that phrase changes.
+ */
+function pm_followup_timefix(string $text, array $l, ?int $now = null): string
+{
+    $when = pm_followup_when($l, $now);
+    return (string)preg_replace_callback('/\b(wrote|reached out|got in touch|emailed|sent you (?:an|a short|my) (?:email|note|message))((?: to you| you)?)\s+(?:(?:a few|a couple of|several|two|three|four|five|\d+)\s+days ago|a little while ago|last week|earlier this week|the other day|recently|yesterday|earlier today|on (?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)|a few weeks ago|a while ago)/iu',
+        fn($m) => $m[1] . $m[2] . ' ' . $when, $text);
+}
+
 /** Which follow-up the next one is for this lead: 1 for the first, 2 for the second... */
 function pm_followup_nth(array $l): int
 {
@@ -54,12 +84,13 @@ function pm_followup_open(array $l, array $cfg): bool
 function pm_followup_for_send(array $l): array
 {
     if (trim((string)($l['followup_draft']['email_body'] ?? '')) !== '') {
-        return (array)$l['followup_draft'];
+        return ['email_body' => pm_followup_timefix((string)$l['followup_draft']['email_body'], $l), 'whatsapp' => pm_followup_timefix((string)($l['followup_draft']['whatsapp'] ?? ''), $l)] + (array)$l['followup_draft'];
     }
     if ($r = pm_followup_ready($l)) {
-        return ['email_subject' => (string)$r['email_subject'], 'email_body' => (string)$r['email_body'], 'whatsapp' => (string)($r['whatsapp'] ?? ''), 'source' => 'prepared'];
+        return ['email_subject' => (string)$r['email_subject'], 'email_body' => pm_followup_timefix((string)$r['email_body'], $l), 'whatsapp' => pm_followup_timefix((string)($r['whatsapp'] ?? ''), $l), 'source' => 'prepared'];
     }
-    return pm_dm_as((string)($l['brand'] ?? pm_brand()), fn() => pm_dm_followup_render($l)) + ['source' => 'default'];
+    $d = pm_dm_as((string)($l['brand'] ?? pm_brand()), fn() => pm_dm_followup_render($l));
+    return ['email_body' => pm_followup_timefix($d['email_body'], $l), 'whatsapp' => pm_followup_timefix($d['whatsapp'], $l), 'source' => 'default'] + $d;
 }
 
 /**

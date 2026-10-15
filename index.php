@@ -956,6 +956,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sent = 0;
             $why = [];
             $nums = [];
+            $soon = count(array_filter($ok, fn($i2) => in_array(pm_followup_when($leads[$i2]), ['earlier today', 'yesterday'], true))); // the Follow-up head's eye on timing
             $room = function_exists('pm_ml_room_now') ? pm_ml_room_now(pm_brand()) : null;
             foreach ($ok as $qi => $i2) {
                 if ($room !== null && $sent >= $room) {
@@ -980,7 +981,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $nl = implode(', ', array_map(fn($k, $v) => "$v as follow-up $k", array_keys($nums), $nums));
             function_exists('pm_send_advice_refresh') && pm_send_advice_refresh(pm_brand());
             $back($sent . ' of ' . count($ok) . ' follow-up' . (count($ok) === 1 ? '' : 's') . ' sent' . ($nl !== '' ? " ($nl)" : '') . '.' . (count($ids) > count($ok) ? ' ' . (count($ids) - count($ok)) . ' ticked lead' . (count($ids) - count($ok) === 1 ? ' was' : 's were') . ' not waiting for a follow-up.' : '')
-                . ($why ? ' Not sent: ' . implode(' ', array_slice($why, 0, 3)) . (count($why) > 3 ? ' And ' . (count($why) - 3) . ' more.' : '') : ''), $sent ? 'ok' : 'err');
+                . ($why ? ' Not sent: ' . implode(' ', array_slice($why, 0, 3)) . (count($why) > 3 ? ' And ' . (count($why) - 3) . ' more.' : '') : '') . ($soon ? " Note from the Follow-up head: $soon of them had our previous email only yesterday or today. Each follow-up says so truthfully, but a gap of a few days usually gets more replies." : ''), $sent ? 'ok' : 'err');
         }
         if ($do === 'approve_send' || $do === 'unapprove_send') {
             $ids = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? []))));

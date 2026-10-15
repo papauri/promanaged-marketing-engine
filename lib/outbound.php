@@ -492,8 +492,8 @@ function pm_send_first(array &$leads, string $id, string $which, ?callable $mail
     pm_brand_set((string)($leads[$id]['brand'] ?? 'promanaged')); // act as the brand this lead was approached by
     try {
         $key = in_array($which, ['followup', 'followup_draft'], true) ? 'followup_draft' : (in_array($which, ['winback', 'winback_draft'], true) ? 'winback_draft' : 'drafts');
-        if ($key === 'followup_draft' && trim((string)($leads[$id]['followup_draft']['email_body'] ?? '')) === '' && ($leads[$id]['status'] ?? '') === 'contacted' && function_exists('pm_followup_for_send')) {
-            $leads[$id]['followup_draft'] = pm_followup_for_send($leads[$id]); // the one the Follow-up head prepared for this number, else the default for it
+        if ($key === 'followup_draft' && ($leads[$id]['status'] ?? '') === 'contacted' && function_exists('pm_followup_for_send')) {
+            $leads[$id]['followup_draft'] = pm_followup_for_send($leads[$id]); // the draft, else the one the Follow-up head prepared for this number, else the default for it; "I wrote to you ..." set from the real date
         }
         return pm_send_first_run($leads, $id, $key, $mailer);
     } finally {
