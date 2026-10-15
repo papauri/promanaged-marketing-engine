@@ -60,7 +60,8 @@ function pm_board_build(string $brand): array
         $fu > 0 && $say('followup', $n($fu, 'follow-up is', 'follow-ups are') . ' ready for you to send.', '?tab=agents&status=followups');
         $say('replies', $waiting ? $n(count($waiting), 'person wrote', 'people wrote') . ' back and ' . ($answers ? $n($answers, 'answer is', 'answers are') . ' drafted for you.' : 'waits for your answer.') : 'Nobody is waiting for an answer.', '?tab=agents&status=awaiting');
         $say('social', ($fbReady ? 'Our Page: ' . ($pageWait ? $n($pageWait, 'person waits', 'people wait') . ' for an answer' : 'nobody waiting') . '. ' : 'Our Facebook Page is not connected, so I cannot read it. ')
-            . ($people ? $n($people, 'person', 'people') . ' asking for what we offer, with replies to paste. ' : '') . ($postsWait ? $n($postsWait, 'post waits', 'posts wait') . ' for your approval.' : ''), $people ? '?tab=agents&status=people' : '?tab=social');
+            . ($people ? $n($people, 'person', 'people') . ' asking for what we offer, with replies to paste. ' : '') . ($postsWait ? $n($postsWait, 'post waits', 'posts wait') . ' for your approval. ' : '')
+            . (function_exists('pm_sl_counts') && ($sl = pm_sl_counts($brand, $L)) && ($sl['answer'] || $sl['followup']) ? 'Social leads: ' . $sl['answer'] . ' to answer, ' . $sl['followup'] . ' to follow up, drafts ready.' : ''), $people || !empty($sl['answer']) || !empty($sl['followup']) ? '?tab=social&view=leads' : '?tab=social');
         $say('sender', 'Sent ' . $sent . ' today' . ($queued ? ', ' . $queued . ' approved and queued' : '') . ($outbox ? '; ' . $n($outbox, 'email is', 'emails are') . ' stuck in the Outbox.' : '.'), $outbox ? '?tab=agents#outbox' : '?tab=agents');
 
         // what the owner does today, most urgent first
@@ -69,7 +70,9 @@ function pm_board_build(string $brand): array
         $pageWait && $you[] = ['Answer ' . $n($pageWait, 'person', 'people') . ' on our Page', '?tab=social&view=inbox', true, 'social'];
         $outbox && $you[] = ['Fix ' . $n($outbox, 'email', 'emails') . ' in the Outbox', '?tab=agents#outbox', true, 'sender'];
         $ready && $you[] = ['Read and send ' . $n($ready, 'email', 'emails'), '?tab=agents&status=ready', false, 'writers'];
-        $people && $you[] = ['Paste ' . $n($people, 'reply', 'replies') . ' under public posts', '?tab=agents&status=people', false, 'social'];
+        $slc = function_exists('pm_sl_counts') ? pm_sl_counts($brand, $L) : ['answer' => 0, 'followup' => 0];
+        $slc['answer'] && $you[] = ['Answer ' . $n($slc['answer'], 'person', 'people') . ' from social media', '?tab=social&view=leads&stage=answer', true, 'social'];
+        $slc['followup'] && $you[] = ['Send ' . $n($slc['followup'], 'social follow-up', 'social follow-ups'), '?tab=social&view=leads&stage=followup', false, 'social'];
         $postsWait && $you[] = ['Approve ' . $n($postsWait, 'post', 'posts'), '?tab=social', false, 'social'];
 
         // the Director checks the board against what we have

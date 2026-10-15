@@ -12,6 +12,7 @@
 function pm_heads_goals(string $brand): array
 {
     require_once __DIR__ . '/director.php'; // the pipeline numbers
+    function_exists('pm_social_cfg') || require_once __DIR__ . '/social_modules.php'; // the daily run does not load the social screens: Social's goal needs them
     $was = pm_brand();
     pm_brand_set($brand);
     try {
@@ -110,9 +111,14 @@ function pm_heads_goals(string $brand): array
         $enq += count(array_filter($L, fn($l) => !empty($l['listen']) && strtotime((string)($l['created'] ?? '')) > $week));
         $fb = function_exists('pm_social_cfg') && pm_social_cfg($brand)['ready'];
         $soOk = !$sg['enquiries_per_week'] || $enq >= $sg['enquiries_per_week'];
-        $set('social', $sg['enquiries_per_week'] ? "Bring {$sg['enquiries_per_week']} enquiries a week from social media" : 'Keep the Page answered', $n($enq, 'enquiry', 'enquiries') . ' in 7 days', $soOk,
-            $soOk ? '' : ($fb ? 'I post more lead posts and listen wider.' : 'Our Facebook Page is not connected.'), $fb ? 'writers' : 'owner',
-            $fb ? 'Social is short of enquiries: give me the angles that won replies this month so the lead posts use them.' : 'Connect the Facebook Page so I can bring enquiries from it.');
+        $slc = function_exists('pm_sl_counts') ? pm_sl_counts($brand, $L) : ['answer' => 0, 'followup' => 0];
+        $slDue = $slc['answer'] + $slc['followup']; // the people who came on social media and wait for us come before more enquiries
+        $set('social', ($sg['enquiries_per_week'] ? "Bring {$sg['enquiries_per_week']} enquiries a week from social media" : 'Keep the Page answered') . ', and answer and follow up every social lead',
+            $n($enq, 'enquiry', 'enquiries') . ' in 7 days, ' . $slDue . ' social ' . ($slDue === 1 ? 'lead waits' : 'leads wait') . ' for us', $soOk && !$slDue,
+            $slDue ? $slc['answer'] . ' to answer and ' . $slc['followup'] . ' to follow up, drafted on Social › Social leads.' : ($soOk ? '' : ($fb ? 'I post more lead posts and listen wider.' : 'Our Facebook Page is not connected.')),
+            $slDue || !$fb ? 'owner' : 'writers',
+            $slDue ? 'People who came to us on social media wait: ' . $slc['answer'] . ' to answer and ' . $slc['followup'] . ' to follow up. The drafts are on Social › Social leads; please send them.'
+                : ($fb ? 'Social is short of enquiries: give me the angles that won replies this month so the lead posts use them.' : 'Connect the Facebook Page so I can bring enquiries from it.'));
 
         return ['at' => date('Y-m-d H:i'), 'line' => $line, 'per_day' => $perDay, 'goals' => $g];
     } finally {

@@ -11,6 +11,8 @@
  * Data: data/listen.json {brand: {seen: {md5(url): [date, url]}, day: {date, at, huddle[[who,says]], tasks[[to,do]], focus, found, kept, error}}}.
  */
 
+require_once __DIR__ . '/sx_socleads.php'; // the social leads she owns: drafted in her morning call
+
 const PM_LISTEN_WHO = ['social', 'director', 'scouts', 'research', 'writers', 'replies', 'followup'];
 
 /** A lead found on a public post: reached under that post, not by the outreach pipeline. */
@@ -77,7 +79,7 @@ function pm_listen_search(string $brand, array $towns, array $skip): string
 }
 
 /** Thandi's instructions and her brief for today (no web: the search is done): [system, user]. */
-function pm_listen_prompt(string $brand, string $found, array $towns, array $drop = [], array $page = []): array
+function pm_listen_prompt(string $brand, string $found, array $towns, array $drop = [], array $page = [], array $due = [], array $slCounts = []): array
 {
     $site = function_exists('pm_brand_site') ? pm_brand_site($brand) : '';
     $company = pm_brand_name($brand);
@@ -94,14 +96,17 @@ function pm_listen_prompt(string $brand, string $found, array $towns, array $dro
         . 'the director\'s orders and team notes, the social numbers and the people you found; every line names something concrete (a town, a person found, a number, an order) and nobody repeats the company pitch. '
         . '4 to 6 lines {"who","says"}, each one short first-person sentence, from the facts only; you speak first and last. '
         . '"tasks": up to 4 for today {"to":"social|scouts|research|writers|replies|followup|director","do":"one specific sentence"}; yours (to social) say what today\'s posts and stories must do. '
+        . '"social_leads" is where the people who came to us on social media stand, by channel; "social_leads_due" are the ones to answer or follow up today: in the huddle say who takes them (replies answers, followup follows up). '
+        . '"followups": for each item of social_leads_due, {"id","text"}: what we send on that channel, at most 45 words, from ' . $company . ' (never as a customer or friend), warm and specific to what they asked and what was said, '
+        . 'greeting them by name when given; an answer helps first; a follow-up checks in once without pressure and never repeats our last message; end with an easy question; no prices, no links. '
         . "\"focus\": what today's posts lean on, one of $focusKeys. "
         . (defined('PM_TRUST_RULES') ? PM_TRUST_RULES . ' ' : '') . PM_AGENT_RULES;
     $user = json_encode(['today' => date('Y-m-d'), 'areas' => $towns, 'we_answer' => pm_listen_wants($brand), 'search_found' => $found !== '' ? $found : 'nobody asking today', 'drop_links' => $drop,
             'our_page' => !empty($page['ready']) ? ['waiting_for_an_answer' => (int)$page['waiting_comments'] + (int)$page['waiting_messages'], 'comments_waiting' => (int)$page['waiting_comments'],
                 'messages_waiting' => (int)$page['waiting_messages'], 'complaints' => (int)$page['complaints'], 'buyers_added_to_leads' => (int)$page['buyers_added'], 'what_they_said' => $page['lines']] : 'not connected',
-            'team_notes' => function_exists('pm_tb_line') ? pm_tb_line($brand, 'social', 6) : '', 'social_numbers' => function_exists('pm_director_social') ? pm_director_social($brand) : [],
+            'social_leads' => $slCounts, 'social_leads_due' => $due, 'team_notes' => function_exists('pm_tb_line') ? pm_tb_line($brand, 'social', 6) : '', 'social_numbers' => function_exists('pm_director_social') ? pm_director_social($brand) : [],
             'firm' => function_exists('pm_firm_line') ? pm_firm_line($brand) : '', 'yesterday' => ['people_found' => (int)($st['day']['kept'] ?? 0)]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-        . "\nJSON {\"people\":[{\"who\",\"platform\",\"url\",\"posted\",\"town\",\"wants\",\"email\",\"phone\",\"reply\"}],\"huddle\":[{\"who\",\"says\"}],\"tasks\":[{\"to\",\"do\"}],\"focus\":\"\"} with at most 6 people (none is fine).";
+        . "\nJSON {\"people\":[{\"who\",\"platform\",\"url\",\"posted\",\"town\",\"wants\",\"email\",\"phone\",\"reply\"}],\"huddle\":[{\"who\",\"says\"}],\"tasks\":[{\"to\",\"do\"}],\"followups\":[{\"id\",\"text\"}],\"focus\":\"\"} with at most 6 people (none is fine).";
     return [$system, $user];
 }
 
@@ -143,7 +148,10 @@ function pm_listen_run(string $brand, array &$all): array
             $all[$k] ??= $v;
         }
     }
-    [$system, $user] = pm_listen_prompt($brand, $found, $towns, array_slice($drop, 0, 12), $page);
+    $due = pm_sl_due($brand, $all); // the social leads to answer or follow up today: she drafts them in the same call
+    $slc = pm_sl_counts($brand, $all);
+    $slCounts = array_map(fn($by) => array_filter($by), array_combine(array_map(fn($k) => PM_SL_CHANNELS[$k][0], array_keys($slc['by_channel'])), $slc['by_channel']));
+    [$system, $user] = pm_listen_prompt($brand, $found, $towns, array_slice($drop, 0, 12), $page, $due, $slCounts);
     $out = pm_agent_json($GLOBALS['PM_LISTEN_RAW'] = pm_claude($system, $user, false, 2200));
     if (!is_array($out)) {
         throw new RuntimeException('The head of Social\'s answer could not be read');
@@ -170,6 +178,7 @@ function pm_listen_run(string $brand, array &$all): array
             function_exists('pm_tb_post') && pm_tb_post($brand, 'social', $to, 'Today: ' . $do, 'thandi:' . $to . ':' . count($tasks));
         }
     }
+    $drafted = $due ? pm_sl_keep_drafts($brand, $all, (array)($out['followups'] ?? []), $due) : 0;
     $focus = (string)($out['focus'] ?? '');
     $focus = defined('PM_SOCIAL_FOCUS') && isset(PM_SOCIAL_FOCUS[$focus]) ? $focus : '';
 
@@ -244,11 +253,16 @@ function pm_listen_run(string $brand, array &$all): array
             pm_tb_post($brand, 'social', 'replies', 'On our Page ' . $waiting . ' ' . ($waiting === 1 ? 'person is' : 'people are') . ' waiting for an answer' . ($page['complaints'] ? ', ' . $page['complaints'] . ' of them unhappy: answer those first' : '') . ': ' . implode(' | ', array_slice($page['lines'], 0, 2)), 'thandi:page');
         }
     }
+    if (function_exists('pm_tb_post')) { // the social leads: Replies answers, Follow-up follows up, each told what waits and where
+        $slc['answer'] ? pm_tb_post($brand, 'social', 'replies', $slc['answer'] . ' ' . ($slc['answer'] === 1 ? 'person' : 'people') . ' from social media wait for an answer; the drafts are on Social > Social leads.', 'thandi:slanswer') : pm_tb_take($brand, 'thandi:slanswer');
+        $slc['followup'] ? pm_tb_post($brand, 'social', 'followup', $slc['followup'] . ' social follow-up' . ($slc['followup'] === 1 ? ' is' : 's are') . ' due on ' . implode(', ', array_map(fn($k) => PM_SL_CHANNELS[$k][0], array_keys(array_filter($slc['by_channel'], fn($b) => !empty($b['followup']))))) . '; the drafts are on Social > Social leads.', 'thandi:slfu') : pm_tb_take($brand, 'thandi:slfu');
+    }
+    ($slc['answer'] || $slc['followup']) && pm_agent_log('Social', 'Social leads: ' . $slc['answer'] . ' to answer and ' . $slc['followup'] . ' to follow up' . ($drafted ? '; I drafted ' . $drafted . ' of them' : '') . '.');
     if ($kept && function_exists('pm_tb_post')) {
         pm_tb_post($brand, 'social', 'director', 'I found ' . $kept . ' ' . ($kept === 1 ? 'person' : 'people') . ' asking on social media: ' . implode('; ', array_slice($wantsSeen, 0, 3)), 'thandi:found');
         pm_tb_post($brand, 'social', 'writers', 'People are asking on social media for: ' . implode('; ', array_slice($wantsSeen, 0, 3)) . '. Use what they want as the angle.', 'thandi:asks');
     }
-    return ['found' => $nFound, 'kept' => $kept, 'names' => $names, 'tasks' => count($tasks), 'links' => $live, 'dropped' => count($drop), 'page' => $page, 'error' => ''];
+    return ['found' => $nFound, 'kept' => $kept, 'names' => $names, 'tasks' => count($tasks), 'drafted' => $drafted, 'links' => $live, 'dropped' => count($drop), 'page' => $page, 'error' => ''];
 }
 
 /**
