@@ -50,6 +50,7 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
       <div class="btns"><button class="btn small">Save the new text</button>
         <?php if (pm_agents_ready() && trim((string)$p['message']) !== ''): ?><button type="button" class="btn small" data-reword="textarea[name=text]" data-kind="post" title="One small AI call writes it again: same facts, prices and links. Read it, then Save the new text">New wording</button><?php endif; ?>
         <a class="btn small" href="<?= pm_h($p['url']) ?>" target="_blank" rel="noopener noreferrer">Open on Facebook</a>
+        <?php if (function_exists('pm_rp_panel') && ($p['picture'] !== '' || str_contains((string)$p['type'], 'video'))): ?><a class="btn small" href="?tab=social&amp;view=content&amp;rp=fb:<?= pm_h(rawurlencode($p['id'])) ?>#repost" title="The same picture or video with new words, scheduled on the channels you choose">Repost with new words</a><?php endif; ?>
         <button class="btn small danger" name="do" value="delete" onclick="return confirm('Delete this post from the Facebook Page? This cannot be undone.')">Delete post</button></div>
     </form>
     <?php if ($open === $p['id'] || $p['comments'] > 0): $cms = $p['comments'] > 0 ? pm_fb_comments($vb, $p['id']) : ['comments' => [], 'error' => '']; ?>

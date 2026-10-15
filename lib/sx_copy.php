@@ -1,6 +1,7 @@
 <?php
 /**
- * Profile words, written like a person who does this for a living: three options per profile field (plain and warm, specific and confident, short and memorable), made in ONE AI call for
+ * Profile words, written like a person who does this for a living, with the marketing psychology that makes people act (PM_MARKETING_PSYCH): three options per profile field
+ * (the customer's outcome first, who it is for with proof, short with an easy next step), made in ONE AI call for
  * the fields the owner ticks. Each option is polished by the human voice layer, must fit the platform's limit, and must stay inside the business's own facts (no new number, link, boast);
  * anything that still reads as machine-written is dropped. "Use" makes the option the suggestion everywhere (Optimise, Audit), and for Facebook and WhatsApp can apply it straight away.
  * Data: data/page_opt.json {brand: {copy: {key: {at, options: [{voice, text}]}}, ai: {key: text}}}.
@@ -21,7 +22,9 @@ const PM_COPY_FIELDS = [
     'yt_bio' => ['YouTube channel description', 300, 'About the channel.', 'youtube'],
 ];
 const PM_COPY_GROUPS = ['business' => 'Business details', 'facebook' => 'Facebook', 'instagram' => 'Instagram', 'whatsapp' => 'WhatsApp Business', 'google' => 'Google Business', 'linkedin' => 'LinkedIn', 'x' => 'X', 'tiktok' => 'TikTok', 'youtube' => 'YouTube'];
-const PM_COPY_VOICES = ['plain' => 'Plain and warm', 'specific' => 'Specific and confident', 'short' => 'Short and memorable'];
+const PM_COPY_VOICES = ['outcome' => 'Their outcome first', 'proof' => 'Who it is for, with proof', 'action' => 'Short, with an easy next step',
+    'plain' => 'Plain and warm', 'specific' => 'Specific and confident', 'short' => 'Short and memorable']; // the last three: options written before
+const PM_COPY_ASK = ['outcome', 'proof', 'action'];
 const PM_COPY_APPLY = ['biz_tagline', 'fb_about', 'fb_description', 'wa_about', 'wa_description']; // the ones an app can put on the channel (the first is saved as the business's own line)
 
 /** What the code would suggest with no AI. */
@@ -37,7 +40,14 @@ function pm_copy_plain(string $brand, string $key): string
     };
 }
 
-/** The options written so far: key => ['at', 'options' => [['voice','text']]]. */
+/** A fingerprint of the facts the words are written from: when it changes, the written options are out of date. */
+function pm_copy_sig(string $brand): string
+{
+    $f = pm_opt_facts($brand);
+    return substr(md5((string)json_encode([$f['name'], $f['tagline'], $f['about'], $f['audience'], $f['facts'], $f['address'], $f['phone'], $f['site']])), 0, 10);
+}
+
+/** The options written so far: key => ['at', 'options' => [['voice','text']], 'sig']. */
 function pm_copy_store(string $brand): array
 {
     return (array)(pm_opt_store($brand)['copy'] ?? []);
@@ -73,10 +83,11 @@ function pm_copy_write(string $brand, array $keys): array
     $f = pm_opt_facts($brand);
     $source = implode(' ', array_filter(array_map('strval', [$f['name'], $f['tagline'], $f['about'], $f['audience'], implode(' ', $f['facts']), $f['address'], $f['phone'], $f['website'], $f['site']])));
     $voice = trim((string)(pm_brain($brand)['voice'] ?? ''));
-    $system = pm_agents_company_brief('tiny') . "\nYou are a senior brand copywriter for " . $f['name'] . ', the kind who writes for small independent studios, not for software companies. '
-        . 'Write the profile texts the way the owner would say it across a counter: lead with what the business does and for whom in concrete terms, include one specific detail from the facts, vary the sentence length, '
+    $system = pm_agents_company_brief('tiny') . "\nYou are a senior direct-response copywriter for " . $f['name'] . ', the kind who writes for small independent businesses, not for software companies. '
+        . 'Write the profile texts the way the owner would say it across a counter, so a visitor knows in two seconds what they get and why to message. ' . PM_MARKETING_PSYCH . ' Vary the sentence length '
         . 'and use the place name where it is natural. Avoid taglines built from "where X meets Y", "your partner in", "passionate about", "solutions", "tailored", "innovative". No hashtags, emoji or links. '
-        . 'For each field give three options that really differ: plain (warm, everyday words), specific (a concrete detail and a quiet confidence), short (the shortest version that still says something). '
+        . 'For each field give three options that really differ: outcome (the result the customer wants, or the problem gone, first), proof (who it is for and the most convincing specific detail from the facts), '
+        . 'action (short and memorable, ending with the easy next step when it fits the limit). '
         . 'Every option must fit the character limit. Use ONLY the facts: no number, price, award, ranking or claim that is not in them, and never "best" or "leading". ' . PM_HUMAN_RULES
         . ($voice !== '' ? ' The owner describes their voice as: ' . mb_substr($voice, 0, 160) . '.' : '') . ' Reply JSON only.';
     $items = [];
@@ -85,7 +96,7 @@ function pm_copy_write(string $brand, array $keys): array
     }
     $user = json_encode(['business' => $f['name'], 'tagline' => $f['tagline'], 'about' => mb_substr($f['about'], 0, 500), 'audience' => mb_substr($f['audience'], 0, 240), 'facts' => array_slice($f['facts'], 0, 8),
             'town' => $f['address_real'] ? $f['address'] : 'Malawi', 'fields' => $items], JSON_UNESCAPED_UNICODE)
-        . "\nJSON: {\"items\":[{\"key\":\"\",\"plain\":\"\",\"specific\":\"\",\"short\":\"\"}]}";
+        . "\nJSON: {\"items\":[{\"key\":\"\",\"outcome\":\"\",\"proof\":\"\",\"action\":\"\"}]}";
     $out = pm_agent_json(pm_claude($system, $user, false, 350 + 330 * count($keys), 'write'));
     $list = is_array($out) ? (array_is_list($out) ? $out : (array)($out['items'] ?? [])) : [];
     $done = 0;
@@ -96,10 +107,10 @@ function pm_copy_write(string $brand, array $keys): array
             continue;
         }
         $k = (string)$x['key'];
-        $opts = pm_copy_clean_options(array_intersect_key($x, PM_COPY_VOICES), PM_COPY_FIELDS[$k][1], $source);
+        $opts = pm_copy_clean_options(array_intersect_key($x, array_flip(PM_COPY_ASK)), PM_COPY_FIELDS[$k][1], $source);
         $dropped += 3 - count($opts);
         if ($opts) {
-            $new[$k] = ['at' => date('Y-m-d H:i'), 'options' => $opts];
+            $new[$k] = ['at' => date('Y-m-d H:i'), 'options' => $opts, 'sig' => pm_copy_sig($brand)];
             $done++;
         }
     }

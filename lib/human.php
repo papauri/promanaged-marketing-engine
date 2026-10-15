@@ -11,6 +11,11 @@ const PM_HUMAN_RULES = "Sound like one real person writing to another: plain eve
     . "Never use: delve, leverage, seamless, robust, elevate, unlock, game-changer, cutting-edge, streamline, empower, journey, transformative, \"in today's fast-paced world\", \"I hope this finds you well\", \"thrilled to announce\", "
     . "\"not just X, but Y\". No em dashes. Do not list things in threes out of habit, and do not end with a slogan.";
 
+/** How the best marketers make words sell, kept honest: for profile words, covers and reworded posts (a few dozen tokens). */
+const PM_MARKETING_PSYCH = "Use what makes people act, honestly: lead with the outcome the customer wants or the problem they want gone, in the words a customer would use (benefit before feature); "
+    . "name who it is for so the right people recognise themselves; one concrete detail from the facts beats any adjective; proof (years, clients, places, reviews) only when the facts carry it; "
+    . "a familiar local cue (the town) builds trust; make the next step small and easy (message us, ask a question) when there is room. Warm and confident, never hype, fake urgency or pressure.";
+
 /** Words and phrases swapped for plain ones (whole words, case kept at the start). */
 const PM_HUMAN_SWAPS = [
     'game-changer' => 'big help', 'game changer' => 'big help', 'game-changing' => 'useful', 'cutting-edge' => 'modern', 'state-of-the-art' => 'modern', 'best-in-class' => 'strong',

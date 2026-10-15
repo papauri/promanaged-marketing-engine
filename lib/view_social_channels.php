@@ -11,6 +11,7 @@ $cp = fn(string $text, string $label = 'Copy') => '<button type="button" class="
 <?= pm_social_nav('channels') ?>
 <div class="sxv">
 
+<p class="hint mt-0"><b>Profile details</b> (about, description, phone, email, website, hours, the WhatsApp Business profile) are changed in one place, <a href="?tab=social&amp;view=optimise">Brand › Profiles</a>: where the channel allows it the change goes straight onto the channel; where it does not, you get the words to copy and a link to the exact page. To repost an earlier post with new words, use <a href="?tab=social&amp;view=content#repost">Content › Repost</a>.</p>
 <p class="hint mt-0">Honest limits: the app posts to Facebook, Instagram (when linked and online) and LinkedIn. TikTok, YouTube Shorts, Google, WhatsApp Status and Channels, X and your personal LinkedIn have no safe automatic route for a small business (posting on them needs audited API access or a personal number), so this page prepares the exact text and picture and you press Copy, post, then Mark posted.</p>
 
 <div class="card" id="tasks">

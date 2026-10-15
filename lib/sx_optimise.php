@@ -1078,8 +1078,9 @@ function pm_opt_polish(string $brand): array
     $items = [];
     foreach ($run['channels'] as $c) {
         foreach ($c['items'] as $i) {
-            if ($i['state'] !== 'ok' && $i['proposal'] !== '' && in_array($i['input'], ['text', 'textarea'], true) && $i['limit'] >= 80 && !str_starts_with($i['key'], 'biz_') && !in_array($i['key'], ['fb_phone', 'fb_website', 'fb_email', 'wa_email', 'wa_websites', 'wa_address', 'g_review_link'], true)) {
-                $items[$i['key']] = ['key' => $i['key'], 'channel' => PM_OPT_CHANNELS[$i['channel']] ?? $i['channel'], 'limit' => $i['limit'], 'text' => $i['proposal']];
+            $text = $i['state'] === 'ok' ? $i['current'] : $i['proposal']; // a text already on the profile can be made to sell better too
+            if ($text !== '' && in_array($i['input'], ['text', 'textarea'], true) && $i['limit'] >= 80 && !str_starts_with($i['key'], 'biz_') && !in_array($i['key'], ['fb_phone', 'fb_website', 'fb_email', 'wa_email', 'wa_websites', 'wa_address', 'g_review_link'], true)) {
+                $items[$i['key']] = ['key' => $i['key'], 'channel' => PM_OPT_CHANNELS[$i['channel']] ?? $i['channel'], 'limit' => $i['limit'], 'text' => $text];
             }
         }
     }
@@ -1087,7 +1088,7 @@ function pm_opt_polish(string $brand): array
         return [0, 0, 'There is no text suggestion to polish.'];
     }
     $source = implode(' ', array_filter(array_map('strval', [$f['name'], $f['tagline'], $f['about'], $f['audience'], implode(' ', $f['facts']), $f['address'], $f['phone']])));
-    $system = pm_agents_company_brief('tiny') . "\nYou polish short profile texts for " . $f['name'] . '. Rewrite each text so it reads naturally and clearly, in plain English, within its character limit. '
+    $system = pm_agents_company_brief('tiny') . "\nYou polish short profile texts for " . $f['name'] . '. Rewrite each text so it reads naturally and sells, as the owner would say it, within its character limit. ' . PM_MARKETING_PSYCH . ' '
         . 'Use ONLY what the text and the facts already say: add no claim, number, price, award, place, name or promise, and no link, email, phone number, hashtag, emoji or exclamation mark. Do not say "best" or "leading". Reply JSON only.';
     $user = json_encode(['facts' => array_slice($f['facts'], 0, 8), 'items' => array_values($items)], JSON_UNESCAPED_UNICODE) . "\nJSON: {\"items\":[{\"key\":\"\",\"text\":\"\"}]}";
     $out = pm_agent_json(pm_claude($system, $user, false, 300 + 220 * count($items), 'cheap'));

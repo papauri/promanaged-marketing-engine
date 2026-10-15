@@ -75,7 +75,8 @@ $team = [
     ]],
     'brand' => ['Brand', [
         $a('?tab=social&view=studio', 'Studio') . ' and ' . $a('?tab=social&view=kit', 'Brand kit') . ': covers and profile pictures.',
-        $a('?tab=social&view=optimise', 'Profiles') . ': fix each channel\'s profile, and copy the text over where the app cannot change it.',
+        $a('?tab=social&view=optimise', 'Profiles') . ': fix each channel\'s profile, and copy the text over where the app cannot change it. Every detail the app can change (Facebook intro, description, phone, email, website and hours; the WhatsApp Business profile; the business details) has "Change it", even when it is already good. "Write 3 options" and "Polish the wording" write with the marketing psychology that makes people message (their outcome first, who it is for with proof, an easy next step), from your facts only; when your details change, a note asks you to write them again.',
+        $a('?tab=social&view=content#repost', 'Repost with new words') . ' (Social › Content, or "Repost with new words" on a Page post): the same picture or video from any earlier post, ours or on the Page wall, with a punchier caption in your voice (one small AI call on the cheapest model), as a draft at the day and time you choose on the channels you tick. Only channels we have permission to post to are offered. Approve it in the Plan and it goes out then.',
         $a('?tab=social&view=voice', 'Voice') . ': what the writers know about the business. Keep it true.',
     ]],
     'aiteam' => ['The AI team', [

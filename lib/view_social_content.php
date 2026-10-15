@@ -116,6 +116,8 @@ $sxx = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type
   </form>
 </div>
 
+<?= function_exists('pm_rp_panel') ? pm_rp_panel($vb, $csrf) : '' ?>
+
 <?php if ($rec): ?><div class="card" id="recycle">
   <h2>Bring back what worked</h2>
 <?php if (!$rec): ?><p class="hint m-0">No post is ready to come back yet. A post can return when it is among the best 20% by 7-day engagement, older than 45 days, not about a date or offer, and not used again in the last 90 days. At least 5 such posts are needed before one is picked.</p>

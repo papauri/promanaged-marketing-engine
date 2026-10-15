@@ -54,11 +54,12 @@ $item = fn(array $i): string => pm_opt_item_html($i, $vb, $csrf);
 <?php $copyStore = pm_copy_store($vb); $plainOf = fn(string $k) => pm_copy_plain($vb, $k); ?>
 <div class="card" id="words">
   <h2>Profile words</h2>
-  <p class="hint mt-0">The intro, description and bio for each channel you tick: three options each (plain and warm, specific and confident, short and memorable), written from your facts only and checked for machine-sounding wording. Choose one and it becomes the suggestion on Profiles and the Audit.</p>
+  <p class="hint mt-0">The intro, description and bio for each channel you tick: three options each (their outcome first, who it is for with proof, short with an easy next step), written with the marketing psychology that makes people message, from your facts only and checked for machine-sounding wording. Choose one and it becomes the suggestion on Profiles and the Audit.</p>
   <form method="post"><?= $fx('copy_write') ?>
     <div class="btns mt-0"><?php foreach (PM_COPY_GROUPS as $gk => $gl): ?><label class="check"><input type="checkbox" name="groups[]" value="<?= $gk ?>" <?= in_array($gk, ['business', 'facebook', 'instagram', 'whatsapp', 'google'], true) ? 'checked' : '' ?>> <?= pm_h($gl) ?></label><?php endforeach; ?></div>
     <div class="btns"><button class="btn primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?>>Write 3 options for each (AI)</button><?php if ($copyStore): ?><button class="btn small" name="do" value="copy_clear">Clear the options</button><?php endif; ?></div>
   </form>
+  <?php $sigNow = pm_copy_sig($vb); if (array_filter($copyStore, fn($c) => ($c['sig'] ?? '') !== $sigNow)): ?><p class="flash warn">Some options were written before your business details last changed, or before the new marketing wording. Write them again so they match (one AI call).</p><?php endif; ?>
   <?php foreach (PM_COPY_FIELDS as $k => [$label, $limit, $what, $grp]): $cur = $copyStore[$k] ?? null; $plain = $plainOf($k); $chosen = trim((string)(pm_opt_store($vb)['ai'][$k] ?? '')); ?>
   <div class="sx-card my-2" id="w-<?= pm_h($k) ?>">
     <div class="sxh" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b><?= pm_h($label) ?></b><span class="sx-chip"><?= pm_h(PM_COPY_GROUPS[$grp]) ?> · up to <?= (int)$limit ?></span><span class="muted"><?= pm_h($what) ?></span></div>
@@ -91,6 +92,9 @@ $item = fn(array $i): string => pm_opt_item_html($i, $vb, $csrf);
   <?php foreach ($todo as $i): ?><?= $item($i) ?><?php endforeach; ?>
   <?php if ($good): ?><details class="more"><summary class="hint" style="cursor:pointer">Already good (<?= count($good) ?>)</summary>
     <ul class="opt-good"><?php foreach ($good as $i): ?><li><b><?= pm_h($i['title']) ?></b><?= $i['current'] !== '' ? ' <span class="muted">· ' . pm_h(mb_substr($i['current'], 0, 120)) . '</span>' : '' ?>
+      <?php if (in_array($i['how'], ['api', 'app'], true) && in_array($i['input'], ['text', 'textarea', 'hours', 'select'], true)): // change it straight from here, even when it is already good ?>
+      <details class="mt-1"><summary class="hint" style="cursor:pointer">Change it<?= $i['ai'] ? ' (better wording ready)' : '' ?></summary><?= $item(['proposal' => $i['ai'] || $i['current'] === '' ? $i['proposal'] : $i['current'], 'alts' => [], 'note' => $i['ai'] ? 'Reworded to sell better, from your facts. Edit it or keep what is there.' : ''] + $i) ?></details>
+      <?php endif; ?>
       <?php if ($i['tick'] !== '' && in_array($i['how'], ['manual', 'go'], true)): ?><form method="post" class="inl"><?= $fx('opt_done', $hid('tick', $i['tick']) . $hid('how', 'undo')) ?><button class="btn small">Undo tick</button></form><?php endif; ?></li><?php endforeach; ?></ul></details><?php endif; ?>
 </details>
 <?php endforeach; ?>
