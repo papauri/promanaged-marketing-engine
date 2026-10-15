@@ -606,7 +606,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $keep = ($ctxS !== '' ? '&status=' . $ctxS : '') . ($ctxT !== '' ? '&type=' . urlencode($ctxT) : '') . ((int)($_POST['rp'] ?? 0) > 1 ? '&p=' . (int)$_POST['rp'] : '')
             . (preg_match('/^(&(q|city|has|min|sort|folder)=[A-Za-z0-9%._+-]*)*$/', (string)($_POST['rf'] ?? '')) ? (string)($_POST['rf'] ?? '') : ''); // the other filters of the list
         $back = function (string $m = '', string $k = 'ok') use (&$id, $do, $keep) {
-            if ($m !== '' && function_exists('pm_talk') && in_array($do, ['send_now', 'approve_send', 'turn_down', 'move_to', 'send', 'outbox_retry', 'run', 'research', 'followups_ai', 'followup_ai', 'draft_outreach'], true)) {
+            if ($m !== '' && function_exists('pm_talk') && in_array($do, ['send_now', 'followup_send', 'approve_send', 'turn_down', 'move_to', 'send', 'outbox_retry', 'run', 'research', 'followups_ai', 'followup_ai', 'draft_outreach'], true)) {
                 pm_talk(pm_brand(), 'owner', html_entity_decode(strip_tags($m), ENT_QUOTES)); // what the owner decided, in the Audit's conversation
             }
             if (($_POST['bt'] ?? '') === 'whatsapp') {
@@ -615,11 +615,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (in_array($_POST['bt'] ?? '', ['targeting', 'home', 'ops'], true)) { // the page the button was on
                 pm_redirect(['home' => 'home', 'ops' => 'settings&section=connections'][$_POST['bt']] ?? 'targeting', $m, $k);
             }
-            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after', 'dismiss_unmatched', 'folder_add', 'folder_remove', 'folder_rename', 'folder_delete', 'outbox_retry', 'outbox_discard', 'move_to', 'turn_down', 'tb_strike'], true);
+            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'send_now', 'followup_send', 'unapprove_send', 'set_send_after', 'dismiss_unmatched', 'folder_add', 'folder_remove', 'folder_rename', 'folder_delete', 'outbox_retry', 'outbox_discard', 'move_to', 'turn_down', 'tb_strike'], true);
             if ($id !== '' && !$noLead) {
                 pm_redirect(!empty($_POST['rl']) ? 'agents&lead=' . $id : 'agents' . $keep . '&at=' . rawurlencode($id) . '#l' . $id, $m, $k); // at= opens the page of the list that holds the lead
             }
-            pm_redirect('agents' . (in_array($do, ['delete', 'plan', 'approve_send', 'send_now', 'unapprove_send', 'set_send_after', 'folder_add', 'folder_remove', 'outbox_retry', 'outbox_discard', 'move_to', 'turn_down'], true) ? $keep : ''), $m, $k);
+            pm_redirect('agents' . (in_array($do, ['delete', 'plan', 'approve_send', 'send_now', 'followup_send', 'unapprove_send', 'set_send_after', 'folder_add', 'folder_remove', 'outbox_retry', 'outbox_discard', 'move_to', 'turn_down'], true) ? $keep : ''), $m, $k);
         };
 
         if ($do === 'run') {
@@ -943,6 +943,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             function_exists('pm_send_advice_refresh') && pm_send_advice_refresh(pm_brand()); // the advice reads the new numbers
             $back($sent . ' of ' . count($ids) . ' email' . (count($ids) === 1 ? '' : 's') . ' sent now.' . ($why ? ' Not sent: ' . implode(' ', array_slice($why, 0, 3)) . (count($why) > 3 ? ' And ' . (count($why) - 3) . ' more (see the Outbox).' : '') : '') . ($notes ? ' Note: ' . implode(' ', array_slice(array_unique($notes), 0, 2)) : ''), $sent ? 'ok' : 'err');
+        }
+        if ($do === 'followup_send') { // Follow up: every ticked lead we wrote to that has not answered gets its next follow-up now, the one the Follow-up head prepared for that number
+            $ids = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? []))));
+            $fcfg = pm_agents_config();
+            $ok = array_values(array_filter($ids, fn($i2) => isset($leads[$i2]) && pm_followup_open($leads[$i2], ['max_followups' => 99] + $fcfg))); // the owner decides past the usual limit
+            if (!$ok) {
+                $back($ids ? 'None of the ticked leads is waiting for a follow-up: they must be Contacted, with a first email sent, no reply yet, and a working email.' : 'Tick the leads first.', 'err');
+            }
+            @set_time_limit(0);
+            @ignore_user_abort(true);
+            $sent = 0;
+            $why = [];
+            $nums = [];
+            $room = function_exists('pm_ml_room_now') ? pm_ml_room_now(pm_brand()) : null;
+            foreach ($ok as $qi => $i2) {
+                if ($room !== null && $sent >= $room) {
+                    $why[] = (count($ok) - $qi) . ' left for later: your mail provider takes no more this hour. Press Follow up again after the hour.';
+                    break;
+                }
+                $nth = pm_followup_nth($leads[$i2]);
+                $res = pm_send_first($leads, $i2, 'followup_draft');
+                if (!empty($res['ok'])) {
+                    $sent++;
+                    $nums[$nth] = ($nums[$nth] ?? 0) + 1;
+                    pm_leads_save($leads);
+                    continue;
+                }
+                $why[] = ($leads[$i2]['name'] ?? 'A lead') . ': ' . $res['msg'];
+                if (($res['kind'] ?? '') === 'smtp') {
+                    break;
+                }
+            }
+            pm_leads_save($leads);
+            ksort($nums);
+            $nl = implode(', ', array_map(fn($k, $v) => "$v as follow-up $k", array_keys($nums), $nums));
+            function_exists('pm_send_advice_refresh') && pm_send_advice_refresh(pm_brand());
+            $back($sent . ' of ' . count($ok) . ' follow-up' . (count($ok) === 1 ? '' : 's') . ' sent' . ($nl !== '' ? " ($nl)" : '') . '.' . (count($ids) > count($ok) ? ' ' . (count($ids) - count($ok)) . ' ticked lead' . (count($ids) - count($ok) === 1 ? ' was' : 's were') . ' not waiting for a follow-up.' : '')
+                . ($why ? ' Not sent: ' . implode(' ', array_slice($why, 0, 3)) . (count($why) > 3 ? ' And ' . (count($why) - 3) . ' more.' : '') : ''), $sent ? 'ok' : 'err');
         }
         if ($do === 'approve_send' || $do === 'unapprove_send') {
             $ids = array_values(array_filter(array_map('strval', (array)($_POST['ids'] ?? []))));

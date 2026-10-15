@@ -25,6 +25,103 @@ function pm_followup_due(array $leads, array $cfg, bool $withDraft = true): arra
     return $out;
 }
 
+/* ---------------- prepared ahead by the Follow-up head ---------------- */
+
+/** Which follow-up the next one is for this lead: 1 for the first, 2 for the second... */
+function pm_followup_nth(array $l): int
+{
+    return (int)($l['followups'] ?? 0) + 1;
+}
+
+/** The follow-up the Follow-up head prepared for this lead's next follow-up, or null (none, or written for an earlier number). */
+function pm_followup_ready(array $l): ?array
+{
+    $r = (array)($l['followup_ready'] ?? []);
+    return trim((string)($r['email_body'] ?? '')) !== '' && (int)($r['n'] ?? 0) === pm_followup_nth($l) ? $r : null;
+}
+
+/** A lead we wrote to that has not answered and may still get a follow-up (whatever the day): contacted, has a first email, under the limit, a working email, not a social-post lead. */
+function pm_followup_open(array $l, array $cfg): bool
+{
+    return ($l['status'] ?? '') === 'contacted' && !empty($l['sent']) && pm_followup_nth($l) <= max(1, (int)($cfg['max_followups'] ?? 3)) && !pm_lead_email_dead($l) && empty($l['listen'])
+        && !(function_exists('pm_lead_replied') && pm_lead_replied($l));
+}
+
+/**
+ * The follow-up that goes when the owner presses Follow up: the draft on the lead (written or edited), else the one the Follow-up head prepared for this number,
+ * else the default follow-up for this number (no AI, so a press never waits). ['email_subject','email_body','whatsapp', 'source'].
+ */
+function pm_followup_for_send(array $l): array
+{
+    if (trim((string)($l['followup_draft']['email_body'] ?? '')) !== '') {
+        return (array)$l['followup_draft'];
+    }
+    if ($r = pm_followup_ready($l)) {
+        return ['email_subject' => (string)$r['email_subject'], 'email_body' => (string)$r['email_body'], 'whatsapp' => (string)($r['whatsapp'] ?? ''), 'source' => 'prepared'];
+    }
+    return pm_dm_as((string)($l['brand'] ?? pm_brand()), fn() => pm_dm_followup_render($l)) + ['source' => 'default'];
+}
+
+/**
+ * The Follow-up head writes the next follow-up ahead of time for every lead that has not answered, so pressing Follow up (one lead or many ticked) sends at once with
+ * nothing to wait for. It knows which number it is and words it for that (a gentle first nudge, a graceful last note). The AI only for what is not prepared yet, six to a
+ * call, at most $max a pass; with no AI key, or a business that drafts from its default message, the default follow-up for that number. Returns how many were prepared.
+ */
+function pm_followup_prepare(string $brand, int $max = 18): int
+{
+    $cfg = pm_agents_config($brand);
+    $todo = [];
+    foreach (pm_leads_read() as $id => $l) {
+        if (($l['brand'] ?? 'promanaged') === $brand && pm_followup_open($l, $cfg) && trim((string)($l['followup_draft']['email_body'] ?? '')) === '' && !pm_followup_ready($l)) {
+            $todo[(string)$id] = ['id' => (string)$id] + $l;
+        }
+    }
+    if (!$todo) {
+        return 0;
+    }
+    $todo = array_slice($todo, 0, $max, true);
+    $was = pm_brand();
+    pm_brand_set($brand);
+    try {
+        $ready = [];
+        foreach (array_chunk($todo, 6, true) as $chunk) {
+            $out = [];
+            if (!pm_followup_by_default($brand)) {
+                try {
+                    $out = pm_agent_followup(array_values($chunk), true);
+                } catch (Throwable) {
+                    $out = []; // the AI failed: the default for that number instead
+                }
+            }
+            $by = [];
+            foreach ($out as $w) {
+                if (is_array($w) && is_scalar($w['id'] ?? null) && trim((string)($w['email_body'] ?? '')) !== '') {
+                    $by[(string)$w['id']] = $w;
+                }
+            }
+            foreach ($chunk as $id => $l) {
+                $w = $by[$id] ?? null;
+                $ready[$id] = ($w ? ['email_subject' => (string)($w['email_subject'] ?? ''), 'email_body' => (string)$w['email_body'], 'whatsapp' => (string)($w['whatsapp'] ?? ''), 'by' => 'ai']
+                    : pm_dm_followup_render($l) + ['by' => 'default']) + ['n' => pm_followup_nth($l), 'at' => date('Y-m-d H:i')];
+            }
+        }
+    } finally {
+        pm_brand_set($was);
+    }
+    $n = 0;
+    pm_update('leads', function (array $cur) use ($ready, &$n) {
+        foreach ($ready as $id => $r) {
+            if (isset($cur[$id]) && ($cur[$id]['status'] ?? '') === 'contacted' && pm_followup_nth($cur[$id]) === $r['n']) { // a reply or a send meanwhile: not stored
+                $cur[$id]['followup_ready'] = $r;
+                $n++;
+            }
+        }
+        return $cur;
+    }, fn() => []);
+    $n && function_exists('pm_tb_post') && pm_tb_post($brand, 'followup', 'owner', "Follow-ups prepared for $n " . ($n === 1 ? 'lead' : 'leads') . ' that have not answered: tick them on Leads and press Follow up.', 'fu_prepared');
+    return $n;
+}
+
 /**
  * What the Follow-up agent decided for one lead, applied: 'send' stores the follow-up draft (ready to send from the list), 'wait' pauses the lead until the day it chose,
  * 'stop' closes it as no response (Move to puts it back any time). Returns 'send', 'wait' or 'stop'.
@@ -78,6 +175,21 @@ function pm_followup_draft_now(array $ids = [], int $max = 60): array
     $total = count($due);
     $drafted = 0;
     $failed = 0;
+    $prep = array_filter($due, fn($l) => pm_followup_ready($l) !== null); // already written ahead by the Follow-up head: no AI asked again
+    if ($prep) {
+        pm_update('leads', function (array $cur) use ($prep, &$drafted) {
+            foreach (array_keys($prep) as $id) {
+                if (isset($cur[$id]) && empty($cur[$id]['followup_draft']) && ($r = pm_followup_ready($cur[$id]))) {
+                    $cur[$id]['followup_draft'] = ['email_subject' => (string)$r['email_subject'], 'email_body' => (string)$r['email_body'], 'whatsapp' => (string)($r['whatsapp'] ?? ''), 'source' => 'prepared'];
+                    unset($cur[$id]['followup_ready']);
+                    pm_lead_note($cur[$id], 'Follow-up ' . (int)$r['n'] . ' ready (prepared ahead by the Follow-up head)');
+                    $drafted++;
+                }
+            }
+            return $cur;
+        }, fn() => []);
+        $due = array_diff_key($due, $prep);
+    }
     $byDefault = pm_followup_by_default($brand);
     foreach (array_chunk(array_slice($due, 0, $max, true), 6, true) as $chunk) {
         $out = null;
@@ -188,13 +300,15 @@ function pm_job_followup_drafts(string $brand): string
             return $s;
         }, fn() => []);
     };
+    $prepared = pm_followup_prepare($brand); // the next follow-up written ahead for everyone who has not answered, so Follow up sends at once
     if (!pm_followup_due($mine, $cfg, false)) {
         $stamp();
-        return '';
+        return $prepared ? "$prepared follow-up" . ($prepared === 1 ? '' : 's') . ' prepared ahead' : '';
     }
     $r = pm_followup_draft_now();
     if ($r['drafted'] > 0 || $r['failed'] === 0) {
         $stamp(); // a day with every call failing is tried again at the next pass
     }
-    return $r['drafted'] . ' follow-up draft' . ($r['drafted'] === 1 ? '' : 's') . (pm_followup_by_default($brand) ? ' made from the default follow-up' : ' written with AI') . ($r['failed'] ? ', ' . $r['failed'] . ' could not be' : '');
+    return $r['drafted'] . ' follow-up draft' . ($r['drafted'] === 1 ? '' : 's') . (pm_followup_by_default($brand) ? ' made from the default follow-up' : ' written with AI') . ($r['failed'] ? ', ' . $r['failed'] . ' could not be' : '')
+        . ($prepared ? ", $prepared prepared ahead" : '');
 }

@@ -822,6 +822,18 @@ try {
         $save();
     }
 
+    if ($cfg['enabled']['followup'] && $only === '') { // the Follow-up head writes the next follow-up ahead for everyone who has not answered, so Follow up sends at once
+        $save();
+        $progress('Follow-up head preparing the next follow-ups');
+        if (pm_followup_prepare($brand)) {
+            foreach (pm_leads_read() as $k => $fl) { // what it stored, so the run's next save keeps it
+                if (isset($leads[$k]) && !empty($fl['followup_ready'])) {
+                    $leads[$k]['followup_ready'] = $fl['followup_ready'];
+                }
+            }
+        }
+    }
+
     // ---- 6. Win-back: one fresh angle for lost leads, on a long cooldown ----
     $wbDue = $only === '' && ($cfg['enabled']['followup'] ?? true) && function_exists('pm_winback_due') ? pm_winback_due($leads, 2) : [];
     if ($wbDue) {

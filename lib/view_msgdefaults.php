@@ -28,7 +28,7 @@ function pm_view_msgdefaults(string $vb, string $csrf): void
     <p class="hint <?= $pv['problems'] ? 'warnt' : '' ?>">The email is <b><?= (int)$pv['words'] ?></b> words with an example lead (first emails may be 20 to 190, with at most one link in the text).<?= $pv['problems'] ? ' Fix before it can be sent: ' . pm_h(implode(' ', $pv['problems'])) : ' It passes the checks.' ?></p>
   </div>
   <div class="card"><h2>Default follow-up · <?= pm_h($bn) ?></h2>
-    <p class="hint mt-0">For a business we wrote to that has not replied. A contacted lead's card has <b>Use default follow-up</b> any time; when follow-ups fall due they are made from it with no AI if the default message drafts new leads, or if there is no AI key (and whenever the AI fails). The same placeholders work here.</p>
+    <p class="hint mt-0">For a business we wrote to that has not replied. A contacted lead's card has <b>Use default follow-up</b> any time; when follow-ups fall due they are made from it with no AI if the default message drafts new leads, or if there is no AI key (and whenever the AI fails). The same placeholders work here. A second or later follow-up says "a little while ago" and ends with a graceful last note in place of your last paragraph.</p>
     <label>Follow-up subject</label><input type="text" name="dm[fu_subject]" value="<?= pm_h($c['fu_subject']) ?>" maxlength="120">
     <label>Follow-up email</label><textarea name="dm[fu_body]" rows="9" data-grow><?= pm_h($c['fu_body']) ?></textarea>
     <label>Follow-up WhatsApp</label><textarea name="dm[fu_whatsapp]" rows="3" data-grow><?= pm_h($c['fu_whatsapp']) ?></textarea>

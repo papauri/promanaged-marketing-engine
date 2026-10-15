@@ -152,14 +152,32 @@ function pm_dm_render(array $lead, string $opening = ''): array
     return ['email_subject' => function_exists('pm_subject_tidy') ? pm_subject_tidy($subject, $lead) : $subject, 'email_body' => pm_brand() === 'travel' ? pm_tm_pack_swap($body) : $body, 'whatsapp' => pm_dm_fill($c['whatsapp'], $v)];
 }
 
-/** The default follow-up for one lead that has not replied: ['email_subject', 'email_body', 'whatsapp'], as the business in use (no AI). */
-function pm_dm_followup_render(array $lead): array
+/** The closing of a second or later default follow-up: a graceful last note, so nobody feels chased. */
+const PM_DM_FU_LAST = 'This will be my last note about it, so I won\'t fill your inbox. If it is ever useful, just reply and we will pick it up from there.';
+
+/**
+ * The default follow-up for one lead that has not replied: ['email_subject', 'email_body', 'whatsapp'], as the business in use (no AI). The number it is ($nth, from the
+ * follow-ups already sent) changes the wording: the first is the text as written; a later one says "a little while ago" and ends with a graceful last note.
+ */
+function pm_dm_followup_render(array $lead, int $nth = 0): array
 {
+    $nth = $nth > 0 ? $nth : (int)($lead['followups'] ?? 0) + 1;
     $c = pm_dm_cfg();
     $v = pm_dm_vars($lead);
     $subject = pm_dm_fill($c['fu_subject'], $v);
-    return ['email_subject' => function_exists('pm_subject_tidy') ? pm_subject_tidy($subject, $lead) : $subject, 'email_body' => pm_dm_fill($c['fu_body'], $v),
-        'whatsapp' => pm_dm_fill($c['fu_whatsapp'], $v)];
+    $body = pm_dm_fill($c['fu_body'], $v);
+    $wa = pm_dm_fill($c['fu_whatsapp'], $v);
+    if ($nth >= 2) {
+        $body = strtr($body, ['I wrote to you a few days ago and wanted to follow up briefly, in case my email got buried under everything else.' => 'I wrote to you a little while ago and wanted to check in one last time, in case it got lost in a busy week.',
+            'wrote to you a few days ago' => 'wrote to you a little while ago']); // the longest match first
+        $paras = explode("\n\n", str_replace("\r", '', $body));
+        if (count($paras) >= 3) {
+            $paras[count($paras) - 1] = PM_DM_FU_LAST; // in place of "if now is not a good time, no problem at all"
+        }
+        $body = implode("\n\n", $paras);
+        $subject = 'One last note for ' . trim((string)$v['name']);
+    }
+    return ['email_subject' => function_exists('pm_subject_tidy') ? pm_subject_tidy($subject, $lead) : $subject, 'email_body' => $body, 'whatsapp' => $wa];
 }
 
 /** Puts the default follow-up on a contacted lead as its follow-up draft, replacing what is there. Returns [ok, message]. */

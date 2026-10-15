@@ -95,6 +95,9 @@ $hasApprove = function_exists('pm_approve_for_send');
 $approvable = fn($l) => $hasApprove && empty($l['approved_at']) && filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL)
     && ((in_array($l['status'], ['drafted', 'qualified'], true) && empty($l['sent']) && !empty($l['drafts']['email_body'])) || ($l['status'] === 'contacted' && !empty($l['followup_draft']['email_body']))); // a first email or a follow-up ready to go
 $nApprovable = count(array_filter($shown, $approvable));
+$fuOpen = fn($l) => pm_followup_open($l, ['max_followups' => 99] + $acfg); // waiting for a follow-up: Follow up sends the next one at once
+$nFollow = count(array_filter($shown, $fuOpen));
+$nPrepared = count(array_filter($shown, fn($l) => $fuOpen($l) && (pm_followup_ready($l) || !empty($l['followup_draft']['email_body']))));
 $sentToday = pm_sent_today($leadsAll);
 $agentLog = pm_load('agent_log', fn() => []);
 $hid = fn($n, $v) => '<input type="hidden" name="' . $n . '" value="' . pm_h((string)$v) . '">';
@@ -243,6 +246,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <form method="post" id="leadsel" class="selbar<?= $running ? ' locked' : '' ?>"><?= $post('', '') ?>
   <label class="tick"><input type="checkbox" data-pick-all=".lsel" aria-label="Tick every lead on this page"> All on this page</label>
   <b class="selcount" data-pick-count=".lsel">0 ticked</b>
+  <?php if ($nFollow): ?><button class="btn primary" name="do" value="followup_send" data-confirm="Send the next follow-up to each ticked lead that has not answered? Each one gets the follow-up the Follow-up head prepared for its number (or the default for it), with the usual checks (STOP, bounced address, wording)." title="<?= $nPrepared ?> of the <?= $nFollow ?> leads on this page that have not answered have a follow-up prepared; the rest get the default for their number">Follow up</button><?php endif; ?>
   <?php if ($nApprovable): ?><button class="btn primary" name="do" value="send_now" data-confirm="Send the ticked emails now? No daily limit: each one still gets the usual checks (STOP, bounced address, wording) and is never sent twice." title="Sends each ticked email now, one after another">Send now</button>
   <label class="selwhen">or from <input type="datetime-local" name="send_after" aria-label="Send no earlier than (optional)"></label>
   <button class="btn" name="do" value="approve_send" title="Each ticked email goes out on its own, one at a time, in the sending hours (or from the time given)">Send in the sending hours</button><?php endif; ?>
@@ -262,15 +266,16 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <div class="leadlist<?= $running ? ' locked' : '' ?><?= $fper >= 50 ? ' dense' : '' ?>">
 <?php foreach ($shown as $l):
     $id = $l['id'];
-    $which = ($l['status'] === 'contacted' && !empty($l['followup_draft'])) ? 'followup' : 'first';
-    $dr = $which === 'followup' ? $l['followup_draft'] : ($l['drafts'] ?? []);
+    $fuReady = $l['status'] === 'contacted' && empty($l['followup_draft']) ? pm_followup_ready($l) : null; // written ahead by the Follow-up head: shown and editable, sent by Follow up
+    $which = ($l['status'] === 'contacted' && (!empty($l['followup_draft']) || $fuReady)) ? 'followup' : 'first';
+    $dr = $which === 'followup' ? ($l['followup_draft'] ?? $fuReady) : ($l['drafts'] ?? []);
     $canMail = !empty($dr['email_body']) && filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) && $l['status'] !== 'optout';
     $wa = $waOn && !empty($dr['whatsapp']) && ($l['status'] ?? '') !== 'optout' ? pm_wa_link($l, $dr['whatsapp']) : ''; // nobody who said STOP gets a WhatsApp button
     $hasReply = !empty($l['reply_draft']);
 ?>
-<details class="lead" id="l<?= pm_h($id) ?>" <?= ($which === 'followup' || $waiting($l) || $focusId === $id) ? 'open' : '' ?>>
+<details class="lead" id="l<?= pm_h($id) ?>" <?= (($which === 'followup' && !$fuReady) || $waiting($l) || $focusId === $id) ? 'open' : '' ?>>
   <summary>
-    <?php if ($pickable($l)): ?><label class="lpick" onclick="event.stopPropagation()" title="<?= $approvable($l) ? 'Tick to send this email' : 'Admin: tick to delete' ?>"><input type="checkbox" class="lsel" form="leadsel" name="ids[]" value="<?= pm_h($id) ?>" aria-label="Tick <?= pm_h($l['name']) ?>"></label><?php else: ?><span class="lpick none"></span><?php endif; ?>
+    <?php if ($pickable($l)): ?><label class="lpick" onclick="event.stopPropagation()" title="<?= $approvable($l) ? 'Tick to send this email' : ($fuOpen($l) ? 'Tick to follow up' : 'Tick to move, file or delete') ?>"><input type="checkbox" class="lsel" form="leadsel" name="ids[]" value="<?= pm_h($id) ?>" aria-label="Tick <?= pm_h($l['name']) ?>"></label><?php else: ?><span class="lpick none"></span><?php endif; ?>
     <span class="who"><b><?= pm_h($l['name']) ?></b><small><?= pm_h($l['type']) ?> · <?= pm_h($l['city']) ?></small></span>
     <span class="tags">
       <?php if ($hasReply): ?><span class="pill warn">reply waiting</span><?php elseif ($waiting($l)): ?><span class="pill warn">they wrote</span><?php elseif ($which === 'followup'): ?><span class="pill warn">follow-up ready</span><?php endif; ?>
@@ -365,7 +370,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
         <?php endif; ?>
         <?php if ($dr || $l['status'] !== 'new' || !empty($l['research']['starters'])): ?>
         <form method="post" class="msg msgpanel"><?= $post($id, 'save_draft', $hid('which', $which) . $hid('fmt', '')) ?>
-          <div class="mp-head"><h4 class="lc-h"><?= $which === 'followup' ? 'The follow-up' : 'The first message' ?></h4></div>
+          <div class="mp-head"><h4 class="lc-h"><?= $which === 'followup' ? 'Follow-up ' . pm_followup_nth($l) . ($fuReady ? ' <span class="muted t-sm">· prepared by the Follow-up head ' . pm_h(substr((string)($fuReady['at'] ?? ''), 0, 10)) . '</span>' : '') : 'The first message' ?></h4></div>
           <details class="mp-to"><summary>To: <?= pm_h(implode(' · ', array_filter([(string)($l['contact'] ?? ''), (string)($l['email'] ?? '') ?: 'no email', (string)($l['phone'] ?? '')]))) ?></summary>
             <div class="two"><input type="text" name="email" value="<?= pm_h($l['email'] ?? '') ?>" placeholder="Email"><input type="text" name="contact" value="<?= pm_h($l['contact'] ?? '') ?>" placeholder="Contact name"></div>
             <input type="text" name="phone" value="<?= pm_h($l['phone'] ?? '') ?>" placeholder="<?= $waOn ? 'Phone / WhatsApp' : 'Phone' ?>"></details>

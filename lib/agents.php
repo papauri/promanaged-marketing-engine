@@ -1265,11 +1265,12 @@ function pm_starter_draft(array $lead): ?array
 }
 
 /** FOLLOW-UP: a short nudge for leads that have gone quiet. Engagement-aware: opened-but-silent, never-opened and replied-then-quiet get different angles. */
-function pm_agent_followup(array $leads): array
+function pm_agent_followup(array $leads, bool $prepare = false): array
 {
     $s = pm_settings();
+    $max = max(1, (int)(pm_agents_config()['max_followups'] ?? 3));
     $subjectRule = 'written like a normal subject line: a capital letter first and a capital letter on every town, area, road, person and business name (for example \'Rooms near the Shire River barrage?\'), every other word in ordinary lowercase, no full stop, no exclamation marks, no word in ALL CAPS except an acronym such as VAT';
-    $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou are the Follow-up agent for {$s['company_name']}. Write a 40 to 70-word follow-up email and a 25 to 45-word WhatsApp that add ONE new angle (a different gain, or a one-page plan offer).  Read their_last_message and our_last_message: never repeat our last message, never quote words they did not write, and if their_last_message is empty never say they said anything. followups_already_sent tells you how many nudges came before: each one must add a different reason."
+    $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou are the Follow-up agent for {$s['company_name']}. Write a 40 to 70-word follow-up email and a 25 to 45-word WhatsApp that add ONE new angle (a different gain, or a one-page plan offer).  Read their_last_message and our_last_message: never repeat our last message, never quote words they did not write, and if their_last_message is empty never say they said anything. followups_already_sent tells you how many nudges came before: each one must add a different reason. follow_up_number says which follow-up this is, of follow_ups_allowed: word it for that number. Number 1: a light, friendly check-in that assumes they are busy, not uninterested, with the one new angle. A middle one: a fresh, genuinely useful reason, shorter still. The last allowed one: a gracious final note that says plainly this is the last time you will write about it, leaves the door open with warmth, and asks nothing hard. Never say 'just following up' or 'circling back', never 'as per my last email', never make them feel chased. Sound like a respected professional who would be glad to help, not a salesperson."
         . "Match the state: for \"opened\" (they opened our proposal or email but stayed quiet) gently reference what they saw and add one new, true reason; for \"silent\" (never engaged) be shorter and lead with one specific fact about their business (from what_we_know when given: our research's facts, news and hooks; never invent one);for \"replied\" pick up their last words, never repeat a whole earlier message. "
         . "Write like one real person following up with one owner, warm and brief: a greeting with their first name when given ('Good day,' otherwise), say you wrote a few days ago, the new angle, and leave the door open ('if now is not a good time, no problem at all'). "
         . (pm_brand() === 'travel' ? 'Always make this offer, in your own words: ' . PM_TM_PHOTOS_OFFER . '. ' : '')
@@ -1277,7 +1278,7 @@ function pm_agent_followup(array $leads): array
         . pm_email_exp_followup_example(pm_brand()) . ' ' . pm_market_pulse_line() . ' '
         . pm_tb_line(pm_brand(), 'followup') . ' ' . PM_TRUST_RULES . ' Where an item has owner_feedback, the owner turned the last follow-up down for that reason: write a new one that fixes exactly that, and decide send. '
         . 'Before writing, DECIDE for each item what is best for winning this business: "send" (a follow-up now: write it), "wait" (too soon, or a better moment is coming: give wait_days 2 to 21 and leave the texts empty), '
-        . 'or "stop" (a poor fit, or enough follow-ups have gone with no sign of interest; only when followups_already_sent is 1 or more). Use days_since_our_last_email, followups_already_sent, state, views, score and what_we_know. Default to "send". Give a short why. '
+        . 'or "stop" (a poor fit, or enough follow-ups have gone with no sign of interest; only when followups_already_sent is 1 or more). Use days_since_our_last_email, followups_already_sent, state, views, score and what_we_know. Default to "send". Give a short why. ' . ($prepare ? 'This one is prepared ahead for the owner, who decides when it goes: always decide "send" and write it. ' : '')
         . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $last = function (array $l, string $dir): string { // the latest message each way, so "pick up their last words" has their words to pick up
         foreach (array_reverse((array)($l['thread'] ?? [])) as $m) {
@@ -1288,7 +1289,7 @@ function pm_agent_followup(array $leads): array
         return '';
     };
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'contact' => $l['contact'] ?? '', 'used' => mb_substr($l['drafts']['email_body'] ?? '', 0, 220),
-        'their_last_message' => $last($l, 'in'), 'our_last_message' => $last($l, 'out'), 'followups_already_sent' => (int)($l['followups'] ?? 0),
+        'their_last_message' => $last($l, 'in'), 'our_last_message' => $last($l, 'out'), 'followups_already_sent' => (int)($l['followups'] ?? 0), 'follow_up_number' => (int)($l['followups'] ?? 0) + 1, 'follow_ups_allowed' => $max,
         'state' => pm_lead_engagement((array)$l), 'views' => (int)($l['view_count'] ?? 0), 'last_seen' => (string)($l['last_viewed_at'] ?? ''), 'score' => (int)($l['score'] ?? 0),
         'owner_feedback' => (string)($l['rewrite_reason'] ?? ''),
         'days_since_our_last_email' => ($lt = strtotime((string)($l['last_contacted'] ?? ''))) ? (int)floor((time() - $lt) / 86400) : null,
