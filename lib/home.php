@@ -30,6 +30,7 @@ function pm_home_staff(string $brand, array $d): array
             $row('Planner', 'Writes the week\'s posts for your approval', $fb || (int)($d['social']['planned'] ?? 0) > 0, 'connect the Facebook Page'),
             $row('Community manager', 'Answers and tidies comments (autopilot)', $fb && ($d['social']['autopilot'] ?? 'safe') !== 'off', $fb ? 'autopilot is off' : 'connect the Facebook Page'),
             $row('Playbook', 'Who to engage today, with the words', $fb, 'connect the Facebook Page'),
+            $row('Shop desk', 'Keeps the Facebook and Instagram Shop: finds what we sell in our posts, checks each item, writes the words', true),
             $row('Scouting desk', 'Finds the groups, pages and conversations where buyers gather, and people asking', $ai && !empty($en['scout']), $ai ? 'switched off with the Scout under Targeting and messages' : $needAi),
             $row('Idea room', 'Four specialists suggest post ideas; an editor scores them', $ai, $needAi),
             $row('Editor', 'Reads the AI\'s posts and sends weak ones back once', $ai && function_exists('pm_editor_on') && pm_editor_on($brand), $ai ? 'switched off in the Plan\'s Publishing rules' : $needAi),
@@ -171,6 +172,8 @@ function pm_home_needs(string $brand, array $d): array
     ($sm = $s['drafts'] - $s['drafts_no_email']) > 0 && $need['sales'][] = [$n($sm, 'first email is', 'first emails are') . ' ready to read and send', '?tab=agents&status=ready', false];
     $s['drafts_no_email'] && $need['sales'][] = [$n($s['drafts_no_email'], 'written message has', 'written messages have') . ' no email address: send on WhatsApp or find an email', '?tab=agents&status=noemail', false];
     $s['followups_to_draft'] && $need['sales'][] = [$n($s['followups_to_draft'], 'due follow-up has', 'due follow-ups have') . ' nothing written yet', '?tab=agents&status=followups', false];
+    ($shc = function_exists('pm_shop_counts') ? pm_shop_counts($brand) : ['candidates' => 0, 'fix' => 0])['candidates'] && $need['social'][] = [$n($shc['candidates'], 'item', 'items') . ' we sell in our posts ' . ($shc['candidates'] === 1 ? 'is' : 'are') . ' not in the shop yet', '?tab=social&view=shop#found', false];
+    $shc['fix'] && $need['social'][] = [$n($shc['fix'], 'shop item needs', 'shop items need') . ' a fix before Facebook shows ' . ($shc['fix'] === 1 ? 'it' : 'them'), '?tab=social&view=shop#items', false];
     $so['sf']['people'] && $need['social'][] = [$n($so['sf']['people'], 'person asks', 'people ask') . ' for what we offer on public posts: reply under their post', '?tab=agents&status=people', true];
     $so['sf']['new'] && $need['social'][] = [$n($so['sf']['new'], 'place', 'places') . ' on social media where we can win business ' . ($so['sf']['new'] === 1 ? 'waits' : 'wait') . ' for your decision', '?tab=social&view=scout', false];
     $so['sl']['answer'] && $need['social'][] = [$n($so['sl']['answer'], 'person', 'people') . ' from social media to answer (drafts ready)', '?tab=social&view=leads&stage=answer', true];

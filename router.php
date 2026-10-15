@@ -19,6 +19,10 @@ if ($path === '/doc.php') { // a PDF from a business's share kit, for the link i
     require __DIR__ . '/doc.php';
     return true;
 }
+if ($path === '/shop.php') { // the public shop: Commerce Manager's catalogue feed, item pictures and item pages (no login)
+    require __DIR__ . '/shop.php';
+    return true;
+}
 if ($path === '/enquire.php') { // public enquiry form and free website check (no login)
     require __DIR__ . '/enquire.php';
     return true;

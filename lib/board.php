@@ -72,6 +72,7 @@ function pm_board_build(string $brand): array
         $say('replies', $waiting ? $n(count($waiting), 'person wrote', 'people wrote') . ' back and ' . ($answers ? $n($answers, 'answer is', 'answers are') . ' drafted for you.' : 'waits for your answer.') : 'Nobody is waiting for an answer.', '?tab=agents&status=awaiting');
         $say('social', ($fbReady ? 'Our Page: ' . ($pageWait ? $n($pageWait, 'person waits', 'people wait') . ' for an answer' : 'nobody waiting') . '. ' : 'Our Facebook Page is not connected, so I cannot read it. ')
             . ($people ? $n($people, 'person', 'people') . ' asking for what we offer, with replies to paste. ' : '') . ($postsWait ? $n($postsWait, 'post waits', 'posts wait') . ' for your approval. ' : '')
+            . (function_exists('pm_shop_counts') && ($shc = pm_shop_counts($brand)) && ($shc['items'] || $shc['candidates']) ? 'Shop: ' . $shc['live'] . ' item' . ($shc['live'] === 1 ? '' : 's') . ' in the shop' . ($shc['fix'] ? ', ' . $shc['fix'] . ' to fix' : '') . ($shc['out'] ? ', ' . $shc['out'] . ' out of stock' : '') . ($shc['candidates'] ? ', ' . $shc['candidates'] . ' found in our posts to add' : '') . '. ' : '')
             . (function_exists('pm_sf_counts') && ($sfc = pm_sf_counts($brand)) && ($sfc['new'] || $sfc['handed'] || $sfc['acted7']) ? 'Scouting: ' . $sfc['new'] . ' place' . ($sfc['new'] === 1 ? '' : 's') . ' to decide on, ' . $sfc['handed'] . ' with the team, ' . $sfc['acted7'] . ' of ' . $sfc['goal'] . ' acted on this week. ' : '')
             . (function_exists('pm_sl_counts') && ($sl = pm_sl_counts($brand, $L)) && ($sl['answer'] || $sl['followup']) ? 'Social leads: ' . $sl['answer'] . ' to answer, ' . $sl['followup'] . ' to follow up, drafts ready.' : ''), $people || !empty($sl['answer']) || !empty($sl['followup']) ? '?tab=social&view=leads' : '?tab=social');
         $say('sender', 'Sent ' . $sent . ' today' . ($queued ? ', ' . $queued . ' approved and queued' : '') . ($outbox ? '; ' . $n($outbox, 'email is', 'emails are') . ' stuck in the Outbox.' : '.'), $outbox ? '?tab=agents#outbox' : '?tab=agents');
@@ -135,7 +136,7 @@ function pm_board_refresh(string $brand, bool $standup = false): array
 function pm_board_inputs_at(string $brand): int
 {
     $t = 0;
-    foreach (['leads', 'social_posts', 'director', 'team_board', 'heads', 'mail_log', 'listen', 'fb_judged', 'social_finds', 'mailbox', pm_run_state_file($brand)] as $f) {
+    foreach (['leads', 'social_posts', 'director', 'team_board', 'heads', 'mail_log', 'listen', 'fb_judged', 'social_finds', 'mailbox', 'shop', pm_run_state_file($brand)] as $f) {
         $p = PM_DATA . '/' . (str_ends_with($f, '.json') ? $f : $f . '.json');
         $t = max($t, is_file($p) ? (int)filemtime($p) : 0);
     }

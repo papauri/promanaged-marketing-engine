@@ -26,6 +26,7 @@ function pm_social_nav(string $on): string
         'campaign' => 'One message to every channel at once: feed, stories, carousel, WhatsApp and a flyer, with one approval.',
         'content' => 'What we post about: the mix, proof, ideas and photos, and which old posts to bring back.', 'channels' => 'Where else to post, and today\'s hand-post tasks.',
         'leads' => 'Everyone who came to us on social media, by channel, with the answer or follow-up to send.',
+        'shop' => 'Everything we sell, kept here and shown in the Facebook and Instagram Shop through Commerce Manager\'s feed.',
         'scout' => 'Where our buyers gather on social media and what we can win there: you decide what the team acts on.',
         'inbox' => 'Everyone waiting for an answer: messages and comments, and what to hide or delete.', 'page' => 'The Page\'s own posts with their comments: read, edit and reply.',
         'growth' => 'Who to engage today, with the words to use.', 'ads' => 'Small targeted ads, always created paused.', 'gads' => 'A complete Google Search campaign to paste or import: keywords, ads, assets, budget and tracking.',

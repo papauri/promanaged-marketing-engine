@@ -30,6 +30,7 @@ function pm_social_view_file(string $view): string
         $view === 'results' => 'view_social_results.php',
         $view === 'leads' => 'view_social_leads.php',
         $view === 'scout' => 'view_social_scout.php',
+        $view === 'shop' => 'view_social_shop.php',
         $view === 'gads' => 'view_social_gads.php',
         $view === 'relearn' => 'view_social_relearn.php',
         in_array($view, ['page', 'inbox', 'audit'], true) => 'view_social_page.php',

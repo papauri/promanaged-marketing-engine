@@ -1016,3 +1016,17 @@ a.sf-stat:hover { border-color:var(--line-strong) }
 .rp-inline > summary::-webkit-details-marker { display:none }
 .rp-inline[open] > summary { background:var(--surface-2) }
 .rp-form { margin-top:var(--s-2); padding:var(--s-3) var(--s-4); border:1px solid var(--line); border-radius:var(--r-ctl); background:var(--surface-2) }
+
+/* Social > Shop: the feed address to copy, items found in our posts, and the shop's items as cards that open into their form */
+.copyrow { display:flex; gap:var(--s-2); margin:var(--s-1) 0 } .copyrow input { flex:1; font-family:ui-monospace,Consolas,monospace; font-size:var(--fs-2) }
+.shop-cands { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap:var(--s-3) }
+.shop-cand { display:flex; gap:var(--s-3); padding:var(--s-3); border:1px solid var(--line); border-radius:var(--r-ctl); background:var(--surface-2) }
+.shop-cand img { width:96px; height:96px; object-fit:cover; border-radius:10px; flex:none }
+.shop-price { font-weight:700; color:var(--ink); margin:2px 0 }
+.shop-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap:var(--s-3); align-items:start }
+details.shop-item { margin:0 } details.shop-item > summary { display:flex; gap:var(--s-3); align-items:flex-start; cursor:pointer; list-style:none }
+details.shop-item > summary::-webkit-details-marker { display:none }
+details.shop-item > summary img, .shop-noimg { width:88px; height:88px; object-fit:cover; border-radius:10px; flex:none; background:var(--surface-2) }
+.shop-noimg { display:flex; align-items:center; justify-content:center; font-size:var(--fs-1); color:var(--muted); border:1px dashed var(--line-strong) }
+.shop-sum { display:flex; flex-direction:column; gap:2px; min-width:0 }
+.shop-form { margin-top:var(--s-3) } .muted-card { opacity:.75 }
