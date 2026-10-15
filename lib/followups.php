@@ -25,6 +25,43 @@ function pm_followup_due(array $leads, array $cfg, bool $withDraft = true): arra
     return $out;
 }
 
+/**
+ * The Follow-up head's numbers, for the Overview, the board and its goal (one business's leads): waiting (we wrote, no answer, a follow-up may still go), prepared (of those,
+ * a follow-up is written and ready), due (falls due now), due_ready (due and ready to send at once), to_write (due with nothing written), next (the day the next one falls due, '' when none).
+ */
+function pm_followup_board(array $leads, array $cfg): array
+{
+    $days = (int)($cfg['followup_days'] ?? 4);
+    $out = ['waiting' => 0, 'prepared' => 0, 'due' => 0, 'due_ready' => 0, 'to_write' => 0, 'next' => ''];
+    $due = pm_followup_due($leads, $cfg, true);
+    foreach ($leads as $k => $l) {
+        if (!pm_followup_open($l, $cfg)) {
+            continue;
+        }
+        $out['waiting']++;
+        $has = trim((string)($l['followup_draft']['email_body'] ?? '')) !== '' || pm_followup_ready($l) !== null;
+        $out['prepared'] += $has ? 1 : 0;
+        if (isset($due[$k])) {
+            $out['due']++;
+            $out['due_ready'] += $has ? 1 : 0;
+            $out['to_write'] += $has ? 0 : 1;
+        } elseif (($t = strtotime((string)($l['last_contacted'] ?? ''))) && !pm_lead_snoozed($l)) {
+            $when = date('Y-m-d', $t + $days * 86400);
+            $out['next'] = $out['next'] === '' || $when < $out['next'] ? $when : $out['next'];
+        }
+    }
+    return $out;
+}
+
+/** "Saturday 18 Oct", "tomorrow", "today" for a Y-m-d day. */
+function pm_followup_day(string $ymd): string
+{
+    if ($ymd === '') {
+        return '';
+    }
+    return $ymd <= date('Y-m-d') ? 'today' : ($ymd === date('Y-m-d', strtotime('+1 day')) ? 'tomorrow' : date('l j M', strtotime($ymd)));
+}
+
 /* ---------------- prepared ahead by the Follow-up head ---------------- */
 
 /** When we last wrote to them, in plain words, from the real date: "earlier today", "yesterday", "on Tuesday", "last week", "a few weeks ago". */

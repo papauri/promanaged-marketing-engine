@@ -123,7 +123,8 @@ function pm_home_data(string $brand): array
         return [
             'brand' => $brand,
             'sales' => ['leads' => (int)$ps['leads'], 'new' => (int)($st['new'] ?? 0), 'contacted' => (int)$ps['contacted'], 'replies' => (int)$ps['awaiting_reply'], 'drafts' => (int)$ps['drafts_unsent'],
-                'followups_due' => (int)$ps['followups_due'], 'followups_to_draft' => (int)$ps['followups_to_draft'], 'approved' => (int)$ps['approved_waiting'], 'sent_today' => (int)$ps['sent_today'],
+                'followups_due' => (int)$ps['followups_due'], 'followups_to_draft' => (int)$ps['followups_to_draft'], 'waiting_answer' => (int)$ps['awaiting_answer'], 'followups_prepared' => (int)$ps['followups_prepared'],
+                'followups_next' => (string)$ps['followups_next'], 'drafts_no_email' => (int)$ps['drafts_no_email'], 'approved' => (int)$ps['approved_waiting'], 'sent_today' => (int)$ps['sent_today'],
                 'send_cap' => (int)($cfg['send_cap'] ?? 0), 'proposals' => (int)$ps['proposals_sent'], 'won' => (int)$ps['won'], 'enabled' => (array)($cfg['enabled'] ?? []),
                 'run_state' => (string)($run['state'] ?? 'idle'), 'run_at' => (string)($run['finished'] ?? '')],
             'brief' => ['headline' => (string)($brief['headline'] ?? ''), 'priorities' => array_values(array_filter(array_map('strval', (array)($brief['priorities'] ?? [])))), 'at' => (int)($brief['at'] ?? 0), 'date' => (string)($brief['date'] ?? ''),
@@ -161,8 +162,10 @@ function pm_home_needs(string $brand, array $d): array
     $n = fn(int $x, string $one, string $many) => $x . ' ' . ($x === 1 ? $one : $many);
     $need = ['sales' => [], 'social' => [], 'brand' => [], 'insights' => [], 'ops' => []];
     $s['replies'] && $need['sales'][] = [$n($s['replies'], 'reply waits', 'replies wait') . ' for an answer', '?tab=agents&status=awaiting', true];
-    $s['drafts'] && $need['sales'][] = [$n($s['drafts'], 'first message is', 'first messages are') . ' ready to read and approve', '?tab=agents&status=drafted', false];
-    $s['followups_to_draft'] && $need['sales'][] = [$n($s['followups_to_draft'], 'follow-up', 'follow-ups') . ' to draft', '?tab=agents#strategy', false];
+    $s['followups_due'] && $need['sales'][] = [$n($s['followups_due'], 'lead is', 'leads are') . ' due a follow-up' . ($s['followups_due'] > $s['followups_to_draft'] ? ' (' . ($s['followups_due'] - $s['followups_to_draft']) . ' ready): tick them and press Follow up' : ''), '?tab=agents&status=followups', true];
+    ($sm = $s['drafts'] - $s['drafts_no_email']) > 0 && $need['sales'][] = [$n($sm, 'first email is', 'first emails are') . ' ready to read and send', '?tab=agents&status=ready', false];
+    $s['drafts_no_email'] && $need['sales'][] = [$n($s['drafts_no_email'], 'written message has', 'written messages have') . ' no email address: send on WhatsApp or find an email', '?tab=agents&status=noemail', false];
+    $s['followups_to_draft'] && $need['sales'][] = [$n($s['followups_to_draft'], 'due follow-up has', 'due follow-ups have') . ' nothing written yet', '?tab=agents&status=followups', false];
     if (!$so['ready']) {
         $need['social'][] = ['Connect the Facebook Page', '?tab=settings&section=connections', true];
     } else {
@@ -193,7 +196,9 @@ function pm_home_depts(string $brand, array $d): array
     $staff = pm_home_staff($brand, $d);
     $n = fn(int $x, string $one, string $many) => $x . ' ' . ($x === 1 ? $one : $many);
     // Sales
-    [$sSt, $sTxt] = !$op['ai'] ? ['todo', 'Needs an AI key before the team can work'] : ($s['replies'] > 0 ? ['warn', $n($s['replies'], 'reply waits', 'replies wait') . ' for an answer'] : ($s['drafts'] > 0 ? ['warn', $n($s['drafts'], 'draft waits', 'drafts wait') . ' for you to read'] : ['ok', 'Nothing is waiting on you']));
+    [$sSt, $sTxt] = !$op['ai'] ? ['todo', 'Needs an AI key before the team can work'] : ($s['replies'] > 0 ? ['warn', $n($s['replies'], 'reply waits', 'replies wait') . ' for an answer']
+        : ($s['followups_due'] > 0 ? ['warn', $n($s['followups_due'], 'follow-up is', 'follow-ups are') . ' due'] : ($s['drafts'] > 0 ? ['warn', $n($s['drafts'], 'draft waits', 'drafts wait') . ' for you to read']
+        : ['ok', $s['waiting_answer'] ? $n($s['waiting_answer'], 'lead', 'leads') . ' waiting to answer; follow-ups ' . ($s['followups_next'] !== '' ? 'from ' . pm_followup_day($s['followups_next']) : 'prepared') : 'Nothing is waiting on you'])));
     // Social
     [$soSt, $soTxt] = !$so['ready'] ? ['todo', 'Connect the Facebook Page to start'] : ($so['waiting'] > 0 ? ['warn', $n($so['waiting'], 'post waits', 'posts wait') . ' for your approval'] : ($so['planned'] === 0 ? ['warn', 'Nothing is scheduled to post'] : ['ok', $n($so['planned'], 'post', 'posts') . ' lined up']));
     // Brand
@@ -205,8 +210,8 @@ function pm_home_depts(string $brand, array $d): array
     $on = fn(array $rows) => count(array_filter($rows, fn($r) => $r['on']));
     $cards = [
         'sales' => ['mission' => 'Finds businesses, writes to them, follows up and prepares the quotation.', 'state' => $sSt, 'text' => $sTxt,
-            'stats' => ['Leads' => $s['leads'], 'Replies waiting' => $s['replies'], 'Drafts to read' => $s['drafts'], 'Follow-ups due' => $s['followups_due'], 'Sent today' => $s['sent_today'] . ($s['send_cap'] ? ' of ' . $s['send_cap'] : '')],
-            'next' => array_values(array_filter([[$s['replies'] ? 'Answer the replies' : 'Open the leads', '?tab=agents', true], $s['followups_to_draft'] > 0 ? ['Draft ' . $s['followups_to_draft'] . ' follow-up' . ($s['followups_to_draft'] === 1 ? '' : 's'), '?tab=agents#strategy', false] : null, ['WhatsApp outreach', '?tab=whatsapp', false]]))],
+            'stats' => ['Leads' => $s['leads'], 'Replies waiting' => $s['replies'], 'Drafts to read' => $s['drafts'], 'Not answered yet' => $s['waiting_answer'], 'Follow-ups prepared' => $s['followups_prepared'] . ($s['waiting_answer'] ? ' of ' . $s['waiting_answer'] : ''), 'Follow-ups due' => $s['followups_due'], 'Sent today' => $s['sent_today'] . ($s['send_cap'] ? ' of ' . $s['send_cap'] : '')],
+            'next' => array_values(array_filter([[$s['replies'] ? 'Answer the replies' : 'Open the leads', '?tab=agents', true], $s['followups_due'] > 0 ? ['Follow up ' . $n($s['followups_due'], 'lead', 'leads'), '?tab=agents&status=followups', true] : null, ['WhatsApp outreach', '?tab=whatsapp', false]]))],
         'social' => ['mission' => 'Plans and publishes the posts, answers the community, and tells you who to engage today.', 'state' => $soSt, 'text' => $soTxt,
             'stats' => ['Posts lined up' => $so['planned'], 'Waiting approval' => $so['waiting'], 'Published (4 weeks)' => $so['published28'], 'Playbook tasks open' => $so['playbook_open'], 'Followers' => $so['followers'] ?: '-'],
             'next' => $so['ready'] ? array_values(array_filter([[$so['waiting'] ? 'Approve the posts' : 'Plan the posts', '?tab=social', true], ['Today\'s playbook', '?tab=social&view=growth', false], ['Inbox', '?tab=social&view=inbox', false]])) : [['Connect Facebook', '?tab=settings&section=connections', true]]],

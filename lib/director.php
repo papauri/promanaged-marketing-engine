@@ -163,10 +163,14 @@ function pm_pipeline_stats(string $brand): array
     $cfgB = pm_agents_config($brand);
     $bs = pm_backlog_state($leads, $cfgB, $brand);
     $waitingNow = fn($l) => ($l['status'] ?? '') !== 'optout' && (($l['status'] ?? '') === 'replied' || !empty($l['awaiting_reply_since']));
+    $fu = pm_followup_board($leads, $cfgB);
+    $hasMail = fn($l) => (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) && !(!empty($l['email_bad']) && strcasecmp((string)$l['email_bad'], (string)$l['email']) === 0);
+    $unsent = array_filter($leads, fn($l) => in_array($l['status'] ?? '', ['drafted', 'qualified'], true) && empty($l['sent']) && empty($l['approved_at']) && !empty($l['drafts']['email_body']));
     return [
         // what is on the desk right now (live numbers; the advice about them is what the AI writes)
-        'awaiting_reply' => count(array_filter($leads, $waitingNow)), 'followups_due' => count(pm_followup_due($leads, $cfgB, true)), 'followups_to_draft' => count(pm_followup_due($leads, $cfgB, false)),
-        'drafts_unsent' => count(array_filter($leads, fn($l) => in_array($l['status'] ?? '', ['drafted', 'qualified'], true) && empty($l['sent']) && empty($l['approved_at']) && !empty($l['drafts']['email_body']))),
+        'awaiting_reply' => count(array_filter($leads, $waitingNow)), 'followups_due' => $fu['due'], 'followups_to_draft' => $fu['to_write'],
+        'awaiting_answer' => $fu['waiting'], 'followups_prepared' => $fu['prepared'], 'followups_next' => $fu['next'], // everyone we wrote to who has not answered, and their follow-ups
+        'drafts_unsent' => count($unsent), 'drafts_no_email' => count(array_filter($unsent, fn($l) => !$hasMail($l))), // a draft with no email goes by WhatsApp, or waits for an address
         'approved_waiting' => count(array_filter($leads, fn($l) => !empty($l['approved_at']) && empty($l['sent']))), 'sent_today' => pm_sent_today($leads),
         'leads' => count($leads), 'status' => array_filter($st), 'segments' => array_slice($seg, 0, 8, true),
         'contacted' => $contacted, 'replied' => $replied, 'reply_rate' => $contacted ? round(100 * $replied / $contacted) : 0,

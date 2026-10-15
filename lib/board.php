@@ -56,8 +56,13 @@ function pm_board_build(string $brand): array
             $say('director', 'We sat down over ' . $n(count($sat), 'lead', 'leads') . ' and decided: ' . implode(', ', array_map(fn($a, $c) => strtolower(PM_SD_ACTIONS[$a] ?? $a) . ' (' . $c . ')', array_keys($acts), $acts)) . '.', '?tab=agents');
         }
         $say('writers', $firstReady ? $n($firstReady, 'first email is', 'first emails are') . ' written and ready for you to send.' : 'No first emails waiting.', '?tab=agents&status=ready');
-        $fu = $ready - $firstReady;
-        $fu > 0 && $say('followup', $n($fu, 'follow-up is', 'follow-ups are') . ' ready for you to send.', '?tab=agents&status=followups');
+        $noMailDraft = $cnt(fn($l) => !$mail($l) && in_array($l['status'] ?? '', ['new', 'qualified', 'drafted'], true) && empty($l['sent']) && !empty($l['drafts']['email_body']));
+        $noMailDraft && $say('writers', $n($noMailDraft, 'more message is', 'more messages are') . ' written but ' . ($noMailDraft === 1 ? 'has' : 'have') . ' no email address: send on WhatsApp, or the Contact Finder keeps looking.', '?tab=agents&status=noemail');
+        $fb = pm_followup_board($L, pm_agents_config($brand)); // everyone we wrote to who has not answered: the Follow-up head reports every day, due or not
+        $say('followup', !$fb['waiting'] ? 'Nobody we wrote to is waiting for a follow-up.'
+            : $n($fb['waiting'], 'lead has', 'leads have') . ' not answered yet; the next follow-up is prepared for ' . ($fb['prepared'] === $fb['waiting'] ? ($fb['waiting'] === 1 ? 'it' : 'all of them') : $fb['prepared']) . '. '
+              . ($fb['due'] ? $n($fb['due'], 'is', 'are') . ' due now' . ($fb['due_ready'] ? ': tick them on Leads and press Follow up.' : '; I write them next.') : ($fb['next'] !== '' ? 'The first fall due ' . pm_followup_day($fb['next']) . '.' : '')),
+            $fb['due'] ? '?tab=agents&status=followups' : '?tab=agents&status=contacted');
         $say('replies', $waiting ? $n(count($waiting), 'person wrote', 'people wrote') . ' back and ' . ($answers ? $n($answers, 'answer is', 'answers are') . ' drafted for you.' : 'waits for your answer.') : 'Nobody is waiting for an answer.', '?tab=agents&status=awaiting');
         $say('social', ($fbReady ? 'Our Page: ' . ($pageWait ? $n($pageWait, 'person waits', 'people wait') . ' for an answer' : 'nobody waiting') . '. ' : 'Our Facebook Page is not connected, so I cannot read it. ')
             . ($people ? $n($people, 'person', 'people') . ' asking for what we offer, with replies to paste. ' : '') . ($postsWait ? $n($postsWait, 'post waits', 'posts wait') . ' for your approval. ' : '')
@@ -69,7 +74,8 @@ function pm_board_build(string $brand): array
         $waiting && $you[] = ['Answer ' . $n(count($waiting), 'person who wrote', 'people who wrote') . ' back', '?tab=agents&status=awaiting', true, 'replies'];
         $pageWait && $you[] = ['Answer ' . $n($pageWait, 'person', 'people') . ' on our Page', '?tab=social&view=inbox', true, 'social'];
         $outbox && $you[] = ['Fix ' . $n($outbox, 'email', 'emails') . ' in the Outbox', '?tab=agents#outbox', true, 'sender'];
-        $ready && $you[] = ['Read and send ' . $n($ready, 'email', 'emails'), '?tab=agents&status=ready', false, 'writers'];
+        $fb['due'] && $you[] = ['Follow up ' . $n($fb['due'], 'lead', 'leads') . ' who have not answered', '?tab=agents&status=followups', true, 'followup'];
+        $firstReady && $you[] = ['Read and send ' . $n($firstReady, 'first email', 'first emails'), '?tab=agents&status=ready', false, 'writers'];
         $slc = function_exists('pm_sl_counts') ? pm_sl_counts($brand, $L) : ['answer' => 0, 'followup' => 0];
         $slc['answer'] && $you[] = ['Answer ' . $n($slc['answer'], 'person', 'people') . ' from social media', '?tab=social&view=leads&stage=answer', true, 'social'];
         $slc['followup'] && $you[] = ['Send ' . $n($slc['followup'], 'social follow-up', 'social follow-ups'), '?tab=social&view=leads&stage=followup', false, 'social'];
@@ -80,7 +86,7 @@ function pm_board_build(string $brand): array
         !$ranToday && (int)date('G') >= 9 && $chk[] = ['The morning run has not happened today, so the reports are from the last one. Check the scheduler.', '?tab=settings&section=health'];
         !$fbReady && $chk[] = ['Connect the Facebook Page so Social can read comments and messages and post.', '?tab=settings&section=connections'];
         !pm_agents_ready() && $chk[] = ['Add an AI key: the team cannot write without one.', '?tab=settings&section=connections'];
-        ($dir['date'] ?? '') !== '' && ($dir['date'] ?? '') < date('Y-m-d', strtotime('-2 days')) && $chk[] = ['My strategy is ' . max(2, (int)((time() - strtotime((string)$dir['date'])) / 86400)) . ' days old.', '?tab=home#brief'];
+        ($dir['date'] ?? '') !== '' && ($dir['date'] ?? '') < $today && $chk[] = ['My strategy was written on ' . date('j M', strtotime((string)$dir['date'])) . ', so its numbers are out of date: the morning run writes today\'s, or press Refresh strategy.', '?tab=home#brief'];
         ($listen['date'] ?? '') !== $today && $ranToday && $chk[] = ['Social has not held today\'s huddle yet.', '?tab=social'];
 
         $goals = function_exists('pm_heads_goals') ? pm_heads_goals($brand) : ['goals' => [], 'line' => ''];
@@ -99,7 +105,7 @@ function pm_board_build(string $brand): array
 function pm_board_refresh(string $brand, bool $standup = false): array
 {
     $old = (array)(pm_load('board', fn() => [])[$brand] ?? []);
-    $b = pm_board_build($brand) + ['standup' => $standup ? date('H:i') : (substr((string)($old['at'] ?? ''), 0, 10) === date('Y-m-d') ? (string)($old['standup'] ?? '') : '')];
+    $b = pm_board_build($brand) + ['ts' => time(), 'standup' => $standup ? date('H:i') : (substr((string)($old['at'] ?? ''), 0, 10) === date('Y-m-d') ? (string)($old['standup'] ?? '') : '')];
     if ($standup && function_exists('pm_talk')) {
         foreach ($b['reports'] as [$dept, $text]) {
             $dept !== 'director' && pm_talk($brand, $dept, $text, 'director');
@@ -116,11 +122,24 @@ function pm_board_refresh(string $brand, bool $standup = false): array
     return $b;
 }
 
-/** Today's board for the Overview: the stored one, rebuilt (quietly, no AI) when it is over an hour old or from another day. */
+/** When anything the board reads last changed: the leads, the posts, the strategy, the run, the team's notes, the Outbox. */
+function pm_board_inputs_at(string $brand): int
+{
+    $t = 0;
+    foreach (['leads', 'social_posts', 'director', 'team_board', 'heads', 'mail_log', 'listen', 'fb_judged', pm_run_state_file($brand)] as $f) {
+        $p = PM_DATA . '/' . (str_ends_with($f, '.json') ? $f : $f . '.json');
+        $t = max($t, is_file($p) ? (int)filemtime($p) : 0);
+    }
+    return $t;
+}
+
+/** Today's board for the Overview: the stored one, rebuilt (quietly, no AI) when anything it reads has changed since, when it is over an hour old, or from another day. Always what we have. */
 function pm_board(string $brand): array
 {
     $b = (array)(pm_load('board', fn() => [])[$brand] ?? []);
-    if (empty($b['at']) || strtotime((string)$b['at']) < time() - 3600 || substr((string)$b['at'], 0, 10) !== date('Y-m-d')) {
+    clearstatcache();
+    $at = (int)($b['ts'] ?? 0) ?: (strtotime((string)($b['at'] ?? '')) ?: 0);
+    if (!$at || $at < time() - 3600 || substr((string)($b['at'] ?? ''), 0, 10) !== date('Y-m-d') || pm_board_inputs_at($brand) > $at) {
         try {
             $b = pm_board_refresh($brand);
         } catch (Throwable) {

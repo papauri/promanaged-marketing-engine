@@ -32,7 +32,7 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
 <div class="hq-kpis">
   <?= $kpi('Leads', (string)$s['leads'], '?tab=agents') ?>
   <?= $kpi('Replies waiting', (string)$s['replies'], '?tab=agents', $s['replies'] > 0 ? 'warn' : '') ?>
-  <?= $kpi('Follow-ups due', (string)$s['followups_due'], '?tab=agents#strategy', $s['followups_due'] > 0 ? 'warn' : '') ?>
+  <?= $kpi('Follow-ups due', (string)$s['followups_due'] . ($s['followups_due'] === 0 && $s['followups_next'] !== '' ? ' · next ' . date('D j M', strtotime($s['followups_next'])) : ''), $s['followups_due'] ? '?tab=agents&status=followups' : '?tab=agents&status=contacted', $s['followups_due'] > 0 ? 'warn' : '') ?>
   <?= $kpi('Posts lined up', (string)$so['planned'], '?tab=social') ?>
   <?= $kpi('Page health', $br['score'] === null ? '-' : $br['score'] . '%', '?tab=social&view=optimise', $br['score'] !== null && $br['score'] < 60 ? 'warn' : '') ?>
   <?= $kpi('Won', (string)$s['won'], '?tab=history') ?>
@@ -74,7 +74,7 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
       <?php if ($dir['experiment']): ?><p class="hint">Experiment this week: <?= pm_h($dir['experiment']) ?></p><?php endif; ?>
       <?php if (!empty($dir['meeting'])): ?><details class="more mt-1"><summary>This morning's sit-down (how the team decided)</summary><ul class="talklist"><?php foreach ($dir['meeting'] as $mt): ?><li><time></time><b><?= pm_h(pm_talk_name((string)$mt['who'])) ?>:</b><span><?= pm_h((string)$mt['says']) ?></span></li><?php endforeach; ?></ul>
         <?php if (!empty($dir['orders'])): ?><p class="hint"><b>Orders:</b> <?= pm_h(implode(' · ', array_map(fn($o) => pm_talk_name((string)$o['to']) . ': ' . $o['say'], $dir['orders']))) ?></p><?php endif; ?></details><?php endif; ?>
-      <?php if ($brief['date'] !== '' && $brief['date'] !== date('Y-m-d')): ?><p class="hint">Written on <?= pm_h(date('j M', strtotime($brief['date']))) ?>.</p><?php endif; ?>
+      <?php if ($brief['date'] !== '' && $brief['date'] !== date('Y-m-d')): ?><p class="hint warnt">Written on <?= pm_h(date('j M', strtotime($brief['date']))) ?>, so its numbers are from then. Today: <?= pm_h(implode(', ', array_filter([$s['drafts'] . ' draft' . ($s['drafts'] === 1 ? '' : 's') . ' to read', $s['waiting_answer'] ? $s['waiting_answer'] . ' not answered yet' : '', $s['followups_due'] ? $s['followups_due'] . ' follow-up' . ($s['followups_due'] === 1 ? '' : 's') . ' due' : '', $s['replies'] ? $s['replies'] . ' repl' . ($s['replies'] === 1 ? 'y' : 'ies') . ' waiting' : '', $s['sent_today'] . ' sent today']))) ?>. The morning run writes a new one; <b>Refresh strategy</b> does it now.</p><?php endif; ?>
     <?php else: ?>
       <p class="muted">No strategy has been written yet. The Director reads the numbers once a day and says what to do first.</p>
     <?php endif; ?>

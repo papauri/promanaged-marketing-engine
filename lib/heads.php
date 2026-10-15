@@ -75,13 +75,13 @@ function pm_heads_goals(string $brand): array
         // the Writers: a day's messages ready
         $wOk = $ready >= $perDay;
         $wTo = $raw > 0 ? '' : ($noMail > 0 ? 'contact' : 'scouts');
-        $set('writers', "Keep {$perDay} messages ready to send", $n($ready, 'message', 'messages') . ' ready', $wOk, $wOk ? '' : ($raw ? $n($raw, "lead with an email waits", "leads with an email wait") . " for a draft." : ($noMail ? $n($noMail, 'lead has', 'leads have') . ' no email.' : 'No leads left to write to.')),
+        $set('writers', "Keep {$perDay} messages ready to send", $n($ready, 'message', 'messages') . ' ready' . ((int)$st['drafts_no_email'] ? ' (' . (int)$st['drafts_no_email'] . ' of them with no email: WhatsApp only)' : ''), $wOk, $wOk ? '' : ($raw ? $n($raw, "lead with an email waits", "leads with an email wait") . " for a draft." : ($noMail ? $n($noMail, 'lead has', 'leads have') . ' no email.' : 'No leads left to write to.')),
             $wTo, $wTo === 'contact' ? 'I have no lead with an email left to write to: please find the emails of the best ' . min($noMail, $perDay * 2) . ' of the ' . $noMail . ' without one.' : "I have no lead left to write to: please bring {$needWeek} businesses this week that publish an email.");
 
         // the Contact Finder: the leads worth writing to can be reached
         $share = $openN ? 1 - $noMail / $openN : 1;
         $cOk = $share >= 0.6 || $noMail < $perDay;
-        $set('contact', 'Most leads worth writing to have an email (6 in 10)', round($share * 100) . '% of ' . $openN . ' open leads', $cOk, $cOk ? '' : $n($noMail, 'lead has', 'leads have') . ' no email.',
+        $set('contact', 'Most leads worth writing to have an email (6 in 10)', round($share * 100) . '% of ' . $openN . ' open leads' . ($cOk && $share < 0.6 && $noMail ? ' (' . $n($noMail, 'lead', 'leads') . ' without one; few enough to look up by hand)' : ''), $cOk, $cOk ? ($share < 0.6 && $noMail ? 'I keep looking for the ' . $n($noMail, 'missing email', 'missing emails') . '.' : '') : $n($noMail, 'lead has', 'leads have') . ' no email.',
             'research', 'Many of our leads have no email: when you study a business, bring back its published email and WhatsApp number first.');
 
         // the Researchers: the leads we write to are studied first
@@ -96,9 +96,14 @@ function pm_heads_goals(string $brand): array
             $scOk ? '' : 'Short of new businesses.', (int)$cfg['new_per_day'] * 5 < $needWeek ? 'owner' : 'director',
             (int)$cfg['new_per_day'] * 5 < $needWeek ? "My limit of {$cfg['new_per_day']} new leads a day is too low for the goal: raise it in the settings." : 'I am short of new businesses: point my searches at the kinds of business and towns that answer.');
 
-        // Follow-up: every follow-up that is due is drafted
-        $fd = (int)$st['followups_to_draft'];
-        $set('followup', 'Draft every follow-up that is due', $n((int)$st['followups_due'], 'follow-up is', 'follow-ups are') . ' due, ' . $fd . ' without a draft', $fd === 0, $fd ? "I draft them next." : '');
+        // Follow-up: everyone who has not answered has the next follow-up written ahead, and the due ones go out on time
+        $fu = pm_followup_board($L, $cfg);
+        $fuMissing = $fu['waiting'] - $fu['prepared'];
+        $set('followup', 'Have the next follow-up ready for everyone who has not answered, and send each one on time',
+            $n($fu['waiting'], 'lead has', 'leads have') . ' not answered, ' . $fu['prepared'] . ' prepared, ' . $fu['due'] . ' due now' . (!$fu['due'] && $fu['next'] !== '' ? ' (next ' . pm_followup_day($fu['next']) . ')' : ''),
+            $fuMissing === 0 && $fu['due'] === 0,
+            $fu['due'] ? ($fu['due_ready'] ? $n($fu['due_ready'], 'follow-up is', 'follow-ups are') . ' due and ready to send.' : 'I write the due ones next.') : ($fuMissing ? "I prepare the other {$fuMissing} next." : ''),
+            $fu['due_ready'] ? 'owner' : '', $n($fu['due_ready'], 'follow-up is', 'follow-ups are') . ' due and ready: please tick them on Leads and press Follow up.');
 
         // Replies: nobody waits more than a day
         $wo = count($waitOld);
