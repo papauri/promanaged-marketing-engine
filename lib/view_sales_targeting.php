@@ -101,11 +101,10 @@ echo function_exists('pm_adv_card') ? pm_adv_card($vb, $csrf) : '';
       <div><label>What matters to these buyers (one per line; the qualifier leads with them)</label><textarea name="b[tg_angles]" rows="3"><?= pm_h(implode("\n", $tg['angles'])) ?></textarea></div>
     </div>
     <p class="hint"><?= !empty($learned['at']) ? 'Last studied ' . pm_h((string)$learned['at']) . (!empty($learned['from']) ? ' from ' . pm_h(implode(', ', array_map('pm_study_host', (array)$learned['from']))) : ' from your answers') . '.' : 'Not studied by the AI yet.' ?>
-      <button class="btn small" form="restudy-<?= pm_h($vb) ?>" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?>>Study the business again</button></p>
+      <a class="btn small" href="?tab=social&amp;view=relearn">Relearn the business</a></p>
   </div>
   <div class="btns formbar"><button class="btn primary">Save</button></div>
 </form>
-<form method="post" id="restudy-<?= pm_h($vb) ?>"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="brand_restudy"><input type="hidden" name="id" value="<?= pm_h($vb) ?>"></form>
 
 <div class="card">
   <h2>One-page offer</h2>

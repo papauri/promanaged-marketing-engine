@@ -44,7 +44,7 @@ function pm_ui_nav(): array
             'Paid' => ['?tab=social&view=ads' => 'Ads', '?tab=social&view=gads' => 'Google Ads']]],
         'brand' => ['label' => 'Brand', 'name' => 'Brand and creative department', 'job' => 'Look and sound right everywhere', 'color' => '#8a6a2f', 'href' => '?tab=social&view=studio', 'groups' => [
             'Look' => ['?tab=social&view=studio' => 'Studio', '?tab=social&view=kit' => 'Brand kit'],
-            'Words and profiles' => ['?tab=social&view=optimise' => 'Profiles', '?tab=social&view=voice' => 'Voice'],
+            'Words and profiles' => ['?tab=social&view=optimise' => 'Profiles', '?tab=social&view=voice' => 'Voice', '?tab=social&view=relearn' => 'Relearn the business'],
             'Upkeep' => ['?tab=social&view=cleanup' => 'Page clean-up']]],
         'insights' => ['label' => 'Insights', 'name' => 'Insights department', 'job' => 'Measure what works and advise', 'color' => '#46607a', 'href' => '?tab=social&view=results', 'groups' => [
             'Reports' => ['?tab=social&view=results' => 'Results', '?tab=social&view=audit' => 'Page audit', '?tab=social&view=numbers' => 'Enter numbers']]],

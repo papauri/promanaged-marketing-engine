@@ -29,7 +29,7 @@ function pm_social_nav(string $on): string
         'inbox' => 'Everyone waiting for an answer: messages and comments, and what to hide or delete.', 'page' => 'The Page\'s own posts with their comments: read, edit and reply.',
         'growth' => 'Who to engage today, with the words to use.', 'ads' => 'Small targeted ads, always created paused.', 'gads' => 'A complete Google Search campaign to paste or import: keywords, ads, assets, budget and tracking.',
         'studio' => 'Design the covers and profile pictures: styles, colours and wording, made by code.', 'kit' => 'Cover wording, a hero photo and every platform\'s pictures at the right size.',
-        'optimise' => 'Fix what is missing on every profile, one press at a time, and write the profile words.', 'voice' => 'Everything the AI knows and may say about this business.',
+        'optimise' => 'Fix what is missing on every profile, one press at a time, and write the profile words.', 'voice' => 'Everything the AI knows and may say about this business.', 'relearn' => 'The team studies the business again and suggests every change; you approve each one.',
         'cleanup' => 'Tidy old posts on the Page: keep, rewrite or delete.', 'results' => 'What worked, what it cost, and what to do next.',
         'audit' => 'A health check of the Page, with every finding ready to act on.', 'numbers' => 'Type in the numbers the apps do not give us.'];
     $name = function_exists('pm_brand_title') ? pm_brand_title(pm_settings(), pm_brand()) : pm_brand_name(pm_brand());
