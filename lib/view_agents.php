@@ -183,7 +183,11 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     if (!empty($l['followup_draft'])) {
         return ' <span class="pill hot">draft ready</span>';
     }
-    return ($l['status'] ?? '') === 'contacted' && !pm_lead_email_dead($l) && pm_agents_ready() ? '<form method="post" class="inline">' . $post($t['lead'], 'followup_ai') . '<button class="btn small" title="The Follow-up agent writes a draft for you to read; nothing is sent">Draft with AI</button></form>' : '';
+    if (($l['status'] ?? '') !== 'contacted' || pm_lead_email_dead($l)) {
+        return '';
+    }
+    return (pm_agents_ready() ? '<form method="post" class="inline">' . $post($t['lead'], 'followup_ai') . '<button class="btn small" title="The Follow-up agent writes a draft for you to read; nothing is sent">Draft with AI</button></form>' : '')
+        . '<form method="post" class="inline">' . $post($t['lead'], 'followup_default') . '<button class="btn small" title="The default follow-up, no AI; nothing is sent">Use default</button></form>';
 };
 ?>
 
@@ -201,7 +205,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     <?php foreach (array_slice($plan, 6) as $t): ?><div class="task <?= $t['done'] ? 'done' : '' ?>">
       <form method="post"><?= $post('', 'plan', $hid('task', $t['id']) . ($t['done'] ? '' : $hid('done', 1))) ?><button title="Mark done" aria-label="Mark done"><?= $t['done'] ? '✓' : '' ?></button></form>
       <span><?= pm_h($t['title']) ?></span><?= $taskExtra($t) ?></div><?php endforeach; ?></details><?php endif; ?>
-<?php if ((int)(($dir['stats'] ?? [])['followups_to_draft'] ?? 0) > 0): ?><form method="post"><?= $post('', 'followups_ai') ?><button class="btn small primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?> title="The Follow-up agent writes them for you to read; nothing is sent">Draft <?= (int)$ds['followups_to_draft'] ?> follow-up<?= (int)$ds['followups_to_draft'] === 1 ? '' : 's' ?> with AI</button></form><?php endif; ?>
+<?php if ((int)(($dir['stats'] ?? [])['followups_to_draft'] ?? 0) > 0): ?><form method="post"><?= $post('', 'followups_ai') ?><button class="btn small primary" title="<?= pm_followup_by_default(pm_brand()) ? 'Made from the default follow-up (Sales &gt; Targeting and messages)' : 'The Follow-up agent writes them' ?> for you to read; nothing is sent">Draft <?= (int)$ds['followups_to_draft'] ?> follow-up<?= (int)$ds['followups_to_draft'] === 1 ? '' : 's' ?><?= pm_followup_by_default(pm_brand()) ? '' : ' with AI' ?></button></form><?php endif; ?>
 </details>
 <?php endif; ?>
 
@@ -401,6 +405,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <?php if ($wa): $waFull = pm_wa_text($l, $dr['whatsapp'], $which === 'first'); ?><a class="btn" data-wa-log data-first data-id="<?= pm_h($id) ?>" data-csrf="<?= pm_h($csrf) ?>" data-text="<?= pm_h($waFull) ?>" data-url="<?= pm_h(pm_wa_link($l, '')) ?>" href="<?= pm_h(pm_wa_link($l, $waFull)) ?>" target="_blank" rel="noopener noreferrer" title="Checked and logged like the WhatsApp page: daily limit, STOP and the wording rules">WhatsApp</a><?php endif; ?>
       <?php if ($tel = pm_tel_link($l)): ?><a class="btn" href="<?= pm_h($tel) ?>">Call</a><?php endif; ?>
       <?php if (($l['status'] ?? '') === 'contacted' && !pm_lead_email_dead($l) && pm_agents_ready()): ?><form method="post"<?= empty($l['followup_draft']) ? '' : ' data-confirm="Write a new follow-up in place of the one shown?"' ?>><?= $post($id, 'followup_ai') ?><button class="btn" title="The Follow-up agent writes a follow-up for you to read; nothing is sent"><?= empty($l['followup_draft']) ? 'Draft follow-up with AI' : 'Draft a new follow-up' ?></button></form><?php endif; ?>
+      <?php if (($l['status'] ?? '') === 'contacted' && !pm_lead_email_dead($l)): ?><form method="post"<?= empty($l['followup_draft']) ? '' : ' data-confirm="Put the default follow-up in place of the one shown?"' ?>><?= $post($id, 'followup_default') ?><button class="btn" title="The default follow-up of this business, no AI (Sales > Targeting and messages); nothing is sent">Use default follow-up</button></form><?php endif; ?>
       </div>
       <?php if (empty($l['listen'])): ?><div class="agrp" aria-label="Prepare the message">
       <?php if (!in_array($l['status'], ['won', 'lost', 'optout'], true)): ?><form method="post"><?= $post($id, 'sitdown') ?><button class="btn" title="The team talks this lead over and decides how best to approach it (one small AI call)">Team sit-down</button></form><?php endif; ?>

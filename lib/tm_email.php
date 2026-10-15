@@ -20,8 +20,33 @@ const PM_TM_WHO = "I'm with {company}; we haven't met yet, so I'll keep this bri
 /** The paragraph after the personal opening: the aim, then what a host gets, in the host's own money. */
 const PM_TM_AIM_EMAIL = "We are building Malawi's own directory of independent stays, together with the hosts who run them. Guests book you directly and pay you in {currency}, with no commission, unlike Booking.com and the other big sites that take a cut of every stay. They can chat and video call you before they come.";
 
-/** The invitation that ends every first email: the one link in the text (the share kit adds the direct links below it). */
-const PM_TM_INVITE = "Please visit {link} to list {name} for free and manage your page and your online presence yourself, or simply reply and our team will set it up for you. There is no catch: we are building Malawi's tourism together.";
+/** The invitation that ends every first email: the one link in the text (the share kit adds the direct links below it), and the easiest way in: reply with photos and rates, we do the rest. */
+const PM_TM_INVITE = "Please visit {link} to list {name} for free. Even easier: just reply with a few photos of your rooms and the outside, and your rates, and our team will set up your page for you and let you know as soon as you are online. It is all free, and there is no catch: we are building Malawi's tourism together.";
+
+/** The invitation before it offered to do it from photos (unsent drafts are brought up to date once). */
+const PM_TM_INVITE_V3 = "Please visit {link} to list {name} for free and manage your page and your online presence yourself, or simply reply and our team will set it up for you. There is no catch: we are building Malawi's tourism together.";
+
+/** The offer every Travel Malawi follow-up makes (the AI is told to make it too): photos and rates by reply, we set it up, free. */
+const PM_TM_PHOTOS_OFFER = 'they can simply reply with a few photos of their rooms and the outside, and their rates, and our team sets up their page for them and lets them know as soon as they are online, all free';
+
+/** The default follow-up to a stay that has not replied: short and human, the photos offer, no pressure. */
+function pm_tm_followup_seed(): array
+{
+    return ['fu_subject' => 'Photos are all we need for {name}',
+        'fu_body' => "Good day {first_name},\n\nI wrote to you a few days ago about listing {name} on {company}, the directory of Malawi's own stays we are building together with the hosts who run them.\n\n"
+            . "To make it easy, there is nothing to fill in. Just reply to this email with a few photos of your rooms and the outside, and your rates, and our team will set up your page for you and let you know as soon as you are online. It is free, with no commission.\n\n"
+            . "And if now is not a good time, no problem at all.",
+        'fu_whatsapp' => "Good day {first_name}, {company} here again. To list {name} free, just reply here with a few photos of your rooms and the outside, and your rates, and we will set up your page and let you know once you are online. No commission, no catch."];
+}
+
+/** The end of the first WhatsApp message: the easiest way in. */
+const PM_TM_WA_PHOTOS = 'Just reply here with a few photos of your rooms and the outside, and your rates, and we will set up your page and let you know once you are online.';
+
+/** The first WhatsApp message to a stay: the aim (without the longer gains, to stay short) and the photos offer. */
+function pm_tm_wa_first(string $hello): string
+{
+    return $hello . ' ' . str_replace(' Guests chat and video call you before they come, and your reviews from different sources are shown together.', '', PM_TM_WA_AIM) . ' ' . PM_TM_WA_PHOTOS;
+}
 
 /** The benefit line about reviews: open about what guests said, wherever they said it, is what earns a new guest's trust. */
 const PM_TM_REVIEWS = 'Your reviews from different sources, shown together, so guests trust you.';
@@ -178,7 +203,7 @@ function pm_tm_write_ai(array $leads): array
         . 'The paragraph before it says who we are and that we have not met; the paragraph after it is the aim above; never repeat either. '
         . 'Never give your own name or introduce yourself (the signature does that). We are a business offering a service: never say or suggest that you were looking for a place to stay, planning a trip, travelling or a possible guest. '
         . 'No greeting, no sign-off, no promises, no numbers, no prices, no link, no exclamation marks. '
-        . (pm_wa_on() ? 'whatsapp: 35 to 60 words, one paragraph: a greeting with the first name if given, that this is ' . $s['company_name'] . ' (never your own name: the sign-off carries it), then straight away the aim (we are building Malawi\'s own directory of stays together with hosts and would love them in it; free, no commission, unlike Booking.com), one gain (guests chat and video call them before they come, or their reviews from different sources shown together), one easy question. Never pose as a traveller. ' : 'No WhatsApp message: this business works by email only. ')
+        . (pm_wa_on() ? 'whatsapp: 35 to 60 words, one paragraph: a greeting with the first name if given, that this is ' . $s['company_name'] . ' (never your own name: the sign-off carries it), then straight away the aim (we are building Malawi\'s own directory of stays together with hosts and would love them in it; free, no commission, unlike Booking.com), then that ' . PM_TM_PHOTOS_OFFER . '. Never pose as a traveller. ' : 'No WhatsApp message: this business works by email only. ')
         . 'email_subject: make an owner curious to open it, for example about joining Malawi\'s own directory of stays, within the subject_style. '
         . 'The rest of the email (what the platform is, the benefits, the set-up steps, the link and that it is free) is a fixed text the app adds, so never describe it. '
         . ($subjectLine !== '' ? $subjectLine . ' ' : '') . pm_market_pulse_line() . ' ' . pm_tb_line('travel', 'writers') . ' Where an item has owner_feedback, the owner turned the last version down for that reason: fix exactly that. ' . PM_TRUST_RULES . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
@@ -203,7 +228,7 @@ function pm_tm_write_ai(array $leads): array
         $first = pm_tm_first_name($l);
         $wa = $txt($x['whatsapp'] ?? '', 'whatsapp');
         if ($wa === '') {
-            $wa = 'Hello' . ($first !== '' ? " $first" : '') . ', this is Travel Malawi. ' . str_replace('{name}', trim((string)$l['name']) ?: 'your place', PM_TM_WA_AIM) . ' May I send you the details?';
+            $wa = str_replace('{name}', trim((string)$l['name']) ?: 'your place', pm_tm_wa_first('Hello' . ($first !== '' ? " $first" : '') . ', this is Travel Malawi.'));
         }
         $res[] = ['id' => $l['id'], 'email_subject' => $subject, 'email_body' => pm_tm_email_compose($l, pm_tm_clean_opening($txt($x['opening'] ?? ''))), 'whatsapp' => $wa];
     }
@@ -325,6 +350,45 @@ function pm_tm_fix_once(): void
         $n = pm_tm_short_v3();
         pm_update('migrations', fn(array $m) => $m + ['tm_short_v3' => date('c') . " ($n drafts)"], fn() => []);
     }
+    if (empty($done['tm_photos_v4'])) {
+        $n = pm_tm_photos_v4();
+        pm_update('migrations', fn(array $m) => $m + ['tm_photos_v4' => date('c') . " ($n drafts)"], fn() => []);
+    }
+}
+
+/** The invitation now offers to set the page up from photos and rates: the saved default message and unsent first emails that still carry the earlier wording take the new one. Returns how many drafts changed. */
+function pm_tm_photos_v4(): int
+{
+    $re = '/' . str_replace(['\{link\}', '\{name\}'], ['(\S+)', '(.+?)'], preg_quote(PM_TM_INVITE_V3, '/')) . '/u';
+    $to = str_replace(['{link}', '{name}'], ['$1', '$2'], PM_TM_INVITE);
+    $waOld = ['Guests chat and video call you before they come, and your reviews from different sources are shown together. The host starter pack and the links to get listed are below.',
+        'Guests chat and video call you before they come, and your reviews from different sources are shown together. May I send you the details?'];
+    $wa = fn(string $t) => str_replace($waOld, PM_TM_WA_PHOTOS, $t);
+    pm_update('message_defaults', function (array $all) use ($wa) {
+        if (isset($all['travel']['email_body'])) {
+            $all['travel']['email_body'] = str_replace(PM_TM_INVITE_V3, PM_TM_INVITE, (string)$all['travel']['email_body']);
+        }
+        if (isset($all['travel']['whatsapp'])) {
+            $all['travel']['whatsapp'] = $wa((string)$all['travel']['whatsapp']);
+        }
+        return $all;
+    }, fn() => []);
+    $n = 0;
+    pm_update('leads', function (array $cur) use (&$n, $re, $to, $wa) {
+        foreach ($cur as $id => $l) {
+            $b = (string)($l['drafts']['email_body'] ?? '');
+            $w = (string)($l['drafts']['whatsapp'] ?? '');
+            if (($l['brand'] ?? 'promanaged') !== 'travel' || !empty($l['sent']) || $b === '' || [$new = (string)preg_replace($re, $to, $b), $nw = $wa($w)] === [$b, $w]) {
+                continue;
+            }
+            $cur[$id]['drafts']['email_body'] = $new;
+            $cur[$id]['drafts']['whatsapp'] = $nw;
+            pm_lead_note($cur[$id], 'Draft updated: it offers to set the page up from their photos and rates');
+            $n++;
+        }
+        return $cur;
+    }, fn() => []);
+    return $n;
 }
 
 /**

@@ -27,6 +27,13 @@ function pm_view_msgdefaults(string $vb, string $csrf): void
     <label>WhatsApp message</label><textarea name="dm[whatsapp]" rows="3" data-grow><?= pm_h($c['whatsapp']) ?></textarea>
     <p class="hint <?= $pv['problems'] ? 'warnt' : '' ?>">The email is <b><?= (int)$pv['words'] ?></b> words with an example lead (first emails may be 20 to 190, with at most one link in the text).<?= $pv['problems'] ? ' Fix before it can be sent: ' . pm_h(implode(' ', $pv['problems'])) : ' It passes the checks.' ?></p>
   </div>
+  <div class="card"><h2>Default follow-up · <?= pm_h($bn) ?></h2>
+    <p class="hint mt-0">For a business we wrote to that has not replied. A contacted lead's card has <b>Use default follow-up</b> any time; when follow-ups fall due they are made from it with no AI if the default message drafts new leads, or if there is no AI key (and whenever the AI fails). The same placeholders work here.</p>
+    <label>Follow-up subject</label><input type="text" name="dm[fu_subject]" value="<?= pm_h($c['fu_subject']) ?>" maxlength="120">
+    <label>Follow-up email</label><textarea name="dm[fu_body]" rows="9" data-grow><?= pm_h($c['fu_body']) ?></textarea>
+    <label>Follow-up WhatsApp</label><textarea name="dm[fu_whatsapp]" rows="3" data-grow><?= pm_h($c['fu_whatsapp']) ?></textarea>
+    <p class="hint <?= $pv['fu_problems'] ? 'warnt' : '' ?>">The follow-up is <b><?= (int)$pv['fu_words'] ?></b> words with an example lead (follow-ups may be 20 to 120).<?= $pv['fu_problems'] ? ' Fix before it can be sent: ' . pm_h(implode(' ', $pv['fu_problems'])) : ' It passes the checks.' ?></p>
+  </div>
   <div class="card"><h2>Signatures</h2>
     <p class="hint mt-0">The signature ends every first email and reply, and the sign-off ends every WhatsApp message, whether the AI or the default message wrote it. Until you save, messages end as they always did (your name and details).
       A line whose words are missing, such as <code>{phone}</code> with no phone number, is left out. Your name comes from the person working (the team menu), else the signatory in Business details.</p>
@@ -40,6 +47,10 @@ function pm_view_msgdefaults(string $vb, string $csrf): void
     <div class="split mt-2">
       <div><label>Email · <?= pm_h($pv['subject']) ?></label><pre><?= pm_h($pv['email']) ?></pre></div>
       <div><label>WhatsApp</label><pre><?= pm_h($pv['whatsapp']) ?></pre></div>
+    </div>
+    <div class="split mt-2">
+      <div><label>Follow-up · <?= pm_h($pv['fu_subject']) ?></label><pre><?= pm_h($pv['fu_email']) ?></pre></div>
+      <?php if ($pv['fu_whatsapp'] !== ''): ?><div><label>Follow-up WhatsApp</label><pre><?= pm_h($pv['fu_whatsapp']) ?></pre></div><?php endif; ?>
     </div>
   </details>
   <div class="btns formbar"><button class="btn primary">Save the default message</button>

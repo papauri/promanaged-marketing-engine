@@ -1045,12 +1045,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $back("Added $name. The next agent run will qualify it and draft a message.");
         }
         if ($do === 'followups_ai') { // draft every follow-up that is due, with the AI (drafts only; nothing is sent)
-            if (!pm_agents_ready()) {
-                $back('The AI needs a key in .env first.', 'err');
-            }
             @set_time_limit(300);
-            $fr = pm_followup_draft_now(); // today's strategy was written in the morning and is not asked again (Refresh does)
-            $back(!$fr['due'] ? 'No follow-ups are due without a draft.' : $fr['drafted'] . ' follow-up' . ($fr['drafted'] === 1 ? '' : 's') . ' drafted with AI' . ($fr['failed'] ? ', ' . $fr['failed'] . ' could not be (try again)' : '') . '. Read them, then send.', $fr['failed'] && !$fr['drafted'] ? 'err' : 'ok');
+            $fr = pm_followup_draft_now(); // today's strategy was written in the morning and is not asked again (Refresh does); no AI key or the default chosen: the default follow-up
+            $back(!$fr['due'] ? 'No follow-ups are due without a draft.' : $fr['drafted'] . ' follow-up' . ($fr['drafted'] === 1 ? '' : 's') . (pm_followup_by_default(pm_brand()) ? ' made from the default follow-up' : ' drafted') . ($fr['failed'] ? ', ' . $fr['failed'] . ' could not be (try again)' : '') . '. Read them, then send.', $fr['failed'] && !$fr['drafted'] ? 'err' : 'ok');
         }
         if ($do === 'fix_subjects') { // capital letters and names in the subject lines of unsent drafts (nothing is sent; hand-edited drafts are left alone)
             @set_time_limit(180);
@@ -1378,6 +1375,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             @set_time_limit(120);
             [$fok, $fmsg] = pm_followup_draft_one($id);
             $back($fmsg, $fok ? 'ok' : 'err');
+        }
+        if ($do === 'followup_default') { // the business's default follow-up, no AI, any time after the first email
+            [$fdOk, $fdMsg] = pm_dm_followup_apply($leads[$id]);
+            $fdOk && pm_leads_save($leads);
+            $back($fdMsg, $fdOk ? 'ok' : 'err');
         }
         if ($do === 'use_default') { // the business's default message instead of an AI draft
             [$udOk, $udMsg] = pm_dm_apply($leads[$id], !empty($_POST['plain']));

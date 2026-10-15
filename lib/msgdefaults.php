@@ -40,17 +40,19 @@ function pm_dm_seed(string $brand): array
 {
     $sig = "Kind regards,\n{sender}\n{company}\n{phone}\n{website}";
     if ($brand === 'travel') {
-        $pack = function_exists('pm_share_pack_state') && pm_share_pack_state('travel') !== 'none';
         return ['email_subject' => 'Direct bookings for {name}', 'email_body' => pm_tm_email_compose([], '', true),
-            'whatsapp' => 'Hello {first_name}, this is {company}. ' . PM_TM_WA_AIM . ' '
-                . ($pack ? 'The host starter pack and the links to get listed are below.' : 'May I send you the details?'),
-            'signature' => $sig, 'wa_signature' => '— {sender}, {company}'];
+            'whatsapp' => pm_tm_wa_first('Hello {first_name}, this is {company}.'), // the share kit's links follow it by themselves
+            'signature' => $sig, 'wa_signature' => '— {sender}, {company}'] + pm_tm_followup_seed();
     }
     return ['email_subject' => 'A short note for {name}',
         'email_body' => "Hello {first_name},\n\n{intro}.\n\n{opening} If it would be useful, I can send you a short plan for your business.\n\n"
             . (pm_our_wa_number(pm_settings()) !== '' ? 'Reply to this email, or message us on WhatsApp on {phone}, and I will come back to you.' : 'Reply to this email and I will come back to you.'), // WhatsApp only with a number to reach us on
         'whatsapp' => 'Hello {first_name}, {intro}. I came across {name} and thought we could help. May I send you a short plan for your business?',
-        'signature' => $sig, 'wa_signature' => '— {sender}, {company}'];
+        'signature' => $sig, 'wa_signature' => '— {sender}, {company}',
+        'fu_subject' => 'Following up for {name}',
+        'fu_body' => "Hello {first_name},\n\nI wrote to you a few days ago and wanted to follow up briefly, in case my email got buried under everything else.\n\n"
+            . "If it would help, I can put together a short one-page plan for {name}, written around how you work today. A one-line reply is all it takes.\n\nAnd if the timing is not right, no problem at all.",
+        'fu_whatsapp' => 'Hello {first_name}, {company} here again. Just following up on my email: if it would help, I can put together a short one-page plan for {name}. A quick reply is all it takes.'];
 }
 
 /** The business's default message as it stands: ['use', 'email_subject', 'email_body', 'whatsapp', 'signature' (null = never saved), 'wa_signature' (null = never saved), 'saved' => bool]. */
@@ -60,7 +62,7 @@ function pm_dm_cfg(string $brand = ''): array
     $st = (array)(pm_dm_all()[$brand] ?? []);
     $seed = pm_dm_as($brand, fn() => pm_dm_seed($brand));
     $c = ['use' => ($st['use'] ?? '') === 'default' ? 'default' : 'ai', 'saved' => $st !== []];
-    foreach (['email_subject', 'email_body', 'whatsapp'] as $k) {
+    foreach (['email_subject', 'email_body', 'whatsapp', 'fu_subject', 'fu_body', 'fu_whatsapp'] as $k) {
         $c[$k] = trim((string)($st[$k] ?? '')) !== '' ? (string)$st[$k] : (string)$seed[$k];
     }
     $c['email_body'] = str_replace(PM_DM_OPENING_TRAVEL_OLD, '{opening}', $c['email_body']); // the line that was written out before {opening} existed
@@ -150,6 +152,27 @@ function pm_dm_render(array $lead, string $opening = ''): array
     return ['email_subject' => function_exists('pm_subject_tidy') ? pm_subject_tidy($subject, $lead) : $subject, 'email_body' => pm_brand() === 'travel' ? pm_tm_pack_swap($body) : $body, 'whatsapp' => pm_dm_fill($c['whatsapp'], $v)];
 }
 
+/** The default follow-up for one lead that has not replied: ['email_subject', 'email_body', 'whatsapp'], as the business in use (no AI). */
+function pm_dm_followup_render(array $lead): array
+{
+    $c = pm_dm_cfg();
+    $v = pm_dm_vars($lead);
+    $subject = pm_dm_fill($c['fu_subject'], $v);
+    return ['email_subject' => function_exists('pm_subject_tidy') ? pm_subject_tidy($subject, $lead) : $subject, 'email_body' => pm_dm_fill($c['fu_body'], $v),
+        'whatsapp' => pm_dm_fill($c['fu_whatsapp'], $v)];
+}
+
+/** Puts the default follow-up on a contacted lead as its follow-up draft, replacing what is there. Returns [ok, message]. */
+function pm_dm_followup_apply(array &$lead): array
+{
+    if (($lead['status'] ?? '') !== 'contacted') {
+        return [false, 'A follow-up is for a lead we have already written to and who has not replied.'];
+    }
+    $lead['followup_draft'] = pm_dm_as((string)($lead['brand'] ?? pm_brand()), fn() => pm_dm_followup_render($lead)) + ['source' => 'default'];
+    pm_lead_note($lead, 'Default follow-up used');
+    return [true, 'The default follow-up is now ready for ' . ($lead['name'] ?? 'this lead') . '. Read it, then send.'];
+}
+
 /** Rows in the shape the writer returns, for leads drafted from the default message (no AI). */
 function pm_dm_rows(array $leads): array
 {
@@ -182,7 +205,13 @@ function pm_dm_preview(): array
     $wa = str_word_count($r['whatsapp']);
     $wa > 80 && $problems[] = "WhatsApp: the message is $wa words; keep it under 80.";
     $email = $r['email_body'] . (function_exists('pm_share_email_block') ? pm_share_email_block($r['email_body']) : '') . pm_outreach_footer(pm_settings());
-    return ['subject' => $r['email_subject'], 'email' => $email, 'whatsapp' => pm_wa_text($lead, $r['whatsapp'], true), 'words' => str_word_count($r['email_body']), 'problems' => $problems];
+    $f = pm_dm_followup_render($lead);
+    $fuProblems = pm_outreach_lint($f['email_subject'], $f['email_body'], false);
+    if ($bad = pm_dm_unknown($c['fu_subject'] . ' ' . $c['fu_body'] . ' ' . $c['fu_whatsapp'])) {
+        $fuProblems[] = 'Unknown placeholder ' . implode(', ', $bad) . ': it would be sent as typed.';
+    }
+    return ['subject' => $r['email_subject'], 'email' => $email, 'whatsapp' => pm_wa_text($lead, $r['whatsapp'], true), 'words' => str_word_count($r['email_body']), 'problems' => $problems,
+        'fu_subject' => $f['email_subject'], 'fu_email' => $f['email_body'] . pm_outreach_footer(pm_settings()), 'fu_whatsapp' => $f['whatsapp'], 'fu_words' => str_word_count($f['email_body']), 'fu_problems' => $fuProblems];
 }
 
 /** Saves the form of one business (the fields posted in $_POST['dm']). Returns [message, kind]. */
@@ -201,7 +230,7 @@ function pm_dm_save(string $brand): array
     $in = (array)($_POST['dm'] ?? []);
     $t = fn(string $k, int $max) => mb_substr(trim(str_replace("\r\n", "\n", (string)($in[$k] ?? ''))), 0, $max);
     $row = ['use' => ($in['use'] ?? '') === 'default' ? 'default' : 'ai', 'email_subject' => $t('email_subject', 120), 'email_body' => $t('email_body', 3000), 'whatsapp' => $t('whatsapp', 700),
-        'signature' => $t('signature', 500), 'wa_signature' => $t('wa_signature', 160)];
+        'signature' => $t('signature', 500), 'wa_signature' => $t('wa_signature', 160), 'fu_subject' => $t('fu_subject', 120), 'fu_body' => $t('fu_body', 2000), 'fu_whatsapp' => $t('fu_whatsapp', 700)];
     pm_update('message_defaults', function (array $all) use ($brand, $row) {
         $all[$brand] = $row;
         return $all;

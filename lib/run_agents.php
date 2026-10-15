@@ -790,6 +790,13 @@ try {
     // ---- 5. Follow-up ----
     // Not for leads that are snoozed, replied, in proposal, won, lost or opted out, nor those whose only channel is a bad email.
     $due = array_values(pm_followup_due($leads, $cfg, false)); // the same rule the Leads screen and the scheduler use (lib/followups.php)
+    if ($cfg['enabled']['followup'] && $due && pm_followup_by_default($brand)) { // this business follows up with its default follow-up: no AI
+        foreach (array_keys(pm_followup_due($leads, $cfg, false)) as $id) {
+            $stats['followups'] += pm_dm_followup_apply($leads[$id])[0] ? 1 : 0;
+        }
+        $save();
+        $due = [];
+    }
     if ($cfg['enabled']['followup'] && $due) {
         $progress('Follow-up agent on ' . count($due) . ' leads');
         $jobs = array_map(fn($b) => ['agent' => 'followup', 'leads' => $b], array_chunk($due, 6));

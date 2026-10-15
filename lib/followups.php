@@ -78,15 +78,29 @@ function pm_followup_draft_now(array $ids = [], int $max = 60): array
     $total = count($due);
     $drafted = 0;
     $failed = 0;
+    $byDefault = pm_followup_by_default($brand);
     foreach (array_chunk(array_slice($due, 0, $max, true), 6, true) as $chunk) {
-        $batch = [];
-        foreach ($chunk as $k => $l) {
-            $batch[] = ['id' => (string)($l['id'] ?? $k)] + $l;
+        $out = null;
+        if (!$byDefault) {
+            $batch = [];
+            foreach ($chunk as $k => $l) {
+                $batch[] = ['id' => (string)($l['id'] ?? $k)] + $l;
+            }
+            try {
+                $out = pm_agent_followup($batch);
+            } catch (Throwable) {
+                $out = null; // the AI failed: the default follow-up instead, so nobody who has not replied is left without one
+            }
         }
-        try {
-            $out = pm_agent_followup($batch);
-        } catch (Throwable) {
-            $failed += count($batch);
+        if ($out === null) { // the default follow-up (Sales > Targeting and messages): no AI, ready at once
+            pm_update('leads', function (array $cur) use ($chunk, &$drafted) {
+                foreach (array_keys($chunk) as $id) {
+                    if (isset($cur[$id]) && empty($cur[$id]['followup_draft']) && pm_dm_followup_apply($cur[$id])[0]) {
+                        $drafted++;
+                    }
+                }
+                return $cur;
+            }, fn() => []);
             continue;
         }
         $by = [];
@@ -107,6 +121,12 @@ function pm_followup_draft_now(array $ids = [], int $max = 60): array
         $failed += count($batch) - count($by);
     }
     return ['drafted' => $drafted, 'failed' => $failed, 'due' => $total];
+}
+
+/** True when this business's follow-ups come from its default follow-up, not the AI: it drafts from its default message, or there is no AI key. */
+function pm_followup_by_default(string $brand): bool
+{
+    return pm_dm_use_default($brand) || !(pm_agents_ready() || isset($GLOBALS['PM_AI_STUB']));
 }
 
 /** One lead, on demand, whenever the owner asks (it need not be due yet). Replaces an earlier follow-up draft. Returns [ok, message]. */
@@ -152,9 +172,6 @@ function pm_followup_draft_one(string $id): array
  */
 function pm_job_followup_drafts(string $brand): string
 {
-    if (!function_exists('pm_agents_ready') || (!pm_agents_ready() && !isset($GLOBALS['PM_AI_STUB']))) { // (a test stub stands in for the AI key)
-        return '';
-    }
     $now = function_exists('pm_now') ? pm_now() : time();
     if ((int)date('N', $now) > 5 || date('H:i', $now) < '08:00' || date('H:i', $now) > '17:00') {
         return '';
@@ -179,5 +196,5 @@ function pm_job_followup_drafts(string $brand): string
     if ($r['drafted'] > 0 || $r['failed'] === 0) {
         $stamp(); // a day with every call failing is tried again at the next pass
     }
-    return $r['drafted'] . ' follow-up draft' . ($r['drafted'] === 1 ? '' : 's') . ' written with AI' . ($r['failed'] ? ', ' . $r['failed'] . ' could not be' : '');
+    return $r['drafted'] . ' follow-up draft' . ($r['drafted'] === 1 ? '' : 's') . (pm_followup_by_default($brand) ? ' made from the default follow-up' : ' written with AI') . ($r['failed'] ? ', ' . $r['failed'] . ' could not be' : '');
 }
