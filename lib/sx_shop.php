@@ -56,6 +56,12 @@ function pm_shop_dir(string $brand): string
 /** The public addresses (from APP_URL in .env): the shop page, the feed, an item's page, an item's picture. '' when APP_URL is not set. */
 function pm_shop_base(): string
 {
+    $host = (string)($_SERVER['HTTP_HOST'] ?? '');
+    if ($host !== '' && !preg_match('/^(localhost|127\.|\[::1\])/i', $host) && preg_match('/^[a-z0-9.\-]+(:\d+)?$/i', $host)) { // on the server: the address it is really reached at (APP_URL may name an old folder)
+        $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https' || (int)($_SERVER['SERVER_PORT'] ?? 0) === 443;
+        $dir = rtrim(str_replace('\\', '/', dirname((string)($_SERVER['SCRIPT_NAME'] ?? '/index.php'))), '/');
+        return ($https ? 'https' : 'http') . '://' . strtolower($host) . $dir . '/shop.php';
+    }
     return pm_app_url() !== '' ? pm_app_url() . '/shop.php' : '';
 }
 
