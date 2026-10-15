@@ -289,6 +289,13 @@ if (isset($_GET['archive']) && is_string($_GET['archive'])) {
     exit;
 }
 
+// ---------- Google Ads Editor CSV (Social > Google Ads) ----------
+if (isset($_GET['gads_csv']) && function_exists('pm_gads_csv')) {
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . preg_replace('/[^A-Za-z0-9]/', '', pm_brand_name($vb)) . '-google-ads.csv"');
+    echo pm_gads_csv($vb);
+    exit;
+}
 // ---------- One-page offer download (a business added in the app) ----------
 if (isset($_GET['onepager']) && is_string($_GET['onepager'])) {
     $opb = (string)$_GET['onepager'];

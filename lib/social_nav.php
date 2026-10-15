@@ -29,6 +29,7 @@ function pm_social_view_file(string $view): string
         $view === 'studio' => 'view_social_studio.php',
         $view === 'results' => 'view_social_results.php',
         $view === 'leads' => 'view_social_leads.php',
+        $view === 'gads' => 'view_social_gads.php',
         in_array($view, ['page', 'inbox', 'audit'], true) => 'view_social_page.php',
         in_array($view, ['growth', 'cleanup', 'ads'], true) => 'view_social_growth.php',
         default => 'view_social.php',

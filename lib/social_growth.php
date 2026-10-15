@@ -27,7 +27,7 @@ function pm_social_nav(string $on): string
         'content' => 'What we post about: the mix, proof, ideas and photos, and which old posts to bring back.', 'channels' => 'Where else to post, and today\'s hand-post tasks.',
         'leads' => 'Everyone who came to us on social media, by channel, with the answer or follow-up to send.',
         'inbox' => 'Everyone waiting for an answer: messages and comments, and what to hide or delete.', 'page' => 'The Page\'s own posts with their comments: read, edit and reply.',
-        'growth' => 'Who to engage today, with the words to use.', 'ads' => 'Small targeted ads, always created paused.',
+        'growth' => 'Who to engage today, with the words to use.', 'ads' => 'Small targeted ads, always created paused.', 'gads' => 'A complete Google Search campaign to paste or import: keywords, ads, assets, budget and tracking.',
         'studio' => 'Design the covers and profile pictures: styles, colours and wording, made by code.', 'kit' => 'Cover wording, a hero photo and every platform\'s pictures at the right size.',
         'optimise' => 'Fix what is missing on every profile, one press at a time, and write the profile words.', 'voice' => 'Everything the AI knows and may say about this business.',
         'cleanup' => 'Tidy old posts on the Page: keep, rewrite or delete.', 'results' => 'What worked, what it cost, and what to do next.',

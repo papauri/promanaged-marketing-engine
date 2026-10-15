@@ -212,6 +212,9 @@ function pm_director_social(string $brand): array
             $rs = (array)pm_response_stats($brand);
             $o['comments_unanswered_2h'] = $rs['unanswered_over_2h'] ?? null;
         }
+        if (function_exists('pm_gads_summary') && ($gs = pm_gads_summary($brand))) { // Google Search ads, typed in weekly, with the leads the app counted
+            $o['google_ads_30d'] = ['spend_mwk' => (int)$gs['spend'], 'clicks' => (int)$gs['clicks'], 'leads' => (int)$gs['leads'], 'cost_per_lead_mwk' => $gs['cost_per_lead']];
+        }
         $o['drafts_waiting'] = count(array_filter(pm_social_posts(), fn($p) => ($p['brand'] ?? 'promanaged') === $brand && ($p['status'] ?? '') === 'draft'));
         return array_filter($o, fn($v) => $v !== null);
     } catch (Throwable) {

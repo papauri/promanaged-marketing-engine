@@ -11,6 +11,7 @@ if (!function_exists('pm_mail')) {
 }
 require_once __DIR__ . '/lib/outbound.php';
 require_once __DIR__ . '/lib/leadoffers.php'; // the public page of a lead offer (?mode=offer&o=...)
+require_once __DIR__ . '/lib/sx_gads.php'; // the Google tag, when the business saved one on Social > Google Ads
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
@@ -58,7 +59,7 @@ function pm_e_page(string $title, string $body, int $code = 200): never
     $logo = pm_brand_asset($brand, 'logo');
     http_response_code($code);
     $accent = preg_match('/^#[0-9a-fA-F]{6}$/', (string)($s['accent_color'] ?? '')) ? $s['accent_color'] : '#17375E';
-    echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . pm_h($title . ' · ' . $co) . '</title><style>'
+    echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' . pm_h($title . ' · ' . $co) . '</title>' . pm_gads_tag_html($brand, !empty($GLOBALS['PM_GADS_CONV'])) . '<style>'
         . ':root{--ink:#14161a;--muted:#6b7078;--line:#e4e6e9;--soft:#f6f7f9;--accent:' . $accent . '}*{box-sizing:border-box}'
         . 'body{margin:0;background:' . ($embed ? '#fff' : 'var(--soft)') . ';color:var(--ink);font:16px/1.55 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}'
         . '.wrap{max-width:640px;margin:0 auto;padding:' . ($embed ? '8px' : '24px') . ' 16px 48px}.top{display:flex;align-items:center;gap:10px;margin-bottom:18px}.top img{height:38px;border-radius:6px}.top b{font:700 19px Georgia,serif}'
@@ -170,6 +171,7 @@ function pm_e_finish(array $d, string $kind): never
     $r = pm_web_lead($d + ['brand' => $brand, 'kind' => $kind, 'src' => $src]);
     pm_web_notify($r['lead'], $r['merged']);
     pm_web_ack($r['lead']);
+    setcookie('pm_conv', '1', ['expires' => time() + 600, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax']); // the thank-you page reports one conversion, once
     header('Location: enquire.php?b=' . $brand . '&done=1' . ($embed ? '&embed=1' : ''), true, 303);
     exit;
 }
@@ -182,6 +184,10 @@ $checkUrl = '';
 
 if (isset($_GET['done'])) {
     header('X-Robots-Tag: noindex');
+    if (!empty($_COOKIE['pm_conv'])) { // a real enquiry was just saved (not a reload or a typed address): Google Ads counts it once, when the tag is set
+        $GLOBALS['PM_GADS_CONV'] = true;
+        setcookie('pm_conv', '', ['expires' => time() - 3600, 'path' => '/']);
+    }
     pm_e_thanks('We have your message and a member of our team will read it and reply to you personally.');
 }
 
