@@ -14,6 +14,15 @@ const PM_TM_AIM = "We are building Malawi's own directory of independent stays, 
 /** The WhatsApp version of the hook, after "Hello {first_name}, this is {company}." */
 const PM_TM_WA_AIM = "We are building Malawi's own directory of independent stays together with hosts, and we would love {name} in it. It is free, with no commission, unlike Booking.com. Guests chat and video call you before they come, and your reviews from different sources are shown together.";
 
+/** The second line of every first email: who is writing, and that we have not met (the name is in the signature). */
+const PM_TM_WHO = "I'm with {company}; we haven't met yet, so I'll keep this brief.";
+
+/** The paragraph after the personal opening: the aim, then what a host gets, in the host's own money. */
+const PM_TM_AIM_EMAIL = "We are building Malawi's own directory of independent stays, together with the hosts who run them. Guests book you directly and pay you in {currency}, with no commission, unlike Booking.com and the other big sites that take a cut of every stay. They can chat and video call you before they come.";
+
+/** The invitation that ends every first email: the one link in the text (the share kit adds the direct links below it). */
+const PM_TM_INVITE = "Please visit {link} to list {name} for free and manage your page and your online presence yourself, or simply reply and our team will set it up for you. There is no catch: we are building Malawi's tourism together.";
+
 /** The benefit line about reviews: open about what guests said, wherever they said it, is what earns a new guest's trust. */
 const PM_TM_REVIEWS = 'Your reviews from different sources, shown together, so guests trust you.';
 
@@ -99,10 +108,13 @@ function pm_tm_default_opening(array $lead): string
     return 'I would love ' . trim((string)($lead['name'] ?? 'your place')) . ($city !== '' && strcasecmp($city, 'Malawi') !== 0 ? " in $city" : '') . ' to be part of something new.';
 }
 
+/** What the personal opening must do (the study and the writer both follow it): show the owner we really looked at their place. */
+const PM_TM_OPENING_RULE = "two short sentences, at most 40 words, that show we really researched their place: ONE true, specific observation from the research or evidence (their website, how guests book or reach them, their rooms or setting, a recent review or news), then, only conditionally ('when ..., ...'), what it means for travellers trying to book them, or what it could win them. Friendly and helpful, never critical.";
+
 /** A sentence the Travel Malawi opening must not have: the writer naming themselves (the signature does), or posing as a traveller looking for a stay. */
 const PM_TM_OPENING_BANNED = '/\b(I\'?m|I am|my name is|this is|it\'?s)\s+[A-Z][\p{L}\'-]+\s+(from|with|at|of)\b|\bmy name\b|\b(looking|searching|browsing) (for|at|up|around|through)\b[^.?]{0,60}\b(stays?|accommodation|rooms?|lodges?|places?|somewhere|options)\b|\b(planning|plan) (a |my |our )?(trip|stay|visit|holiday)|\b(I|we) (was|were|am|are) (travell?ing|visiting|staying)|\bplaces? to stay\b/iu';
 
-/** The AI's opening made safe: no greeting (the app adds one), no self-introduction or traveller pose, no link, number, price or exclamation mark, at most two sentences and 40 words. '' when unusable. */
+/** The AI's opening made safe: no greeting (the app adds one), no self-introduction or traveller pose, no link, number, price or exclamation mark, at most two sentences and 45 words. '' when unusable. */
 function pm_tm_clean_opening(string $s): string
 {
     $s = trim((string)preg_replace('/\s+/u', ' ', strip_tags($s)));
@@ -122,35 +134,16 @@ function pm_tm_clean_opening(string $s): string
     if ($s === '') {
         return '';
     }
-    return count((array)preg_split('/\s+/u', $s, -1, PREG_SPLIT_NO_EMPTY)) > 28 ? '' : $s; // room for the fixed part inside 190 words
+    return count((array)preg_split('/\s+/u', $s, -1, PREG_SPLIT_NO_EMPTY)) > 45 ? '' : $s; // the observation and what it means for them
 }
 
-/** The first email to a stay: the Travel Malawi default message (Sales > Targeting and messages) with the line the AI wrote in place of {opening}. $template builds the starting text of that message instead, with {placeholders} left in. */
+/** The first email to a stay: the Travel Malawi default message (Sales > Targeting and messages) with the line the study or the AI wrote in place of {opening}. $template builds its starting text instead, with {placeholders} left in. */
 function pm_tm_email_compose(array $lead, string $opening = '', bool $template = false): string
 {
     if (!$template) {
         return pm_dm_render($lead, $opening)['email_body'];
     }
-    $c = pm_tm_email_cfg();
-    $c['benefits'] = array_map('pm_tm_pack_swap', $c['benefits']);
-    $c['closing'] = pm_tm_pack_swap((string)$c['closing']);
-    $first = pm_tm_first_name($lead);
-    $open = trim($opening) !== '' ? trim($opening) : pm_tm_default_opening($lead);
-    if ($template) { // the same email with {placeholders} where the lead's own words go: the starting text of the default message (lib/msgdefaults.php)
-        $first = '{first_name}';
-        $open = '{opening}';
-    }
-    $list = fn(array $rows, bool $numbered) => implode("\n", array_map(fn($i, $x) => ($numbered ? ($i + 1) . '. ' : '- ') . str_replace('{link}', (string)$c['link'], $x), array_keys($rows), $rows));
-    $parts = [$first !== '' ? "Hello $first," : 'Hello,', $open, trim((string)$c['intro'])];
-    if ($c['benefits']) {
-        $parts[] = trim((string)$c['benefits_title'] . "\n" . $list($c['benefits'], false));
-    }
-    if ($c['steps']) {
-        $parts[] = trim((string)$c['steps_title'] . "\n" . $list($c['steps'], true));
-    }
-    $parts[] = trim(trim((string)$c['free']) . ' ' . trim((string)$c['why']));
-    $parts[] = trim((string)$c['closing']);
-    return implode("\n\n", array_values(array_filter($parts, fn($x) => trim((string)$x) !== '')));
+    return implode("\n\n", ['Good day {first_name},', PM_TM_WHO, '{opening}', PM_TM_AIM_EMAIL, PM_TM_INVITE]); // short and human: who we are, what we found about them, the aim, the invitation
 }
 
 /** WRITER for Travel Malawi: the AI writes the subject, the personal opening and the WhatsApp message; the email is the opening plus the standard part. */
@@ -181,8 +174,8 @@ function pm_tm_write_ai(array $leads): array
     $system = pm_agents_company_brief('tiny') . "\nYou are writing outreach for {$s['company_name']}, a business inviting places to stay to list with it. For each item write three things. "
         . 'email_subject: under 45 characters, specific to them, truthful, in the subject_style given, written like a normal subject line: a capital letter first and a capital letter on every town, area, road, person and business name (for example "Rooms near the Shire River barrage?"), every other word in ordinary lowercase, no full stop, no exclamation marks, no word in ALL CAPS except an acronym such as VAT. '
         . 'Our aim, which every message must make a host excited about: ' . PM_TM_AIM . ' Hosts are partners building it with us, not customers. '
-        . 'opening: the first lines a busy owner reads, so they must hook: one or two short sentences, at most 30 words: ONE true, specific observation about their place from the evidence or research, then that we would love them to be part of it. '
-        . 'The very next paragraph is the aim above, word for word, so lead into it and never repeat it. '
+        . 'opening: ' . PM_TM_OPENING_RULE . ' '
+        . 'The paragraph before it says who we are and that we have not met; the paragraph after it is the aim above; never repeat either. '
         . 'Never give your own name or introduce yourself (the signature does that). We are a business offering a service: never say or suggest that you were looking for a place to stay, planning a trip, travelling or a possible guest. '
         . 'No greeting, no sign-off, no promises, no numbers, no prices, no link, no exclamation marks. '
         . (pm_wa_on() ? 'whatsapp: 35 to 60 words, one paragraph: a greeting with the first name if given, that this is ' . $s['company_name'] . ' (never your own name: the sign-off carries it), then straight away the aim (we are building Malawi\'s own directory of stays together with hosts and would love them in it; free, no commission, unlike Booking.com), one gain (guests chat and video call them before they come, or their reviews from different sources shown together), one easy question. Never pose as a traveller. ' : 'No WhatsApp message: this business works by email only. ')
@@ -328,6 +321,56 @@ function pm_tm_fix_once(): void
         $n = pm_tm_aim_v2();
         pm_update('migrations', fn(array $m) => $m + ['tm_aim_v2' => date('c') . " ($n drafts)"], fn() => []);
     }
+    if (empty($done['tm_short_v3'])) {
+        $n = pm_tm_short_v3();
+        pm_update('migrations', fn(array $m) => $m + ['tm_short_v3' => date('c') . " ($n drafts)"], fn() => []);
+    }
+}
+
+/**
+ * The short, human first email replaces the long list: the saved default message still in the list format takes the new starting text, and unsent drafts nobody
+ * approved or edited are drafted again from it, keeping the personal opening each one already had. Returns how many drafts changed.
+ */
+function pm_tm_short_v3(): int
+{
+    $old = fn(string $b) => str_contains($b, 'What you get:') || str_contains($b, 'How to start:');
+    pm_update('message_defaults', function (array $all) use ($old) {
+        if (isset($all['travel']['email_body']) && $old((string)$all['travel']['email_body'])) {
+            unset($all['travel']['email_body']); // never saved = the starting text
+        }
+        return $all;
+    }, fn() => []);
+    pm_update('settings', function (array $s) {
+        unset($s['travel']['host_email']); // the list it held is gone from the email
+        return $s;
+    }, 'pm_default_settings');
+    $aim = mb_substr(PM_TM_AIM, 0, 40);
+    $n = 0;
+    pm_update('leads', function (array $cur) use (&$n, $old, $aim) {
+        foreach ($cur as $id => $l) {
+            $d = (array)($l['drafts'] ?? []);
+            $body = str_replace("\r", '', (string)($d['email_body'] ?? ''));
+            if (($l['brand'] ?? 'promanaged') !== 'travel' || !$old($body) || !empty($l['sent']) || !empty($l['approved_at']) || !empty($d['edited_at'])) {
+                continue;
+            }
+            $paras = explode("\n\n", $body);
+            $at = 0;
+            foreach ($paras as $i => $p) {
+                if (str_starts_with(trim($p), $aim)) {
+                    $at = $i;
+                    break;
+                }
+            }
+            $open = $at >= 2 ? trim($paras[$at - 1]) : '';
+            $cut = trim((string)preg_replace('/,?\s+and (we|I)(\'d| would) love\b[^.]*\./iu', '.', $open)); // the next paragraph already says what we are building
+            $open = str_word_count($cut) >= 7 ? $cut : $open;
+            $cur[$id]['drafts']['email_body'] = pm_dm_as('travel', fn() => pm_dm_render(['id' => $id] + $l, $open)['email_body']);
+            pm_lead_note($cur[$id], 'Draft updated: the shorter, more personal first email');
+            $n++;
+        }
+        return $cur;
+    }, fn() => []);
+    return $n;
 }
 
 /** Earlier wording swapped for the hook (PM_TM_SWAP), and the earlier fallback opening for the new one. */

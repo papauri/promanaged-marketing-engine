@@ -151,18 +151,20 @@ function pm_dm_personalise(array &$lead): bool
                 break;
             }
         }
-        if (!str_contains($body, $p) && $brand === 'travel') { // an earlier writer's opening ("We came across your lodge..."): the paragraph between the greeting and the standard part
+        if (!str_contains($body, $p) && $brand === 'travel') { // an earlier writer's opening ("We came across your lodge..."): the paragraph just before the aim
             $paras = explode("\n\n", str_replace("\r", '', $body));
-            $intro = trim((string)(pm_dm_as($brand, fn() => pm_tm_email_cfg())['intro'] ?? ''));
-            if (count($paras) > 3 && $intro !== '' && trim($paras[2]) === $intro && preg_match('/^(Hello|Hi|Good day|Dear)\b[^\n]{0,40},$/u', trim($paras[0]))) {
-                $paras[1] = $p;
-                $body = implode("\n\n", $paras);
+            foreach ($paras as $i => $x) {
+                if ($i >= 2 && str_starts_with(trim($x), mb_substr(PM_TM_AIM, 0, 40)) && preg_match('/^(Hello|Hi|Good day|Dear)\b[^\n]{0,40},$/u', trim($paras[0]))) {
+                    $paras[$i - 1] = $p;
+                    $body = implode("\n\n", $paras);
+                    break;
+                }
             }
         }
     }
     $first = pm_dm_first($lead);
     if ($first !== '') {
-        $body = (string)preg_replace('/^(Hello|Hi|Good day|Dear)\s*,/u', "Hello $first,", $body);
+        $body = (string)preg_replace('/^(Hello|Hi|Good day|Dear)\s*,/u', "\$1 $first,", $body);
         $d['whatsapp'] = (string)preg_replace('/^(Hello|Hi|Good day)\s*,/u', "Hello $first,", $was[1]);
     }
     if ([$body, (string)($d['whatsapp'] ?? '')] === $was) {
@@ -191,7 +193,7 @@ function pm_dm_greet(array &$lead): bool
         }
         foreach (['email_body', 'whatsapp'] as $f) {
             $t = (string)($lead[$k][$f] ?? '');
-            $n = (string)preg_replace('/^(Hello|Hi|Dear|Good day|Moni|Muli bwanji)(\s+(Mr|Mrs|Ms|Dr)\.?)?(\s+[\p{L}\'’-]+){0,2}\s*,/u', "Hello $first,", $t, 1);
+            $n = (string)preg_replace('/^(Hello|Hi|Dear|Good day|Moni|Muli bwanji)(\s+(Mr|Mrs|Ms|Dr)\.?)?(\s+[\p{L}\'’-]+){0,2}\s*,/u', "$1 $first,", $t, 1);
             if ($n !== $t) {
                 $lead[$k][$f] = $n;
                 $did = true;

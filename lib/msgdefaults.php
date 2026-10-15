@@ -107,7 +107,7 @@ function pm_dm_vars(array $lead = [], string $opening = ''): array
 function pm_dm_fill(string $text, array $vars): string
 {
     $t = (string)preg_replace_callback('/\{([A-Za-z_]+)\}/', fn($m) => array_key_exists(strtolower($m[1]), $vars) ? (string)$vars[strtolower($m[1])] : $m[0], $text); // {Email} works as {email}
-    return (string)preg_replace(['/(Hello|Hi|Dear) +,/', '/[ \t]+,/'], ['$1,', ','], $t); // no name: "Hello,"
+    return (string)preg_replace(['/(Hello|Hi|Dear|Good day) +,/', '/[ \t]+,/'], ['$1,', ','], $t); // no name: "Hello,"
 }
 
 /** A signature: one line per line of the template, a line whose words are all missing is left out ("{phone}" with no phone). */

@@ -193,7 +193,7 @@ function pm_sitdown_email_view(array $l, string $subject, string $body): string
     if ($body === '') {
         return '';
     }
-    if (($l['brand'] ?? '') === 'travel' && defined('PM_TM_AIM') && ($p = mb_strpos($body, mb_substr(PM_TM_AIM, 0, 40))) !== false) {
+    if (($l['brand'] ?? '') === 'travel' && defined('PM_TM_AIM') && str_contains($body, 'What you get:') && ($p = mb_strpos($body, mb_substr(PM_TM_AIM, 0, 40))) !== false) { // the old long format; the short one is read whole
         $end = (string)preg_replace('/^.*\R\R/su', '', trim($body)); // the closing line, after the fixed part
         return 'Subject: ' . $subject . "
 " . trim(mb_substr($body, 0, $p)) . "
