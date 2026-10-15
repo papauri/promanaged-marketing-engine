@@ -157,6 +157,7 @@ function pm_followup_ready(array $l): ?array
 function pm_followup_open(array $l, array $cfg): bool
 {
     return ($l['status'] ?? '') === 'contacted' && !empty($l['sent']) && pm_followup_nth($l) <= max(1, (int)($cfg['max_followups'] ?? 3)) && !pm_lead_email_dead($l) && empty($l['listen'])
+        && filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) && !(!empty($l['email_bad']) && strcasecmp((string)$l['email_bad'], (string)$l['email']) === 0) // a bounced address gets no follow-up
         && !(function_exists('pm_lead_replied') && pm_lead_replied($l));
 }
 

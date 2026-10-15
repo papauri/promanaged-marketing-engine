@@ -111,6 +111,38 @@ function pm_mb_open(string $brand): array
     return [$fp, '', strtolower($c['host'] . '|' . $c['user'])];
 }
 
+/** One email of the open folder, peeked (never marked read) and parsed into a mailbox item. */
+function pm_mb_fetch($fp, int $uid, string $key, string $tag): array
+{
+    $raw = pm_imap_cmd($fp, $tag, "UID FETCH $uid (BODY.PEEK[]<0.40000>)");
+    $a = strpos($raw, "\n");
+    $msg = (string)preg_replace('/\r?\n\)\r?\n' . preg_quote($tag, '/') . ' OK.*$/s', '', substr($raw, $a === false ? 0 : $a + 1));
+    $p = pm_parse_mail($msg);
+    $head = (string)(preg_split('/\r?\n\r?\n/', $msg, 2)[0] ?? '');
+    $at = preg_match('/^Date:\s*(.+)$/mi', $head, $dm) && ($t = strtotime(trim($dm[1]))) ? date('Y-m-d H:i', $t) : date('Y-m-d H:i');
+    $replyTo = preg_match('/^Reply-To:\s*(.+)$/mi', $head, $rm) && preg_match('/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/', $rm[1], $ra) ? strtolower($ra[0]) : '';
+    return ['key' => $key, 'dir' => 'in', 'at' => $at, 'addr' => (string)$p['from_email'], 'reply_to' => $replyTo, 'name' => mb_substr((string)$p['from_name'], 0, 80),
+        'subject' => mb_substr((string)$p['subject'], 0, 200), 'snippet' => mb_substr(trim((string)preg_replace('/\s+/', ' ', (string)$p['text'])), 0, 400), 'text' => mb_substr((string)$p['text'], 0, 3000),
+        'msgid' => (string)$p['message_id'], 'auto' => !empty($p['auto']), 'bulk' => !empty($p['bulk']), 'dsn' => !empty($p['dsn']),
+        'noreply' => (bool)preg_match('/^(no-?reply|do-?not-?reply|notifications?|alerts?|mailer|info@.*(facebook|google|linkedin))/i', (string)$p['from_email'])]
+        + (!empty($p['dsn']) ? ['failed' => array_values((array)($p['failed_all'] ?? [])), 'dsn_kind' => (string)($p['dsn_kind'] ?? 'hard'), 'dsn_why' => (string)($p['dsn_why'] ?? '')] : []);
+}
+
+/** The Trash, Junk and Spam folders of the open mailbox (where bounces often end up). */
+function pm_mb_bin_folders($fp): array
+{
+    $out = [];
+    foreach (preg_split('/\r?\n/', pm_imap_cmd($fp, 'LB', 'LIST "" "*"')) as $ln) {
+        if (preg_match('/^\* LIST \(([^)]*)\) (?:"[^"]*"|NIL) (?:"((?:[^"\\\\]|\\\\.)*)"|(\S+))\s*$/i', trim($ln), $m)) {
+            $name = ($m[2] ?? '') !== '' ? stripcslashes($m[2]) : (string)($m[3] ?? '');
+            if (preg_match('/\\\\(Trash|Junk)/i', $m[1]) || preg_match('/(^|[.\/])(trash|junk|spam|bin|deleted( items| messages)?|bulk mail)$/i', $name)) {
+                $out[] = $name;
+            }
+        }
+    }
+    return array_slice(array_values(array_unique($out)), 0, 4);
+}
+
 /** The UIDs of a folder since $days days ago, opened read-only: [uidvalidity, [uid...]]. */
 function pm_mb_uids($fp, string $folder, int $days): array
 {
@@ -138,6 +170,7 @@ function pm_mb_read(string $brand, int $max = 120): array
         pm_mb_update($brand, fn($s) => ['error' => $why, 'at' => date('Y-m-d H:i')] + $s);
         return ['error' => $why] + $res;
     }
+    function_exists('pm_bounce_backfill') && pm_bounce_backfill($brand); // leads that bounced before the folder existed
     $st = pm_mb_state($brand);
     $own = function_exists('pm_own_addresses') ? pm_own_addresses() : [];
     $new = [];
@@ -147,19 +180,28 @@ function pm_mb_read(string $brand, int $max = 120): array
         [$v, $uids] = pm_mb_uids($fp, 'INBOX', 30);
         $doneIn = array_map('intval', (array)($uidsDone['in'][$v] ?? []));
         foreach (array_slice(array_values(array_diff($uids, $doneIn)), -$max) as $n => $uid) {
-            $raw = pm_imap_cmd($fp, 'I' . $n, "UID FETCH $uid (BODY.PEEK[]<0.40000>)");
-            $a = strpos($raw, "\n");
-            $msg = (string)preg_replace('/\r?\n\)\r?\nI' . $n . ' OK.*$/s', '', substr($raw, $a === false ? 0 : $a + 1));
-            $p = pm_parse_mail($msg);
-            $head = (string)(preg_split('/\r?\n\r?\n/', $msg, 2)[0] ?? '');
-            $at = preg_match('/^Date:\s*(.+)$/mi', $head, $dm) && ($t = strtotime(trim($dm[1]))) ? date('Y-m-d H:i', $t) : date('Y-m-d H:i');
-            $replyTo = preg_match('/^Reply-To:\s*(.+)$/mi', $head, $rm) && preg_match('/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/', $rm[1], $ra) ? strtolower($ra[0]) : '';
-            $new[] = ['key' => "in:$v:$uid", 'dir' => 'in', 'at' => $at, 'addr' => (string)$p['from_email'], 'reply_to' => $replyTo, 'name' => mb_substr((string)$p['from_name'], 0, 80),
-                'subject' => mb_substr((string)$p['subject'], 0, 200), 'snippet' => mb_substr(trim((string)preg_replace('/\s+/', ' ', (string)$p['text'])), 0, 400), 'text' => mb_substr((string)$p['text'], 0, 3000),
-                'msgid' => (string)$p['message_id'], 'auto' => !empty($p['auto']), 'bulk' => !empty($p['bulk']), 'dsn' => !empty($p['dsn']),
-                'noreply' => (bool)preg_match('/^(no-?reply|do-?not-?reply|notifications?|alerts?|mailer|info@.*(facebook|google|linkedin))/i', (string)$p['from_email'])];
+            $new[] = pm_mb_fetch($fp, (int)$uid, "in:$v:$uid", 'I' . $n);
             $res['in']++;
             $uidsDone['in'][$v][] = $uid;
+        }
+        // bounces moved to Trash, Junk or Spam by hand or by a filter: still read, so the lead is still triaged
+        foreach (pm_mb_bin_folders($fp) as $bi => $bin) {
+            $sel = pm_imap_cmd($fp, 'B' . $bi, 'EXAMINE "' . addcslashes($bin, '"\\') . '"');
+            if (!str_contains($sel, 'B' . $bi . ' OK')) {
+                continue;
+            }
+            $bv = preg_match('/UIDVALIDITY (\d+)/i', $sel, $bvm) ? $bvm[1] : '0';
+            preg_match('/\* SEARCH([\d ]*)/', pm_imap_cmd($fp, 'C' . $bi, 'UID SEARCH SINCE ' . date('d-M-Y', strtotime('-30 days'))
+                . ' OR OR OR FROM "mailer-daemon" FROM "postmaster" SUBJECT "deliver" SUBJECT "failure"'), $bm);
+            $doneBin = array_map('intval', (array)($uidsDone['bin:' . $bin][$bv] ?? []));
+            foreach (array_slice(array_values(array_diff(array_map('intval', array_filter(explode(' ', trim($bm[1] ?? '')))), $doneBin)), -40) as $n => $uid) {
+                $it = pm_mb_fetch($fp, (int)$uid, "bin:$bin:$bv:$uid", 'D' . $bi . '_' . $n);
+                $uidsDone['bin:' . $bin][$bv][] = $uid;
+                if (!empty($it['dsn'])) {
+                    $new[] = $it + ['folder' => $bin];
+                    $res['in']++;
+                }
+            }
         }
         // the Sent folder: what we sent, from this app or by hand
         $sentBox = function_exists('pm_ml_sent_box') ? pm_ml_sent_box($fp, $acct) : 'Sent';
@@ -254,7 +296,8 @@ function pm_mb_place(string $brand, array &$new, array $own): array
             $it['addr'] = $addr = (string)$it['reply_to']; // a website form mailing for the person who filled it in: they are the sender
             $it['form'] = true;
         }
-        [$it['lead'], $it['how']] = pm_mb_match($addr, $byMail, $byDom);
+        [$it['lead'], $it['how']] = !empty($it['dsn']) ? [pm_bounce_find_lead($leads, (array)($it['failed'] ?? []), [$brand]), 'the address that bounced'] : pm_mb_match($addr, $byMail, $byDom);
+        !empty($it['dsn']) && $it['summary'] = 'Could not deliver to ' . implode(', ', array_slice((array)($it['failed'] ?? []), 0, 2)) . (!empty($it['dsn_why']) ? ': ' . $it['dsn_why'] : '');
         $it['kind'] = !empty($it['dsn']) ? 'bounce' : (!empty($it['auto']) ? 'auto' : (!empty($it['bulk']) ? 'newsletter' : (!empty($it['noreply']) ? 'notification' : ($it['lead'] !== null ? 'lead' : '')))); // a newsletter from a lead's company stays a newsletter (still linked)
         $linked += $it['lead'] !== null ? 1 : 0;
         if ($it['kind'] === '') {
@@ -293,7 +336,7 @@ function pm_mb_place(string $brand, array &$new, array $own): array
         }
     }
     unset($it);
-    return ['linked' => $linked, 'outside' => pm_mb_outside($brand, $new)];
+    return ['linked' => $linked, 'outside' => pm_mb_outside($brand, $new), 'bounced' => pm_mb_bounces($brand, $new)];
 }
 
 /** The one lead whose whole name (its distinctive words: at least two, or one long one) is in the words given, else ''. Strong enough to link an email we sent. */
@@ -397,6 +440,43 @@ function pm_mb_outside(string $brand, array $new): array
     return $names;
 }
 
+/** Every bounce in the mailbox triaged on its lead (the inbox check may have missed it, or it was moved to Trash first). Returns the lead names newly triaged. */
+function pm_mb_bounces(string $brand, array $new): array
+{
+    $todo = array_filter($new, fn($it) => !empty($it['dsn']) && !empty($it['lead']));
+    if (!$todo) {
+        return [];
+    }
+    $names = [];
+    $sentTo = [];
+    foreach (function_exists('pm_ml_rows') ? pm_ml_rows() : [] as $r) {
+        ($r['lead'] ?? '') !== '' && $sentTo[(string)$r['lead']][] = strtolower((string)($r['to'] ?? ''));
+    }
+    pm_update('leads', function (array $cur) use ($todo, &$names, $sentTo) {
+        foreach ($todo as $it) {
+            $id = (string)$it['lead'];
+            if (!isset($cur[$id])) {
+                continue;
+            }
+            foreach ((array)($it['failed'] ?? []) as $addr) {
+                $addr = strtolower((string)$addr);
+                $mine = array_map('strtolower', array_merge([(string)($cur[$id]['email'] ?? ''), (string)($cur[$id]['email_bad'] ?? '')], (array)($cur[$id]['alt_emails'] ?? []), (array)($cur[$id]['bad_emails'] ?? []), $sentTo[$id] ?? []));
+                if (!in_array($addr, $mine, true)) {
+                    continue; // only the lead's own addresses
+                }
+                if (($r = pm_bounce_triage($cur[$id], $addr, (string)($it['dsn_kind'] ?? 'hard'), (string)($it['dsn_why'] ?? ''), (string)$it['at'])) !== '') {
+                    $names[] = (string)$cur[$id]['name'];
+                    function_exists('pm_ml_mark_bounce') && pm_ml_mark_bounce($addr, (string)($it['dsn_kind'] ?? 'hard'), (string)($it['dsn_why'] ?? ''));
+                }
+                break;
+            }
+        }
+        return $cur;
+    }, fn() => []);
+    $names && pm_agent_log('Contact Finder', 'Bounces read in the mailbox: ' . implode(', ', array_unique($names)) . ' moved to "' . PM_BOUNCE_FOLDER . '".');
+    return array_values(array_unique($names));
+}
+
 /** The desk's numbers for the screens: emails in 30 days by kind, those that need a look (human, not linked, not put aside), the leads found in touch outside the app. */
 function pm_mb_counts(string $brand): array
 {
@@ -483,7 +563,8 @@ function pm_do_mb_read(string $vb): array
     @set_time_limit(180);
     $r = pm_mb_read($vb);
     return ['msg' => $r['error'] !== '' ? 'The mailbox could not be read: ' . $r['error'] : 'Read ' . $r['in'] . ' new email' . ($r['in'] === 1 ? '' : 's') . ' in the Inbox and ' . $r['out'] . ' in Sent.'
-        . ($r['outside'] ? ' Already in touch outside the app, now out of cold outreach: ' . implode(', ', $r['outside']) . '.' : ''), 'kind' => $r['error'] !== '' ? 'err' : 'ok', 'to' => 'mailbox'];
+        . ($r['outside'] ? ' Already in touch outside the app, now out of cold outreach: ' . implode(', ', $r['outside']) . '.' : '')
+        . (!empty($r['bounced']) ? ' Bounced, moved to "' . PM_BOUNCE_FOLDER . '": ' . implode(', ', $r['bounced']) . '.' : ''), 'kind' => $r['error'] !== '' ? 'err' : 'ok', 'to' => 'mailbox'];
 }
 
 function pm_do_mb_act(string $vb): array

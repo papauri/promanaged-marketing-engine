@@ -7,6 +7,7 @@
  */
 require_once __DIR__ . '/agents.php';
 require_once __DIR__ . '/director.php';
+require_once __DIR__ . '/bounces.php'; // every bounce read, tied to its lead and triaged (the Contact Finder's desk)
 
 /* ---------------- Polisher ---------------- */
 
@@ -163,7 +164,8 @@ function pm_reply_precheck(array $lead, string $text, array $m = []): ?array
         return $mk('stop', 'STOP request');
     }
     if (!empty($m['dsn'])) {
-        return $mk('bounce', 'Delivery failure notice', ['failed' => (string)($m['failed'] ?? ''), 'hard' => ($m['dsn_kind'] ?? 'hard') !== 'soft', 'auth' => ($m['dsn_kind'] ?? '') === 'auth']);
+        return $mk('bounce', 'Delivery failure notice' . (!empty($m['dsn_why']) ? ': ' . $m['dsn_why'] : ''), ['failed' => (string)($m['failed'] ?? ''), 'hard' => ($m['dsn_kind'] ?? 'hard') !== 'soft', 'auth' => ($m['dsn_kind'] ?? '') === 'auth',
+            'kind' => (string)($m['dsn_kind'] ?? 'hard'), 'why' => (string)($m['dsn_why'] ?? '')]);
     }
     if (!empty($m['auto']) && preg_match('/out of office|auto.?reply|automatic reply|vacation|away from (the )?office/i', ($m['subject'] ?? '') . ' ' . $text)) {
         return $mk('out_of_office', 'Automatic out-of-office reply');
@@ -521,14 +523,21 @@ function pm_parse_mail(string $raw): array
         + pm_dsn_info($raw, $head, $from . ' ' . $email, $subject, $text);
 }
 
-/** Is this a delivery-status (bounce) notice? Returns [] or ['dsn'=>true,'dsn_kind'=>'hard'|'soft'|'ok','failed','failed_all','orig_ids']. */
+
+/**
+ * Is this a delivery-status (bounce) notice? Returns [] or ['dsn'=>true,'dsn_kind'=>'hard'|'blocked'|'soft'|'auth'|'ok','dsn_why','failed','failed_all','orig_ids'].
+ * Reads every common form: a standard report (multipart/report), the mail system writing as mailer-daemon, postmaster or Microsoft Exchange, and plain notices
+ * whose subject and words say it ("Delivery to the following recipient failed permanently", "Your message couldn't be delivered", "Address not found",
+ * "Undelivered Mail Returned to Sender", "Mail delivery failed", "Recipient address rejected", "User unknown"...).
+ */
 function pm_dsn_info(string $raw, string $head, string $from, string $subject, string $text): array
 {
     $report = (bool)preg_match('/^Content-Type:\s*multipart\/report/mi', $head);
-    $daemon = (bool)preg_match('/mailer-daemon|postmaster/i', $from);
-    $subj = (bool)preg_match('/undeliver|delivery status|delivery (has )?failed|delivery failure|failure notice|returned mail|could not be delivered|mail delivery/i', $subject);
+    $daemon = (bool)preg_match('/mailer-daemon|postmaster|microsoftexchange|mail delivery (sub)?system|mail delivery service/i', $from);
+    $subj = (bool)preg_match('/undeliver|delivery status|delivery (has )?failed|delivery failure|failure notice|returned mail|could not be delivered|couldn.?t be delivered|mail delivery|not delivered|address not found|message blocked|delivery incomplete|returned to sender/i', $subject);
     $evidence = (bool)preg_match('/^(Final-Recipient|X-Failed-Recipients|Diagnostic-Code):|^Status:\s*[245]\.\d/mi', $raw);
-    if (!($report || $daemon || ($subj && $evidence))) {
+    $says = (bool)preg_match('/failed permanently|could not be delivered|couldn.?t be delivered|wasn.?t delivered|address not found|recipient address rejected|user unknown|unknown user|no such (user|recipient|mailbox)|mailbox (unavailable|not found|does not exist|is disabled)|does not exist|account (is )?(disabled|inactive|suspended)|domain (name )?not found|host (or domain name )?not found|\b5[0-9]{2}[ -]5\.\d+\.\d+|permanent (error|failure)|delivery has failed|returned to sender/i', mb_substr($text, 0, 6000));
+    if (!($report || $daemon || ($subj && ($evidence || $says)))) {
         return [];
     }
     $rx = '/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/';
@@ -542,19 +551,36 @@ function pm_dsn_info(string $raw, string $head, string $from, string $subject, s
     }
     preg_match_all($rx, $text, $mm);
     $c = array_merge($c, $mm[0]);
-    $c = array_values(array_unique(array_filter(array_map(fn($a) => strtolower(rtrim(trim($a), '.>')), $c), fn($a) => $a !== '' && !preg_match('/^(mailer-daemon|postmaster)@/', $a)
-        && !str_contains($from, $a))));
+    $own = function_exists('pm_own_addresses') ? pm_own_addresses() : [];
+    $c = array_values(array_unique(array_filter(array_map(fn($a) => strtolower(rtrim(trim($a), '.>')), $c), fn($a) => $a !== '' && !preg_match('/^(mailer-daemon|postmaster|no-?reply)@/', $a)
+        && !str_contains(strtolower($from), $a) && !in_array($a, $own, true))));
+    $all = mb_substr($raw, 0, 30000);
+    // the server's own words: "550 No such recipient here", "Diagnostic-Code: smtp; 550 5.1.1 ...", Gmail's "Technical details of permanent failure: ..."
+    $why = '';
+    if (preg_match('/^Diagnostic-Code:\s*(?:smtp;\s*)?(.+)$/mi', $all, $dm)) {
+        $why = $dm[1];
+    } elseif (preg_match('/Technical details of (?:permanent|temporary) failure:\s*(?:\R\s*)*(.+)/i', $text, $dm)) {
+        $why = $dm[1];
+    } elseif (preg_match('/\b([45][0-9]{2}[ :-]+(?:[45]\.\d+\.\d+ )?[^\r\n]{4,140})/', $text, $dm)) {
+        $why = $dm[1];
+    } elseif (preg_match('/(address not found|user unknown|no such user|mailbox (?:full|unavailable|not found)|does not exist|domain not found)[^\r\n]{0,100}/i', $text, $dm)) {
+        $why = $dm[0];
+    }
+    $why = mb_substr(trim((string)preg_replace('/\s+/', ' ', strip_tags($why))), 0, 200);
     $kind = 'hard';
-    if (preg_match('/^Status:\s*([245])\.\d+\.\d+/mi', $raw, $sm)) {
+    if (preg_match('/^Status:\s*([245])\.(\d+)\.(\d+)/mi', $raw, $sm)) {
         $kind = ['2' => 'ok', '4' => 'soft', '5' => 'hard'][$sm[1]];
-    } elseif (preg_match('/mailbox (is )?full|over quota|quota exceeded|temporar|try again later|deferred|greylist/i', mb_substr($raw, 0, 20000))) {
+    } elseif (preg_match('/\b4[0-9]{2}[ -]4\.\d+\.\d+|mailbox (is )?full|over quota|quota exceeded|temporar|try again later|deferred|greylist|will (retry|keep trying)|delivery (is )?delayed/i', $all)) {
         $kind = 'soft';
     }
-    if ($kind === 'hard' && preg_match('/5\.7\.2[3-7]\b|sender is unauthenticated|requires all senders to authenticate|(SPF|DKIM|DMARC)\b[^\n]{0,80}\b(fail|did not pass|not pass)/i', mb_substr($raw, 0, 30000))) {
+    if ($kind === 'hard' && preg_match('/5\.7\.2[3-7]\b|sender is unauthenticated|requires all senders to authenticate|(SPF|DKIM|DMARC)\b[^\n]{0,80}\b(fail|did not pass|not pass)/i', $all)) {
         $kind = 'auth'; // refused because OUR domain is not authenticated: the address is not to blame
+    } elseif ($kind === 'hard' && preg_match('/5\.7\.1\b|blocked|blacklist|block ?list|spam|rejected (for|due to|by) (policy|content)|policy reasons|not (allowed|authori[sz]ed) to send|access denied|message rejected/i', $why . ' ' . mb_substr($text, 0, 3000))
+        && !preg_match('/user unknown|no such|does not exist|address not found|5\.1\.[0-9]/i', $why . ' ' . mb_substr($text, 0, 3000))) {
+        $kind = 'blocked'; // their server refuses our mail: the address may be fine, but we cannot reach them there
     }
     preg_match_all('/^Message-ID:\s*(<[^>\s]+>)/mi', $raw, $oi);
-    return ['dsn' => true, 'dsn_kind' => $kind, 'failed' => $c[0] ?? '', 'failed_all' => array_slice($c, 0, 8), 'orig_ids' => array_values(array_unique($oi[1]))];
+    return ['dsn' => true, 'dsn_kind' => $kind, 'dsn_why' => $why, 'failed' => $c[0] ?? '', 'failed_all' => array_slice($c, 0, 8), 'orig_ids' => array_values(array_unique($oi[1]))];
 }
 
 function pm_mime_text(string $head, string $body): string
@@ -622,15 +648,8 @@ function pm_match_lead(array $leads, string $email, array $m = []): ?string
         }
     }
     $contacted = fn($l) => !empty($l['sent']) || !empty($l['last_contacted']) || !empty($l['wa_sent']);
-    if ($dsn) { // the sender is the mail system: look at who it could not reach
-        foreach ((array)($m['failed_all'] ?? []) as $cand) {
-            foreach ($leads as $id => $l) {
-                if (strtolower((string)($l['email'] ?? '')) === $cand || strtolower((string)($l['email_bad'] ?? '')) === $cand) {
-                    return $id;
-                }
-            }
-        }
-        return null;
+    if ($dsn) { // the sender is the mail system: look at who it could not reach (its address, an earlier or a colleague's address, or the send log)
+        return pm_bounce_find_lead($leads, (array)($m['failed_all'] ?? []));
     }
     $d = pm_email_domain($email);
     $domainHit = null;
@@ -723,8 +742,8 @@ function pm_apply_reply(array &$lead, string $text, array $r, string $mode, ?cal
             if (!empty($r['auth']) && function_exists('pm_auth_failed')) {
                 return pm_auth_failed($lead);
             }
-            pm_mark_bounced($lead, (string)($r['failed'] ?? ''), $r['hard'] ?? true);
-            return !empty($lead['email_bad']) && ($r['hard'] ?? true) ? 'email bounced; address cleared' : 'temporary delivery problem';
+            $bt = pm_bounce_triage($lead, (string)($r['failed'] ?? ''), (string)($r['kind'] ?? (($r['hard'] ?? true) ? 'hard' : 'soft')), (string)($r['why'] ?? '')); // the Contact Finder's triage (lib/bounces.php)
+            return $bt !== '' ? $bt : 'bounce already known';
         case 'out_of_office':
             $lead['snooze_until'] = date('Y-m-d', strtotime('+7 days'));
             return 'automatic reply; paused 7 days';

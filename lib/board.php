@@ -51,6 +51,10 @@ function pm_board_build(string $brand): array
         $say('scouts', $added ? 'I found ' . $n($added, 'new business', 'new businesses') . ' today.' : 'No new businesses today.', '?tab=agents&sort=new');
         $say('research', $studied ? 'I studied ' . $n($studied, 'lead', 'leads') . ' today: the business, its news, the owner and contacts.' : 'Nothing new to study today.', '?tab=agents');
         $noMail && $say('contact', $n($noMail, 'lead still has', 'leads still have') . ' no email; I keep looking.', '?tab=agents&status=noemail');
+        $bc = function_exists('pm_bounce_counts') ? pm_bounce_counts($brand, $L) : null; // bounces: the Contact Finder triages every one
+        $bc && $bc['month'] && $say('contact', 'Bounces: ' . $n($bc['week'], 'email', 'emails') . ' bounced this week (' . $bc['month'] . ' in 30 days), all moved to "' . PM_BOUNCE_FOLDER . '" so nothing more goes to them. '
+            . ($bc['reachable'] ? $bc['reachable'] . ' can still be reached by WhatsApp, phone or another email' . ($bc['need'] ? '; ' : '.') : '') . ($bc['need'] ? 'I am looking for a new address for ' . $bc['need'] . '.' : ''),
+            '?tab=agents&status=all&folder=' . rawurlencode(PM_BOUNCE_FOLDER));
         if ($sat) { // the sit-downs: how many leads, and what was decided
             $acts = array_count_values(array_map(fn($l) => (string)($l['sitdown']['action'] ?? ''), $sat));
             $say('director', 'We sat down over ' . $n(count($sat), 'lead', 'leads') . ' and decided: ' . implode(', ', array_map(fn($a, $c) => strtolower(PM_SD_ACTIONS[$a] ?? $a) . ' (' . $c . ')', array_keys($acts), $acts)) . '.', '?tab=agents');
