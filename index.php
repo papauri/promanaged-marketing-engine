@@ -2598,6 +2598,8 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
 
 <?php elseif ($tab === 'whatsapp'): require __DIR__ . '/lib/view_whatsapp.php'; ?>
 
+<?php elseif ($tab === 'mailbox'): require __DIR__ . '/lib/view_mailbox.php'; ?>
+
 <?php elseif ($tab === 'social'): $sv = (string)($_GET['view'] ?? ''); require pm_social_view_file($sv); ?>
 
 <?php elseif ($tab === 'settings'): require __DIR__ . '/lib/view_settings.php'; ?>

@@ -164,6 +164,7 @@ function pm_home_needs(string $brand, array $d): array
     $n = fn(int $x, string $one, string $many) => $x . ' ' . ($x === 1 ? $one : $many);
     $need = ['sales' => [], 'social' => [], 'brand' => [], 'insights' => [], 'ops' => []];
     $s['replies'] && $need['sales'][] = [$n($s['replies'], 'reply waits', 'replies wait') . ' for an answer', '?tab=agents&status=awaiting', true];
+    ($mbc = function_exists('pm_mb_counts') ? pm_mb_counts($brand) : ['look' => 0])['look'] && $need['sales'][] = [$n($mbc['look'], 'email in the mailbox needs', 'emails in the mailbox need') . ' a look: people we do not know as leads yet', '?tab=mailbox&f=look', false];
     $s['outbox'] && $need['sales'][] = [$n($s['outbox'], 'email did', 'emails did') . ' not go: they wait in the Outbox', '?tab=agents#outbox', true];
     $s['followups_due'] && $need['sales'][] = [$n($s['followups_due'], 'lead is', 'leads are') . ' due a follow-up' . ($s['followups_due'] > $s['followups_to_draft'] ? ' (' . ($s['followups_due'] - $s['followups_to_draft']) . ' ready): tick them and press Follow up' : ''), '?tab=agents&status=followups', true];
     ($sm = $s['drafts'] - $s['drafts_no_email']) > 0 && $need['sales'][] = [$n($sm, 'first email is', 'first emails are') . ' ready to read and send', '?tab=agents&status=ready', false];

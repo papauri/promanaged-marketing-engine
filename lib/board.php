@@ -63,6 +63,8 @@ function pm_board_build(string $brand): array
             : $n($fb['waiting'], 'lead has', 'leads have') . ' not answered yet; the next follow-up is prepared for ' . ($fb['prepared'] === $fb['waiting'] ? ($fb['waiting'] === 1 ? 'it' : 'all of them') : $fb['prepared']) . '. '
               . ($fb['due'] ? $n($fb['due'], 'is', 'are') . ' due now' . ($fb['due_ready'] ? ': tick them on Leads and press Follow up.' : '; I write them next.') : ($fb['next'] !== '' ? 'The first fall due ' . pm_followup_day($fb['next']) . '.' : '')),
             $fb['due'] ? '?tab=agents&status=followups' : '?tab=agents&status=contacted');
+        $mbc = function_exists('pm_mb_counts') ? pm_mb_counts($brand) : null; // the mailbox desk: what is in the mailbox and whose it is
+        $mbc && $mbc['at'] !== '' && $say('replies', 'Mailbox: ' . ($mbc['in'] + $mbc['out']) . ' emails in 30 days, ' . $mbc['linked'] . ' linked to leads' . ($mbc['look'] ? ', ' . $mbc['look'] . ' need a look' : '') . ($mbc['outside'] ? '; ' . $mbc['outside'] . ' ' . ($mbc['outside'] === 1 ? 'lead was' : 'leads were') . ' already talking to us outside the app and kept out of cold outreach' : '') . '.', $mbc['look'] ? '?tab=mailbox&f=look' : '?tab=mailbox');
         $say('replies', $waiting ? $n(count($waiting), 'person wrote', 'people wrote') . ' back and ' . ($answers ? $n($answers, 'answer is', 'answers are') . ' drafted for you.' : 'waits for your answer.') : 'Nobody is waiting for an answer.', '?tab=agents&status=awaiting');
         $say('social', ($fbReady ? 'Our Page: ' . ($pageWait ? $n($pageWait, 'person waits', 'people wait') . ' for an answer' : 'nobody waiting') . '. ' : 'Our Facebook Page is not connected, so I cannot read it. ')
             . ($people ? $n($people, 'person', 'people') . ' asking for what we offer, with replies to paste. ' : '') . ($postsWait ? $n($postsWait, 'post waits', 'posts wait') . ' for your approval. ' : '')
@@ -129,7 +131,7 @@ function pm_board_refresh(string $brand, bool $standup = false): array
 function pm_board_inputs_at(string $brand): int
 {
     $t = 0;
-    foreach (['leads', 'social_posts', 'director', 'team_board', 'heads', 'mail_log', 'listen', 'fb_judged', 'social_finds', pm_run_state_file($brand)] as $f) {
+    foreach (['leads', 'social_posts', 'director', 'team_board', 'heads', 'mail_log', 'listen', 'fb_judged', 'social_finds', 'mailbox', pm_run_state_file($brand)] as $f) {
         $p = PM_DATA . '/' . (str_ends_with($f, '.json') ? $f : $f . '.json');
         $t = max($t, is_file($p) ? (int)filemtime($p) : 0);
     }

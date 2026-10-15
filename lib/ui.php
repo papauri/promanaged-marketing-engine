@@ -36,7 +36,7 @@ function pm_ui_nav(): array
     return [
         'hq' => ['label' => 'Overview', 'name' => 'Agency overview', 'job' => 'See the whole firm', 'color' => '#2b2f36', 'href' => '?tab=home', 'groups' => []],
         'sales' => ['label' => 'Sales', 'name' => 'Sales department', 'job' => 'Win customers', 'color' => '#2f6b4f', 'href' => '?tab=agents', 'groups' => [
-            'Pipeline' => ['?tab=agents' => 'Leads', '?tab=whatsapp' => 'WhatsApp', '?tab=targeting' => 'Targeting and messages'],
+            'Pipeline' => ['?tab=agents' => 'Leads', '?tab=mailbox' => 'Mailbox', '?tab=whatsapp' => 'WhatsApp', '?tab=targeting' => 'Targeting and messages'],
             'Proposals' => ['?tab=proposal' => 'New proposal', '?tab=history' => 'History', '?tab=template' => 'Template and prices']]],
         'social' => ['label' => 'Social', 'name' => 'Social department', 'job' => 'Publish and answer the audience', 'color' => '#b4532a', 'href' => '?tab=social', 'groups' => [
             'Publish' => ['?tab=social' => 'Plan', '?tab=social&view=leadposts' => 'Lead posts', '?tab=social&view=campaign' => 'Campaigns', '?tab=social&view=content' => 'Content', '?tab=social&view=channels' => 'Channels'],
@@ -115,7 +115,7 @@ function pm_ui_dept_of(string $tab, string $view = '', string $section = ''): st
             }
         }
     }
-    return ['home' => 'hq', 'social' => 'social', 'settings' => 'ops', 'business' => 'ops', 'agents' => 'sales', 'whatsapp' => 'sales', 'targeting' => 'sales', 'proposal' => 'sales', 'history' => 'sales', 'template' => 'sales', 'audit' => 'audit', 'guide' => 'hq'][$tab] ?? '';
+    return ['home' => 'hq', 'social' => 'social', 'settings' => 'ops', 'business' => 'ops', 'agents' => 'sales', 'mailbox' => 'sales', 'whatsapp' => 'sales', 'targeting' => 'sales', 'proposal' => 'sales', 'history' => 'sales', 'template' => 'sales', 'audit' => 'audit', 'guide' => 'hq'][$tab] ?? '';
 }
 
 /** A department's pages in order, as href => label (the "+ Add" links are buttons, not pages). */
