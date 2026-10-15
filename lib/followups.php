@@ -101,6 +101,9 @@ function pm_followup_prepare(string $brand, int $max = 18): int
             }
             foreach ($chunk as $id => $l) {
                 $w = $by[$id] ?? null;
+                if ($w && pm_outreach_lint((string)($w['email_subject'] ?? ''), (string)$w['email_body'], false)) {
+                    $w = null; // too long or against a wording rule: it would be refused at the send, so the default for that number instead
+                }
                 $ready[$id] = ($w ? ['email_subject' => (string)($w['email_subject'] ?? ''), 'email_body' => (string)$w['email_body'], 'whatsapp' => (string)($w['whatsapp'] ?? ''), 'by' => 'ai']
                     : pm_dm_followup_render($l) + ['by' => 'default']) + ['n' => pm_followup_nth($l), 'at' => date('Y-m-d H:i')];
             }

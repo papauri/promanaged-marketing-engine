@@ -27,7 +27,7 @@ const PM_TM_INVITE = "Please visit {link} to list {name} for free. Even easier: 
 const PM_TM_INVITE_V3 = "Please visit {link} to list {name} for free and manage your page and your online presence yourself, or simply reply and our team will set it up for you. There is no catch: we are building Malawi's tourism together.";
 
 /** The offer every Travel Malawi follow-up makes (the AI is told to make it too): photos and rates by reply, we set it up, free. */
-const PM_TM_PHOTOS_OFFER = 'they can simply reply with a few photos of their rooms and the outside, and their rates, and our team sets up their page for them and lets them know as soon as they are online, all free';
+const PM_TM_PHOTOS_OFFER = 'You can simply reply with a few photos of your rooms and the outside, and your rates, and our team will set up your page for you and let you know as soon as you are online. It is all free.';
 
 /** The default follow-up to a stay that has not replied: short and human, the photos offer, no pressure. */
 function pm_tm_followup_seed(): array
@@ -203,7 +203,7 @@ function pm_tm_write_ai(array $leads): array
         . 'The paragraph before it says who we are and that we have not met; the paragraph after it is the aim above; never repeat either. '
         . 'Never give your own name or introduce yourself (the signature does that). We are a business offering a service: never say or suggest that you were looking for a place to stay, planning a trip, travelling or a possible guest. '
         . 'No greeting, no sign-off, no promises, no numbers, no prices, no link, no exclamation marks. '
-        . (pm_wa_on() ? 'whatsapp: 35 to 60 words, one paragraph: a greeting with the first name if given, that this is ' . $s['company_name'] . ' (never your own name: the sign-off carries it), then straight away the aim (we are building Malawi\'s own directory of stays together with hosts and would love them in it; free, no commission, unlike Booking.com), then that ' . PM_TM_PHOTOS_OFFER . '. Never pose as a traveller. ' : 'No WhatsApp message: this business works by email only. ')
+        . (pm_wa_on() ? 'whatsapp: 35 to 60 words, one paragraph: a greeting with the first name if given, that this is ' . $s['company_name'] . ' (never your own name: the sign-off carries it), then straight away the aim (we are building Malawi\'s own directory of stays together with hosts and would love them in it; free, no commission, unlike Booking.com), then this offer, in your own words, speaking to them: "' . PM_TM_PHOTOS_OFFER . '" Never pose as a traveller. ' : 'No WhatsApp message: this business works by email only. ')
         . 'email_subject: make an owner curious to open it, for example about joining Malawi\'s own directory of stays, within the subject_style. '
         . 'The rest of the email (what the platform is, the benefits, the set-up steps, the link and that it is free) is a fixed text the app adds, so never describe it. '
         . ($subjectLine !== '' ? $subjectLine . ' ' : '') . pm_market_pulse_line() . ' ' . pm_tb_line('travel', 'writers') . ' Where an item has owner_feedback, the owner turned the last version down for that reason: fix exactly that. ' . PM_TRUST_RULES . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
