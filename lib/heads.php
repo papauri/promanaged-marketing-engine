@@ -118,12 +118,24 @@ function pm_heads_goals(string $brand): array
         $soOk = !$sg['enquiries_per_week'] || $enq >= $sg['enquiries_per_week'];
         $slc = function_exists('pm_sl_counts') ? pm_sl_counts($brand, $L) : ['answer' => 0, 'followup' => 0];
         $slDue = $slc['answer'] + $slc['followup']; // the people who came on social media and wait for us come before more enquiries
-        $set('social', ($sg['enquiries_per_week'] ? "Bring {$sg['enquiries_per_week']} enquiries a week from social media" : 'Keep the Page answered') . ', and answer and follow up every social lead',
-            $n($enq, 'enquiry', 'enquiries') . ' in 7 days, ' . $slDue . ' social ' . ($slDue === 1 ? 'lead waits' : 'leads wait') . ' for us', $soOk && !$slDue,
-            $slDue ? $slc['answer'] . ' to answer and ' . $slc['followup'] . ' to follow up, drafted on Social › Social leads.' : ($soOk ? '' : ($fb ? 'I post more lead posts and listen wider.' : 'Our Facebook Page is not connected.')),
-            $slDue || !$fb ? 'owner' : 'writers',
+        $sf = function_exists('pm_sf_counts') ? pm_sf_counts($brand) : ['new' => 0, 'acted7' => 0, 'goal' => 0, 'people' => 0]; // the scouting desk: places found, the owner's decisions, what we acted on
+
+        $sfGoal = (int)$sf['goal'];
+        $sfOk = !$sfGoal || $sf['acted7'] >= $sfGoal;
+        $set('social', ($sg['enquiries_per_week'] ? "Bring {$sg['enquiries_per_week']} enquiries a week from social media" : 'Keep the Page answered') . ', answer and follow up every social lead'
+                . ($sfGoal ? ", and act on {$sfGoal} scouting finds a week" : ''),
+            $n($enq, 'enquiry', 'enquiries') . ' in 7 days, ' . $slDue . ' social ' . ($slDue === 1 ? 'lead waits' : 'leads wait') . ' for us'
+                . ($sfGoal ? ', ' . $sf['acted7'] . ' of ' . $sfGoal . ' finds acted on (' . $sf['new'] . ' to decide)' : ''),
+            $soOk && !$slDue && $sfOk,
+            $slDue ? $slc['answer'] . ' to answer and ' . $slc['followup'] . ' to follow up, drafted on Social › Social leads.'
+                : ($sf['new'] ? $n($sf['new'], 'place I found waits', 'places I found wait') . ' for a decision on Social › Scouting.'
+                : ($sf['people'] ? $n($sf['people'], 'person asks', 'people ask') . ' for what we offer on public posts, with replies ready.'
+                : ($soOk && $sfOk ? '' : ($fb ? 'I scout wider and post more lead posts.' : 'Our Facebook Page is not connected; I scout the public web meanwhile.')))),
+            $slDue || $sf['new'] || $sf['people'] || !$fb ? 'owner' : 'writers',
             $slDue ? 'People who came to us on social media wait: ' . $slc['answer'] . ' to answer and ' . $slc['followup'] . ' to follow up. The drafts are on Social › Social leads; please send them.'
-                : ($fb ? 'Social is short of enquiries: give me the angles that won replies this month so the lead posts use them.' : 'Connect the Facebook Page so I can bring enquiries from it.'));
+                : ($sf['new'] ? 'I found ' . $n($sf['new'], 'place', 'places') . ' on social media where we can win business: please decide on Social › Scouting which the team acts on, or tell me to look for more like them.'
+                : ($sf['people'] ? $n($sf['people'], 'person is', 'people are') . ' asking for what we offer on public posts: please paste the replies under their posts (Leads › People looking).'
+                : ($fb ? 'Social is short of enquiries: give me the angles that won replies this month so the lead posts use them.' : 'Connect the Facebook Page so I can bring enquiries from it.'))));
 
         return ['at' => date('Y-m-d H:i'), 'line' => $line, 'per_day' => $perDay, 'goals' => $g];
     } finally {

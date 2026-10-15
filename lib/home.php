@@ -30,6 +30,7 @@ function pm_home_staff(string $brand, array $d): array
             $row('Planner', 'Writes the week\'s posts for your approval', $fb || (int)($d['social']['planned'] ?? 0) > 0, 'connect the Facebook Page'),
             $row('Community manager', 'Answers and tidies comments (autopilot)', $fb && ($d['social']['autopilot'] ?? 'safe') !== 'off', $fb ? 'autopilot is off' : 'connect the Facebook Page'),
             $row('Playbook', 'Who to engage today, with the words', $fb, 'connect the Facebook Page'),
+            $row('Scouting desk', 'Finds the groups, pages and conversations where buyers gather, and people asking', $ai && !empty($en['scout']), $ai ? 'switched off with the Scout under Targeting and messages' : $needAi),
             $row('Idea room', 'Four specialists suggest post ideas; an editor scores them', $ai, $needAi),
             $row('Editor', 'Reads the AI\'s posts and sends weak ones back once', $ai && function_exists('pm_editor_on') && pm_editor_on($brand), $ai ? 'switched off in the Plan\'s Publishing rules' : $needAi),
         ],
@@ -130,7 +131,7 @@ function pm_home_data(string $brand): array
                 'run_state' => (string)($run['state'] ?? 'idle'), 'run_at' => (string)($run['finished'] ?? '')],
             'brief' => ['headline' => (string)($brief['headline'] ?? ''), 'priorities' => array_values(array_filter(array_map('strval', (array)($brief['priorities'] ?? [])))), 'at' => (int)($brief['at'] ?? 0), 'date' => (string)($brief['date'] ?? ''),
                 'experiment' => (string)($brief['experiment'] ?? '')],
-            'social' => ['sl' => function_exists('pm_sl_counts') ? pm_sl_counts($brand, $mine) : ['answer' => 0, 'followup' => 0], 'ready' => $fb['ready'], 'ig' => $fb['ig_id'] !== '', 'autopilot' => $fb['ready'] ? pm_autopilot_level($brand) : 'off', 'planned' => $planned, 'waiting' => $waitingPosts, 'published28' => $pub28,
+            'social' => ['sf' => function_exists('pm_sf_counts') ? pm_sf_counts($brand) : ['new' => 0, 'handed' => 0, 'acted7' => 0, 'goal' => 0, 'people' => 0], 'sl' => function_exists('pm_sl_counts') ? pm_sl_counts($brand, $mine) : ['answer' => 0, 'followup' => 0], 'ready' => $fb['ready'], 'ig' => $fb['ig_id'] !== '', 'autopilot' => $fb['ready'] ? pm_autopilot_level($brand) : 'off', 'planned' => $planned, 'waiting' => $waitingPosts, 'published28' => $pub28,
                 'playbook_day' => (string)($pb['day'] ?? ''), 'playbook_open' => $pbOpen, 'playbook_total' => count((array)($pb['tasks'] ?? [])), 'followers' => (int)($page['followers'] ?? $page['fans'] ?? 0)],
             'brand' => ['score' => isset($opt['score']) ? (int)$opt['score'] : null, 'fixable' => (int)($opt['fixable'] ?? 0), 'checked' => (string)($opt['at'] ?? ''), 'design' => $design ? (string)(PM_SD_STYLES[$design['style']] ?? 'custom') : '',
                 'copy' => count((array)(pm_opt_store($brand)['copy'] ?? [])), 'todo' => (array)($opt['todo'] ?? []), 'kits' => function_exists('pm_bt_pending') ? count(pm_bt_pending($brand)) : 0],
@@ -168,6 +169,8 @@ function pm_home_needs(string $brand, array $d): array
     ($sm = $s['drafts'] - $s['drafts_no_email']) > 0 && $need['sales'][] = [$n($sm, 'first email is', 'first emails are') . ' ready to read and send', '?tab=agents&status=ready', false];
     $s['drafts_no_email'] && $need['sales'][] = [$n($s['drafts_no_email'], 'written message has', 'written messages have') . ' no email address: send on WhatsApp or find an email', '?tab=agents&status=noemail', false];
     $s['followups_to_draft'] && $need['sales'][] = [$n($s['followups_to_draft'], 'due follow-up has', 'due follow-ups have') . ' nothing written yet', '?tab=agents&status=followups', false];
+    $so['sf']['people'] && $need['social'][] = [$n($so['sf']['people'], 'person asks', 'people ask') . ' for what we offer on public posts: reply under their post', '?tab=agents&status=people', true];
+    $so['sf']['new'] && $need['social'][] = [$n($so['sf']['new'], 'place', 'places') . ' on social media where we can win business ' . ($so['sf']['new'] === 1 ? 'waits' : 'wait') . ' for your decision', '?tab=social&view=scout', false];
     $so['sl']['answer'] && $need['social'][] = [$n($so['sl']['answer'], 'person', 'people') . ' from social media to answer (drafts ready)', '?tab=social&view=leads&stage=answer', true];
     $so['sl']['followup'] && $need['social'][] = [$n($so['sl']['followup'], 'social lead', 'social leads') . ' to follow up (drafts ready)', '?tab=social&view=leads&stage=followup', false];
     if (!$so['ready']) {

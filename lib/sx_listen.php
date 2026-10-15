@@ -99,12 +99,13 @@ function pm_listen_prompt(string $brand, string $found, array $towns, array $dro
         . '"social_leads" is where the people who came to us on social media stand, by channel; "social_leads_due" are the ones to answer or follow up today: in the huddle say who takes them (replies answers, followup follows up). '
         . '"followups": for each item of social_leads_due, {"id","text"}: what we send on that channel, at most 45 words, from ' . $company . ' (never as a customer or friend), warm and specific to what they asked and what was said, '
         . 'greeting them by name when given; an answer helps first; a follow-up checks in once without pressure and never repeats our last message; end with an easy question; no prices, no links. '
+        . '"scouting" is your scouting desk: places on social media where our buyers gather, those waiting for the owner\'s decision and those the team is acting on: in the huddle the head named for each one says how it is going, and you ask the owner to decide on the best waiting one. '
         . "\"focus\": what today's posts lean on, one of $focusKeys. "
         . (defined('PM_TRUST_RULES') ? PM_TRUST_RULES . ' ' : '') . PM_AGENT_RULES;
     $user = json_encode(['today' => date('Y-m-d'), 'areas' => $towns, 'we_answer' => pm_listen_wants($brand), 'search_found' => $found !== '' ? $found : 'nobody asking today', 'drop_links' => $drop,
             'our_page' => !empty($page['ready']) ? ['waiting_for_an_answer' => (int)$page['waiting_comments'] + (int)$page['waiting_messages'], 'comments_waiting' => (int)$page['waiting_comments'],
                 'messages_waiting' => (int)$page['waiting_messages'], 'complaints' => (int)$page['complaints'], 'buyers_added_to_leads' => (int)$page['buyers_added'], 'what_they_said' => $page['lines']] : 'not connected',
-            'social_leads' => $slCounts, 'social_leads_due' => $due, 'team_notes' => function_exists('pm_tb_line') ? pm_tb_line($brand, 'social', 6) : '', 'social_numbers' => function_exists('pm_director_social') ? pm_director_social($brand) : [],
+            'social_leads' => $slCounts, 'social_leads_due' => $due, 'scouting' => pm_listen_scouting($brand), 'team_notes' => function_exists('pm_tb_line') ? pm_tb_line($brand, 'social', 6) : '', 'social_numbers' => function_exists('pm_director_social') ? pm_director_social($brand) : [],
             'firm' => function_exists('pm_firm_line') ? pm_firm_line($brand) : '', 'yesterday' => ['people_found' => (int)($st['day']['kept'] ?? 0)]], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
         . "\nJSON {\"people\":[{\"who\",\"platform\",\"url\",\"posted\",\"town\",\"wants\",\"email\",\"phone\",\"reply\"}],\"huddle\":[{\"who\",\"says\"}],\"tasks\":[{\"to\",\"do\"}],\"followups\":[{\"id\",\"text\"}],\"focus\":\"\"} with at most 6 people (none is fine).";
     return [$system, $user];
@@ -355,6 +356,20 @@ function pm_talk_dept(string $who): string
         $names[strtolower(PM_AGENT_FIRST[$d])] ??= $d;
     }
     return $names[$w] ?? $w;
+}
+
+/** The scouting desk for the huddle: the places waiting for the owner and those with the team (names, moves and who does them), and this week's count against the goal. */
+function pm_listen_scouting(string $brand): array
+{
+    if (!function_exists('pm_sf_state')) {
+        return [];
+    }
+    $c = pm_sf_counts($brand);
+    $row = fn(array $f) => $f['name'] . ' (' . $f['platform'] . '): ' . (PM_SF_MOVES[$f['move']] ?? $f['move']) . ', by ' . $f['dept'];
+    $items = pm_sf_state($brand)['items'];
+    return ['to_decide' => array_values(array_map($row, array_slice(array_filter($items, fn($f) => $f['status'] === 'new'), 0, 3))),
+        'with_the_team' => array_values(array_map($row, array_slice(array_filter($items, fn($f) => $f['status'] === 'handed'), 0, 4))),
+        'acted_this_week' => $c['acted7'] . ' of ' . $c['goal']];
 }
 
 /** Today's focus for the social posts, when Thandi set one this morning; '' otherwise. */

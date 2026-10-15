@@ -40,7 +40,7 @@ function pm_ui_nav(): array
             'Proposals' => ['?tab=proposal' => 'New proposal', '?tab=history' => 'History', '?tab=template' => 'Template and prices']]],
         'social' => ['label' => 'Social', 'name' => 'Social department', 'job' => 'Publish and answer the audience', 'color' => '#b4532a', 'href' => '?tab=social', 'groups' => [
             'Publish' => ['?tab=social' => 'Plan', '?tab=social&view=leadposts' => 'Lead posts', '?tab=social&view=campaign' => 'Campaigns', '?tab=social&view=content' => 'Content', '?tab=social&view=channels' => 'Channels'],
-            'Community' => ['?tab=social&view=leads' => 'Social leads', '?tab=social&view=inbox' => 'Inbox', '?tab=social&view=page' => 'Page posts', '?tab=social&view=growth' => 'Playbook'],
+            'Community' => ['?tab=social&view=scout' => 'Scouting', '?tab=social&view=leads' => 'Social leads', '?tab=social&view=inbox' => 'Inbox', '?tab=social&view=page' => 'Page posts', '?tab=social&view=growth' => 'Playbook'],
             'Paid' => ['?tab=social&view=ads' => 'Ads', '?tab=social&view=gads' => 'Google Ads']]],
         'brand' => ['label' => 'Brand', 'name' => 'Brand and creative department', 'job' => 'Look and sound right everywhere', 'color' => '#8a6a2f', 'href' => '?tab=social&view=studio', 'groups' => [
             'Look' => ['?tab=social&view=studio' => 'Studio', '?tab=social&view=kit' => 'Brand kit'],
