@@ -124,12 +124,13 @@ function pm_home_data(string $brand): array
             'brand' => $brand,
             'sales' => ['leads' => (int)$ps['leads'], 'new' => (int)($st['new'] ?? 0), 'contacted' => (int)$ps['contacted'], 'replies' => (int)$ps['awaiting_reply'], 'drafts' => (int)$ps['drafts_unsent'],
                 'followups_due' => (int)$ps['followups_due'], 'followups_to_draft' => (int)$ps['followups_to_draft'], 'waiting_answer' => (int)$ps['awaiting_answer'], 'followups_prepared' => (int)$ps['followups_prepared'],
-                'followups_next' => (string)$ps['followups_next'], 'drafts_no_email' => (int)$ps['drafts_no_email'], 'approved' => (int)$ps['approved_waiting'], 'sent_today' => (int)$ps['sent_today'],
+                'followups_next' => (string)$ps['followups_next'], 'drafts_no_email' => (int)$ps['drafts_no_email'],
+                'in_play' => count(array_filter($mine, fn($l) => !in_array($l['status'] ?? '', ['won', 'lost', 'optout'], true))), 'outbox' => function_exists('pm_ml_outbox') ? count(pm_ml_outbox($brand)) : 0, 'approved' => (int)$ps['approved_waiting'], 'sent_today' => (int)$ps['sent_today'],
                 'send_cap' => (int)($cfg['send_cap'] ?? 0), 'proposals' => (int)$ps['proposals_sent'], 'won' => (int)$ps['won'], 'enabled' => (array)($cfg['enabled'] ?? []),
                 'run_state' => (string)($run['state'] ?? 'idle'), 'run_at' => (string)($run['finished'] ?? '')],
             'brief' => ['headline' => (string)($brief['headline'] ?? ''), 'priorities' => array_values(array_filter(array_map('strval', (array)($brief['priorities'] ?? [])))), 'at' => (int)($brief['at'] ?? 0), 'date' => (string)($brief['date'] ?? ''),
                 'experiment' => (string)($brief['experiment'] ?? '')],
-            'social' => ['ready' => $fb['ready'], 'ig' => $fb['ig_id'] !== '', 'autopilot' => $fb['ready'] ? pm_autopilot_level($brand) : 'off', 'planned' => $planned, 'waiting' => $waitingPosts, 'published28' => $pub28,
+            'social' => ['sl' => function_exists('pm_sl_counts') ? pm_sl_counts($brand, $mine) : ['answer' => 0, 'followup' => 0], 'ready' => $fb['ready'], 'ig' => $fb['ig_id'] !== '', 'autopilot' => $fb['ready'] ? pm_autopilot_level($brand) : 'off', 'planned' => $planned, 'waiting' => $waitingPosts, 'published28' => $pub28,
                 'playbook_day' => (string)($pb['day'] ?? ''), 'playbook_open' => $pbOpen, 'playbook_total' => count((array)($pb['tasks'] ?? [])), 'followers' => (int)($page['followers'] ?? $page['fans'] ?? 0)],
             'brand' => ['score' => isset($opt['score']) ? (int)$opt['score'] : null, 'fixable' => (int)($opt['fixable'] ?? 0), 'checked' => (string)($opt['at'] ?? ''), 'design' => $design ? (string)(PM_SD_STYLES[$design['style']] ?? 'custom') : '',
                 'copy' => count((array)(pm_opt_store($brand)['copy'] ?? [])), 'todo' => (array)($opt['todo'] ?? []), 'kits' => function_exists('pm_bt_pending') ? count(pm_bt_pending($brand)) : 0],
@@ -162,10 +163,13 @@ function pm_home_needs(string $brand, array $d): array
     $n = fn(int $x, string $one, string $many) => $x . ' ' . ($x === 1 ? $one : $many);
     $need = ['sales' => [], 'social' => [], 'brand' => [], 'insights' => [], 'ops' => []];
     $s['replies'] && $need['sales'][] = [$n($s['replies'], 'reply waits', 'replies wait') . ' for an answer', '?tab=agents&status=awaiting', true];
+    $s['outbox'] && $need['sales'][] = [$n($s['outbox'], 'email did', 'emails did') . ' not go: they wait in the Outbox', '?tab=agents#outbox', true];
     $s['followups_due'] && $need['sales'][] = [$n($s['followups_due'], 'lead is', 'leads are') . ' due a follow-up' . ($s['followups_due'] > $s['followups_to_draft'] ? ' (' . ($s['followups_due'] - $s['followups_to_draft']) . ' ready): tick them and press Follow up' : ''), '?tab=agents&status=followups', true];
     ($sm = $s['drafts'] - $s['drafts_no_email']) > 0 && $need['sales'][] = [$n($sm, 'first email is', 'first emails are') . ' ready to read and send', '?tab=agents&status=ready', false];
     $s['drafts_no_email'] && $need['sales'][] = [$n($s['drafts_no_email'], 'written message has', 'written messages have') . ' no email address: send on WhatsApp or find an email', '?tab=agents&status=noemail', false];
     $s['followups_to_draft'] && $need['sales'][] = [$n($s['followups_to_draft'], 'due follow-up has', 'due follow-ups have') . ' nothing written yet', '?tab=agents&status=followups', false];
+    $so['sl']['answer'] && $need['social'][] = [$n($so['sl']['answer'], 'person', 'people') . ' from social media to answer (drafts ready)', '?tab=social&view=leads&stage=answer', true];
+    $so['sl']['followup'] && $need['social'][] = [$n($so['sl']['followup'], 'social lead', 'social leads') . ' to follow up (drafts ready)', '?tab=social&view=leads&stage=followup', false];
     if (!$so['ready']) {
         $need['social'][] = ['Connect the Facebook Page', '?tab=settings&section=connections', true];
     } else {

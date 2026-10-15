@@ -681,6 +681,11 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
         $L['followups'] = (int)$cfg['max_followups'];
         unset($L['winback_draft'], $L['snooze_until']);
     }
+    if ($which !== 'winback_draft' && function_exists('pm_followup_fill_gaps')) { // no slip-ups: the next follow-up is ready the moment this one goes (the Follow-up head rewrites it with the AI in the morning)
+        $one = [$id => $L];
+        pm_followup_fill_gaps($one, (string)($L['brand'] ?? pm_brand()));
+        $L = $one[$id];
+    }
     pm_lead_note($L, ($which === 'drafts' ? 'First email' : ($which === 'winback_draft' ? 'Win-back email' : 'Follow-up')) . ' sent to ' . $email);
     unset($L);
     try {

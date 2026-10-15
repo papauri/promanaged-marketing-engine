@@ -53,6 +53,52 @@ function pm_followup_board(array $leads, array $cfg): array
     return $out;
 }
 
+/** The day this lead's next follow-up falls due (Y-m-d; '' when none can go): the configured days after our last email, or the end of a pause. */
+function pm_followup_due_on(array $l, array $cfg): string
+{
+    if (!pm_followup_open($l, $cfg) || !($t = strtotime((string)($l['last_contacted'] ?? '')))) {
+        return '';
+    }
+    $d = date('Y-m-d', $t + (int)($cfg['followup_days'] ?? 4) * 86400);
+    $snz = (string)($l['snooze_until'] ?? '');
+    return $snz !== '' && $snz > $d ? $snz : $d;
+}
+
+/**
+ * No slip-ups: every lead we wrote to that has not answered always has its next follow-up ready. Any that has none (written before this rule, the AI failed, a send
+ * from elsewhere) gets the default for its number now, with no AI; the Follow-up head's morning pass rewrites those with the AI where it can. One business's leads
+ * in $cur (the whole leads file is fine). Returns how many were filled in.
+ */
+function pm_followup_fill_gaps(array &$cur, string $brand): int
+{
+    $cfg = pm_agents_config($brand);
+    $n = 0;
+    foreach ($cur as $id => $l) {
+        if (($l['brand'] ?? 'promanaged') !== $brand || !pm_followup_open($l, $cfg) || trim((string)($l['followup_draft']['email_body'] ?? '')) !== '' || pm_followup_ready($l)) {
+            continue;
+        }
+        $cur[$id]['followup_ready'] = pm_dm_as($brand, fn() => pm_dm_followup_render($l)) + ['by' => 'default', 'n' => pm_followup_nth($l), 'at' => date('Y-m-d H:i')];
+        $n++;
+    }
+    return $n;
+}
+
+/** pm_followup_fill_gaps() on the stored leads of one business: written only when something was missing (so nothing is rebuilt for nothing). Said in the team's conversation. */
+function pm_followup_heal(string $brand): int
+{
+    $probe = pm_leads_read();
+    if (!pm_followup_fill_gaps($probe, $brand)) {
+        return 0;
+    }
+    $healed = 0;
+    pm_update('leads', function (array $cur) use ($brand, &$healed) {
+        $healed = pm_followup_fill_gaps($cur, $brand);
+        return $cur;
+    }, fn() => []);
+    $healed && function_exists('pm_talk') && pm_talk($brand, 'followup', "I found {$healed} " . ($healed === 1 ? 'lead' : 'leads') . ' we wrote to with no follow-up ready and prepared ' . ($healed === 1 ? 'it' : 'them') . ' now.', 'director');
+    return $healed;
+}
+
 /** "Saturday 18 Oct", "tomorrow", "today" for a Y-m-d day. */
 function pm_followup_day(string $ymd): string
 {
@@ -140,7 +186,7 @@ function pm_followup_prepare(string $brand, int $max = 18): int
     $cfg = pm_agents_config($brand);
     $todo = [];
     foreach (pm_leads_read() as $id => $l) {
-        if (($l['brand'] ?? 'promanaged') === $brand && pm_followup_open($l, $cfg) && trim((string)($l['followup_draft']['email_body'] ?? '')) === '' && !pm_followup_ready($l)) {
+        if (($l['brand'] ?? 'promanaged') === $brand && pm_followup_open($l, $cfg) && trim((string)($l['followup_draft']['email_body'] ?? '')) === '' && (!($r0 = pm_followup_ready($l)) || (($r0['by'] ?? '') === 'default' && !pm_followup_by_default($brand)))) { // none yet, or only the default stand-in: the AI writes it properly
             $todo[(string)$id] = ['id' => (string)$id] + $l;
         }
     }

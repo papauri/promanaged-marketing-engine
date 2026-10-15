@@ -15,7 +15,7 @@ $brief = $hd['brief'];
 $s = $hd['sales'];
 $so = $hd['social'];
 $br = $hd['brand'];
-$kpi = fn(string $label, string $value, string $href, string $tone = '') => '<a class="hq-kpi ' . $tone . '" href="' . pm_h($href) . '"><span>' . pm_h($label) . '</span><b>' . pm_h($value) . '</b></a>';
+$kpi = fn(string $label, string $value, string $href, string $tone = '', string $note = '') => '<a class="hq-kpi ' . $tone . '" href="' . pm_h($href) . '"><span>' . pm_h($label) . '</span><b>' . pm_h($value) . '</b>' . ($note !== '' ? '<small>' . pm_h($note) . '</small>' : '') . '</a>';
 $td = $hd['today'];
 $needs = pm_home_needs($vb, $hd);
 $nNeed = array_sum(array_map('count', $needs));
@@ -30,39 +30,14 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
 </section>
 
 <div class="hq-kpis">
-  <?= $kpi('Leads', (string)$s['leads'], '?tab=agents') ?>
-  <?= $kpi('Replies waiting', (string)$s['replies'], '?tab=agents', $s['replies'] > 0 ? 'warn' : '') ?>
-  <?= $kpi('Follow-ups due', (string)$s['followups_due'] . ($s['followups_due'] === 0 && $s['followups_next'] !== '' ? ' · next ' . date('D j M', strtotime($s['followups_next'])) : ''), $s['followups_due'] ? '?tab=agents&status=followups' : '?tab=agents&status=contacted', $s['followups_due'] > 0 ? 'warn' : '') ?>
-  <?= $kpi('Posts lined up', (string)$so['planned'], '?tab=social') ?>
-  <?= $kpi('Page health', $br['score'] === null ? '-' : $br['score'] . '%', '?tab=social&view=optimise', $br['score'] !== null && $br['score'] < 60 ? 'warn' : '') ?>
-  <?= $kpi('Won', (string)$s['won'], '?tab=history') ?>
+  <?= $kpi('Leads', (string)$s['leads'], '?tab=agents&status=all', '', $s['in_play'] . ' in play') ?>
+  <?= $kpi('Replies waiting', (string)$s['replies'], '?tab=agents&status=awaiting', $s['replies'] > 0 ? 'warn' : '', $s['replies'] ? 'answer them first' : 'nobody waiting') ?>
+  <?= $kpi('Follow-ups due', (string)$s['followups_due'], $s['followups_due'] ? '?tab=agents&status=followups' : '?tab=agents&status=contacted', $s['followups_due'] > 0 ? 'warn' : '',
+      $s['waiting_answer'] ? $s['waiting_answer'] . ' not answered' . ($s['followups_due'] === 0 && $s['followups_next'] !== '' ? ' · next ' . date('D j M', strtotime($s['followups_next'])) : '') : 'nobody to follow up') ?>
+  <?= $kpi('Posts lined up', (string)$so['planned'], '?tab=social', '', $so['waiting'] ? $so['waiting'] . ' to approve' : ($so['ready'] ? 'Facebook connected' : 'Facebook not connected')) ?>
+  <?= $kpi('Page health', $br['score'] === null ? '-' : $br['score'] . '%', '?tab=social&view=optimise', $br['score'] !== null && $br['score'] < 60 ? 'warn' : '', $br['fixable'] ? $br['fixable'] . ' fix' . ($br['fixable'] === 1 ? '' : 'es') . ' ready' : ($br['score'] === null ? 'not checked yet' : '')) ?>
+  <?= $kpi('Won', (string)$s['won'], '?tab=history', '', $s['proposals'] ? $s['proposals'] . ' proposal' . ($s['proposals'] === 1 ? '' : 's') . ' out' : '') ?>
 </div>
-
-<section class="card hq-today" aria-label="Today">
-  <?php $fg = $td['goal']; ?><?= $tile('Firm goal this month', $fg['signed'][0] . ' of ' . $fg['signed'][1] . ' signed', $fg['replies'][0] . ' of ' . $fg['replies'][1] . ' replies · ' . $fg['pace'], '?tab=social&view=results') ?>
-  <?= $tile('Emails today', $td['sent'] . ($td['cap'] ? ' (plan ' . $td['cap'] . ')' : ''), $td['queue'] ? $td['queue'] . ' in the queue' . ($td['next'] === 'paused' ? ', sending paused' : ($td['next'] !== '' ? ', next ' . $td['next'] : '')) : 'nothing queued', '?tab=agents') ?>
-  <?= $tile('WhatsApp today', $td['wa'] . ($td['wa_cap'] ? ' of ' . $td['wa_cap'] : ''), 'first messages and follow-ups', '?tab=whatsapp') ?>
-  <?= $tile('Posts going out today', (string)$td['posts'], $so['ready'] ? $so['planned'] . ' lined up in all' : 'Facebook not connected', '?tab=social') ?>
-  <?= $tile('Playbook', $td['pb_total'] ? $td['pb_done'] . ' of ' . $td['pb_total'] : '–', $td['pb_total'] ? 'tasks done today' : 'no playbook today', '?tab=social&view=growth') ?>
-  <?= $tile('AI today', number_format($td['ai']) . ' tokens', ($td['ai_budget'] ? 'budget ' . number_format($td['ai_budget']) . ' (all businesses)' : 'no daily limit') . ($td['memory'] ? ' · ' . $td['memory'] . ' from memory' : ''), '?tab=social&view=results#ai') ?>
-</section>
-
-<?php $bd = function_exists('pm_board') ? pm_board($vb) : []; if (!empty($bd['reports'])): ?>
-<section class="card" id="board" aria-label="Today's board">
-  <h2>Today's board <span class="muted t-sm">· put together by <?= pm_h(pm_agent_first('director')) ?> with the department heads<?= !empty($bd['standup']) ? ' at the ' . pm_h($bd['standup']) . ' stand-up' : '' ?>, checked <?= pm_h(date('H:i', strtotime((string)$bd['at']))) ?></span></h2>
-  <p class="hq-headline"><?= pm_h((string)$bd['headline']) ?></p>
-  <?php if ($bd['you']): ?><div class="btns"><?php foreach ($bd['you'] as [$yt, $yh, $yu]): ?><a class="btn small<?= $yu ? ' primary' : '' ?>" href="<?= pm_h($yh) ?>"><?= pm_h($yt) ?></a><?php endforeach; ?></div><?php endif; ?>
-  <ul class="talklist"><?php foreach ($bd['reports'] as [$rd, $rt, $rh]): ?><li><time></time><b><?= pm_h(pm_talk_name($rd)) ?>:</b><span><?= $rh !== '' ? '<a href="' . pm_h($rh) . '">' . pm_h($rt) . '</a>' : pm_h($rt) ?></span></li><?php endforeach; ?></ul>
-  <?php if (!empty($bd['goals'])): uasort($bd['goals'], fn($a, $b) => $a['ok'] <=> $b['ok']); ?>
-  <details id="goals"<?= array_filter($bd['goals'], fn($x) => !$x['ok']) ? ' open' : '' ?>><summary><b>Each head's goal</b> <span class="muted t-sm">· <?= count(array_filter($bd['goals'], fn($x) => $x['ok'])) ?> of <?= count($bd['goals']) ?> on track</span></summary>
-    <?php if (!empty($bd['chain'])): ?><p class="hint mt-0"><?= pm_h((string)$bd['chain']) ?></p><?php endif; ?>
-    <ul class="talklist"><?php foreach ($bd['goals'] as $gd => $gx): ?><li><time><?= $gx['ok'] ? 'on track' : '<b>behind</b>' ?></time><b><?= pm_h(pm_talk_name($gd)) ?>:</b><span><?= pm_h($gx['goal'] . ' · now ' . $gx['have'] . '.' . ($gx['why'] !== '' ? ' ' . $gx['why'] : '') . ($gx['ask_to'] !== '' ? ($gx['ask_to'] === 'owner' ? ' Asks you: "' : ' Asked ' . pm_talk_name($gx['ask_to']) . ': "') . $gx['ask'] . '"' : '')) ?></span></li><?php endforeach; ?></ul>
-  </details>
-  <?php endif; ?>
-  <?php if ($bd['checks']): ?><p class="hint"><b><?= pm_h(pm_agent_first('director')) ?> checked the board against what we have:</b></p><ul class="t-sm"><?php foreach ($bd['checks'] as [$ct, $ch]): ?><li><a href="<?= pm_h($ch) ?>"><?= pm_h($ct) ?></a></li><?php endforeach; ?></ul><?php endif; ?>
-</section>
-<?php endif; ?>
-
 <div class="hq-top">
   <section class="card hq-brief" id="brief">
     <h2>Today's brief from the Director</h2>
@@ -93,6 +68,46 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
     <?php endforeach; ?>
   </section>
 </div>
+
+<section class="card hq-today" aria-label="Today">
+  <?php $fg = $td['goal']; ?><?= $tile('Firm goal this month', $fg['signed'][0] . ' of ' . $fg['signed'][1] . ' signed', $fg['replies'][0] . ' of ' . $fg['replies'][1] . ' replies · ' . $fg['pace'], '?tab=social&view=results') ?>
+  <?= $tile('Emails today', $td['sent'] . ($td['cap'] ? ' (plan ' . $td['cap'] . ')' : ''), $td['queue'] ? $td['queue'] . ' in the queue' . ($td['next'] === 'paused' ? ', sending paused' : ($td['next'] !== '' ? ', next ' . $td['next'] : '')) : 'nothing queued', '?tab=agents') ?>
+  <?= $tile('WhatsApp today', $td['wa'] . ($td['wa_cap'] ? ' of ' . $td['wa_cap'] : ''), 'first messages and follow-ups', '?tab=whatsapp') ?>
+  <?= $tile('Posts going out today', (string)$td['posts'], $so['ready'] ? $so['planned'] . ' lined up in all' : 'Facebook not connected', '?tab=social') ?>
+  <?= $tile('Playbook', $td['pb_total'] ? $td['pb_done'] . ' of ' . $td['pb_total'] : '–', $td['pb_total'] ? 'tasks done today' : 'no playbook today', '?tab=social&view=growth') ?>
+  <?= $tile('AI today', number_format($td['ai']) . ' tokens', ($td['ai_budget'] ? 'budget ' . number_format($td['ai_budget']) . ' (all businesses)' : 'no daily limit') . ($td['memory'] ? ' · ' . $td['memory'] . ' from memory' : ''), '?tab=social&view=results#ai') ?>
+</section>
+
+<?php $bd = function_exists('pm_board') ? pm_board($vb) : []; if (!empty($bd['reports'])):
+    $goals = (array)($bd['goals'] ?? []);
+    $rows = []; // one row per head: what they report today, and where they stand against their goal for the month
+    foreach ($bd['reports'] as [$rd, $rt, $rh]) {
+        $rows[$rd]['say'][] = [$rt, $rh];
+    }
+    foreach ($goals as $gd => $gx) {
+        $rows[$gd]['goal'] = $gx;
+    }
+    uksort($rows, fn($a, $b) => [isset($rows[$a]['goal']) ? (int)$rows[$a]['goal']['ok'] : 2, $a === 'director' ? 0 : 1] <=> [isset($rows[$b]['goal']) ? (int)$rows[$b]['goal']['ok'] : 2, $b === 'director' ? 0 : 1]); // behind first, then on track, then those with no goal
+    $nOk = count(array_filter($goals, fn($x) => $x['ok']));
+?>
+<section class="card hq-board" id="board" aria-label="The team's report">
+  <h2>The team's report <span class="muted t-sm">· every head reports to <?= pm_h(pm_agent_first('director')) ?><?= !empty($bd['standup']) ? ' (stand-up at ' . pm_h($bd['standup']) . ')' : '' ?>, updated <?= pm_h(date('H:i', (int)($bd['ts'] ?? strtotime((string)$bd['at'])))) ?></span></h2>
+  <?php if ($goals): ?><p class="hq-headline"><?= $nOk ?> of <?= count($goals) ?> heads on track for the month<?= $nOk < count($goals) ? '; the ones behind say what holds them up and who they asked.' : '.' ?></p><?php endif; ?>
+  <?php if (!empty($bd['chain'])): ?><p class="hint mt-0"><?= pm_h((string)$bd['chain']) ?></p><?php endif; ?>
+  <ul class="hq-heads" id="goals">
+  <?php foreach ($rows as $dept => $r): $gx = $r['goal'] ?? null; ?>
+    <li class="<?= $gx ? ($gx['ok'] ? 'ok' : 'behind') : '' ?>">
+      <div class="hq-head-who"><b><?= pm_h(pm_talk_name($dept)) ?></b><?php if ($gx): ?><span class="chip <?= $gx['ok'] ? 'ok' : 'warn' ?>"><?= $gx['ok'] ? 'on track' : 'behind' ?></span><?php endif; ?></div>
+      <div class="hq-head-say">
+        <?php foreach ((array)($r['say'] ?? []) as [$rt, $rh]): ?><p><?= $rh !== '' ? '<a href="' . pm_h($rh) . '">' . pm_h($rt) . '</a>' : pm_h($rt) ?></p><?php endforeach; ?>
+        <?php if ($gx): ?><small>Goal: <?= pm_h($gx['goal']) ?> · now <?= pm_h($gx['have']) ?>.<?= $gx['why'] !== '' ? ' ' . pm_h($gx['why']) : '' ?><?= $gx['ask_to'] !== '' ? ' <b>' . ($gx['ask_to'] === 'owner' ? 'Asks you' : 'Asked ' . pm_h(pm_talk_name($gx['ask_to']))) . ':</b> "' . pm_h($gx['ask']) . '"' : '' ?></small><?php endif; ?>
+      </div>
+    </li>
+  <?php endforeach; ?>
+  </ul>
+  <?php if ($bd['checks']): ?><div class="hq-checks"><b><?= pm_h(pm_agent_first('director')) ?> checked the report against what we have</b><ul><?php foreach ($bd['checks'] as [$ct, $ch]): ?><li><a href="<?= pm_h($ch) ?>"><?= pm_h($ct) ?></a></li><?php endforeach; ?></ul></div><?php endif; ?>
+</section>
+<?php endif; ?>
 
 <?php if (count(pm_user_brands()) > 1): ?>
 <h3>Your businesses</h3>

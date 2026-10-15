@@ -9,6 +9,7 @@ pm_brand_set($_SESSION['abrand']);
 $bname = pm_brand_title(pm_settings(), pm_brand());
 $acfg = pm_agents_config();
 $readied = function_exists('pm_dm_ready_all') ? pm_dm_ready_all() : 0; // every lead with an email has its first email ready (default message + personal line, no AI)
+function_exists('pm_followup_heal') && pm_followup_heal(pm_brand()); // and everyone we wrote to who has not answered has the next follow-up ready (no AI)
 $synced = function_exists('pm_ml_autosync') ? pm_ml_autosync() : 0; // the Sent folders are read at most every 5 minutes (no AI): a lead emailed from the other copy is not in Active
 $leadsAll = array_filter(pm_leads(), fn($l) => ($l['brand'] ?? 'promanaged') === pm_brand());
 $run = pm_run_state();
@@ -45,14 +46,14 @@ $waiting = fn($l) => $l['status'] !== 'optout' && ($l['status'] === 'replied' ||
 $gaps = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted'], true) && empty($l['sent']) && empty($l['listen']) && pm_approach($l)['ready'] < 70;
 $people = fn($l) => !empty($l['listen']) && in_array($l['status'], ['new', 'contacted', 'replied'], true); // found by Thandi on a public post: answered there // not written to yet, and too little known for a good approach
 $fuDue = array_flip(array_map('strval', array_keys(pm_followup_due($leadsAll, $acfg, false))));
-$todo = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted', 'replied', 'proposal'], true) || $waiting($l)
-    || ($l['status'] === 'contacted' && (!empty($l['followup_draft']) || isset($fuDue[(string)$l['id']]))); // Active: something to do now
+$waitAns = fn($l) => $l['status'] === 'contacted' && (!empty($l['followup_draft']) || isset($fuDue[(string)$l['id']]) || pm_followup_open($l, ['max_followups' => 99] + $acfg)); // we wrote, they have not answered: their follow-up is prepared, due or not
+$todo = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted', 'replied', 'proposal'], true) || $waiting($l) || $waitAns($l); // Active: everyone still in play, including those we wait on
 $hasMail = fn($l) => (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) && !(!empty($l['email_bad']) && strcasecmp((string)$l['email_bad'], (string)$l['email']) === 0);
 $readySend = fn($l) => $hasMail($l) && empty($l['approved_at']) && $l['status'] !== 'optout'
     && ((in_array($l['status'], ['new', 'qualified', 'drafted'], true) && empty($l['sent']) && !empty($l['drafts']['email_body'])) || ($l['status'] === 'contacted' && !empty($l['followup_draft']['email_body']))); // Ready to send: an email address and a message, nothing in the way
 $inStatus = fn($l, $f) => $f === 'people' ? $people($l) : ($f === 'all' ? true : ($f === 'mine' ? (($l['owner'] ?? '') === $who && (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l))) : ($f === 'awaiting' ? $waiting($l)
     : ($f === 'ready' ? $readySend($l) : ($f === 'noemail' ? (!$hasMail($l) && empty($l['listen']) && !in_array($l['status'], ['won', 'lost', 'optout'], true))
-    : ($f === 'followups' ? ($l['status'] === 'contacted' && (!empty($l['followup_draft']) || isset($fuDue[(string)$l['id']]))) : ($f === 'closed' ? in_array($l['status'], ['lost', 'optout'], true)
+    : ($f === 'followups' ? $waitAns($l) : ($f === 'closed' ? in_array($l['status'], ['lost', 'optout'], true)
     : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? $todo($l) : $l['status'] === $f)))))))));
 $inSearch = fn($l) => ($fq === '' || mb_stripos($l['name'] . ' ' . $l['city'] . ' ' . ($l['contact'] ?? '') . ' ' . ($l['type'] ?? '') . ' ' . ($l['email'] ?? ''), $fq) !== false)
     && ($fcity === '' || strcasecmp(trim((string)($l['city'] ?? '')), $fcity) === 0) && $hasOk($l) && (int)($l['score'] ?? 0) >= $fmin
@@ -278,7 +279,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     <?php if ($pickable($l)): ?><label class="lpick" onclick="event.stopPropagation()" title="<?= $approvable($l) ? 'Tick to send this email' : ($fuOpen($l) ? 'Tick to follow up' : 'Tick to move, file or delete') ?>"><input type="checkbox" class="lsel" form="leadsel" name="ids[]" value="<?= pm_h($id) ?>" aria-label="Tick <?= pm_h($l['name']) ?>"></label><?php else: ?><span class="lpick none"></span><?php endif; ?>
     <span class="who"><b><?= pm_h($l['name']) ?></b><small><?= pm_h($l['type']) ?> · <?= pm_h($l['city']) ?></small></span>
     <span class="tags">
-      <?php if ($hasReply): ?><span class="pill warn">reply waiting</span><?php elseif ($waiting($l)): ?><span class="pill warn">they wrote</span><?php elseif ($which === 'followup'): ?><span class="pill warn">follow-up ready</span><?php endif; ?>
+      <?php if ($hasReply): ?><span class="pill warn">reply waiting</span><?php elseif ($waiting($l)): ?><span class="pill warn">they wrote</span><?php elseif ($l['status'] === 'contacted' && $waitAns($l)): $fuOn = pm_followup_due_on($l, ['max_followups' => 99] + $acfg); $fuNow = isset($fuDue[(string)$id]) || !empty($l['followup_draft']); ?><span class="pill <?= $fuNow ? 'warn' : '' ?>" title="<?= $which === 'followup' ? 'The follow-up is written: open the lead to read it' : 'The Follow-up head prepares it' ?>">follow-up <?= pm_followup_nth($l) ?> <?= $fuNow ? 'due now' : ($fuOn !== '' ? 'on ' . pm_h(date('D j M', strtotime($fuOn))) : 'prepared') ?></span><?php endif; ?>
       <?php foreach (pm_lead_open_drafts($l) as $od): ?><span class="pill warn"><?= ['winback' => 'win-back ready', 'postsign' => 'thank-you asks ready', 'reverify' => 'contact re-checked'][$od] ?></span><?php endforeach; ?>
       <?php if (!empty($l['snooze_until']) && $l['snooze_until'] >= date('Y-m-d')): ?><span class="pill" title="No follow-ups until then">paused to <?= pm_h(date('j M', strtotime($l['snooze_until']))) ?></span><?php endif; ?>
       <?php if (!empty($l['email_bad'])): ?><span class="pill warn" title="<?= pm_h((string)$l['email_bad']) ?> bounced: find another contact">email bounced</span><?php endif; ?>

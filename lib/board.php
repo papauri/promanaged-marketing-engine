@@ -105,7 +105,9 @@ function pm_board_build(string $brand): array
 function pm_board_refresh(string $brand, bool $standup = false): array
 {
     $old = (array)(pm_load('board', fn() => [])[$brand] ?? []);
+    $healed = function_exists('pm_followup_heal') ? pm_followup_heal($brand) : 0; // no slip-ups: before reporting, the Follow-up head makes sure everyone we wrote to has the next follow-up ready (no AI)
     $b = pm_board_build($brand) + ['ts' => time(), 'standup' => $standup ? date('H:i') : (substr((string)($old['at'] ?? ''), 0, 10) === date('Y-m-d') ? (string)($old['standup'] ?? '') : '')];
+    $healed && $b['checks'][] = ["The Follow-up head found {$healed} " . ($healed === 1 ? 'lead' : 'leads') . ' we wrote to with no follow-up ready, and prepared ' . ($healed === 1 ? 'it' : 'them') . ' just now.', '?tab=agents&status=followups'];
     if ($standup && function_exists('pm_talk')) {
         foreach ($b['reports'] as [$dept, $text]) {
             $dept !== 'director' && pm_talk($brand, $dept, $text, 'director');
