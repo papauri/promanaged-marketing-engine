@@ -529,10 +529,7 @@ function pm_do_shop_delete(string $vb): array
 /** Scheduler job: once a day the shop desk looks through our posts for items not in the shop yet (one small AI call only when there are new posts with a price). */
 function pm_job_shop(string $brand): string
 {
-    $st = pm_shop_state($brand);
-    if (!$st['items'] && !$st['candidates'] && $st['scan_at'] === '' && $brand !== 'promanaged') {
-        return ''; // a business that sells nothing in its posts: the owner starts the shop from Social > Shop
-    }
+    $st = pm_shop_state($brand); // every business, the ones added later too: the look is free when no post carries a price (the AI is asked only about new posts that do)
     if ((strtotime($st['scan_at']) ?: 0) > time() - 20 * 3600 || (int)date('G') < 8) {
         return '';
     }
