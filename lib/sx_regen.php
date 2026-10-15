@@ -70,6 +70,11 @@ function pm_regen_words(array $fields, string $kind, string $note = ''): array
             $max = max(1, min(5, count(preg_split('/\s+/', $old))));
             $new = implode(' ', array_slice(array_values(array_unique($hm[0])), 0, $max));
         }
+        if ($new !== '' && $k !== 'hashtags' && !array_diff(pm_regen_links($new), pm_regen_links($old)) && array_diff(pm_regen_links($old), pm_regen_links($new))) {
+            preg_match_all('~(?:https?://|www\.)[^\s<>"\')]+~i', $old, $lm); // the AI left a link out (it added none): the original link goes back on its own line
+            $gone = array_filter(array_map(fn($u) => rtrim($u, '.,;:!?'), $lm[0]), fn($u) => !in_array(strtolower($u), pm_regen_links($new), true));
+            $new = rtrim($new) . "\n\n" . implode(' ', array_values(array_unique($gone)));
+        }
         if ($new === '' || pm_regen_links($new) !== pm_regen_links($old) || $new === $old) {
             $res[$k] = $old;
             continue;

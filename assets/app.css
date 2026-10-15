@@ -1009,3 +1009,10 @@ a.sf-stat:hover { border-color:var(--line-strong) }
 .mb-act { display:flex; flex-direction:column; gap:var(--s-1) }
 .mb-act select { height:var(--ctl-sm); font-size:var(--fs-2) }
 @media (max-width:820px) { .mb-row { grid-template-columns:24px minmax(0, 1fr) } .mb-act { grid-column:2 } }
+
+/* Social > Page posts: "Repost with new words" opens right under the post */
+.rp-inline { margin-top:var(--s-2) }
+.rp-inline > summary { list-style:none; display:inline-flex; cursor:pointer }
+.rp-inline > summary::-webkit-details-marker { display:none }
+.rp-inline[open] > summary { background:var(--surface-2) }
+.rp-form { margin-top:var(--s-2); padding:var(--s-3) var(--s-4); border:1px solid var(--line); border-radius:var(--r-ctl); background:var(--surface-2) }

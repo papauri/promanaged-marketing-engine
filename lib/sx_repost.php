@@ -142,7 +142,13 @@ function pm_rp_media(string $brand, array $src, string $newId): array
  */
 function pm_rp_make(string $brand, string $key, array $chs, string $when, string $note = ''): array
 {
-    $src = pm_rp_sources($brand, 40)[$key] ?? null;
+    $all = pm_rp_sources($brand, 100);
+    if (!isset($all[$key]) && str_starts_with($key, 'fb:')) { // a Page post the app made is listed under our own posts
+        foreach (pm_sx_posts($brand) as $p) {
+            (string)($p['fb_id'] ?? '') === substr($key, 3) && $key = 'app:' . $p['id'];
+        }
+    }
+    $src = $all[$key] ?? null;
     if (!$src) {
         return ['ok' => false, 'msg' => 'That post is not in the list any more.', 'id' => ''];
     }
@@ -171,7 +177,14 @@ function pm_rp_make(string $brand, string $key, array $chs, string $when, string
     if (pm_agents_ready()) {
         try {
             $GLOBALS['PM_AI_REF'] = 'repost';
-            $new = pm_regen_words(array_filter($words), 'post', PM_RP_NOTE . ($note !== '' ? ' The owner adds: ' . $note : ''));
+            $ask = PM_RP_NOTE . ($note !== '' ? ' The owner adds: ' . $note : '');
+            $new = pm_regen_words(array_filter($words), 'post', $ask);
+            $probe = fn(array $w) => pm_social_lint_post(['caption' => (string)($w['caption'] ?? ''), 'hashtags' => array_values(array_filter(preg_split('/\s+/', trim((string)($w['hashtags'] ?? ''))) ?: [])),
+                'brand' => $brand, 'format' => $video ? 'reel' : 'image', 'allowed_amounts' => function_exists('pm_money_amounts') ? pm_money_amounts($text) : []]);
+            if (($new['caption'] ?? $words['caption']) !== $words['caption'] && ($left = $probe($new + $words))) { // the new words break a posting rule: one more try, told exactly what to fix
+                $again = pm_regen_words(['caption' => (string)$new['caption']] + array_filter(['hashtags' => (string)($new['hashtags'] ?? '')]), 'post', $ask . ' Fix these before it can be posted: ' . implode(' ', $left));
+                count($probe($again + $new + $words)) < count($left) && $new = $again + $new;
+            }
             if (($new['caption'] ?? $words['caption']) !== $words['caption']) {
                 $words = $new + $words;
                 $by = 'ai';
@@ -188,6 +201,8 @@ function pm_rp_make(string $brand, string $key, array $chs, string $when, string
         'hashtags' => array_values(array_filter(preg_split('/\s+/', trim((string)$words['hashtags'])) ?: [])), 'media' => $media !== '' ? pm_social_media_rel($media) : '',
         'fb_id' => '', 'error' => '', 'ig' => '', 'tries' => 0, 'retry_at' => '', 'lint' => [], 'script' => '', 'created' => date('Y-m-d H:i'), 'by' => pm_social_who() ?: 'owner',
         'src' => 'repost', 'reposted_from' => $key, 'words_by' => $by, 'tokens' => 0,
+        'allowed_amounts' => function_exists('pm_money_amounts') ? pm_money_amounts($text) : [], // the owner's own prices in the original may come back with it
+        'allowed_amounts' => function_exists('pm_money_amounts') ? pm_money_amounts($text) : [], // the owner's own prices in the original may come back with it
         'ch_skip' => array_values(array_diff(['facebook', 'instagram', 'linkedin'], $chs)),
     ];
     $video && $post['format'] = 'reel';
@@ -216,7 +231,33 @@ function pm_do_repost(string $vb): array
     $chs = array_values(array_filter((array)($_POST['ch'] ?? []), 'is_string'));
     $when = trim((string)($_POST['date'] ?? '')) . ' ' . trim((string)($_POST['time'] ?? '18:30'));
     $r = pm_rp_make($vb, $key, $chs, $when, (string)($_POST['note'] ?? ''));
+    $pid = preg_replace('/[^0-9_]/', '', (string)($_POST['back_post'] ?? ''));
+    if ($pid !== '') { // asked from a post on Social > Page posts: back to that post, whatever happened
+        return ['msg' => $r['msg'] . ($r['ok'] ? ' It is in the Plan.' : ''), 'kind' => $r['ok'] ? 'ok' : 'err', 'to' => 'social&view=page&post=' . $pid . '#p' . $pid];
+    }
     return ['msg' => $r['msg'], 'kind' => $r['ok'] ? 'ok' : 'err', 'to' => $r['ok'] ? 'social#s' . $r['id'] : 'social&view=content&rp=' . rawurlencode($key) . '#repost'];
+}
+
+/** "Repost with new words" right under a post on Social > Page posts: channels, day and time, an optional note. No other page. */
+function pm_rp_inline(string $vb, string $csrf, array $fp): string
+{
+    $video = str_contains((string)($fp['type'] ?? ''), 'video');
+    $chs = pm_rp_channels($vb, $video);
+    if (!$chs) {
+        return '';
+    }
+    $slot = strtotime(pm_social_free_slot(pm_social_posts(), $vb, time() + 3600)) ?: time() + 86400;
+    $h = '<details class="rp-inline"><summary class="btn small">Repost with new words</summary><form method="post" class="rp-form">'
+        . '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="repost">'
+        . '<input type="hidden" name="src" value="fb:' . pm_h((string)$fp['id']) . '"><input type="hidden" name="back_post" value="' . pm_h((string)$fp['id']) . '">'
+        . '<p class="hint mt-0">The same ' . ($video ? 'video' : 'picture') . ' with new words in your voice (one small AI call); your own prices in it may stay. It becomes a draft in the Plan at the time you choose, for you to approve.</p><div class="btns mt-0">';
+    foreach ($chs as $k => $l) {
+        $h .= '<label class="check"><input type="checkbox" name="ch[]" value="' . $k . '" checked> ' . pm_h($l) . '</label>';
+    }
+    return $h . '</div><div class="row"><div><label>Day</label><input type="date" name="date" value="' . date('Y-m-d', $slot) . '" min="' . date('Y-m-d') . '" required></div>'
+        . '<div><label>Time</label><input type="time" name="time" value="' . date('H:i', $slot) . '" required></div></div>'
+        . '<label>Anything to change (optional)</label><input type="text" name="note" maxlength="300" placeholder="e.g. mention the new rooms">'
+        . '<div class="btns"><button class="btn small primary">Write new words and schedule it</button></div></form></details>';
 }
 
 /** The Repost card on Social > Content. */

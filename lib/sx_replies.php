@@ -212,14 +212,14 @@ const PM_REPLY_NEVER = ['cheapest', 'lowest price', 'best price', 'number one', 
  * Reasons a reply may not go out (empty = fine). mode: 'reply' (public comment or first DM: max 400 chars, one link),
  * 'dm' (a Messenger answer you typed: max 1000), 'post' (an edited Page post: no length or link-count limit, links must still be ours).
  */
-function pm_reply_lint(string $text, string $brand, string $mode = 'reply'): array
+function pm_reply_lint(string $text, string $brand, string $mode = 'reply', array $allow = []): array
 {
     $t = trim($text);
     if ($t === '') {
         return ['Empty text.'];
     }
     $brand = pm_brand_norm($brand);
-    return (array)pm_inb_as($brand, function () use ($t, $brand, $mode) {
+    return (array)pm_inb_as($brand, function () use ($t, $brand, $mode, $allow) {
         $why = [];
         $phone = substr(pm_inb_wa_digits($brand) ?: preg_replace('/\D/', '', (string)(pm_settings()['phone'] ?? '')), -9);
         // links
@@ -263,8 +263,12 @@ function pm_reply_lint(string $text, string $brand, string $mode = 'reply'): arr
             }
         }
         // money
-        if (preg_match('/(?i:\b(MWK|USD|ZAR|ZMW|GBP|EUR|kwacha|dollars?)\b)|[$£€]\s?\d|(?<![A-Za-z])K\s?\d|\d\s?[Kk]\b|\b\d{1,3}(?:,\d{3})+\b|\b\d+\s*(?:per|a|\/)\s*night\b/u', $noPhone)) {
-            $why[] = 'Contains a price or money amount.';
+        $amts = function_exists('pm_money_new') ? pm_money_new($noPhone, $allow) : (preg_match('/(?i:\b(MWK|USD|ZAR|ZMW|GBP|EUR)\b)|[$£€]\s?\d|(?<![A-Za-z])K\s?\d/u', $noPhone) ? ['an amount'] : []);
+        if ($mode !== 'post' && !$amts && preg_match('/\b\d{1,3}(?:,\d{3})+\b/u', $noPhone, $big) && !in_array($big[0], $allow, true) && !preg_match('/' . preg_quote($big[0], '/') . '\s*(?:members|followers|guests|people|visitors|views|likes|km|m\b|metres|feet)/iu', $noPhone)) {
+            $amts = [$big[0]]; // a bare "50,000" in an answer reads as a price
+        }
+        if ($amts) {
+            $why[] = 'Contains a price or money amount (' . implode(', ', array_slice($amts, 0, 2)) . ').';
         }
         if (preg_match('/\b(guarantee[sd]?|guaranteed|promise[sd]?|100\s?%|assured)\b/iu', $t)) {
             $why[] = 'Promises or guarantees something.';

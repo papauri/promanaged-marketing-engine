@@ -260,7 +260,12 @@ function pm_fb_action(string $brand, string $what, string $id, string $text = ''
         return [false, $by[0] . ' already answered this comment ' . $by[1] . '. Not posted twice.'];
     }
     if (in_array($what, ['reply', 'edit'], true)) {
-        $bad = pm_reply_lint($text, $brand, $what === 'edit' ? 'post' : 'reply');
+        $orig = '';
+        if ($what === 'edit') { // the post as it is on the Page now: its own prices may stay in the new words
+            [$ok0, $d0] = pm_graph('GET', $id, ['fields' => 'message'], $c['token']);
+            $orig = $ok0 ? (string)($d0['message'] ?? '') : '';
+        }
+        $bad = pm_reply_lint($text, $brand, $what === 'edit' ? 'post' : 'reply', $orig !== '' && function_exists('pm_money_amounts') ? pm_money_amounts($orig) : []);
         if ($bad) {
             return [false, 'Not posted: ' . implode(' ', $bad)];
         }

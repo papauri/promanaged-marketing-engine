@@ -810,6 +810,24 @@ function pm_social_recent_from(array $posts, string $brand, string $exceptId = '
     return array_map(fn($p) => (string)$p['caption'], array_slice($rows, 0, $n));
 }
 
+/**
+ * The money amounts in a text: "MWK 45,000", "K50,000", "US$20", "€15", "50,000 kwacha", "80 a night". The word "kwacha" on its own ("pay in kwacha"),
+ * "4K" video or "10k followers" are not amounts.
+ */
+function pm_money_amounts(string $t): array
+{
+    preg_match_all('/(?:\b(?:MWK|USD|ZAR|ZMW|GBP|EUR)\s?|US\$\s?|[$£€]\s?|(?<![A-Za-z0-9])K\s?)\d[\d,.]*(?:\s?(?:k|m|million|thousand)\b)?|\b\d[\d,.]*\s?(?:kwacha|MWK|USD|dollars?|rand)\b|\b\d[\d,.]*\s*(?:per|a|\/)\s*night\b/iu', $t, $m);
+    return array_values(array_unique(array_map('trim', $m[0])));
+}
+
+/** The amounts in $t that are not among $allowed (the owner's own figures, as written in the post being edited or reposted). */
+function pm_money_new(string $t, array $allowed = []): array
+{
+    $norm = fn($s) => (string)preg_replace('/\D/', '', (string)$s); // the figure itself: "K30,000", "MWK 30 000" and "30,000 a night" are the same price
+    $ok = array_map($norm, $allowed);
+    return array_values(array_filter(pm_money_amounts($t), fn($a) => !in_array($norm($a), $ok, true)));
+}
+
 /** Reasons a caption may not be posted (empty list = fine). $post (optional) adds the pillar / proof checks. */
 function pm_social_lint(string $caption, string $brand, string $channel = 'facebook', array $recent = [], array $post = []): array
 {
@@ -825,8 +843,8 @@ function pm_social_lint(string $caption, string $brand, string $channel = 'faceb
         $why[] = 'Promises a guarantee.';
     }
     $priceOwn = trim((string)($post['price']['text'] ?? '')); // the owner's own price on a post from a photo: that exact figure may appear, no other
-    if (preg_match('/(?i:\b(MWK|USD|ZAR|ZMW|GBP|EUR|kwacha)\b)|[$£€]\s?\d|(?<![A-Za-z])K\s?\d|\d\s?[Kk]\b/', $priceOwn !== '' ? str_ireplace($priceOwn, '', $c) : $c)) {
-        $why[] = 'Contains a price or money amount.';
+    if ($new = pm_money_new($priceOwn !== '' ? str_ireplace($priceOwn, '', $c) : $c, (array)($post['allowed_amounts'] ?? []))) { // a repost keeps the owner's own figures from the original
+        $why[] = 'Contains a price or money amount (' . implode(', ', array_slice($new, 0, 2)) . ').';
     }
     if ($channel === 'facebook' && preg_match('/link in (my |our )?bio/i', $c)) {
         $why[] = '"Link in bio" does not work on Facebook.';
