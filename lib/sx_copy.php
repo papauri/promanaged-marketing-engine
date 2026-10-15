@@ -81,13 +81,14 @@ function pm_copy_write(string $brand, array $keys): array
         return [0, 'Tick at least one profile.'];
     }
     $f = pm_opt_facts($brand);
-    $source = implode(' ', array_filter(array_map('strval', [$f['name'], $f['tagline'], $f['about'], $f['audience'], implode(' ', $f['facts']), $f['address'], $f['phone'], $f['website'], $f['site']])));
+    $source = implode(' ', array_filter(array_map('strval', [$f['name'], $f['tagline'], $f['about'], $f['audience'], implode(' ', $f['facts']), implode(' ', $f['offers']), $f['address'], $f['phone'], $f['website'], $f['site']])));
     $voice = trim((string)(pm_brain($brand)['voice'] ?? ''));
     $system = pm_agents_company_brief('tiny') . "\nYou are a senior direct-response copywriter for " . $f['name'] . ', the kind who writes for small independent businesses, not for software companies. '
         . 'Write the profile texts the way the owner would say it across a counter, so a visitor knows in two seconds what they get and why to message. ' . PM_MARKETING_PSYCH . ' Vary the sentence length '
         . 'and use the place name where it is natural. Avoid taglines built from "where X meets Y", "your partner in", "passionate about", "solutions", "tailored", "innovative". No hashtags, emoji or links. '
         . 'For each field give three options that really differ: outcome (the result the customer wants, or the problem gone, first), proof (who it is for and the most convincing specific detail from the facts), '
         . 'action (short and memorable, ending with the easy next step when it fits the limit). '
+        . 'Show the whole of what we offer (everything_we_offer) wherever the limit allows, and never present us as only one part of it; a short field names the main areas in a few words. '
         . 'Every option must fit the character limit. Use ONLY the facts: no number, price, award, ranking or claim that is not in them, and never "best" or "leading". ' . PM_HUMAN_RULES
         . ($voice !== '' ? ' The owner describes their voice as: ' . mb_substr($voice, 0, 160) . '.' : '') . ' Reply JSON only.';
     $items = [];
@@ -95,7 +96,7 @@ function pm_copy_write(string $brand, array $keys): array
         $items[] = ['key' => $k, 'field' => PM_COPY_FIELDS[$k][0], 'limit' => PM_COPY_FIELDS[$k][1], 'about' => PM_COPY_FIELDS[$k][2], 'plain_version' => pm_copy_plain($brand, $k)];
     }
     $user = json_encode(['business' => $f['name'], 'tagline' => $f['tagline'], 'about' => mb_substr($f['about'], 0, 500), 'audience' => mb_substr($f['audience'], 0, 240), 'facts' => array_slice($f['facts'], 0, 8),
-            'town' => $f['address_real'] ? $f['address'] : 'Malawi', 'fields' => $items], JSON_UNESCAPED_UNICODE)
+            'everything_we_offer' => $f['offers'], 'town' => $f['address_real'] ? $f['address'] : 'Malawi', 'fields' => $items], JSON_UNESCAPED_UNICODE)
         . "\nJSON: {\"items\":[{\"key\":\"\",\"outcome\":\"\",\"proof\":\"\",\"action\":\"\"}]}";
     $out = pm_agent_json(pm_claude($system, $user, false, 350 + 330 * count($keys), 'write'));
     $list = is_array($out) ? (array_is_list($out) ? $out : (array)($out['items'] ?? [])) : [];

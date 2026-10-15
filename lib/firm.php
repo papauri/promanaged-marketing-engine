@@ -51,6 +51,74 @@ function pm_firm_goal(string $brand): array
     return ['signed' => [$signed, $tSigned], 'replies' => [$replies, $tReplies], 'pace' => $pace, 'line' => $line];
 }
 
+/* ---------------- everything we offer, kept in view ---------------- */
+
+const PM_OFFER_STOP = ['including', 'items', 'stock', 'locally', 'local', 'friendly', 'payment', 'international', 'orders', 'finding', 'buying', 'delivering', 'everyday', 'sessions', 'products',
+    'accounts', 'industry', 'system', 'systems', 'other', 'their', 'small', 'business', 'businesses', 'services', 'service', 'custom', 'internal', 'multi', 'tenant', 'management', 'their', 'about', 'where', 'which', 'user', 'users', 'post', 'launch', 'care', 'gear', 'tools', 'things', 'stuff'];
+
+/** Each offering (Sales > Targeting and messages) with the words that show a text is about it: [['name', 'text', 'keys' => [...]]]. Words shared by two offerings do not count. */
+function pm_offer_keys(string $brand): array
+{
+    $rows = [];
+    $seen = [];
+    foreach ((array)(pm_agents_config($brand)['offerings'] ?? []) as $o) {
+        [$name, $desc] = array_map('trim', explode(':', (string)$o, 2)) + ['', ''];
+        $words = array_unique(array_filter(preg_split('/[^\p{L}\p{N}]+/u', mb_strtolower($desc !== '' ? $desc : $name)) ?: [], fn($w) => mb_strlen($w) >= 4 && !in_array($w, PM_OFFER_STOP, true)));
+        foreach ($words as $w) {
+            $seen[$w] = ($seen[$w] ?? 0) + 1;
+        }
+        $rows[] = ['name' => $name, 'text' => (string)$o, 'keys' => array_values($words)];
+    }
+    foreach ($rows as $i => $r) {
+        $rows[$i]['keys'] = array_values(array_filter($r['keys'], fn($w) => $seen[$w] === 1));
+    }
+    return $rows;
+}
+
+/** Which offerings a text speaks about: [offering name => true/false]. */
+function pm_offer_in_text(string $brand, string $text): array
+{
+    $t = ' ' . mb_strtolower($text) . ' ';
+    $out = [];
+    foreach (pm_offer_keys($brand) as $r) {
+        $hit = false;
+        foreach ($r['keys'] as $w) {
+            if (preg_match('/(?<![\p{L}])' . preg_quote(mb_strlen($w) >= 6 ? rtrim($w, 's') : $w, '/') . '/u', $t)) { // "laptops" also finds "laptop"
+                $hit = true;
+                break;
+            }
+        }
+        $out[$r['name']] = $hit;
+    }
+    return $out;
+}
+
+/** How often each offering came up in this business's posts of the last $days days (published, approved or planned), least first: [name => n]. */
+function pm_offer_coverage(string $brand, int $days = 30): array
+{
+    $n = array_fill_keys(array_column(pm_offer_keys($brand), 'name'), 0);
+    if (!$n || !function_exists('pm_social_posts')) {
+        return $n;
+    }
+    foreach (pm_social_posts() as $p) {
+        if (($p['brand'] ?? 'promanaged') !== $brand || strtotime((string)($p['when'] ?? $p['created'] ?? '')) < strtotime("-$days days") || in_array($p['status'] ?? '', ['deleted', 'rejected'], true)) {
+            continue;
+        }
+        foreach (pm_offer_in_text($brand, ($p['headline'] ?? '') . ' ' . ($p['sub'] ?? '') . ' ' . ($p['caption'] ?? '')) as $k => $hit) {
+            $n[$k] += $hit ? 1 : 0;
+        }
+    }
+    asort($n);
+    return $n;
+}
+
+/** Every offering in one compact line for the agents' instructions, so no writer forgets one ('' when the business lists none). */
+function pm_offer_line(string $brand): string
+{
+    $o = array_values(array_filter(array_map(fn($x) => trim(mb_substr((string)$x, 0, 220)), (array)(pm_agents_config($brand)['offerings'] ?? []))));
+    return $o ? 'Everything we offer (never present us as only one of these): ' . implode(' | ', $o) . '.' : '';
+}
+
 /* ---------------- what wins ---------------- */
 
 /** The format a lead's first message was written in: a Write with AI format, the default message, or the agents' own draft. */

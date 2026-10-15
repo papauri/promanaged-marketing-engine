@@ -21,7 +21,7 @@ function pm_cd_brief(string $brand): array
     $saved = pm_studio_saved($brand);
     return ['f' => $f, 'name' => (string)$f['name'], 'voice' => trim((string)($brain['voice'] ?? '')), 'never' => trim((string)($brain['never'] ?? '')),
         'head' => $saved ? (string)$saved['headline'] : trim((string)$cfg['cover_head']), 'line' => $saved ? (string)$saved['subline'] : trim((string)$cfg['cover_line']),
-        'source' => pm_studio_facts_source($brand), 'factwords' => pm_editor_words(implode(' ', array_merge([$f['name'], $f['tagline'], $f['about'], $f['audience']], $f['facts'])))];
+        'source' => pm_studio_facts_source($brand), 'factwords' => pm_editor_words(implode(' ', array_merge([$f['name'], $f['tagline'], $f['about'], $f['audience']], $f['facts'], $f['offers'])))];
 }
 
 /** [system, user] for one round. Pure: easy to test. */
@@ -34,11 +34,12 @@ function pm_cd_prompt(array $brief, int $n, array $feedback, array $tried): arra
     }
     $system = pm_agents_company_brief('tiny') . "\nYou run the writers' room for " . $f['name'] . ' (Malawi). The cover of its social media pages has a headline (up to 60 characters) and one supporting line (up to 100 characters). '
         . 'Four writers each give ' . max(1, intdiv($n, 4)) . ' options with their own angle: ' . implode('; ', $writers) . '. Make every option clearly different from the others. A copy editor scores each option, and weak ones come back to you. '
+        . 'Between the headline and the line, a visitor must see the whole of what we offer (everything_we_offer), never only one part of it. '
         . (defined('PM_MARKETING_PSYCH') ? PM_MARKETING_PSYCH . ' ' : '')
         . 'Use ONLY what the facts say: no number, price, award, ranking, guarantee or claim that is not in them, no link, hashtag, emoji or exclamation mark, never "best" or "leading". '
         . PM_HUMAN_RULES . ($brief['voice'] !== '' ? ' The owner describes the voice as: ' . mb_substr($brief['voice'], 0, 160) . '.' : '') . ($brief['never'] !== '' ? ' Never say: ' . mb_substr($brief['never'], 0, 160) . '.' : '') . ' Reply JSON only.';
     $user = json_encode(['business' => $f['name'], 'tagline' => $f['tagline'], 'about' => mb_substr($f['about'], 0, 400), 'audience' => mb_substr($f['audience'], 0, 200), 'facts' => array_slice($f['facts'], 0, 8),
-        'town' => $f['address_real'] ? $f['address'] : 'Malawi', 'wording_in_use' => ['headline' => $brief['head'], 'line' => $brief['line']], 'already_proposed' => array_slice($tried, 0, 10), 'editor_said' => $feedback], JSON_UNESCAPED_UNICODE)
+        'everything_we_offer' => $f['offers'], 'town' => $f['address_real'] ? $f['address'] : 'Malawi', 'wording_in_use' => ['headline' => $brief['head'], 'line' => $brief['line']], 'already_proposed' => array_slice($tried, 0, 10), 'editor_said' => $feedback], JSON_UNESCAPED_UNICODE)
         . "\nJSON: {\"options\":[{\"writer\":\"\",\"headline\":\"\",\"line\":\"\",\"why\":\"one short sentence\"}]}";
     return [$system, $user];
 }

@@ -1038,7 +1038,7 @@ function pm_studio_clean(array $in, array $base, ?string $factsSource = null): a
 function pm_studio_facts_source(string $brand, array $spec = []): string
 {
     $f = pm_opt_facts($brand);
-    return implode(' ', array_filter(array_map('strval', [$f['name'], $f['tagline'], $f['about'], $f['audience'], implode(' ', $f['facts']), $f['address'], $f['phone'], $f['website'], $f['site'],
+    return implode(' ', array_filter(array_map('strval', [$f['name'], $f['tagline'], $f['about'], $f['audience'], implode(' ', $f['facts']), implode(' ', $f['offers'] ?? []), $f['address'], $f['phone'], $f['website'], $f['site'],
         $spec['headline'] ?? '', $spec['subline'] ?? '', $spec['eyebrow'] ?? '', implode(' ', (array)($spec['whisper'] ?? []))])));
 }
 

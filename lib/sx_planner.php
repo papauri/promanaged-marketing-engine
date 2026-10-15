@@ -227,6 +227,7 @@ function pm_sx_prompt(string $brand, string $company, string $brief, array $item
     $system = $brief . "\nYou write short social posts for $company in Malawi" . ($travel ? ' for lodge, guest house, B&B and safari camp owners, and for travellers' : (pm_brand_is_custom($brand) ? ' for ' . (rtrim(trim((string)(pm_brain($brand)['audience'] ?? '')), '.') ?: 'our customers') : ' for small business owners')) . ".\n"
         . "Write one post for each item. Per post: caption of 25 to 70 words in plain, warm English, one idea. Use ONLY the facts given for that post. Never invent numbers, names, places, prices, results, guarantees, response times or claims like best, cheapest, fastest, leading, number one. "
         . "Say Kwacha amounts only if a fact gives one. Say free or no commission only if a fact says so. No hashtags, links, emoji or phone numbers. Do not start with Hello or the business name. "
+        . "When an item has feature_offer, that part of what we offer is what the post shows (its own words are facts you may use), tied to the item's topic. "
         . "Follow the item's hook pattern, audience and cta. headline: at most 7 words (printed on the picture). sub: at most 12 words. "
         . "slides: only when the item asks for them, each {h (at most 6 words), t (at most 14 words)}, from the facts only. video: only for a reel: {hook_2s, shots [3 to 5 of {secs, show, say, onscreen}], total_secs (at most 30), cta, cover_text, music_note}. "
         . ($learn !== '' ? "What has worked for this audience: $learn " : '') . 'Reply with JSON only.';
@@ -458,6 +459,9 @@ function pm_sx_build(string $brand, int $n, string $start, string $focus, bool $
         $t0 = function_exists('pm_usage_mark') ? pm_usage_mark() : 0;
         $s = pm_settings();
         $items = [];
+        $offerText = array_column(function_exists('pm_offer_keys') ? pm_offer_keys($brand) : [], 'text', 'name');
+        $offerTurn = $offerText ? array_keys(pm_offer_coverage($brand)) : []; // what we sell, the least posted about lately first: no part of the business is forgotten
+        $k = 0;
         foreach ($aiIdx as $i) {
             $slot = $slots[$i];
             $it = ['i' => $i, 'pillar' => $slot['pillar'], 'hook' => pm_sx_hook_patterns()[$slot['hook_pattern']][0] ?? '', 'audience' => $slot['audience'], 'format' => $slot['format'],
@@ -472,6 +476,9 @@ function pm_sx_build(string $brand, int $n, string $start, string $focus, bool $
             }
             if (isset($exp[$i])) {
                 $it['note'] = $exp[$i]['ins'];
+            }
+            if ($offerTurn) {
+                $it['feature_offer'] = $offerText[$offerTurn[$k++ % count($offerTurn)]];
             }
             $items[] = $it;
         }

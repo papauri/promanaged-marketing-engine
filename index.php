@@ -685,8 +685,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $raw['daily_usd_budget'] = $c['daily_usd_budget'];
                 $raw['quality'] = $c['quality'];
                 $own = ['sectors', 'cities', 'markets', 'new_per_day', 'scouts_per_day', 'send_cap', 'no_limit', 'wa_cap', 'followup_days', 'max_followups', 'proposals_per_day', 'enabled'];
+                $own[] = 'offerings'; // every business keeps its own list of what it offers
                 if (pm_brand_is_custom(pm_brand())) {
-                    $own = array_merge($own, ['offerings', 'existing_clients']);
+                    $own = array_merge($own, ['existing_clients']);
                     if ($grp === 'targeting') { $c['existing_clients'] = array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($_POST['cfg']['existing_clients'] ?? ''))))); }
                 }
                 $raw[pm_brand()] = array_intersect_key($c, array_flip($own));

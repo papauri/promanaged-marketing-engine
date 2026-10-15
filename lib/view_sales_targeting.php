@@ -21,8 +21,8 @@ echo function_exists('pm_adv_card') ? pm_adv_card($vb, $csrf) : '';
   <?= $agent('config') ?>
   <div class="card">
     <h2>Who we look for</h2>
-    <?php if (!$travel): ?><label>What we sell (one line each, "Name: description")</label>
-    <textarea name="cfg[offerings]" rows="4"><?= pm_h(implode("\n", (array)$acfg['offerings'])) ?></textarea><?php endif; ?>
+    <label>Everything we offer (one line each, "Name: description"). Every agent, writer, cover, profile, post and ad reads this and the planner takes turns through it, so list every part of the business.</label>
+    <textarea name="cfg[offerings]" rows="5"><?= pm_h(implode("\n", (array)$acfg['offerings'])) ?></textarea>
     <label>Types of business to look for <span class="muted">(comma separated)</span></label>
     <textarea name="cfg[sectors]" rows="2"><?= pm_h(implode(', ', (array)$acfg['sectors'])) ?></textarea>
     <label>Where we sell <span class="muted">(countries, home first; add "Worldwide" to look and write beyond them)</span></label>

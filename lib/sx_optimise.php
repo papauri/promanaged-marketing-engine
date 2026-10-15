@@ -164,7 +164,8 @@ function pm_opt_facts(string $brand): array
         $lines = array_values(array_filter(array_map('trim', preg_split('/\R/', (string)($br['facts'] ?? '')) ?: [])));
         return ['name' => trim((string)($s['company_name'] ?? '')) ?: pm_brand_name($brand), 'tagline' => trim((string)($s['tagline'] ?? '')), 'phone' => trim((string)($s['phone'] ?? '')),
             'email' => trim((string)($s['email'] ?? '')), 'website' => $site, 'site' => $link['url'] !== '' ? $link['url'] : $site, 'address' => $addr, 'address_real' => $addr !== '' && !preg_match('/^malawi$/i', $addr),
-            'about' => trim((string)($br['about'] ?? '')), 'audience' => trim((string)($br['audience'] ?? '')), 'facts' => $lines];
+            'about' => trim((string)($br['about'] ?? '')), 'audience' => trim((string)($br['audience'] ?? '')), 'facts' => $lines,
+            'offers' => array_values(array_filter(array_map('strval', (array)(pm_agents_config($brand)['offerings'] ?? []))))]; // everything we sell (Sales > Targeting and messages)
     } finally {
         pm_brand_set($prev);
     }
@@ -412,7 +413,7 @@ function pm_opt_tagline_alts(array $f, array $st, array $live): array
     pm_opt_alt($alts, pm_opt_offer_phrase($first), 'What you offer, from your description', $have);
     pm_opt_alt($alts, pm_opt_name_led($f['name'], $first), 'Your description, with the name in front', $have);
     pm_opt_alt($alts, pm_opt_oneline($first), 'Your description, shortened', $have);
-    $source = implode(' ', array_filter(array_map('strval', [$f['name'], $f['tagline'], $f['about'], $f['audience'], implode(' ', $f['facts']), $live['facebook']['about'] ?? '', $live['instagram']['biography'] ?? '', $live['whatsapp']['about'] ?? ''])));
+    $source = implode(' ', array_filter(array_map('strval', [$f['name'], $f['tagline'], $f['about'], $f['audience'], implode(' ', $f['facts']), implode(' ', $f['offers']), $live['facebook']['about'] ?? '', $live['instagram']['biography'] ?? '', $live['whatsapp']['about'] ?? ''])));
     return array_slice(array_values(array_filter($alts, fn($a) => mb_strlen($a['text']) <= 120 && pm_opt_ai_ok($a['text'], 120, $source))), 0, 5);
 }
 
@@ -534,7 +535,18 @@ function pm_opt_check_business(string $brand, array $f, array $st): array
     $it[] = pm_opt_it('business', 'biz_about', 'What the business does and for whom', $aboutOk ? 'ok' : 'missing', 3, 'The suggestions below are written from it; without it they stay thin.',
         array_replace(['current' => $f['about'], 'how' => 'go', 'link' => '?tab=social&view=voice&brand=' . $brand, 'link_label' => 'Open Brand > Voice', 'note' => 'Brand > Voice (or add the website and press "Study the business again").'],
             $a ? ['how' => 'app', 'input' => 'textarea', 'limit' => 600, 'rows' => 4, 'button' => 'Save as the description', 'note' => 'The text on your profiles says it already. Read it, edit it, then save it as the description every suggestion is written from (change it any time in Brand > Voice).'] + $pick($a) : []));
+    if ($miss = pm_opt_offers_missing($brand, $f['about'] . ' ' . $f['tagline'])) { // everything we offer, in the words every suggestion is written from
+        $it[] = pm_opt_it('business', 'biz_offers', 'Your description names everything you offer', 'weak', 3, 'Every profile, cover and post is written from it: an offer it leaves out gets forgotten everywhere.',
+            ['current' => 'Not named: ' . implode(', ', $miss), 'how' => 'go', 'link' => '?tab=social&view=voice&brand=' . $brand, 'link_label' => 'Open Brand > Voice',
+                'note' => 'Add a few words about ' . implode(' and ', $miss) . ' to what the business does. The full list is under Sales > Targeting and messages.']);
+    }
     return $it;
+}
+
+/** The offerings a text leaves out (their names), from the list under Sales > Targeting and messages. */
+function pm_opt_offers_missing(string $brand, string $text): array
+{
+    return function_exists('pm_offer_in_text') ? array_keys(array_filter(pm_offer_in_text($brand, $text), fn($hit) => !$hit)) : [];
 }
 
 function pm_opt_check_facebook(string $brand, array $f, array $st): array
@@ -568,6 +580,11 @@ function pm_opt_check_facebook(string $brand, array $f, array $st): array
     [$descP, $descAi] = pm_opt_pick($brand, 'fb_description', pm_opt_long($f, 250), 255, $st, $f);
     $it[] = pm_opt_it('facebook', 'fb_description', 'Page description', mb_strlen((string)($pg['description'] ?? '')) >= 80 ? 'ok' : ($has('description') ? 'weak' : 'missing'), 2, 'What visitors read on the About tab.',
         ['current' => (string)($pg['description'] ?? ''), 'proposal' => $descP, 'ai' => $descAi, 'how' => 'api', 'input' => 'textarea', 'limit' => 255, 'bulk' => $descP !== '', 'button' => 'Apply to Facebook']);
+    if ($miss = pm_opt_offers_missing($brand, ($pg['about'] ?? '') . ' ' . ($pg['description'] ?? ''))) { // the Page's own words leave part of the business out
+        $it[] = pm_opt_it('facebook', 'fb_offers', 'The Page names everything you offer', 'weak', 3, 'Visitors only ask for what they can see you do.',
+            ['current' => 'The intro and description leave out: ' . implode(', ', $miss), 'how' => 'go', 'link' => '#words', 'link_label' => 'Write the profile words',
+                'note' => 'The profile words are now written from everything you offer: choose one for the description and apply it.']);
+    }
     $fbHours = pm_opt_hours_from_fb((array)($pg['hours'] ?? []));
     $it[] = pm_opt_it('facebook', 'fb_hours', 'Opening hours', $fbHours ? 'ok' : 'missing', 3, 'Visitors check them first. Customers message you at the wrong time when they are missing.',
         ['current' => $fbHours ? pm_opt_hours_text($fbHours) : '', 'proposal' => pm_opt_hours_text(pm_opt_hours($brand)), 'how' => 'api', 'input' => 'hours', 'bulk' => !empty($st['hours_confirmed']), 'button' => 'Apply to Facebook',
@@ -1087,7 +1104,7 @@ function pm_opt_polish(string $brand): array
     if (!$items) {
         return [0, 0, 'There is no text suggestion to polish.'];
     }
-    $source = implode(' ', array_filter(array_map('strval', [$f['name'], $f['tagline'], $f['about'], $f['audience'], implode(' ', $f['facts']), $f['address'], $f['phone']])));
+    $source = implode(' ', array_filter(array_map('strval', [$f['name'], $f['tagline'], $f['about'], $f['audience'], implode(' ', $f['facts']), implode(' ', $f['offers']), $f['address'], $f['phone']])));
     $system = pm_agents_company_brief('tiny') . "\nYou polish short profile texts for " . $f['name'] . '. Rewrite each text so it reads naturally and sells, as the owner would say it, within its character limit. ' . PM_MARKETING_PSYCH . ' '
         . 'Use ONLY what the text and the facts already say: add no claim, number, price, award, place, name or promise, and no link, email, phone number, hashtag, emoji or exclamation mark. Do not say "best" or "leading". Reply JSON only.';
     $user = json_encode(['facts' => array_slice($f['facts'], 0, 8), 'items' => array_values($items)], JSON_UNESCAPED_UNICODE) . "\nJSON: {\"items\":[{\"key\":\"\",\"text\":\"\"}]}";

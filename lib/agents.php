@@ -22,7 +22,7 @@ function pm_agents_default_config(): array
         // What we sell. One per line: "Name: description". Every agent reads this, so edit it under Sales > Targeting and messages.
         'offerings'       => [
             'Build: custom web apps, internal tools and dashboards, multi-tenant products with user accounts, business websites, and an industry management system (hotels and lodges, restaurants and bars, gyms, conference venues, retail)',
-            'Source: finding, buying and delivering laptops, desktops, gaming PCs, monitors and peripherals, including items out of stock locally, with local-friendly payment on international orders',
+            'Source: finding, buying and delivering laptops, desktops, gaming PCs and gaming gear (controllers, headsets and accessories), monitors, keyboards and mice, including items out of stock locally, with local-friendly payment on international orders',
             'Support: IT support, device setup and migration, email, backups and everyday security, remote support sessions, post-launch care',
         ],
         // Who to look for. Free text, one per search rotation.
@@ -55,6 +55,13 @@ function pm_agents_default_config(): array
 function pm_travel_agent_defaults(): array
 {
     return [
+        // What Travel Malawi offers (its own, never ProManaged IT's), from its facts: every agent and writer reads this
+        'offerings' => [
+            "Listing: a free listing on Malawi's own directory of independent stays, with no commission, no listing fee and no monthly charge",
+            "Bookings: booking requests straight to the host's dashboard, confirmations over WhatsApp, and guests who pay the property directly in kwacha",
+            'Set-up help: the concierge team builds the page, verifies the photos and messages the host on WhatsApp',
+            'Ulendo concierge: an AI companion that helps write the listing and answer guest enquiries',
+        ],
         'sectors' => ['lodges and guest houses', 'bed and breakfasts and cottages', 'safari camps and eco-lodges', 'lakeshore resorts and beach lodges', 'boutique and city hotels', 'backpackers and hostels'],
         'cities' => ['Cape Maclear', 'Nkhata Bay', 'Mangochi', 'Salima', 'Nkhotakota', 'Livingstonia', 'Karonga', 'Liwonde', 'Zomba', 'Mulanje', 'Blantyre', 'Lilongwe', 'Mzuzu', 'Chintheche'],
         'markets' => ['Malawi'],
@@ -92,7 +99,7 @@ function pm_agents_config(?string $brand = null): array
         $base = pm_agents_config('promanaged');
         $stored = (array)(pm_load('agents_config', 'pm_agents_default_config')['travel'] ?? []);
         $t = array_replace_recursive(pm_travel_agent_defaults(), $stored);
-        foreach (['sectors', 'cities'] as $k) {
+        foreach (['sectors', 'cities', 'offerings'] as $k) { // its own lists, never ProManaged IT's
             if (isset($stored[$k]) && is_array($stored[$k])) {
                 $t[$k] = array_values($stored[$k]);
             }
@@ -974,8 +981,8 @@ function pm_brain_defaults(string $brand): array
         ];
     }
     return [
-        'about' => 'Builds software and websites (including a management system for hotels, restaurants, gyms, venues and shops), sources computer equipment, and provides IT support, working from Malawi.',
-        'facts' => "The management system runs in a web browser, with Kwacha pricing, VAT and tourism levy built in\nIt already runs at hotels in Malawi\nWe source laptops, desktops and equipment, including items not sold locally, with local-friendly payment\nIT support by WhatsApp, email, phone and remote session during working hours",
+        'about' => 'Builds software and websites (including a management system for hotels, restaurants, gyms, venues and shops), sources computers and gaming equipment (gaming PCs, controllers, headsets and accessories), and provides IT support, working from Malawi.',
+        'facts' => "The management system runs in a web browser, with Kwacha pricing, VAT and tourism levy built in\nIt already runs at hotels in Malawi\nWe source laptops, desktops and equipment, including items not sold locally, with local-friendly payment\nIT support by WhatsApp, email, phone and remote session during working hours\nWe source gaming equipment too: gaming PCs, controllers, headsets and accessories, including items not sold locally",
         'audience' => 'Owners and managers of small and medium businesses, most of them in Malawi, and businesses anywhere else that need us.',
         'voice' => 'Friendly, practical, honest, plain words.',
         'never' => 'Never promise results, deadlines or out-of-hours support.',
@@ -1003,8 +1010,8 @@ function pm_agents_company_brief(string $level = 'short'): string
     if (pm_brand() === 'travel') {
         return $core . ' Package for every lead: #' . pm_onboarding_index() . ' Stay Onboarding.';
     }
-    if ($level === 'tiny') {
-        return $core;
+    if ($level === 'tiny') { // the writers, social and ads see every offering too, in one line
+        return trim($core . ' ' . (function_exists('pm_offer_line') ? pm_offer_line(pm_brand()) : ''));
     }
     $cfg = pm_agents_config();
     if (pm_brand_is_custom(pm_brand())) { // no price list or pain-point library: what it offers, in its own words

@@ -42,7 +42,7 @@ function pm_listen_wants(string $brand): string
     if (pm_brand_is_custom($brand)) {
         return mb_substr(implode(', ', array_filter($off)) ?: 'what we offer', 0, 200);
     }
-    return 'IT help: a website or web app, a business or booking system, a laptop, computer or gaming PC, IT support, networking, email or backups';
+    return 'IT help: a website or web app, a business or booking system, a laptop, computer or gaming PC, gaming gear (controllers, headsets, accessories), IT support, networking, email or backups';
 }
 
 /** The searches Thandi runs today: a few towns a day in turn, in the words people really use when they ask. */
