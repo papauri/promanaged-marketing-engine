@@ -57,8 +57,8 @@ $form = function (string $id, array $it) use ($sx, $hid, $sel, $cur) {
   <ol class="t-sm">
     <li>In Commerce Manager, open your catalogue, then <b>Data sources › Add items › Data feed</b>, and choose <b>Commerce Manager</b> as the format.</li>
     <li>Choose <b>Use a URL</b> and paste this address:
-      <div class="copyrow"><input type="text" readonly value="<?= pm_h($feedXml) ?>" id="feedxml" aria-label="The feed address"><button type="button" class="btn small" data-copy-target="#feedxml">Copy</button></div>
-      <span class="muted">The same items as CSV, if you prefer: <a href="<?= pm_h($feedCsv) ?>" target="_blank" rel="noopener"><?= pm_h($feedCsv) ?></a></span></li>
+      <div class="copyrow"><input type="text" readonly value="<?= pm_h($feedCsv) ?>" id="feedcsv" aria-label="The feed address"><button type="button" class="btn small" data-copy-target="#feedcsv">Copy</button></div>
+      <span class="muted">It is in Meta's own template columns, with where you sell (a centre point and a radius) on every item, which Meta needs before it uploads an item. The same items as XML: <a href="<?= pm_h($feedXml) ?>" target="_blank" rel="noopener"><?= pm_h($feedXml) ?></a></span></li>
     <li>Set the schedule to <b>daily</b>, in <?= pm_h($cur) ?>. Facebook then picks up every change made here by itself.</li>
     <li>When the shop is live, paste its link below, so the team and the profiles can point people to it.</li>
   </ol>
@@ -68,6 +68,10 @@ $form = function (string $id, array $it) use ($sx, $hid, $sel, $cur) {
     <div><label>Your Facebook Shop link</label><input type="url" name="shop_url" value="<?= pm_h((string)$st['shop_url']) ?>" placeholder="https://www.facebook.com/commerce/shops/…"></div>
     <div><label>Catalogue ID <span class="muted">(optional)</span></label><input type="text" name="catalog_id" inputmode="numeric" value="<?= pm_h((string)$st['catalog_id']) ?>"></div>
     <div><label>Currency</label><input type="text" name="currency" maxlength="3" value="<?= pm_h($cur) ?>"></div>
+    <?php [$aLat, $aLng, $aKm, $aTown] = pm_shop_area($vb); ?>
+    <div><label>We sell from</label><select name="area_town"><?php foreach (array_keys(PM_SHOP_TOWNS) as $tw): ?><option value="<?= pm_h($tw) ?>"<?= $tw === $aTown ? ' selected' : '' ?>><?= pm_h($tw) ?></option><?php endforeach; ?></select></div>
+    <div><label>And deliver within (km)</label><input type="number" name="area_km" min="1" max="2000" value="<?= (int)$aKm ?>" title="500 km from Lilongwe covers all of Malawi"></div>
+    <div><label>Or our exact point <span class="muted">(latitude, longitude)</span></label><div class="two"><input type="text" name="area_lat" inputmode="decimal" placeholder="-13.9626" value="<?= pm_h(is_numeric($st['area_lat'] ?? null) ? (string)$st['area_lat'] : '') ?>"><input type="text" name="area_lng" inputmode="decimal" placeholder="33.7741" value="<?= pm_h(is_numeric($st['area_lng'] ?? null) ? (string)$st['area_lng'] : '') ?>"></div></div>
     <div class="btns"><button class="btn">Save</button><?php if ($st['shop_url'] !== ''): ?><a class="btn ghost" href="<?= pm_h((string)$st['shop_url']) ?>" target="_blank" rel="noopener">Open the shop</a><?php endif; ?></div>
   </form>
 </section>

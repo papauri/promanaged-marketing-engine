@@ -16,6 +16,35 @@
 const PM_SHOP_AVAIL = ['in stock' => 'In stock', 'out of stock' => 'Out of stock'];
 const PM_SHOP_COND = ['new' => 'New', 'used' => 'Used'];
 
+/** Towns a shop can sell from, with their centre point (latitude, longitude). */
+const PM_SHOP_TOWNS = ['Lilongwe' => [-13.9626, 33.7741], 'Blantyre' => [-15.7861, 35.0058], 'Mzuzu' => [-11.4656, 34.0207], 'Zomba' => [-15.3860, 35.3188],
+    'Mangochi' => [-14.4782, 35.2645], 'Salima' => [-13.7804, 34.4587], 'Kasungu' => [-13.0333, 33.4833], 'Karonga' => [-9.9333, 33.9333], 'Nkhata Bay' => [-11.6066, 34.2907],
+    'Liwonde' => [-15.0667, 35.2333], 'Nkhotakota' => [-12.9274, 34.2961], 'Dedza' => [-14.3779, 34.3332], 'Mulanje' => [-16.0316, 35.5000], 'Cape Maclear' => [-14.0270, 34.8380],
+    'Chintheche' => [-11.8333, 34.1667], 'Lusaka' => [-15.3875, 28.3228], 'Harare' => [-17.8252, 31.0335], 'Johannesburg' => [-26.2041, 28.0473], 'Nairobi' => [-1.2921, 36.8219],
+    'Dar es Salaam' => [-6.7924, 39.2083], 'Maputo' => [-25.9692, 32.5732], 'Gaborone' => [-24.6282, 25.9231], 'Kampala' => [0.3476, 32.5825], 'Kigali' => [-1.9441, 30.0619]];
+
+/**
+ * Where the shop sells: one complete location for every item, as Meta asks for ("a centre point with a radius"): [lat, lng, radius km, label].
+ * The owner's own point when saved, else the town chosen, else the first town the business works in that we know, else Lilongwe; 500 km by default (all of Malawi from Lilongwe).
+ */
+function pm_shop_area(string $brand): array
+{
+    $st = pm_shop_state($brand);
+    $km = max(1, min(2000, (int)($st['area_km'] ?? 0) ?: 500));
+    if (is_numeric($st['area_lat'] ?? null) && is_numeric($st['area_lng'] ?? null) && abs((float)$st['area_lat']) <= 90 && abs((float)$st['area_lng']) <= 180) {
+        return [(float)$st['area_lat'], (float)$st['area_lng'], $km, trim((string)($st['area_town'] ?? '')) ?: 'your own point'];
+    }
+    $towns = array_merge([(string)($st['area_town'] ?? '')], array_map('strval', function_exists('pm_agents_config') ? (array)(pm_agents_config($brand)['cities'] ?? []) : []));
+    foreach ($towns as $t) {
+        foreach (PM_SHOP_TOWNS as $name => $ll) {
+            if ($t !== '' && strcasecmp(trim($t), $name) === 0) {
+                return [$ll[0], $ll[1], $km, $name];
+            }
+        }
+    }
+    return [PM_SHOP_TOWNS['Lilongwe'][0], PM_SHOP_TOWNS['Lilongwe'][1], $km, 'Lilongwe'];
+}
+
 function pm_shop_state(string $brand): array
 {
     return (array)(pm_load('shop', fn() => [])[$brand] ?? []) + ['items' => [], 'candidates' => [], 'shop_url' => '', 'catalog_id' => '', 'currency' => '', 'at' => '', 'scan_at' => '', 'error' => ''];
@@ -140,6 +169,9 @@ function pm_shop_feed_xml(string $brand): string
     $x = fn($v) => htmlspecialchars((string)$v, ENT_XML1 | ENT_QUOTES, 'UTF-8');
     $out = '<?xml version="1.0" encoding="UTF-8"?>' . "\n" . '<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0">' . "\n<channel>\n"
         . '<title>' . $x((string)$s['company_name']) . "</title>\n<link>" . $x(pm_shop_base() . '?b=' . rawurlencode($brand)) . "</link>\n<description>" . $x((string)$s['company_name'] . ' shop') . "</description>\n";
+    [$lat, $lng, $km] = pm_shop_area($brand);
+    $loc = '<availability_circle_origin><latitude>' . $lat . '</latitude><longitude>' . $lng . "</longitude></availability_circle_origin>\n"
+        . '<availability_circle_radius>' . $km . "</availability_circle_radius>\n<availability_circle_radius_unit>km</availability_circle_radius_unit>\n"; // where the item is sold: Meta refuses an item without it
     foreach (pm_shop_items($brand, true) as $id => $it) {
         if (trim((string)$it['title']) === '' || (float)$it['price'] <= 0 || pm_shop_image_url($brand, $it) === '') {
             continue;
@@ -152,6 +184,7 @@ function pm_shop_feed_xml(string $brand): string
             . '<g:link>' . $x(pm_shop_item_url($brand, $id)) . "</g:link>\n<g:image_link>" . $x(pm_shop_image_url($brand, $it)) . "</g:image_link>\n"
             . '<g:brand>' . $x(trim((string)($it['brand'] ?? '')) !== '' ? $it['brand'] : $s['company_name']) . "</g:brand>\n"
             . (trim((string)($it['category'] ?? '')) !== '' ? '<g:google_product_category>' . $x($it['category']) . "</g:google_product_category>\n" : '')
+            . $loc
             . (trim((string)($it['fb_category'] ?? '')) !== '' ? '<fb_product_category>' . $x($it['fb_category']) . "</fb_product_category>\n" : '')
             . (trim((string)($it['group'] ?? '')) !== '' ? '<g:product_type>' . $x($it['group']) . "</g:product_type>\n" : '')
             . "</item>\n";
@@ -164,7 +197,9 @@ function pm_shop_feed_csv(string $brand): string
 {
     $cur = pm_shop_currency($brand);
     $h = fopen('php://temp', 'r+');
-    fputcsv($h, ['id', 'title', 'description', 'availability', 'condition', 'link', 'image_link', 'brand', 'price', 'google_product_category', 'fb_product_category', 'sale_price', 'item_group_id', 'product_tags[0]']);
+    fputcsv($h, ['id', 'title', 'description', 'availability', 'condition', 'link', 'image_link', 'brand', 'price', 'google_product_category', 'fb_product_category', 'sale_price', 'item_group_id', 'product_tags[0]',
+        'availability_circle_origin.latitude', 'availability_circle_origin.longitude', 'availability_circle_radius_unit', 'availability_circle_radius']);
+    [$lat, $lng, $km] = pm_shop_area($brand); // one complete location for every item (Meta refuses an item without it)
     $was = pm_brand();
     pm_brand_set($brand);
     $co = (string)pm_settings()['company_name'];
@@ -176,7 +211,8 @@ function pm_shop_feed_csv(string $brand): string
         fputcsv($h, [$id, mb_substr((string)$it['title'], 0, 200), trim((string)$it['description']), isset(PM_SHOP_AVAIL[$it['availability'] ?? '']) ? $it['availability'] : 'in stock',
             isset(PM_SHOP_COND[$it['condition'] ?? '']) ? $it['condition'] : 'new', pm_shop_item_url($brand, $id), pm_shop_image_url($brand, $it), trim((string)($it['brand'] ?? '')) ?: $co,
             pm_shop_money((float)$it['price'], $cur), (string)($it['category'] ?? ''), (string)($it['fb_category'] ?? ''),
-            ($it['sale_price'] ?? '') !== '' && (float)$it['sale_price'] > 0 && (float)$it['sale_price'] < (float)$it['price'] ? pm_shop_money((float)$it['sale_price'], $cur) : '', '', (string)($it['group'] ?? '')]);
+            ($it['sale_price'] ?? '') !== '' && (float)$it['sale_price'] > 0 && (float)$it['sale_price'] < (float)$it['price'] ? pm_shop_money((float)$it['sale_price'], $cur) : '', '', (string)($it['group'] ?? ''),
+            (string)$lat, (string)$lng, 'km', (string)$km]);
     }
     rewind($h);
     return (string)stream_get_contents($h);
@@ -413,7 +449,14 @@ function pm_do_shop_settings(string $vb): array
     if ($url !== '' && !preg_match('#^https://[^\s]+$#', $url)) {
         return ['msg' => 'The shop link must start with https://', 'kind' => 'err', 'to' => 'social&view=shop'];
     }
-    pm_shop_update($vb, fn($s) => ['shop_url' => $url, 'catalog_id' => $cat, 'currency' => strlen($cur) === 3 ? $cur : ''] + $s);
+    $town = (string)($_POST['area_town'] ?? '');
+    $town = isset(PM_SHOP_TOWNS[$town]) ? $town : '';
+    $lat = trim((string)($_POST['area_lat'] ?? ''));
+    $lng = trim((string)($_POST['area_lng'] ?? ''));
+    $own = is_numeric($lat) && is_numeric($lng) && abs((float)$lat) <= 90 && abs((float)$lng) <= 180;
+    $km = max(1, min(2000, (int)($_POST['area_km'] ?? 500)));
+    pm_shop_update($vb, fn($s) => ['shop_url' => $url, 'catalog_id' => $cat, 'currency' => strlen($cur) === 3 ? $cur : '', 'area_town' => $town, 'area_km' => $km,
+        'area_lat' => $own ? (float)$lat : '', 'area_lng' => $own ? (float)$lng : ''] + $s);
     return ['msg' => 'Shop details saved.', 'kind' => 'ok', 'to' => 'social&view=shop'];
 }
 
