@@ -146,6 +146,9 @@ function pm_copy_use(string $brand, string $key, int $i, bool $apply): array
 function pm_do_copy_write(string $vb): array
 {
     $at = preg_replace('/[^a-z0-9_-]/i', '', (string)($_POST['anchor'] ?? '')) ?: 'words'; // back to the card that asked
+    if (($_POST['back'] ?? '') === 'kit') { // asked from Brand > Brand kit (the Facebook bio)
+        return ['to' => 'social&view=kit#fbbio'] + pm_do_copy_write_on($vb);
+    }
     $keys = array_values(array_filter((array)($_POST['keys'] ?? []), 'is_string'));
     $groups = array_values(array_filter((array)($_POST['groups'] ?? []), 'is_string'));
     foreach (PM_COPY_FIELDS as $k => [, , , $g]) {
@@ -162,6 +165,45 @@ function pm_do_copy_write(string $vb): array
         return ['msg' => 'The AI could not write them: ' . mb_substr($e->getMessage(), 0, 120) . '. Nothing changed.', 'kind' => 'err', 'to' => 'social&view=optimise#' . $at];
     }
     return ['msg' => $m, 'kind' => $n > 0 ? 'ok' : 'err', 'to' => 'social&view=optimise#' . $at];
+}
+
+/** pm_do_copy_write without the redirect: [msg, kind] for another screen. */
+function pm_do_copy_write_on(string $vb): array
+{
+    $keys = array_values(array_filter((array)($_POST['keys'] ?? []), 'is_string'));
+    if (!pm_agents_ready() && !isset($GLOBALS['PM_AI_STUB'])) {
+        return ['msg' => 'The AI needs a key in .env first.', 'kind' => 'err'];
+    }
+    try {
+        [$n, $m] = pm_copy_write($vb, $keys);
+    } catch (Throwable $e) {
+        return ['msg' => 'The AI could not write them: ' . mb_substr($e->getMessage(), 0, 120) . '. Nothing changed.', 'kind' => 'err'];
+    }
+    return ['msg' => $m, 'kind' => $n > 0 ? 'ok' : 'err'];
+}
+
+/** Brand > Brand kit, the Facebook bio: the intro or description as typed or chosen, put on the Page now (or kept as the suggestion when the Page is not connected). */
+function pm_do_kit_bio(string $vb): array
+{
+    $key = (string)($_POST['key'] ?? '');
+    $text = trim((string)preg_replace('/\s+/u', ' ', (string)($_POST['text'] ?? $_POST['own'] ?? ''))); // an option's button, or the words typed in the box
+    $to = 'social&view=kit#fbbio';
+    if (!in_array($key, ['fb_about', 'fb_description'], true) || $text === '') {
+        return ['msg' => 'Write the words first.', 'kind' => 'err', 'to' => $to];
+    }
+    [$label, $limit] = PM_COPY_FIELDS[$key];
+    if (mb_strlen($text) > $limit) {
+        return ['msg' => $label . ' is ' . mb_strlen($text) . ' characters; Facebook takes ' . $limit . '. Shorten it and press again.', 'kind' => 'err', 'to' => $to];
+    }
+    pm_opt_update($vb, function (array $d) use ($key, $text) {
+        $d['ai'][$key] = $text; // the suggestion on Optimise and the Audit too
+        return $d;
+    });
+    if (!pm_social_cfg($vb)['ready']) {
+        return ['msg' => $label . ' saved. Connect the Facebook Page (Operations > Connections) to put it on the Page with one press, or copy it in by hand.', 'kind' => 'ok', 'to' => $to];
+    }
+    [$ok, $m] = pm_opt_apply($vb, $key, $text);
+    return ['msg' => $m, 'kind' => $ok ? 'ok' : 'err', 'to' => $to];
 }
 
 function pm_do_copy_use(string $vb): array

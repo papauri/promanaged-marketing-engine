@@ -62,7 +62,7 @@ function pm_bt_brief(string $brand): array
     $about = ' ' . $f['name'] . ' ' . $f['about'] . ' ' . implode(' ', $f['facts']);
     return ['f' => $f, 'name' => (string)$f['name'], 'voice' => trim((string)($brain['voice'] ?? '')), 'never' => trim((string)($brain['never'] ?? '')), 'accent' => (string)(pm_settings()['accent_color'] ?? '#17375E'),
         'hero' => pm_hero_path($brand) !== '', 'current' => $cur, 'recent_styles' => array_values(array_unique($recent)), 'tech' => (bool)preg_match('/\b(software|websites?|digital|computers?|laptops?|IT|apps?|systems?|tech\w*|online)\b/i', $about),
-        'source' => pm_studio_facts_source($brand)];
+        'source' => pm_studio_facts_source($brand), 'site' => function_exists('pm_site_look_line') ? pm_site_look_line($brand) : []];
 }
 
 /* ---------------- the creative director ---------------- */
@@ -73,9 +73,12 @@ function pm_bt_prompt(array $brief, int $n, array $feedback, array $tried): arra
     $f = $brief['f'];
     $system = pm_agents_company_brief('tiny') . "\nYou are the creative director of a small brand team for " . $f['name'] . ' (Malawi). Propose ' . $n . ' DIFFERENT complete kits for its social media profile picture and cover: each with its own style and its own colour family, '
         . 'and its own wording. Code draws them; you only choose. A copy editor and an art critic will score every kit, and weak ones come back to you. '
-        . pm_studio_art_rules() . ($brief['voice'] !== '' ? ' The owner describes the voice as: ' . mb_substr($brief['voice'], 0, 160) . '.' : '') . ($brief['never'] !== '' ? ' Never say: ' . mb_substr($brief['never'], 0, 160) . '.' : '');
+        . pm_studio_art_rules()
+        . (!empty($brief['site']) ? ' The profiles must look like they belong to the website (website_look): build every palette from its own colours, best first, on a background as light or dark as its own, and that comes before the muted-palette rule. '
+            . (!empty($brief['site']['photos_from_the_website']) ? 'Its photos are available: make at least one kit the "photo" style so the cover shows the real place. ' : '') . 'Let the words echo its own headline without copying it word for word.' : '')
+        . ($brief['voice'] !== '' ? ' The owner describes the voice as: ' . mb_substr($brief['voice'], 0, 160) . '.' : '') . ($brief['never'] !== '' ? ' Never say: ' . mb_substr($brief['never'], 0, 160) . '.' : '');
     $user = json_encode(['business' => $f['name'], 'tagline' => $f['tagline'], 'about' => mb_substr($f['about'], 0, 400), 'audience' => mb_substr($f['audience'], 0, 200), 'facts' => array_slice($f['facts'], 0, 6),
-        'website' => $f['site'], 'phone' => $f['phone'], 'brand_colour' => $brief['accent'], 'styles' => PM_SD_STYLES, 'profile_styles' => PM_SD_PSTYLES, 'textures' => array_keys(PM_SD_TEXTURES), 'photo_available' => $brief['hero'],
+        'website' => $f['site'], 'phone' => $f['phone'], 'brand_colour' => $brief['accent'], 'styles' => PM_SD_STYLES, 'profile_styles' => PM_SD_PSTYLES, 'textures' => array_keys(PM_SD_TEXTURES), 'photo_available' => $brief['hero'], 'website_look' => $brief['site'] ?? [],
         'in_use_now' => ['style' => $brief['current']['style'], 'headline' => $brief['current']['headline']], 'do_not_repeat_styles' => array_values(array_unique(array_merge($brief['recent_styles'], $tried))),
         'critics_said' => $feedback], JSON_UNESCAPED_UNICODE)
         . "\nJSON: {\"kits\":[{\"name\":\"two or three words\",\"why\":\"one sentence\",\"style\":\"\",\"pstyle\":\"\",\"palette\":{\"bg1\":\"#\",\"bg2\":\"#\",\"accent\":\"#\",\"ink\":\"#\"},\"texture\":\"\",\"align\":\"left|center|right\",\"eyebrow\":\"\",\"headline\":\"\",\"subline\":\"\",\"whisper\":[],\"monogram\":\"\"}]}";
@@ -202,15 +205,21 @@ function pm_bt_critic(array $c, array $brief): array
         $score -= 6;
         $issues[] = 'The same background colour as the one in use.';
     }
-    $brandHue = pm_sd_hsl(pm_sd_hex($brief['accent']))[0];
+    $hues = [pm_sd_hsl(pm_sd_hex($brief['accent']))[0]];
+    foreach (array_slice((array)($brief['site']['colours_best_first'] ?? []), 0, 2) as $sc) { // the website's own main colours count as the brand's too
+        [$sh, $ss] = pm_sd_hsl(pm_sd_hex((string)$sc));
+        $ss >= 0.15 && $hues[] = $sh;
+    }
     $near = 360;
     foreach (['accent', 'bg1', 'bg2', 'ink'] as $k) { // something in the kit should tie back to the brand colour (a navy ink on clay and paper does)
         [$h, $s] = pm_sd_hsl(pm_sd_hex($spec[$k]));
         if ($s < 0.12) {
             continue; // a neutral says nothing either way
         }
-        $d = abs($h - $brandHue);
-        $near = min($near, min($d, 360 - $d));
+        foreach ($hues as $brandHue) {
+            $d = abs($h - $brandHue);
+            $near = min($near, min($d, 360 - $d));
+        }
     }
     if ($near > 70) {
         $score -= 4;
@@ -239,6 +248,7 @@ function pm_bt_run(string $brand, bool $withWords = true, string $by = 'owner'):
             throw new RuntimeException('This server cannot draw pictures (GD with FreeType and the fonts are needed: see Operations > Connections).');
         }
         $t0 = function_exists('pm_usage_mark') ? pm_usage_mark() : 0;
+        function_exists('pm_site_look') && pm_site_look($brand); // the website's colours and photos, read again when over a week old
         $brief = pm_bt_brief($brand);
         $ai = pm_agents_ready();
         $log = [];

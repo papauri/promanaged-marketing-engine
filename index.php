@@ -162,6 +162,19 @@ if (isset($_GET['kit']) && pm_brand_valid((string)($_GET['b'] ?? '')) && preg_ma
     exit;
 }
 
+// ---------- Photos and logo read from the business's website (Brand > Brand kit) ----------
+if (isset($_GET['sitepic']) && pm_brand_valid((string)($_GET['b'] ?? '')) && preg_match('/^(photo-\d+\.jpg|logo\.png)$/', (string)$_GET['sitepic']) && function_exists('pm_sl_dir')) {
+    $sf = pm_sl_dir((string)$_GET['b']) . '/' . $_GET['sitepic'];
+    if (!is_file($sf)) {
+        http_response_code(404);
+        exit;
+    }
+    header('Content-Type: ' . (str_ends_with($sf, '.png') ? 'image/png' : 'image/jpeg'));
+    header('Cache-Control: private, max-age=300');
+    readfile($sf);
+    exit;
+}
+
 // ---------- Cover studio pictures (drawn by code, cached) ----------
 if (isset($_GET['studio']) && in_array($_GET['studio'], ['cover', 'profile'], true)) {
     $sb = (string)($_GET['b'] ?? '');

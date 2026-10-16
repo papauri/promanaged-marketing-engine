@@ -145,6 +145,31 @@ $kind = ['place' => 'The place', 'work' => 'The work', 'people' => 'The people']
   </div>
   <?php endif; ?>
 </div>
+<?php $sl = function_exists('pm_site_look_cached') ? pm_site_look_cached($vb) : []; $slx = fn(string $do, string $extra = '') => '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="' . $do . '">' . $extra; ?>
+<div class="card" id="site">
+  <div class="sl-head">
+    <div><h2 class="mt-0 mb-0">From your website</h2>
+      <p class="hint mt-0 mb-0">The brand team designs the profile picture and cover from your website's own colours, fonts and photos, so the profiles look like they belong to it.<?= !empty($sl['url']) ? ' Read from <a href="' . pm_h((string)$sl['url']) . '" target="_blank" rel="noopener noreferrer">' . pm_h(preg_replace('#^https?://#', '', (string)$sl['url'])) . '</a>' . (!empty($sl['at']) ? ' on ' . pm_h(date('j M, H:i', strtotime((string)$sl['at']))) : '') . '.' : '' ?></p></div>
+    <form method="post"><?= $slx('site_look') ?><button class="btn small"><?= empty($sl['at']) ? 'Read the website' : 'Read it again' ?></button></form>
+  </div>
+  <?php if (!empty($sl['error'])): ?><p class="hint warnt"><?= pm_h((string)$sl['error']) ?></p><?php endif; ?>
+  <?php if (!empty($sl['palette'])): ?>
+  <div class="sl-row"><span class="sl-k">Colours</span><span class="sl-sw"><?php foreach ((array)$sl['palette'] as $pc): ?><i style="background:<?= pm_h((string)$pc['hex']) ?>" title="<?= pm_h((string)$pc['hex']) ?>"></i><?php endforeach; ?></span>
+    <span class="muted t-sm"><?= pm_h(($sl['base'] ?? 'light') === 'dark' ? 'on a dark background' : 'on a light background') ?><?= !empty($sl['fonts']) ? ' · fonts ' . pm_h(implode(', ', (array)$sl['fonts'])) : '' ?></span></div>
+  <?php if (!empty($sl['h1']) || !empty($sl['title'])): ?><div class="sl-row"><span class="sl-k">Its headline</span><span>“<?= pm_h((string)($sl['h1'] ?: $sl['title'])) ?>”</span></div><?php endif; ?>
+  <?php endif; ?>
+  <?php if (!empty($sl['photos'])): $heroNow = $hero; ?>
+  <div class="sl-photos">
+    <?php foreach ((array)$sl['photos'] as $pi => $ph): $pf = pm_sl_dir($vb) . '/' . basename((string)$ph['file']); if (!is_file($pf)) continue; $isHero = $heroNow !== '' && (realpath($heroNow) === realpath($pf) || (is_file($heroNow) && md5_file($heroNow) === md5_file($pf))); ?>
+    <figure class="sl-ph<?= $isHero ? ' on' : '' ?>"><img src="?sitepic=<?= pm_h(basename($pf)) ?>&amp;b=<?= pm_h($vb) ?>&amp;v=<?= (int)filemtime($pf) ?>" alt="<?= pm_h((string)$ph['alt']) ?>" loading="lazy">
+      <figcaption><span class="t-sm"><?= pm_h((string)$ph['alt'] ?: 'Website photo') ?> · <?= (int)$ph['w'] ?>×<?= (int)$ph['h'] ?></span>
+        <?php if ($isHero): ?><span class="sx-chip ok">the hero photo</span><?php else: ?><form method="post" class="inl"><?= $slx('site_hero', '<input type="hidden" name="i" value="' . (int)$pi . '">') ?><button class="btn small">Use as the hero photo</button></form><?php endif; ?></figcaption></figure>
+    <?php endforeach; ?>
+  </div>
+  <p class="hint mb-0">A photo of a client's place is theirs: use it on a cover only with their permission.</p>
+  <?php elseif (!empty($sl['at']) && empty($sl['error'])): ?><p class="hint mb-0">No photo on the website is big enough for a cover (at least 900 × 450, wider than tall): upload one below.</p><?php endif; ?>
+</div>
+
 <form method="post" enctype="multipart/form-data">
   <input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_accounts"><input type="hidden" name="_sec" value="kit">
   <details class="card" id="manual">
@@ -157,7 +182,7 @@ $kind = ['place' => 'The place', 'work' => 'The work', 'people' => 'The people']
       </div>
       <div>
         <label>Hero photo for covers (JPG or PNG, a real photo of your work or a stay)</label>
-        <?php if ($hero !== ''): ?><div class="logoprev"><img src="<?= str_starts_with($hero, PM_ROOT . '/assets/') ? 'assets/' . basename($hero) . '?v=' . filemtime($hero) : '?thumb=' . $vb ?>" alt="Hero photo" style="height:60px"><span class="hint"><?= str_starts_with($hero, PM_ROOT . '/assets/') ? 'Your photo' : 'Using the website preview picture' ?></span><?php if (str_starts_with($hero, PM_ROOT . '/assets/')): ?><label class="check"><input type="checkbox" name="remove_hero" value="1"> Remove</label><?php endif; ?></div><?php endif; ?>
+        <?php if ($hero !== ''): $heroSite = function_exists('pm_sl_dir') && str_starts_with(strtr($hero, '\\', '/'), strtr(pm_sl_dir($vb), '\\', '/')); ?><div class="logoprev"><img src="<?= str_starts_with($hero, PM_ROOT . '/assets/') ? 'assets/' . basename($hero) . '?v=' . filemtime($hero) : ($heroSite ? '?sitepic=' . basename($hero) . '&b=' . $vb . '&v=' . filemtime($hero) : '?thumb=' . $vb) ?>" alt="Hero photo" style="height:60px"><span class="hint"><?= str_starts_with($hero, PM_ROOT . '/assets/') ? 'Your photo' : ($heroSite ? 'The best photo on your website (pick another above)' : 'Using the website preview picture') ?></span><?php if (str_starts_with($hero, PM_ROOT . '/assets/')): ?><label class="check"><input type="checkbox" name="remove_hero" value="1"> Remove</label><?php endif; ?></div><?php endif; ?>
         <input type="file" name="hero" accept="image/jpeg,image/png">
       </div>
     </div>
@@ -178,7 +203,29 @@ $kind = ['place' => 'The place', 'work' => 'The work', 'people' => 'The people']
       <div class="btns"><button class="btn small" name="do" value="apply_profile" <?= $fb['ready'] ? '' : 'disabled' ?> onclick="return confirm('Change the Facebook Page profile picture now?')">Set as Facebook profile picture</button>
         <button class="btn small" name="do" value="apply_cover" <?= $fb['ready'] ? '' : 'disabled' ?> onclick="return confirm('Change the Facebook Page cover now?')">Set as Facebook cover</button></div>
       <?php if (!$fb['ready']): ?><p class="hint">These buttons work once the Page is connected (<a href="?tab=settings&amp;section=connections">Operations &gt; Connections</a>). Until then, download and upload by hand.</p><?php endif; ?>
+      <?php $copySt = pm_copy_store($vb); $live = $fb['ready'] ? pm_profile_page_fields($vb) : null; $chosenAi = (array)(pm_opt_store($vb)['ai'] ?? []); ?>
+      <div class="fbbio" id="fbbio">
+        <h3 class="mt-3 mb-1">Facebook bio</h3>
+        <p class="hint mt-0">The words beside the pictures: the intro under the Page name and the description on the About tab. Written from your facts only, in your voice.</p>
+        <?php foreach (['fb_about', 'fb_description'] as $bk): [$bl, $blim, $bwhat] = PM_COPY_FIELDS[$bk]; $fid = 'fbb-' . $bk; $opts = (array)($copySt[$bk]['options'] ?? []); $now = trim((string)($live[$bk === 'fb_about' ? 'about' : 'description'] ?? ''));
+            $start = trim((string)($chosenAi[$bk] ?? '')) ?: (string)($opts[0]['text'] ?? '') ?: pm_copy_plain($vb, $bk); ?>
+        <div class="fbbio-f">
+          <div class="fbbio-h"><b><?= pm_h($bl) ?></b> <span class="muted t-sm">· up to <?= (int)$blim ?> characters · <?= pm_h($bwhat) ?></span></div>
+          <?php if ($live !== null): ?><p class="t-sm my-1"><span class="muted">On Facebook now:</span> <?= $now !== '' ? pm_h($now) : '<span class="warnt">nothing yet</span>' ?></p><?php endif; ?>
+          <?php foreach ($opts as $oi => $o): ?>
+          <div class="fbbio-o"><span class="sx-chip"><?= pm_h(PM_COPY_VOICES[$o['voice']] ?? $o['voice']) ?> · <?= mb_strlen($o['text']) ?></span><span><?= pm_h($o['text']) ?></span>
+            <span class="btns"><button class="btn small" form="<?= $fid ?>" name="text" value="<?= pm_h($o['text']) ?>" <?= $fb['ready'] ? 'onclick="return confirm(\'Put this on the Facebook Page now?\')"' : '' ?>><?= $fb['ready'] ? 'Set on Facebook' : 'Use this' ?></button><button type="button" class="btn small ghost" data-copy="<?= pm_h($o['text']) ?>">Copy</button></span></div>
+          <?php endforeach; ?>
+          <textarea form="<?= $fid ?>" name="own" rows="<?= $bk === 'fb_about' ? 2 : 3 ?>" maxlength="<?= (int)$blim ?>" aria-label="<?= pm_h($bl) ?>"><?= pm_h(mb_substr($start, 0, $blim)) ?></textarea>
+          <div class="btns mt-1"><button class="btn small primary" form="<?= $fid ?>" <?= $fb['ready'] ? 'onclick="return confirm(\'Put these words on the Facebook Page now?\')"' : '' ?>><?= $fb['ready'] ? 'Set these words on Facebook' : 'Save these words' ?></button><button type="button" class="btn small ghost" data-copy-target="textarea[form=<?= $fid ?>]">Copy</button></div>
+        </div>
+        <?php endforeach; ?>
+        <div class="btns"><button class="btn small" form="fbb-write" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?> title="Three options each (their outcome first, who it is for with proof, short with an easy next step), from your facts only: one AI call"><?= array_filter([$copySt['fb_about'] ?? null, $copySt['fb_description'] ?? null]) ? 'Write 3 new options for each (AI)' : 'Write 3 options for each (AI)' ?></button></div>
+      </div>
     <?php else: ?><p class="hint">Change it on the platform itself: download, then upload in its profile settings.</p><?php endif; ?>
   </details>
   <?php endforeach; ?>
 </form>
+<?php // the Facebook bio's own forms: its boxes and buttons sit inside the Facebook section above (form="...") ?>
+<?php foreach (['fb_about', 'fb_description'] as $bk): ?><form method="post" id="fbb-<?= $bk ?>"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="kit_bio"><input type="hidden" name="key" value="<?= $bk ?>"></form><?php endforeach; ?>
+<form method="post" id="fbb-write"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="copy_write"><input type="hidden" name="back" value="kit"><input type="hidden" name="keys[]" value="fb_about"><input type="hidden" name="keys[]" value="fb_description"></form>

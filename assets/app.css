@@ -1090,3 +1090,20 @@ body:has(.lsel:checked) .selbar .sel-tip { display:none }
 .sc-goal { display:flex; justify-content:space-between; align-items:center; gap:var(--s-3); flex-wrap:wrap; margin-bottom:var(--s-2) }
 .okt { color:var(--ok) }
 @media (max-width:640px) { .sc-head .sc-now { align-items:flex-start } .sc-row > summary { grid-template-columns:auto 1fr } .sc-meta { display:none } }
+
+/* Brand > Brand kit: from your website, and the Facebook bio */
+.sl-head { display:flex; justify-content:space-between; gap:var(--s-3); align-items:flex-start; flex-wrap:wrap }
+.sl-row { display:flex; gap:var(--s-3); align-items:center; flex-wrap:wrap; margin-top:var(--s-2); font-size:var(--fs-2) }
+.sl-k { min-width:90px; font-size:var(--fs-1); font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted) }
+.sl-sw { display:inline-flex; gap:4px } .sl-sw i { width:26px; height:26px; border-radius:8px; border:1px solid var(--line); display:inline-block }
+.sl-photos { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap:var(--s-3); margin-top:var(--s-3) }
+.sl-ph { margin:0; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--surface-2) } .sl-ph.on { border-color:var(--ok); box-shadow:0 0 0 2px var(--ok-bg) }
+.sl-ph img { display:block; width:100%; aspect-ratio:16/9; object-fit:cover }
+.sl-ph figcaption { display:flex; flex-direction:column; gap:6px; padding:8px 10px }
+.fbbio { border-top:1px solid var(--line); margin-top:var(--s-4); padding-top:var(--s-2) }
+.fbbio-f { padding:var(--s-3) 0; border-bottom:1px dashed var(--line) } .fbbio-f:last-of-type { border-bottom:0 }
+.fbbio-o { display:grid; grid-template-columns:auto 1fr auto; gap:var(--s-2); align-items:center; padding:6px 0; font-size:var(--fs-2) }
+.fbbio-o .btns { margin:0; flex-wrap:nowrap }
+@media (max-width:640px) { .fbbio-o { grid-template-columns:1fr } }
+
+.nd-head { display:flex; justify-content:space-between; gap:var(--s-3); align-items:flex-start; flex-wrap:wrap; margin-bottom:var(--s-2) }

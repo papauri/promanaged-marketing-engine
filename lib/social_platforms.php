@@ -189,7 +189,7 @@ function pm_kit_dir(string $brand): string
     return $d;
 }
 
-/** The brand's hero photo: one you uploaded, else the website's preview picture. '' = none. */
+/** The brand's hero photo: one you uploaded (or picked from the website), else the best photo on the website, else its preview picture. '' = none. */
 function pm_hero_path(string $brand): string
 {
     foreach (['jpg', 'png'] as $x) {
@@ -197,6 +197,9 @@ function pm_hero_path(string $brand): string
         if (is_file($f)) {
             return $f;
         }
+    }
+    if (function_exists('pm_site_photo') && ($sp = pm_site_photo($brand)) !== '') {
+        return $sp;
     }
     $t = pm_link_thumb_path($brand);
     return is_file($t) ? $t : '';
