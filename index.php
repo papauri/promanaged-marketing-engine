@@ -1254,6 +1254,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pm_leads_save($leads);
             $back('Reply saved.');
         }
+        if ($do === 'progress_mark') { // their progress: where it stands now, and the update written for them (lib/sx_progress.php)
+            $pgMsg = pm_pg_mark($leads[$id], (int)($_POST['pg_at'] ?? 0), (string)($_POST['pg_state'] ?? 'working'), (string)($_POST['pg_note'] ?? ''));
+            pm_leads_save($leads);
+            $back($pgMsg, str_starts_with($pgMsg, 'Saved') ? 'ok' : 'err');
+        }
+        if (in_array($do, ['progress_send', 'progress_wa', 'progress_skip'], true)) {
+            if (empty($lead['progress']['msg'])) {
+                $back('That update was already sent or skipped.', 'err');
+            }
+            if ($do === 'progress_skip') {
+                pm_pg_sent($leads[$id], 'skipped');
+                pm_leads_save($leads);
+                $back('Update not sent.');
+            }
+            if ($do === 'progress_wa') {
+                $pgWa = pm_wa_link($lead, pm_pg_wa_text($lead, trim((string)($_POST['whatsapp'] ?? $lead['progress']['msg']['whatsapp'] ?? ''))));
+                if ($pgWa === '' || ($lead['status'] ?? '') === 'optout') {
+                    $back('No WhatsApp number for this lead.', 'err');
+                }
+                pm_pg_sent($leads[$id], 'WhatsApp');
+                pm_leads_save($leads);
+                header('Location: ' . $pgWa);
+                exit;
+            }
+            $pgSub = trim((string)($_POST['subject'] ?? ''));
+            $pgBody = trim((string)($_POST['body'] ?? ''));
+            if ($pgSub === '' || $pgBody === '' || !filter_var($lead['email'] ?? '', FILTER_VALIDATE_EMAIL)) {
+                $back('This lead needs a valid email address, a subject and the update.', 'err');
+            }
+            [$okP, $whyP, $msgIdP] = pm_send_reply($lead, $pgSub, $pgBody);
+            if (!$okP) {
+                $back('Could not send: ' . pm_mail_fail($settings, (string)$whyP), 'err');
+            }
+            $leads[$id]['thread'][] = ['dir' => 'out', 'at' => date('Y-m-d H:i'), 'text' => mb_substr($pgBody, 0, 3000), 'ch' => 'email'];
+            pm_pg_sent($leads[$id], 'email');
+            pm_leads_save($leads);
+            $back('Update sent to ' . $lead['name'] . '.');
+        }
         if ($do === 'send_reply') {
             if (empty($lead['reply_draft']) && ($tr = pm_lead_other_touch($lead))) { // the answer went from another screen meanwhile
                 $back(pm_lead_other_touch_msg($lead, $tr), 'err');
