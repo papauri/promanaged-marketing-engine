@@ -472,3 +472,75 @@
   });
   window.addEventListener('popstate', function () { load(location.href, false, 'keep'); });
 })();
+/* Talk it over: a chat with the agent who wrote it, under every message box (lib/sx_chat.php). The agent's new version goes straight into the box, Undo puts the
+   old one back; nothing is saved until the form is saved. A wish that holds for every message can be remembered as a standing rule (Social > Voice). */
+(function () {
+  if (document.body.getAttribute('data-ai') !== '1') return;
+  var SEL = 'textarea[data-chat], textarea[name=email_body], textarea[name=body], textarea[name=whatsapp], textarea[name=caption], textarea[name=first_comment], textarea[name=reply], textarea[name=own], textarea[name=text]';
+  var QUICK = ['Shorter', 'Warmer', 'More direct', 'Simpler words'];
+  function el(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt) e.textContent = txt; return e; }
+  function field(scope, sel) { var x = scope && scope.querySelector(sel); return x ? x.value : ''; }
+  function attach(ta) {
+    if (ta.dataset.ccOn || ta.closest('.cc-panel') || (/^Paste/i.test(ta.placeholder || '') && !ta.value.trim())) return;
+    ta.dataset.ccOn = '1';
+    var form = ta.form || ta.closest('form, .card'), chat = [];
+    var bar = el('div', 'cc-bar'), open = el('button', 'btn small ghost cc-open', 'Talk it over');
+    open.type = 'button'; open.title = 'Chat with the agent who wrote it: ask for changes, or ask why';
+    bar.appendChild(open);
+    var panel = el('div', 'cc-panel'); panel.hidden = true;
+    var log = el('div', 'cc-log'); log.setAttribute('aria-live', 'polite');
+    var chips = el('div', 'cc-chips');
+    var row = el('div', 'cc-in'), box = el('textarea'), send = el('button', 'btn small primary', 'Send');
+    box.rows = 1; box.placeholder = 'What should change? Or ask why it says something.'; box.setAttribute('aria-label', 'Message to the writer'); send.type = 'button';
+    row.appendChild(box); row.appendChild(send);
+    QUICK.forEach(function (q) { var c = el('button', 'chip cc-chip', q); c.type = 'button'; c.addEventListener('click', function () { go(q); }); chips.appendChild(c); });
+    panel.appendChild(log); panel.appendChild(chips); panel.appendChild(row);
+    var after = ta.nextElementSibling && ta.nextElementSibling.classList.contains('sigprev') ? ta.nextElementSibling : ta;
+    after.insertAdjacentElement('afterend', bar); bar.insertAdjacentElement('afterend', panel);
+    open.addEventListener('click', function () { panel.hidden = !panel.hidden; open.textContent = panel.hidden ? 'Talk it over' : 'Close the chat'; if (!panel.hidden) box.focus(); });
+    box.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); go(box.value); } });
+    send.addEventListener('click', function () { go(box.value); });
+    function bubble(who, text, cls) {
+      var b = el('div', 'cc-msg ' + cls); if (who) b.appendChild(el('b', '', who)); b.appendChild(el('span', '', text)); log.appendChild(b); log.scrollTop = log.scrollHeight; return b;
+    }
+    function go(ask) {
+      ask = (ask || '').trim();
+      if (!ask || send.disabled) return;
+      bubble('', ask, 'me'); box.value = '';
+      var wait = bubble('', 'Writing…', 'agent wait');
+      var c = document.querySelector('input[name=csrf]'), fd = new FormData();
+      fd.append('csrf', c ? c.value : ''); fd.append('action', 'craft_chat'); fd.append('ask', ask); fd.append('text', ta.value);
+      fd.append('kind', ta.getAttribute('data-chat') || ''); fd.append('name', ta.name || ''); fd.append('max', ta.maxLength > 0 ? ta.maxLength : 0);
+      fd.append('do', field(form, 'input[name=do]')); fd.append('which', field(form, 'input[name=which]')); fd.append('id', field(form, 'input[name=id]'));
+      fd.append('subject', field(form, 'input[name=subject], input[name=email_subject]')); fd.append('chat', JSON.stringify(chat.slice(-8)));
+      send.disabled = true;
+      fetch('index.php', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+        wait.remove();
+        if (!j.ok) { bubble('', j.error || 'Could not reach the writer. Try again.', 'agent err'); return; }
+        chat.push({ who: 'owner', said: ask }); chat.push({ who: 'agent', said: j.say + (j.text ? ' [new version: ' + j.text + ']' : '') });
+        var b = bubble(j.agent, j.say, 'agent');
+        if (j.text) {
+          var prev = ta.value; ta.value = j.text; ta.dispatchEvent(new Event('input', { bubbles: true }));
+          ta.classList.add('cc-new'); setTimeout(function () { ta.classList.remove('cc-new'); }, 1200);
+          var acts = el('div', 'cc-acts'), undo = el('button', 'btn small ghost', 'Undo');
+          undo.type = 'button';
+          undo.addEventListener('click', function () { var now = ta.value; ta.value = prev; prev = now; ta.dispatchEvent(new Event('input', { bubbles: true })); undo.textContent = undo.textContent === 'Undo' ? 'Redo' : 'Undo'; });
+          acts.appendChild(el('span', 'muted t-sm', 'In the box now. Save the form to keep it.')); acts.appendChild(undo); b.appendChild(acts);
+        }
+        if (j.lesson) {
+          var rm = el('button', 'btn small cc-rem', 'Remember for every message: “' + j.lesson + '”'); rm.type = 'button';
+          rm.addEventListener('click', function () {
+            var f2 = new FormData(); f2.append('csrf', c ? c.value : ''); f2.append('action', 'craft_remember'); f2.append('lesson', j.lesson); f2.append('for', j.lesson_for);
+            rm.disabled = true;
+            fetch('index.php', { method: 'POST', body: f2, credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (k) { rm.textContent = k.ok ? k.msg : (k.error || 'Not saved.'); })
+              .catch(function () { rm.disabled = false; if (window.pmToast) window.pmToast('Network problem. Try again.'); });
+          });
+          b.appendChild(rm);
+        }
+      }).catch(function () { wait.remove(); bubble('', 'Network problem. Try again.', 'agent err'); }).then(function () { send.disabled = false; box.focus(); });
+    }
+  }
+  function init() { document.querySelectorAll(SEL).forEach(attach); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+  document.addEventListener('pm:swap', init);
+})();

@@ -46,7 +46,7 @@ $autoDrafts = pm_fb_drafts() + array_filter(array_map(fn($k) => (string)($k['rep
       <span class="eng"><?= $p['reactions'] ?> ♥ · <?= $p['comments'] ?> 💬 · <?= $p['shares'] ?> ↗</span>
     </summary>
     <form method="post" class="fbedit"><?= $fp('edit', $hid('id', $p['id'])) ?>
-      <textarea name="text" rows="4"><?= pm_h($p['message']) ?></textarea>
+      <textarea name="text" rows="4" data-chat="post"><?= pm_h($p['message']) ?></textarea>
       <div class="btns"><button class="btn small">Save the new text</button>
         <?php if (pm_agents_ready() && trim((string)$p['message']) !== ''): ?><button type="button" class="btn small" data-reword="textarea[name=text]" data-kind="post" title="One small AI call writes it again: same facts, prices and links. Read it, then Save the new text">New wording</button><?php endif; ?>
         <a class="btn small" href="<?= pm_h($p['url']) ?>" target="_blank" rel="noopener noreferrer">Open on Facebook</a>

@@ -62,7 +62,7 @@ echo pm_ui_tabs($tabs, $tab, 'Scouting');
     </summary>
     <div class="sc-body">
       <label for="<?= $rb ?>" class="t-sm muted">Our reply, to paste under their post</label>
-      <textarea id="<?= $rb ?>" rows="3" readonly><?= pm_h((string)$lz['reply']) ?></textarea>
+      <textarea id="<?= $rb ?>" rows="3" readonly data-chat="comment"><?= pm_h((string)$lz['reply']) ?></textarea>
       <div class="btns"><button type="button" class="btn small" data-copy-target="#<?= $rb ?>">Copy the reply</button><a class="btn small primary" href="<?= pm_h((string)$lz['url']) ?>" target="_blank" rel="noopener noreferrer">Open the post ↗</a>
         <form method="post" class="inline"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="status"><input type="hidden" name="id" value="<?= pm_h((string)$al['id']) ?>"><input type="hidden" name="status" value="contacted"><input type="hidden" name="bt" value="scout"><button class="btn small" title="You answered under their post: it moves to Contacted">I replied</button></form>
         <form method="post" class="inline"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="status"><input type="hidden" name="id" value="<?= pm_h((string)$al['id']) ?>"><input type="hidden" name="status" value="lost"><input type="hidden" name="lost_reason" value="not_interested"><input type="hidden" name="bt" value="scout"><button class="btn small ghost" title="Not someone we can help: off the list">Not for us</button></form>
@@ -93,7 +93,7 @@ echo pm_ui_tabs($tabs, $tab, 'Scouting');
       <?php if ($f['audience'] !== '' || $f['activity'] !== ''): ?><p class="sf-meta"><?= pm_h(implode(' · ', array_filter([(string)$f['audience'], (string)$f['activity']]))) ?></p><?php endif; ?>
       <p class="sf-why"><?= pm_h((string)$f['why']) ?></p>
       <?php if ($f['plan'] !== ''): ?><p class="sf-move"><b><?= pm_h(PM_SF_MOVES[$f['move']] ?? $f['move']) ?>:</b> <?= pm_h((string)$f['plan']) ?></p><?php endif; ?>
-      <?php if ($f['text'] !== ''): ?><label for="<?= $box ?>" class="t-sm muted">The words to use</label><textarea id="<?= $box ?>" rows="3" readonly><?= pm_h((string)$f['text']) ?></textarea><?php endif; ?>
+      <?php if ($f['text'] !== ''): ?><label for="<?= $box ?>" class="t-sm muted">The words to use</label><textarea id="<?= $box ?>" rows="3" readonly data-chat="comment"><?= pm_h((string)$f['text']) ?></textarea><?php endif; ?>
       <?php if (($f['status'] ?? 'new') !== 'new'): ?><p class="hint"><?= pm_h(PM_SF_STATUS[$f['status']]) ?><?= !empty($f['decided_at']) ? ' since ' . pm_h(date('j M', strtotime((string)$f['decided_at']))) : '' ?><?= !empty($f['by']) ? ' · ' . pm_h((string)$f['by']) : '' ?><?= !empty($f['note']) ? ': ' . pm_h((string)$f['note']) : '' ?></p><?php endif; ?>
       <form method="post" class="sf-act"><?= $sx('sf_decide', $hid('id', $id) . $hid('st', $tab)) ?>
         <?php if ($f['status'] === 'new' || $f['status'] === 'handed'): ?><input type="text" name="note" maxlength="300" placeholder="<?= $f['status'] === 'new' ? 'A note for the team, or why it is not for us (optional)' : 'What happened? (optional)' ?>" aria-label="Note"><?php endif; ?>

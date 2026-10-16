@@ -380,6 +380,26 @@ p.hint:has(> .btn), p.hint:has(> button.btn) { display:flex; align-items:center;
 .bt-run { margin-bottom:4px; }
 .btgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; margin-top:16px; }
 
+/* Talk it over: the chat under a message box (lib/sx_chat.php) */
+.cc-bar { display:flex; justify-content:flex-end; margin:var(--s-1) 0 0; }
+.cc-panel { margin:var(--s-2) 0; padding:var(--s-3); border:1px solid var(--line); border-radius:12px; background:var(--surface-2); display:grid; gap:var(--s-2); }
+.cc-log { display:grid; gap:var(--s-2); max-height:340px; overflow-y:auto; }
+.cc-log:empty { display:none; }
+.cc-msg { max-width:88%; padding:var(--s-2) var(--s-3); border-radius:12px; font-size:var(--fs-2); line-height:1.45; overflow-wrap:anywhere; }
+.cc-msg b { display:block; font-size:var(--fs-1); font-weight:600; color:var(--dept); margin-bottom:2px; }
+.cc-msg.me { justify-self:end; background:var(--dept); color:#fff; }
+.cc-msg.agent { justify-self:start; background:var(--surface); border:1px solid var(--line); }
+.cc-msg.wait { color:var(--muted); }
+.cc-msg.err { border-color:var(--bad-line); color:var(--bad); }
+.cc-acts { display:flex; gap:var(--s-2); align-items:center; flex-wrap:wrap; margin-top:var(--s-1); }
+.cc-rem { margin-top:var(--s-2); white-space:normal; text-align:left; height:auto; min-height:var(--ctl-sm); }
+.cc-chips { display:flex; gap:var(--s-1); flex-wrap:wrap; }
+.cc-chip { cursor:pointer; border:1px solid var(--line); background:var(--surface); }
+.cc-chip:hover { border-color:var(--dept); color:var(--dept); }
+.cc-in { display:flex; gap:var(--s-2); align-items:flex-end; }
+.cc-in textarea { flex:1; min-width:0; min-height:var(--ctl-sm); resize:vertical; }
+textarea.cc-new { box-shadow:0 0 0 3px color-mix(in srgb, var(--dept) 35%, transparent); transition:box-shadow .3s var(--ease); }
+
 /* ===== 6. pages ===== */
 .layout { display:grid; grid-template-columns:1fr 340px; gap:16px; align-items:start; }
 .sticky { position:sticky; top:16px; }

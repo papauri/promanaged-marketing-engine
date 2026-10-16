@@ -1609,6 +1609,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         exit;
     }
+    if ($action === 'craft_chat' || $action === 'craft_remember') { // Talk it over under a message box (fetch): one turn of the chat with its agent, or Remember its rule (lib/sx_chat.php)
+        header('Content-Type: application/json');
+        @set_time_limit(60);
+        pm_brand_set($vb);
+        if ($action === 'craft_remember') {
+            $ccMsg = pm_cc_remember($vb, (string)($_POST['lesson'] ?? ''), (string)($_POST['for'] ?? 'voice'));
+            echo json_encode($ccMsg === '' ? ['ok' => false, 'error' => 'Nothing to remember.'] : ['ok' => true, 'msg' => $ccMsg], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        $ccText = trim((string)($_POST['text'] ?? ''));
+        $ccAsk = trim((string)($_POST['ask'] ?? ''));
+        if ($ccAsk === '' || !pm_agents_ready()) {
+            echo json_encode(['ok' => false, 'error' => $ccAsk === '' ? 'Type what you would like changed.' : 'The AI needs a key first (Operations > Connections).']);
+            exit;
+        }
+        try {
+            $ccKind = pm_cc_kind((string)($_POST['kind'] ?? ''), (string)($_POST['name'] ?? ''), (string)($_POST['do'] ?? ''), (string)($_POST['which'] ?? ''));
+            $ccChat = json_decode((string)($_POST['chat'] ?? '[]'), true);
+            echo json_encode(['ok' => true] + pm_cc_turn($ccKind, $ccText, $ccAsk, is_array($ccChat) ? $ccChat : [], pm_cc_lead((string)($_POST['id'] ?? '')), trim((string)($_POST['subject'] ?? '')), (int)($_POST['max'] ?? 0)), JSON_UNESCAPED_UNICODE);
+        } catch (Throwable $e) {
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
     if ($action === 'compose') { // AI message composer (fetch): returns JSON, saves nothing
         header('Content-Type: application/json');
         @set_time_limit(90);
@@ -2349,7 +2373,7 @@ $GLOBALS['PM_DEPT'] = pm_ui_dept_of($tab, (string)($_GET['view'] ?? ''), $sectio
 <link rel="stylesheet" href="assets/app.css?v=<?= @filemtime(PM_ROOT . '/assets/app.css') ?>">
 <?php if ($vb !== 'promanaged' && is_file(PM_ROOT . '/' . pm_brand_asset($vb, 'favicon'))): ?><link rel="icon" href="<?= pm_h(pm_brand_asset($vb, 'favicon')) ?>"><?php endif; ?>
 </head>
-<body style="<?= pm_h(pm_ui_dept_style($GLOBALS['PM_DEPT'])) ?>" data-dept="<?= pm_h($GLOBALS['PM_DEPT']) ?>">
+<body style="<?= pm_h(pm_ui_dept_style($GLOBALS['PM_DEPT'])) ?>" data-dept="<?= pm_h($GLOBALS['PM_DEPT']) ?>" data-ai="<?= pm_agents_ready() ? '1' : '0' ?>">
 <?php
 $team = array_values(array_filter((array)($settings['team'] ?? [])));
 echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'section' => $section, 'vb' => $vb, 'settings' => $settings, 'csrf' => $csrf, 'team' => $team, 'who' => $GLOBALS['PM_WHO'], 'hbAge' => pm_social_heartbeat_age()]);
