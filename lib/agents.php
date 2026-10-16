@@ -60,6 +60,7 @@ function pm_travel_agent_defaults(): array
             "Listing: a free listing on Malawi's own directory of independent stays, with no commission, no listing fee and no monthly charge",
             "Bookings: booking requests straight to the host's dashboard, confirmations over WhatsApp, and guests who pay the property directly in kwacha",
             'Set-up help: the concierge team builds the page, verifies the photos and messages the host on WhatsApp',
+            'Calendar sync: two-way iCal sync with the booking system the host already uses (RoomRaccoon, NightsBridge, Airbnb, Booking.com, Google Calendar), so there are no double bookings and nothing to update twice',
             'Ulendo concierge: an AI companion that helps write the listing and answer guest enquiries',
         ],
         'sectors' => ['lodges and guest houses', 'bed and breakfasts and cottages', 'safari camps and eco-lodges', 'lakeshore resorts and beach lodges', 'boutique and city hotels', 'backpackers and hostels'],
@@ -965,6 +966,13 @@ function pm_agent_list(mixed $out): array
  * What every agent is told about us. Kept as short as the job allows, because every word is paid for on every call.
  * Levels: tiny (writers, follow-up) < short (scouts, lookups) < packages < full (qualifier: packages and pain points).
  */
+/** Travel Malawi's two-way calendar sync, as it works in the platform (Travel-Malawi: server/icalService.ts, Rooms & Rates > Sync iCal, synced in the background about every 25 minutes). */
+const PM_TM_ICAL_FACT = 'Two-way calendar sync (iCal): a host who already uses RoomRaccoon, NightsBridge, Airbnb, Booking.com or Google Calendar pastes that calendar\'s iCal link for each room under Rooms & Rates > Sync iCal, and dates booked there are blocked on Travel Malawi automatically (checked about every half hour); each room, or the whole place, also has its own Travel Malawi calendar link to add to their system, so bookings made on Travel Malawi show up there too. No double bookings, no updating two calendars, and they keep the system they use; the concierge team can link the calendars for them';
+
+/** Booking systems and channels a host's website shows, by name (what the calendar sync connects to). */
+const PM_BOOKING_SYSTEMS = ['roomraccoon' => 'RoomRaccoon', 'nightsbridge' => 'NightsBridge', 'cloudbeds' => 'Cloudbeds', 'beds24' => 'Beds24', 'checkfront' => 'Checkfront', 'siteminder' => 'SiteMinder',
+    'littlehotelier' => 'Little Hotelier', 'little hotelier' => 'Little Hotelier', 'lodgify' => 'Lodgify', 'resrequest' => 'ResRequest', 'booking.com' => 'Booking.com', 'airbnb.' => 'Airbnb', 'expedia.' => 'Expedia'];
+
 /** The default "marketing brain" for a business: what the AI knows and may say. Editable in Settings, so the app can market any business. */
 function pm_brain_defaults(string $brand): array
 {
@@ -974,7 +982,7 @@ function pm_brain_defaults(string $brand): array
     if ($brand === 'travel') {
         return [
             'about' => "Malawi's own directory of independent lodges, B&Bs, cottages, guest houses and safari camps (stays only), built together with the hosts who run them: a direct booking platform that is free to join, with no commission, unlike Booking.com and the other big booking sites that take a cut of every stay. Hosts are partners building it with us.",
-            'facts' => "Listing and onboarding are free for now: no commission, no listing fee, no monthly charge\nGuests pay the property directly, in kwacha: Airtel Money, TNM Mpamba, bank transfer or cash on arrival; no payment goes through the platform\nGuests can chat with the host in the app and voice or video call them, so they see the place and ask the host directly\nUlendo, the AI chat concierge, is a companion for owners and managers: it helps write the listing (it can read photos, menus and documents) and helps answer guest enquiries\nThe concierge team can set the listing up for the host: they build the page, verify the photos and message the host on WhatsApp within 24 hours\nBooking requests reach the host's dashboard and confirmations go out over WhatsApp\nConfirmed guests get a digital voucher with a QR code that staff scan on arrival, with directions and optional WiFi details\nHosts control their own rooms, rates and blocked dates, and can run promotions (slashed prices, flash sales, early-bird offers)\nA manager can be given their own access to the listing\nEvery listing is reviewed before it goes live; only guests with a confirmed booking can leave a review\nA listing shows the stay's reviews from different sources side by side, not only the platform's own; that openness is why travellers trust the place and book\nMaps and directions keep working offline for remote stays\nThere is a host starter guide", // read from ulendomalawi.com: what wins a host over
+            'facts' => "Listing and onboarding are free for now: no commission, no listing fee, no monthly charge\nGuests pay the property directly, in kwacha: Airtel Money, TNM Mpamba, bank transfer or cash on arrival; no payment goes through the platform\nGuests can chat with the host in the app and voice or video call them, so they see the place and ask the host directly\nUlendo, the AI chat concierge, is a companion for owners and managers: it helps write the listing (it can read photos, menus and documents) and helps answer guest enquiries\nThe concierge team can set the listing up for the host: they build the page, verify the photos and message the host on WhatsApp within 24 hours\nBooking requests reach the host's dashboard and confirmations go out over WhatsApp\nConfirmed guests get a digital voucher with a QR code that staff scan on arrival, with directions and optional WiFi details\nHosts control their own rooms, rates and blocked dates, and can run promotions (slashed prices, flash sales, early-bird offers)\n" . PM_TM_ICAL_FACT . "\nA manager can be given their own access to the listing\nEvery listing is reviewed before it goes live; only guests with a confirmed booking can leave a review\nA listing shows the stay's reviews from different sources side by side, not only the platform's own; that openness is why travellers trust the place and book\nMaps and directions keep working offline for remote stays\nThere is a host starter guide", // read from ulendomalawi.com: what wins a host over
             'audience' => 'Owners and managers of independent places to stay in Malawi; travellers looking for them.',
             'voice' => 'Warm, local, proud of Malawi, plain words.',
             'never' => 'Never promise bookings, traffic or income.',
@@ -2629,7 +2637,7 @@ function pm_site_check(string $url, string|bool $type = '', bool $noPrivate = fa
         'whatsapp' => (bool)preg_match('#wa\.me/|api\.whatsapp\.com|whatsapp://#i', $h),
         'booking' => (bool)preg_match('#book now|book online|book a (room|table|stay)|reserve (a|your|now)|make a reservation|reservations|check availability|booking\.com|nightsbridge|cloudbeds|beds24|checkfront#i', $h),
         'form' => str_contains($low, '<form'), 'email' => (bool)preg_match('/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i', strip_tags($h)),
-        'shop' => (bool)preg_match('#add to cart|checkout|woocommerce|shopify#i', $h), 'year' => $year, 'title' => trim(html_entity_decode(strip_tags($tm[1] ?? ''))), 'social' => $social];
+        'shop' => (bool)preg_match('#add to cart|checkout|woocommerce|shopify#i', $h), 'systems' => array_values(array_unique(array_filter(array_map(fn($k) => str_contains($low, $k) ? PM_BOOKING_SYSTEMS[$k] : '', array_keys(PM_BOOKING_SYSTEMS))))), 'year' => $year, 'title' => trim(html_entity_decode(strip_tags($tm[1] ?? ''))), 'social' => $social];
     // emails: homepage plus /contact (one extra request)
     $host = (string)parse_url($r['url'], PHP_URL_HOST);
     $emails = pm_page_emails($h, $host);
@@ -2650,6 +2658,9 @@ function pm_site_check(string $url, string|bool $type = '', bool $noPrivate = fa
     }
     if (preg_match('/hotel|lodge|resort|guest|camp|cottage|b&b|bed and breakfast|hostel|backpack|restaurant|spa|salon|gym|suites|inn|chalet|stay/i', $type)) { // only where booking matters
         $f[] = $r['booking'] ? 'Visitors can book or reserve from the site' : 'There is no way to book or reserve on the home page';
+        if (!empty($r['systems'])) {
+            $f[] = 'Their site uses ' . implode(' and ', array_slice((array)$r['systems'], 0, 3)) . ' for bookings or listings'; // the calendar sync connects to these: no double bookings
+        }
     }
     if (!$r['form'] && !$r['email']) {
         $f[] = 'No contact form or email address on the home page';

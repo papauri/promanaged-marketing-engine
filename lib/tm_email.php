@@ -354,6 +354,44 @@ function pm_tm_fix_once(): void
         $n = pm_tm_photos_v4();
         pm_update('migrations', fn(array $m) => $m + ['tm_photos_v4' => date('c') . " ($n drafts)"], fn() => []);
     }
+    if (empty($done['tm_ical_v5'])) {
+        pm_tm_ical_v5();
+        pm_update('migrations', fn(array $m) => $m + ['tm_ical_v5' => date('c')], fn() => []);
+    }
+}
+
+/**
+ * Travel Malawi now syncs calendars both ways by iCal (RoomRaccoon, NightsBridge, Airbnb, Booking.com, Google Calendar): the saved brain facts take the fact,
+ * and the Director tells each department head what it means for their work (team board, read by every agent for 14 days; Audit > Agent conversations).
+ */
+function pm_tm_ical_v5(): void
+{
+    pm_update('settings', function (array $s) {
+        $facts = (string)($s['travel']['brain']['facts'] ?? '');
+        if ($facts !== '' && stripos($facts, 'iCal') === false) { // facts never saved: the defaults already carry it
+            $s['travel']['brain']['facts'] = rtrim($facts) . "\n" . PM_TM_ICAL_FACT;
+        }
+        return $s;
+    }, 'pm_default_settings');
+    if (!function_exists('pm_tb_post')) {
+        return;
+    }
+    $news = [
+        'writers' => 'News: Travel Malawi now syncs calendars both ways by iCal with RoomRaccoon, NightsBridge, Airbnb, Booking.com and Google Calendar. A host who uses one of them keeps it and gets no double bookings. When research shows their booking system, make that the reason to join: nothing to update twice.',
+        'replies' => 'News: we now sync calendars both ways by iCal. When a host asks about RoomRaccoon, NightsBridge, Airbnb, Booking.com or double bookings, the answer is yes: paste the iCal link per room under Rooms & Rates > Sync iCal, or our concierge team links it for them.',
+        'followup' => 'News: two-way iCal calendar sync is live. A host who went quiet because they already use a booking system or channel manager now has a new reason to join: their calendars stay in step, no double bookings. Use it once as the fresh news in a follow-up.',
+        'research' => 'News: the calendar sync connects to the host\'s own booking system. Note which one each lodge uses (RoomRaccoon, NightsBridge, Cloudbeds, Booking.com, Airbnb): it is now the strongest angle for that host.',
+        'scouts' => 'News: lodges already on Booking.com, Airbnb or a booking system like RoomRaccoon or NightsBridge are now a strong fit: our two-way iCal sync means they join without changing how they work. Do not skip them for having a booking system.',
+        'social' => 'News for the posts: Travel Malawi now syncs with RoomRaccoon, NightsBridge, Airbnb, Booking.com and Google Calendar by iCal. One post for hosts this week: keep your system, list free, no double bookings.',
+        'director' => 'News: two-way iCal calendar sync is live on Travel Malawi. It removes the main reason established lodges give for not joining (one more calendar to keep). Weigh hosts who already use a booking system higher.',
+    ];
+    foreach ($news as $to => $text) {
+        pm_tb_post('travel', 'director', $to, $text, 'order:ical:' . $to);
+    }
+    $was = pm_brand();
+    pm_brand_set('travel'); // the diary line belongs to Travel Malawi
+    function_exists('pm_agent_log') && pm_agent_log('Director', 'News for every department: two-way iCal calendar sync with RoomRaccoon, NightsBridge, Airbnb, Booking.com and Google Calendar is live.');
+    pm_brand_set($was);
 }
 
 /** The invitation now offers to set the page up from photos and rates: the saved default message and unsent first emails that still carry the earlier wording take the new one. Returns how many drafts changed. */

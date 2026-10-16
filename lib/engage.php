@@ -220,6 +220,11 @@ function pm_reply_rethink(array &$lead): string
     if ($lastIn === null) {
         throw new RuntimeException('There is no message from them to talk over.');
     }
+    foreach (array_slice($thread, $lastIn + 1) as $t) {
+        if (($t['dir'] ?? '') === 'out') { // answered already (here or found in the Sent folder): nothing waits, and no new draft reopens it
+            throw new RuntimeException('Their last message was already answered on ' . substr((string)($t['at'] ?? ''), 0, 16) . '.');
+        }
+    }
     $ch = ($thread[$lastIn]['ch'] ?? '') === 'wa' ? 'wa' : 'email';
     $before = $lead;
     $before['thread'] = array_slice($thread, 0, $lastIn); // what had been said when they wrote it
