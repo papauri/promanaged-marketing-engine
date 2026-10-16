@@ -78,7 +78,7 @@ function pm_sf_scout(string $brand): array
         $known = array_values(array_filter(array_map(fn($f) => (string)($f['url'] ?? ''), $st['items'])));
         $areas = implode(', ', array_slice(array_values(array_filter((array)(pm_agents_config($brand)['cities'] ?? []))), 0, 8)) ?: pm_markets($brand)['home'];
         $user = 'Use Google Search for each of these: ' . implode('; ', array_map(fn($q) => '"' . $q . '"', pm_sf_queries($brand))) . '. '
-            . 'Then list the places on social media and the web where ' . pm_sf_buyers($brand) . " gather, in or around $areas: Facebook groups and pages, Reddit communities, forums, "
+            . 'Then list the places on social media and the web where ' . pm_sf_buyers($brand) . " gather, in or around $areas: Facebook groups and pages, "
             . 'Instagram, TikTok or YouTube accounts with an engaged audience, WhatsApp or Telegram communities with a public page, associations, and events in the next 3 months. '
             . 'For each: the exact link, the platform, the name, its size (members or followers, only if shown), how active it is (recent posts and comments, only if you saw it), '
             . 'what people there talk about, and whether it allows posts from businesses (only if its rules say so). Only places the searches found; today is ' . date('j F Y') . '.'

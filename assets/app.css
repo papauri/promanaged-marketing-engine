@@ -1067,3 +1067,26 @@ body:has(.lsel:checked) .selbar .sel-tip { display:none }
 
 .sf-post { padding:var(--s-3) var(--s-4); border:1px solid var(--line); border-radius:14px; background:var(--surface-2) }
 .sf-posts .sf-grid { margin-top:var(--s-3) }
+
+/* Social > Scouting: a short header, one list at a time, one line per item that opens for the details */
+.sc-head .sc-top { display:flex; justify-content:space-between; gap:var(--s-4); align-items:flex-start; flex-wrap:wrap }
+.sc-head .sc-now { display:flex; flex-direction:column; align-items:flex-end; gap:4px }
+.sc-src { display:flex; flex-wrap:wrap; gap:var(--s-2); margin-top:var(--s-3) }
+.sc-chip { display:inline-flex; gap:6px; align-items:center; padding:4px 10px; border-radius:var(--r-pill); border:1px solid var(--line); background:var(--surface-2); font-size:var(--fs-1); color:var(--ink-2) }
+.sc-chip.ok { border-color:var(--ok-line); background:var(--ok-bg) } .sc-chip.off { color:var(--muted) }
+.sc-list { padding-top:var(--s-3) }
+.sc-row { border-top:1px solid var(--line) } .sc-row:first-of-type { border-top:0 }
+.sc-row > summary { list-style:none; display:grid; grid-template-columns:auto 1fr auto; gap:var(--s-3); align-items:center; padding:10px 4px; cursor:pointer }
+.sc-row > summary::-webkit-details-marker { display:none }
+.sc-row > summary:hover { background:var(--surface-2) }
+.sc-row[open] > summary { background:var(--surface-2) }
+.sc-main { display:flex; flex-direction:column; min-width:0 }
+.sc-main b { font-size:var(--fs-3); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.sc-sub { font-size:var(--fs-2); color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.sc-meta { font-size:var(--fs-1); color:var(--muted); white-space:nowrap }
+.sc-body { padding:var(--s-2) 4px var(--s-4); display:flex; flex-direction:column; gap:var(--s-2) }
+.sc-body textarea { font-size:var(--fs-2) }
+.sc-body p { margin:0 }
+.sc-goal { display:flex; justify-content:space-between; align-items:center; gap:var(--s-3); flex-wrap:wrap; margin-bottom:var(--s-2) }
+.okt { color:var(--ok) }
+@media (max-width:640px) { .sc-head .sc-now { align-items:flex-start } .sc-row > summary { grid-template-columns:auto 1fr } .sc-meta { display:none } }

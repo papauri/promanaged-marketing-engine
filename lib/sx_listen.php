@@ -105,17 +105,16 @@ function pm_listen_queries(string $brand, array $towns, int $shift = 0): array
     $pick = $towns ? array_values(array_unique(array_map(fn($i) => $towns[($turn + $i) % count($towns)], [0, 1, 2]))) : [$home];
     $items = pm_listen_items($brand);
     $item = fn(int $i) => $items[($turn + $i) % count($items)];
+    // individual people's public posts on social media: Facebook posts and public groups first, then Instagram, TikTok and X
     $ask = $brand === 'travel'
-        ? ['where to stay in %2$s', 'recommend %1$s in %2$s ' . $home, 'looking for %1$s %2$s ' . $home]
-        : ['looking for %1$s in %2$s', 'anyone recommend %1$s %2$s ' . $home, 'where can I get %1$s in %2$s'];
+        ? ['site:facebook.com "where to stay" %2$s', 'site:facebook.com "recommend" %1$s %2$s', 'site:facebook.com/groups "looking for" %1$s ' . $home]
+        : ['site:facebook.com "looking for" %1$s %2$s', 'site:facebook.com "anyone" %1$s %2$s', 'site:facebook.com/groups "where can I" %1$s ' . $home];
     $q = [];
-    foreach (array_slice($pick, 0, 2) as $i => $t) {
-        $q[] = sprintf($ask[$i % count($ask)], $item($i), $t);
+    foreach ($ask as $i => $a) {
+        $q[] = sprintf($a, $item($i), $pick[$i % count($pick)]);
     }
-    // where people's own questions are public and searchable: Reddit, the Tripadvisor forums, public Facebook posts and X
-    $q[] = 'site:reddit.com ' . $home . ' ' . $item(2);
-    $q[] = $brand === 'travel' ? 'site:tripadvisor.com ' . $home . ' forum ' . ($pick[2] ?? $pick[0]) : 'site:facebook.com ' . $home . ' "anyone" ' . $item(3);
-    $q[] = $brand === 'travel' ? 'site:facebook.com ' . $home . ' "recommend" ' . $item(3) : 'site:x.com ' . $home . ' ' . $item(4);
+    $q[] = 'site:instagram.com ' . $home . ' "looking for" ' . $item(3);
+    $q[] = ($turn % 2 ? 'site:tiktok.com ' : 'site:x.com ') . $home . ' ' . $item(4) . ' "anyone"';
     return $q;
 }
 
@@ -127,7 +126,7 @@ function pm_listen_search(string $brand, array $towns, array $skip, int $shift =
 {
     $areas = implode(', ', $towns ?: ['Malawi']);
     $user = 'Use Google Search for each of these searches: ' . implode('; ', array_map(fn($q) => '"' . $q . '"', pm_listen_queries($brand, $towns, $shift))) . '. '
-        . 'Then list the public posts, group posts, comments and forum threads from the last 90 days (today is ' . date('j F Y') . ") in which a person in or coming to $areas asks for "
+        . 'Then list the public social media posts, group posts and comments (Facebook, Instagram, TikTok, X) from the last 90 days (today is ' . date('j F Y') . ") in which a person in or coming to $areas asks for "
         . pm_listen_wants($brand) . '. For each: the exact link, the date posted, the platform, the town, the name shown on the post (or none), what they asked in their words, '
         . 'and an email or phone only if it is written in the post. Only posts the searches found; no business advertising itself; nothing about the person beyond the post. '
         . ($skip ? 'Leave out these links, already known: ' . implode(' ', $skip) . '. ' : '') . 'Newest first.';
@@ -184,7 +183,8 @@ function pm_listen_run(string $brand, array &$all): array
         pm_agent_log('Social', 'The search of public posts failed: ' . mb_substr($e->getMessage(), 0, 120), true);
     }
     [$found, $drop, $live] = pm_listen_check_links($found, $seen); // the real address of each link; too old or already known is dropped
-    $found = trim($found . "\n\n" . pm_listen_reddit($brand, $seen)); // the country's own community, with real dates (free)
+    [$fromAcc] = pm_listen_connected($brand, $seen);
+    $found = trim($found . "\n\n" . $fromAcc); // our connected Facebook and Instagram: posts that tag us, posts under our hashtags (free)
     // our own Page first: comments and messages read, buyers into the leads, who is waiting for an answer
     $page = pm_listen_page($brand);
     if ($page['buyers_added']) {
@@ -263,56 +263,74 @@ function pm_listen_run(string $brand, array &$all): array
     return ['found' => $nFound, 'kept' => $kept, 'names' => $names, 'tasks' => count($tasks), 'drafted' => $drafted, 'links' => $live, 'dropped' => count($drop), 'page' => $page, 'error' => ''];
 }
 
-/**
- * The newest posts of the country's own Reddit community (r/Malawi for a business at home in Malawi), read from its public feed: free, no AI, and each post carries its
- * real date (a web search often reports old threads as new). Posts of the last 45 days not seen before, as lines for the team to read; '' when there are none.
- * The feed is read at most every 30 minutes for all businesses together (data/reddit_feed.json). $GLOBALS['PM_REDDIT_STUB'] (tests) replaces the network.
- */
-function pm_listen_reddit(string $brand, array $seen): string
+/** The hashtags the desk reads on Instagram: the country, the main towns and the business's own words (at most 8, so the 30-a-week limit of Instagram is never reached). */
+function pm_listen_hashtags(string $brand): array
 {
-    $sub = (string)preg_replace('/[^A-Za-z0-9_]/', '', function_exists('pm_markets') ? pm_markets($brand)['home'] : 'Malawi');
-    if ($sub === '') {
-        return '';
-    }
-    $cache = (array)(pm_load('reddit_feed', fn() => [])[$sub] ?? []);
-    $xml = (string)($cache['xml'] ?? '');
-    if (time() - (int)($cache['at'] ?? 0) > 1800) {
-        if (isset($GLOBALS['PM_REDDIT_STUB']) && is_callable($GLOBALS['PM_REDDIT_STUB'])) {
-            $got = (string)$GLOBALS['PM_REDDIT_STUB']($sub);
-        } else {
-            $ch = curl_init('https://www.reddit.com/r/' . $sub . '/new/.rss?limit=100');
-            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_CONNECTTIMEOUT => 8, CURLOPT_FOLLOWLOCATION => true,
-                CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36']);
-            function_exists('pm_curl_native_ca') && pm_curl_native_ca($ch);
-            $got = (string)curl_exec($ch);
-            $ok = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200;
-            curl_close($ch);
-            $got = $ok ? $got : '';
-        }
-        if (str_contains($got, '<entry')) {
-            $xml = $got;
-        }
-        pm_update('reddit_feed', function (array $s) use ($sub, $xml) {
-            $s[$sub] = ['at' => time(), 'xml' => mb_substr($xml, 0, 400000)];
-            return $s;
-        }, fn() => []);
-    }
-    if ($xml === '' || !preg_match_all('#<entry>(.*?)</entry>#s', $xml, $em)) {
-        return '';
-    }
+    $home = function_exists('pm_markets') ? pm_markets($brand)['home'] : 'Malawi';
+    $towns = array_slice(array_values(array_filter(array_map('strval', (array)(pm_agents_config($brand)['cities'] ?? [])))), 0, 3);
+    $own = $brand === 'travel' ? [$home . 'travel', 'visit' . $home] : (pm_brand_is_custom($brand) ? [$home . 'business'] : [$home . 'gaming', $home . 'business']);
+    $tags = array_map(fn($t) => strtolower((string)preg_replace('/[^A-Za-z0-9]/', '', $t)), array_merge([$home], $towns, $own));
+    return array_slice(array_values(array_unique(array_filter($tags))), 0, 8);
+}
+
+/**
+ * The connected social accounts, read for individual posts: on Facebook the posts in which people tag or mention our Page (comments and messages on our own
+ * posts are judged by the Inbox already), on Instagram the newest public posts under our hashtags (two a time, in turn) and the posts that tag us. Free, no AI,
+ * each post with its real date and link. Returns [lines for the team to read ('' when none), what each account gave: ['facebook' => text, 'instagram' => text]].
+ * $GLOBALS['PM_GRAPH_STUB'] (tests) replaces the network: fn(path, params) => [ok, data].
+ */
+function pm_listen_connected(string $brand, array $seen, int $shift = 0): array
+{
+    $c = function_exists('pm_social_cfg') ? pm_social_cfg($brand) : ['ready' => false, 'ig_id' => '', 'page_id' => '', 'token' => ''];
+    $get = fn(string $path, array $params) => isset($GLOBALS['PM_GRAPH_STUB']) && is_callable($GLOBALS['PM_GRAPH_STUB']) ? $GLOBALS['PM_GRAPH_STUB']($path, $params) : pm_graph('GET', $path, $params, (string)$c['token']);
     $lines = [];
-    foreach ($em[1] as $e) {
-        $link = preg_match('#<link href="([^"]+)"#', $e, $m) ? html_entity_decode($m[1]) : '';
-        $at = preg_match('#<(?:published|updated)>([^<]+)<#', $e, $m) ? (strtotime($m[1]) ?: 0) : 0;
-        $title = preg_match('#<title>(.*?)</title>#s', $e, $m) ? trim(html_entity_decode(strip_tags(html_entity_decode($m[1])))) : '';
-        $body = preg_match('#<content[^>]*>(.*?)</content>#s', $e, $m) ? trim((string)preg_replace('/\s+/', ' ', html_entity_decode(strip_tags(html_entity_decode($m[1]))))) : '';
-        $body = trim((string)preg_replace('/submitted by .*$/i', '', $body));
-        if ($link === '' || !$at || $at < strtotime('-45 days') || isset($seen[md5(strtolower(rtrim($link, '/')))])) {
-            continue;
+    $src = ['facebook' => 'not connected', 'instagram' => 'not linked'];
+    $have = [];
+    $add = function (string $where, string $at, string $text, string $link) use (&$lines, &$have, $seen) {
+        $t = strtotime($at) ?: 0;
+        if (isset($have[$link])) {
+            return false; // the same post under two of our hashtags
         }
-        $lines[] = 'Reddit r/' . $sub . ', posted ' . date('Y-m-d', $at) . ': "' . mb_substr($title, 0, 160) . '" ' . mb_substr($body, 0, 400) . ' ' . $link;
+        $have[$link] = true;
+        $text = trim((string)preg_replace('/\s+/', ' ', $text));
+        if ($link === '' || $text === '' || ($t && $t < strtotime('-45 days')) || isset($seen[md5(strtolower(rtrim($link, '/')))])) {
+            return false;
+        }
+        $lines[] = $where . ($t ? ', posted ' . date('Y-m-d', $t) : '') . ': "' . mb_substr($text, 0, 500) . '" ' . $link;
+        return true;
+    };
+    if (!empty($c['ready'])) {
+        [$ok, $d] = $get((string)$c['page_id'] . '/tagged', ['limit' => 25, 'fields' => 'message,created_time,permalink_url,from']);
+        $n = 0;
+        foreach ($ok ? (array)($d['data'] ?? []) : [] as $p) {
+            $n += $add('Facebook, a post that tags our Page' . (!empty($p['from']['name']) ? ' (by ' . $p['from']['name'] . ')' : ''), (string)($p['created_time'] ?? ''), (string)($p['message'] ?? ''), (string)($p['permalink_url'] ?? '')) ? 1 : 0;
+        }
+        $src['facebook'] = $ok ? 'read: ' . $n . ' new post' . ($n === 1 ? '' : 's') . ' tagging the Page' : 'Facebook refused: ' . mb_substr((string)($d['error']['message'] ?? 'no access'), 0, 100);
     }
-    return $lines ? "Newest posts on Reddit r/$sub (real dates):\n" . implode("\n", array_slice($lines, 0, 30)) : '';
+    if (!empty($c['ready']) && (string)$c['ig_id'] !== '') {
+        $tags = pm_listen_hashtags($brand);
+        $pick = $tags ? array_values(array_unique([$tags[($shift * 2) % count($tags)], $tags[($shift * 2 + 1) % count($tags)]])) : [];
+        $n = 0;
+        $err = '';
+        foreach ($pick as $tag) {
+            [$ok, $d] = $get('ig_hashtag_search', ['user_id' => $c['ig_id'], 'q' => $tag]);
+            $hid = $ok ? (string)($d['data'][0]['id'] ?? '') : '';
+            if ($hid === '') {
+                $err = $err ?: (string)($d['error']['message'] ?? 'hashtag search is not allowed for this account');
+                continue;
+            }
+            [$ok, $d] = $get($hid . '/recent_media', ['user_id' => $c['ig_id'], 'fields' => 'caption,permalink,timestamp', 'limit' => 40]);
+            foreach ($ok ? (array)($d['data'] ?? []) : [] as $p) {
+                $n += $add('Instagram #' . $tag, (string)($p['timestamp'] ?? ''), (string)($p['caption'] ?? ''), (string)($p['permalink'] ?? '')) ? 1 : 0;
+            }
+        }
+        [$ok, $d] = $get((string)$c['ig_id'] . '/tags', ['fields' => 'caption,permalink,timestamp,username', 'limit' => 25]);
+        foreach ($ok ? (array)($d['data'] ?? []) : [] as $p) {
+            $n += $add('Instagram, a post that tags us' . (!empty($p['username']) ? ' (@' . $p['username'] . ')' : ''), (string)($p['timestamp'] ?? ''), (string)($p['caption'] ?? ''), (string)($p['permalink'] ?? '')) ? 1 : 0;
+        }
+        $src['instagram'] = $pick ? 'read #' . implode(', #', $pick) . ': ' . $n . ' new post' . ($n === 1 ? '' : 's') . ($err !== '' ? ' (hashtags: ' . mb_substr($err, 0, 80) . ')' : '') : 'no hashtags';
+    }
+    return [$lines ? "Posts from our connected social accounts (real dates):\n" . implode("\n", array_slice($lines, 0, 60)) : '', $src];
 }
 
 /** The links a search found, checked by code before anyone talks about them: [found text with real addresses, dropped links (too old or known), live links]. */
@@ -419,7 +437,8 @@ function pm_listen_posts(string $brand, array &$all): array
             pm_agent_log('Social', 'The web search of public posts failed: ' . mb_substr($e->getMessage(), 0, 120), true);
         }
         [$found] = pm_listen_check_links($found, $seen);
-        $found = trim($found . "\n\n" . pm_listen_reddit($brand, $seen)); // the country's own community, with real dates (free)
+        [$fromAcc, $res['sources']] = pm_listen_connected($brand, $seen, $shift);
+        $found = trim($found . "\n\n" . $fromAcc); // our connected Facebook and Instagram: posts that tag us, posts under our hashtags (free)
         if ($found !== '') {
             $system = pm_agents_company_brief('tiny') . "\nYou are " . pm_agent_first('social') . ", head of Social for $company. From search_found ONLY (never invent a person, a link or a detail), "
                 . 'go through EVERY post in search_found one by one and keep each one where a real person or small business asks for, wants to buy, or is trying to find something we offer (we_answer; a close match counts: "a laptop for gaming" is a gaming laptop, "somewhere to sleep near the lake" is a place to stay), with the exact link given there. Skip a business advertising itself, a post that only mentions the topic without asking, '
@@ -436,7 +455,7 @@ function pm_listen_posts(string $brand, array &$all): array
     } catch (Throwable $e) {
         $res['error'] = mb_substr($e->getMessage(), 0, 160);
     }
-    $sweep = ['at' => date('Y-m-d H:i'), 'n' => $shift, 'found' => $res['found'], 'kept' => $res['kept'], 'names' => $res['names'], 'error' => $res['error']];
+    $sweep = ['at' => date('Y-m-d H:i'), 'n' => $shift, 'found' => $res['found'], 'kept' => $res['kept'], 'names' => $res['names'], 'error' => $res['error'], 'sources' => (array)($res['sources'] ?? [])];
     pm_update('listen', function (array $s) use ($brand, $seen, $sweep) {
         $s[$brand] = ['seen' => $seen + (array)($s[$brand]['seen'] ?? []), 'posts' => $sweep] + (array)($s[$brand] ?? []);
         return $s;
