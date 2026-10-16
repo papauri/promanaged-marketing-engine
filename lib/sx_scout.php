@@ -229,10 +229,29 @@ function pm_do_sf_scout(string $vb): array
     if (!pm_agents_ready()) {
         return ['msg' => 'The AI needs a key in .env first.', 'kind' => 'err', 'to' => 'social&view=scout'];
     }
-    @set_time_limit(180);
+    @set_time_limit(300);
     $r = pm_sf_scout($vb);
-    return ['msg' => $r['error'] !== '' ? 'The scouting failed: ' . $r['error'] : ($r['added'] ? $r['added'] . ' new place' . ($r['added'] === 1 ? '' : 's') . ' to decide on.' : 'Nothing new worth our time this time.'),
-        'kind' => $r['error'] !== '' ? 'err' : 'ok', 'to' => 'social&view=scout'];
+    $pp = pm_sf_posts_now($vb); // and the individual posts: people asking for something we offer
+    $places = $r['error'] !== '' ? 'The scouting of places failed: ' . $r['error'] . '.' : ($r['added'] ? $r['added'] . ' new place' . ($r['added'] === 1 ? '' : 's') . ' to decide on.' : 'No new place worth our time.');
+    $posts = $pp['error'] !== '' ? ' The scouting of posts failed: ' . $pp['error'] . '.' : ($pp['kept'] ? ' ' . $pp['kept'] . ' ' . ($pp['kept'] === 1 ? 'person asks' : 'people ask') . ' for what we offer on public posts: they are under People looking, each with a reply to paste.' : ' Nobody new asking on public posts.');
+    return ['msg' => $places . $posts, 'kind' => $r['error'] !== '' && $pp['error'] !== '' ? 'err' : 'ok', 'to' => 'social&view=scout'];
+}
+
+/** The scouting desk's sweep of individual posts, saved: ['kept', 'names', 'error']. */
+function pm_sf_posts_now(string $brand): array
+{
+    $was = pm_brand();
+    pm_brand_set($brand);
+    try {
+        $all = pm_leads();
+        $r = pm_listen_posts($brand, $all);
+        $r['kept'] && pm_leads_save($all);
+        return $r;
+    } catch (Throwable $e) {
+        return ['found' => 0, 'kept' => 0, 'names' => [], 'error' => mb_substr($e->getMessage(), 0, 160)];
+    } finally {
+        pm_brand_set($was);
+    }
 }
 
 /** Social > Scouting: the weekly goal (finds acted on). */
@@ -262,6 +281,26 @@ function pm_job_social_scout(string $brand): string
     }
     $r = pm_sf_scout($brand);
     return $r['error'] !== '' ? 'scouting failed: ' . $r['error'] : $r['added'] . ' new place' . ($r['added'] === 1 ? '' : 's') . ' found';
+}
+
+/**
+ * Scheduler job: people asking on posts do not wait, so the desk sweeps the posts every day, more often than it looks for places: at most every 8 hours between 07:00 and 20:00,
+ * not within 4 hours of the head of Social's morning listening. Off without an AI key or with the agents' Scout switched off. Two calls each time.
+ */
+function pm_job_social_scout_posts(string $brand): string
+{
+    $now = function_exists('pm_now') ? pm_now() : time();
+    if (date('H:i', $now) < '07:00' || date('H:i', $now) > '20:00' || !pm_agents_ready() || empty(pm_agents_config($brand)['enabled']['scout'])) {
+        return '';
+    }
+    $st = pm_listen_state($brand);
+    $last = strtotime((string)($st['posts']['at'] ?? '')) ?: 0;
+    $morning = strtotime((string)($st['day']['at'] ?? '')) ?: 0;
+    if ($last > $now - 8 * 3600 || $morning > $now - 4 * 3600) {
+        return '';
+    }
+    $r = pm_sf_posts_now($brand);
+    return $r['error'] !== '' ? 'posts scouting failed: ' . $r['error'] : $r['kept'] . ' ' . ($r['kept'] === 1 ? 'person' : 'people') . ' asking on posts';
 }
 
 /* ---------------- on other screens ---------------- */

@@ -616,6 +616,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (($_POST['bt'] ?? '') === 'whatsapp') {
                 pm_redirect('whatsapp', $m, $k);
             }
+            if (($_POST['bt'] ?? '') === 'scout') { // "I replied" on Social > Scouting
+                pm_redirect('social&view=scout#posts', $m, $k);
+            }
             if (in_array($_POST['bt'] ?? '', ['targeting', 'home', 'ops'], true)) { // the page the button was on
                 pm_redirect(['home' => 'home', 'ops' => 'settings&section=connections'][$_POST['bt']] ?? 'targeting', $m, $k);
             }

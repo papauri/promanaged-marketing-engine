@@ -1064,3 +1064,6 @@ details.rx-first .msgpanel { margin:0; border:0; padding:0; background:none; box
 body:has(.lsel:checked) .selbar .sel-more { display:contents }
 body:has(.lsel:checked) .selbar .sel-tip { display:none }
 .selbar .sel-tip { flex:1 1 auto }
+
+.sf-post { padding:var(--s-3) var(--s-4); border:1px solid var(--line); border-radius:14px; background:var(--surface-2) }
+.sf-posts .sf-grid { margin-top:var(--s-3) }

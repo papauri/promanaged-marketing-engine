@@ -32,33 +32,90 @@ function pm_listen_due(string $brand): bool
     return (string)(pm_listen_state($brand)['day']['date'] ?? '') !== date('Y-m-d');
 }
 
+/**
+ * The things people ask for that this business answers, as short search words, from the offerings (Sales > Targeting and messages: the one list every prompt reads).
+ * "Source: finding, buying and delivering laptops, desktops, gaming PCs and gaming gear (controllers, headsets and accessories)" gives laptops, desktops, gaming PCs, controllers...
+ */
+function pm_listen_items(string $brand): array
+{
+    if ($brand === 'travel') { // travellers looking for a stay, and hosts looking for bookings (they list with us)
+        return ['a place to stay', 'a lodge', 'a guesthouse', 'a campsite', 'accommodation', 'things to do and tours', 'more bookings for my lodge', 'where to list my guesthouse'];
+    }
+    $offers = array_values(array_filter(array_map('strval', (array)(pm_agents_config($brand)['offerings'] ?? []))));
+    $hash = md5(json_encode($offers));
+    $kept = (array)(pm_load('listen_items', fn() => [])[$brand] ?? []);
+    if (($kept['hash'] ?? '') === $hash && !empty($kept['items'])) {
+        return (array)$kept['items'];
+    }
+    $out = [];
+    if ($offers && function_exists('pm_agents_ready') && pm_agents_ready()) { // once per change of the offerings: the words people really write when they need it
+        try {
+            $r = pm_agent_json(pm_claude('You know how people in ' . (function_exists('pm_markets') ? pm_markets($brand)['home'] : 'Malawi') . ' ask for things on social media. Reply JSON only.',
+                "What we sell:\n- " . implode("\n- ", $offers) . "\n\nList 12 to 20 short things (1 to 4 words each) a person or a small business would write in a public post when they need what we sell, "
+                . 'in their own words (for example "gaming laptop", "website designer", "IT support", "PS5 controller"). Concrete things, no job titles of ours, no slogans. JSON {"items":[]}', false, 400));
+            foreach ((array)($r['items'] ?? []) as $it) {
+                $it = strtolower(trim(strip_tags((string)$it), " .\"'"));
+                if (mb_strlen($it) >= 3 && mb_strlen($it) <= 40) {
+                    $out[] = $it;
+                }
+            }
+        } catch (Throwable) {
+        }
+    }
+    if (!$out) { // no AI: the offerings' own words, the details in brackets and after "with" left out
+        foreach ($offers as $o) {
+            $body = str_contains($o, ':') ? substr($o, strpos($o, ':') + 1) : $o;
+            $body = (string)preg_replace('/\([^)]*\)|\b(with|including)\b[^,]*/i', '', $body);
+            foreach (preg_split('/\s*(?:,|;|\band\b|\bor\b)\s*/i', $body) ?: [] as $p) {
+                $p = trim((string)preg_replace('/^(finding|buying|delivering|an?|the|everyday)\s+/i', '', trim($p, " .\t\n")));
+                if (mb_strlen($p) >= 4 && str_word_count($p) <= 3) {
+                    $out[] = strtolower($p);
+                }
+            }
+        }
+        $fallback = true; // not saved: the AI words are tried again next time
+    }
+    $out = array_slice(array_values(array_unique($out)), 0, 20) ?: ['what we offer'];
+    if (empty($fallback)) {
+        pm_update('listen_items', function (array $s) use ($brand, $hash, $out) {
+            $s[$brand] = ['hash' => $hash, 'items' => $out, 'at' => date('Y-m-d H:i')];
+            return $s;
+        }, fn() => []);
+    }
+    return $out;
+}
+
 /** What people ask for that this business answers, in a few words. */
 function pm_listen_wants(string $brand): string
 {
     if ($brand === 'travel') {
-        return 'a place to stay (lodge, guesthouse, campsite, chalet, Airbnb), a recommendation of where to stay, or things to do and tours';
+        return 'a place to stay (lodge, guesthouse, campsite, chalet, Airbnb), a recommendation of where to stay, or things to do and tours; or, from lodge and guesthouse owners, how to get more bookings or where to list their place';
     }
-    $off = array_map(fn($o) => trim((string)preg_replace('/:.*$/', '', (string)$o)), (array)(pm_agents_config($brand)['offerings'] ?? []));
-    if (pm_brand_is_custom($brand)) {
-        return mb_substr(implode(', ', array_filter($off)) ?: 'what we offer', 0, 200);
-    }
-    return 'IT help: a website or web app, a business or booking system, a laptop, computer or gaming PC, gaming gear (controllers, headsets, accessories), IT support, networking, email or backups';
+    return mb_substr(implode(', ', pm_listen_items($brand)), 0, 400);
 }
 
-/** The searches Thandi runs today: a few towns a day in turn, in the words people really use when they ask. */
-function pm_listen_queries(string $brand, array $towns): array
+/**
+ * The searches for people asking: a few towns in turn and a few of the things we offer in turn, in the words people really use when they ask, so each search
+ * covers new ground. $shift moves the turn on (the scouting desk searches posts more than once a day).
+ */
+function pm_listen_queries(string $brand, array $towns, int $shift = 0): array
 {
-    $day = (int)date('z');
-    $pick = $towns ? array_map(fn($i) => $towns[($day * 3 + $i) % count($towns)], [0, 1, 2]) : ['Malawi'];
-    $pick = array_values(array_unique($pick));
-    $ask = $brand === 'travel' ? ['where to stay in %s', 'recommend a lodge %s Malawi', 'accommodation %s Malawi help'] : (pm_brand_is_custom($brand)
-        ? ['looking for %s Malawi', 'recommend %s Malawi', 'anyone know %s Malawi']
-        : ['need a website developer %s Malawi', 'recommend IT support %s', 'where to buy a laptop %s Malawi']);
+    $turn = (int)date('z') * 3 + $shift * 2;
+    $home = function_exists('pm_markets') ? pm_markets($brand)['home'] : 'Malawi';
+    $pick = $towns ? array_values(array_unique(array_map(fn($i) => $towns[($turn + $i) % count($towns)], [0, 1, 2]))) : [$home];
+    $items = pm_listen_items($brand);
+    $item = fn(int $i) => $items[($turn + $i) % count($items)];
+    $ask = $brand === 'travel'
+        ? ['where to stay in %2$s', 'recommend %1$s in %2$s ' . $home, 'looking for %1$s %2$s ' . $home]
+        : ['looking for %1$s in %2$s', 'anyone recommend %1$s %2$s ' . $home, 'where can I get %1$s in %2$s'];
     $q = [];
-    foreach ($pick as $i => $t) {
-        $q[] = sprintf($ask[$i % count($ask)], $t);
+    foreach (array_slice($pick, 0, 2) as $i => $t) {
+        $q[] = sprintf($ask[$i % count($ask)], $item($i), $t);
     }
-    $q[] = $brand === 'travel' ? 'Malawi travel forum where to stay ' . date('Y') : 'Malawi ' . ($brand === 'promanaged' ? 'IT services' : 'recommendation') . ' reddit ' . date('Y');
+    // where people's own questions are public and searchable: Reddit, the Tripadvisor forums, public Facebook posts and X
+    $q[] = 'site:reddit.com ' . $home . ' ' . $item(2);
+    $q[] = $brand === 'travel' ? 'site:tripadvisor.com ' . $home . ' forum ' . ($pick[2] ?? $pick[0]) : 'site:facebook.com ' . $home . ' "anyone" ' . $item(3);
+    $q[] = $brand === 'travel' ? 'site:facebook.com ' . $home . ' "recommend" ' . $item(3) : 'site:x.com ' . $home . ' ' . $item(4);
     return $q;
 }
 
@@ -66,11 +123,11 @@ function pm_listen_queries(string $brand, array $towns): array
  * The listening: ONE short web-searched call, plain text back (a long prompt or a demand for JSON makes the model answer without searching).
  * What the posts said, with their links; '' when nothing was found.
  */
-function pm_listen_search(string $brand, array $towns, array $skip): string
+function pm_listen_search(string $brand, array $towns, array $skip, int $shift = 0): string
 {
     $areas = implode(', ', $towns ?: ['Malawi']);
-    $user = 'Use Google Search for each of these searches: ' . implode('; ', array_map(fn($q) => '"' . $q . '"', pm_listen_queries($brand, $towns))) . '. '
-        . 'Then list the public posts, group posts, comments and forum threads from the last 60 days (today is ' . date('j F Y') . ") in which a person in or coming to $areas asks for "
+    $user = 'Use Google Search for each of these searches: ' . implode('; ', array_map(fn($q) => '"' . $q . '"', pm_listen_queries($brand, $towns, $shift))) . '. '
+        . 'Then list the public posts, group posts, comments and forum threads from the last 90 days (today is ' . date('j F Y') . ") in which a person in or coming to $areas asks for "
         . pm_listen_wants($brand) . '. For each: the exact link, the date posted, the platform, the town, the name shown on the post (or none), what they asked in their words, '
         . 'and an email or phone only if it is written in the post. Only posts the searches found; no business advertising itself; nothing about the person beyond the post. '
         . ($skip ? 'Leave out these links, already known: ' . implode(' ', $skip) . '. ' : '') . 'Newest first.';
@@ -87,7 +144,7 @@ function pm_listen_prompt(string $brand, string $found, array $towns, array $dro
     $st = pm_listen_state($brand);
     $system = pm_agents_company_brief('tiny') . "\nYou are " . pm_agent_first('social') . ", head of Social: you know what people on social media want, on our own Page and everywhere else.\n"
         . '"people": from search_found only (this morning\'s search of public posts), each person who asks for what we offer, with the exact link given there; never invent one or a detail; '
-        . 'skip a business advertising itself, anything older than 60 days or outside our areas, and every link in drop_links (too old or already answered: never talk about those either). Keep only what the post says. For each: who (the name shown, or empty), platform, url, posted (YYYY-MM-DD), town, '
+        . 'skip a business advertising itself, anything older than 90 days or outside our areas, and every link in drop_links (too old or already answered: never talk about those either). Keep only what the post says. For each: who (the name shown, or empty), platform, url, posted (YYYY-MM-DD), town, '
         . 'wants (what they asked for, briefly, in their words), email and phone only if written in the post, '
         . "reply: our public answer under their post, at most 50 words, helpful first and specific to what they asked, from $company (we are a business: never pretend to be a customer, traveller or friend)"
         . ($site !== '' ? ", no link except $site" : ', no links') . ', no pressure, ending with an easy question. '
@@ -126,22 +183,8 @@ function pm_listen_run(string $brand, array &$all): array
         $found = '';
         pm_agent_log('Social', 'The search of public posts failed: ' . mb_substr($e->getMessage(), 0, 120), true);
     }
-    // the links the search found, checked by code before the team talks about them: the real address, and too old or already known is dropped
-    $drop = [];
-    $live = 0;
-    if ($found !== '' && preg_match_all('#https?://[^\s)\]>"]+#', $found, $lm)) {
-        foreach (array_unique($lm[0]) as $u0) {
-            $u = pm_listen_real_url($u0);
-            $u !== $u0 && $found = str_replace($u0, $u, $found);
-            $pd = pm_listen_post_date($u);
-            if (($pd && $pd < strtotime('-75 days')) || isset($seen[md5(strtolower(rtrim($u, '/')))])) {
-                $drop[] = $u;
-            } else {
-                $live++;
-            }
-        }
-        $live || $found = ''; // every link was old or known: nobody new asking
-    }
+    [$found, $drop, $live] = pm_listen_check_links($found, $seen); // the real address of each link; too old or already known is dropped
+    $found = trim($found . "\n\n" . pm_listen_reddit($brand, $seen)); // the country's own community, with real dates (free)
     // our own Page first: comments and messages read, buyers into the leads, who is waiting for an answer
     $page = pm_listen_page($brand);
     if ($page['buyers_added']) {
@@ -183,54 +226,8 @@ function pm_listen_run(string $brand, array &$all): array
     $focus = (string)($out['focus'] ?? '');
     $focus = defined('PM_SOCIAL_FOCUS') && isset(PM_SOCIAL_FOCUS[$focus]) ? $focus : '';
 
-    // the people: checked by code, then each one a lead
-    $nFound = 0;
-    $names = [];
-    $wantsSeen = [];
     $now = date('Y-m-d H:i');
-    foreach (array_slice((array)($out['people'] ?? []), 0, 6) as $p) {
-        if (!is_array($p)) {
-            continue;
-        }
-        $nFound++;
-        $url = pm_listen_real_url(trim((string)($p['url'] ?? '')));
-        $h = md5(strtolower(rtrim($url, '/')));
-        $what = mb_substr(trim(strip_tags((string)($p['wants'] ?? ''))), 0, 220);
-        $reply = trim(strip_tags((string)($p['reply'] ?? '')));
-        $posted = pm_listen_post_date($url) ?: (strtotime((string)($p['posted'] ?? '')) ?: 0); // a Reddit link carries its own date: the model's date is often a year out
-        $townIn = trim((string)($p['town'] ?? ''));
-        $town = '';
-        foreach ($towns as $t) {
-            if ($townIn !== '' && (stripos($townIn, $t) !== false || stripos($t, $townIn) !== false)) {
-                $town = $t;
-                break;
-            }
-        }
-        if (!preg_match('#^https?://[^\s/]+\.[^\s]+#i', $url) || isset($seen[$h]) || $what === '' || $reply === ''
-            || ($site !== '' && stripos($url, (string)parse_url($site, PHP_URL_HOST) ?: '#none#') !== false)
-            || ($posted && $posted < strtotime('-75 days')) || ($town === '' && stripos($townIn . ' ' . $what, 'malawi') === false)) {
-            continue; // no real link, already seen, nothing asked, our own page, too old, or outside where we work
-        }
-        $seen[$h] = [date('Y-m-d'), $url];
-        $who = mb_substr(trim(strip_tags((string)($p['who'] ?? ''))), 0, 60);
-        $plat = mb_substr(trim(strip_tags((string)($p['platform'] ?? ''))), 0, 30) ?: (string)preg_replace('/^www\./', '', (string)parse_url($url, PHP_URL_HOST));
-        $name = $who !== '' ? $who : 'Someone ' . ($town !== '' ? 'in ' . $town : 'on ' . $plat);
-        $id = pm_lead_id($name . substr($h, 0, 6), $town, $brand);
-        if (isset($all[$id])) {
-            continue;
-        }
-        $email = filter_var(trim((string)($p['email'] ?? '')), FILTER_VALIDATE_EMAIL) ?: '';
-        $all[$id] = [
-            'id' => $id, 'brand' => $brand, 'name' => $name, 'type' => 'Person looking', 'city' => $town ?: 'Malawi', 'address' => '', 'website' => '',
-            'phone' => mb_substr(trim((string)($p['phone'] ?? '')), 0, 30), 'email' => $email, 'whatsapp' => '', 'contact' => $who, 'contact_title' => '',
-            'evidence' => [$what . ' ' . $url], 'facebook' => '', 'instagram' => '', 'social_gaps' => [], 'need_signals' => [$what], 'offering' => '',
-            'reason' => 'Asked on ' . $plat . ($posted ? ' on ' . date('j M', $posted) : '') . ': ' . $what, 'score' => 80, 'status' => 'new',
-            'notes' => [], 'drafts' => [], 'sent' => [], 'followups' => 0, 'created' => $now, 'updated' => $now, 'src' => ['kind' => 'listen'], 'folders' => ['People looking'],
-            'listen' => ['url' => $url, 'platform' => $plat, 'posted' => $posted ? date('Y-m-d', $posted) : '', 'wants' => $what, 'reply' => mb_substr($reply, 0, 600), 'found' => $now],
-        ];
-        $names[] = $name . ($town !== '' && $who !== '' ? ' (' . $town . ')' : '');
-        $wantsSeen[] = $what;
-    }
+    [$nFound, $names, $wantsSeen] = pm_listen_keep_people($brand, (array)($out['people'] ?? []), $all, $seen, $towns, $site); // checked by code, then each one a lead
     $kept = count($names);
     if (count($seen) > 600) {
         uasort($seen, fn($a, $b) => strcmp((string)($a[0] ?? ''), (string)($b[0] ?? '')));
@@ -239,7 +236,7 @@ function pm_listen_run(string $brand, array &$all): array
     $day = ['date' => date('Y-m-d'), 'at' => $now, 'huddle' => $huddle, 'tasks' => $tasks, 'focus' => $focus, 'found' => $nFound, 'kept' => $kept, 'names' => $names, 'error' => '',
         'page' => ['ready' => $page['ready'], 'comments' => $page['waiting_comments'], 'messages' => $page['waiting_messages'], 'complaints' => $page['complaints'], 'buyers' => $page['buyers_added']]];
     pm_update('listen', function (array $s) use ($brand, $seen, $day) {
-        $s[$brand] = ['seen' => $seen, 'day' => $day];
+        $s[$brand] = ['seen' => $seen + (array)($s[$brand]['seen'] ?? []), 'day' => $day] + (array)($s[$brand] ?? []); // the posts sweep's own record stays
         return $s;
     }, fn() => []);
 
@@ -264,6 +261,194 @@ function pm_listen_run(string $brand, array &$all): array
         pm_tb_post($brand, 'social', 'writers', 'People are asking on social media for: ' . implode('; ', array_slice($wantsSeen, 0, 3)) . '. Use what they want as the angle.', 'thandi:asks');
     }
     return ['found' => $nFound, 'kept' => $kept, 'names' => $names, 'tasks' => count($tasks), 'drafted' => $drafted, 'links' => $live, 'dropped' => count($drop), 'page' => $page, 'error' => ''];
+}
+
+/**
+ * The newest posts of the country's own Reddit community (r/Malawi for a business at home in Malawi), read from its public feed: free, no AI, and each post carries its
+ * real date (a web search often reports old threads as new). Posts of the last 45 days not seen before, as lines for the team to read; '' when there are none.
+ * The feed is read at most every 30 minutes for all businesses together (data/reddit_feed.json). $GLOBALS['PM_REDDIT_STUB'] (tests) replaces the network.
+ */
+function pm_listen_reddit(string $brand, array $seen): string
+{
+    $sub = (string)preg_replace('/[^A-Za-z0-9_]/', '', function_exists('pm_markets') ? pm_markets($brand)['home'] : 'Malawi');
+    if ($sub === '') {
+        return '';
+    }
+    $cache = (array)(pm_load('reddit_feed', fn() => [])[$sub] ?? []);
+    $xml = (string)($cache['xml'] ?? '');
+    if (time() - (int)($cache['at'] ?? 0) > 1800) {
+        if (isset($GLOBALS['PM_REDDIT_STUB']) && is_callable($GLOBALS['PM_REDDIT_STUB'])) {
+            $got = (string)$GLOBALS['PM_REDDIT_STUB']($sub);
+        } else {
+            $ch = curl_init('https://www.reddit.com/r/' . $sub . '/new/.rss?limit=100');
+            curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_CONNECTTIMEOUT => 8, CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36']);
+            function_exists('pm_curl_native_ca') && pm_curl_native_ca($ch);
+            $got = (string)curl_exec($ch);
+            $ok = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE) === 200;
+            curl_close($ch);
+            $got = $ok ? $got : '';
+        }
+        if (str_contains($got, '<entry')) {
+            $xml = $got;
+        }
+        pm_update('reddit_feed', function (array $s) use ($sub, $xml) {
+            $s[$sub] = ['at' => time(), 'xml' => mb_substr($xml, 0, 400000)];
+            return $s;
+        }, fn() => []);
+    }
+    if ($xml === '' || !preg_match_all('#<entry>(.*?)</entry>#s', $xml, $em)) {
+        return '';
+    }
+    $lines = [];
+    foreach ($em[1] as $e) {
+        $link = preg_match('#<link href="([^"]+)"#', $e, $m) ? html_entity_decode($m[1]) : '';
+        $at = preg_match('#<(?:published|updated)>([^<]+)<#', $e, $m) ? (strtotime($m[1]) ?: 0) : 0;
+        $title = preg_match('#<title>(.*?)</title>#s', $e, $m) ? trim(html_entity_decode(strip_tags(html_entity_decode($m[1])))) : '';
+        $body = preg_match('#<content[^>]*>(.*?)</content>#s', $e, $m) ? trim((string)preg_replace('/\s+/', ' ', html_entity_decode(strip_tags(html_entity_decode($m[1]))))) : '';
+        $body = trim((string)preg_replace('/submitted by .*$/i', '', $body));
+        if ($link === '' || !$at || $at < strtotime('-45 days') || isset($seen[md5(strtolower(rtrim($link, '/')))])) {
+            continue;
+        }
+        $lines[] = 'Reddit r/' . $sub . ', posted ' . date('Y-m-d', $at) . ': "' . mb_substr($title, 0, 160) . '" ' . mb_substr($body, 0, 400) . ' ' . $link;
+    }
+    return $lines ? "Newest posts on Reddit r/$sub (real dates):\n" . implode("\n", array_slice($lines, 0, 30)) : '';
+}
+
+/** The links a search found, checked by code before anyone talks about them: [found text with real addresses, dropped links (too old or known), live links]. */
+function pm_listen_check_links(string $found, array $seen): array
+{
+    $drop = [];
+    $live = 0;
+    if ($found !== '' && preg_match_all('#https?://[^\s)\]>"]+#', $found, $lm)) {
+        foreach (array_unique($lm[0]) as $u0) {
+            $u = pm_listen_real_url($u0);
+            $u !== $u0 && $found = str_replace($u0, $u, $found);
+            $pd = pm_listen_post_date($u);
+            if (($pd && $pd < strtotime('-100 days')) || isset($seen[md5(strtolower(rtrim($u, '/')))])) {
+                $drop[] = $u;
+            } else {
+                $live++;
+            }
+        }
+        $live || $found = ''; // every link was old or known: nobody new asking
+    }
+    return [$found, $drop, $live];
+}
+
+/**
+ * The people the team found asking on posts, checked by code, each one a lead ("People looking") in $all; their links go into $seen.
+ * Returns [how many were offered, the names kept, what they asked for].
+ */
+function pm_listen_keep_people(string $brand, array $people, array &$all, array &$seen, array $towns, string $site): array
+{
+    $nFound = 0;
+    $names = [];
+    $wantsSeen = [];
+    $now = date('Y-m-d H:i');
+    foreach (array_slice($people, 0, 8) as $p) {
+        if (!is_array($p)) {
+            continue;
+        }
+        $nFound++;
+        $url = pm_listen_real_url(trim((string)($p['url'] ?? '')));
+        $h = md5(strtolower(rtrim($url, '/')));
+        $what = mb_substr(trim(strip_tags((string)($p['wants'] ?? ''))), 0, 220);
+        $reply = trim(strip_tags((string)($p['reply'] ?? '')));
+        $posted = pm_listen_post_date($url) ?: (strtotime((string)($p['posted'] ?? '')) ?: 0); // a Reddit link carries its own date: the model's date is often a year out
+        $townIn = trim((string)($p['town'] ?? ''));
+        $town = '';
+        foreach ($towns as $t) {
+            if ($townIn !== '' && (stripos($townIn, $t) !== false || stripos($t, $townIn) !== false)) {
+                $town = $t;
+                break;
+            }
+        }
+        $home = function_exists('pm_markets') ? pm_markets($brand)['home'] : 'Malawi';
+        if (!preg_match('#^https?://[^\s/]+\.[^\s]+#i', $url) || isset($seen[$h]) || $what === '' || $reply === ''
+            || ($site !== '' && stripos($url, (string)parse_url($site, PHP_URL_HOST) ?: '#none#') !== false)
+            || ($posted && $posted < strtotime('-100 days')) || ($town === '' && stripos($townIn . ' ' . $what, $home) === false && stripos($townIn . ' ' . $what, 'malawi') === false)) {
+            continue; // no real link, already seen, nothing asked, our own page, too old, or outside where we work
+        }
+        $seen[$h] = [date('Y-m-d'), $url];
+        $who = mb_substr(trim(strip_tags((string)($p['who'] ?? ''))), 0, 60);
+        $plat = mb_substr(trim(strip_tags((string)($p['platform'] ?? ''))), 0, 30) ?: (string)preg_replace('/^www\./', '', (string)parse_url($url, PHP_URL_HOST));
+        $name = $who !== '' ? $who : 'Someone ' . ($town !== '' ? 'in ' . $town : 'on ' . $plat);
+        $id = pm_lead_id($name . substr($h, 0, 6), $town, $brand);
+        if (isset($all[$id])) {
+            continue;
+        }
+        $email = filter_var(trim((string)($p['email'] ?? '')), FILTER_VALIDATE_EMAIL) ?: '';
+        $all[$id] = [
+            'id' => $id, 'brand' => $brand, 'name' => $name, 'type' => 'Person looking', 'city' => $town ?: $home, 'address' => '', 'website' => '',
+            'phone' => mb_substr(trim((string)($p['phone'] ?? '')), 0, 30), 'email' => $email, 'whatsapp' => '', 'contact' => $who, 'contact_title' => '',
+            'evidence' => [$what . ' ' . $url], 'facebook' => '', 'instagram' => '', 'social_gaps' => [], 'need_signals' => [$what], 'offering' => '',
+            'reason' => 'Asked on ' . $plat . ($posted ? ' on ' . date('j M', $posted) : '') . ': ' . $what, 'score' => 80, 'status' => 'new',
+            'notes' => [], 'drafts' => [], 'sent' => [], 'followups' => 0, 'created' => $now, 'updated' => $now, 'src' => ['kind' => 'listen'], 'folders' => ['People looking'],
+            'listen' => ['url' => $url, 'platform' => $plat, 'posted' => $posted ? date('Y-m-d', $posted) : '', 'wants' => $what, 'reply' => mb_substr($reply, 0, 600), 'found' => $now],
+        ];
+        $names[] = $name . ($town !== '' && $who !== '' ? ' (' . $town . ')' : '');
+        $wantsSeen[] = $what;
+    }
+    if (count($seen) > 600) {
+        uasort($seen, fn($a, $b) => strcmp((string)($a[0] ?? ''), (string)($b[0] ?? '')));
+        $seen = array_slice($seen, -500, null, true);
+    }
+    return [$nFound, $names, $wantsSeen];
+}
+
+/**
+ * The scouting desk's sweep of individual posts: people asking, on public posts, in groups and forums, for something we offer. One short web search (a new turn of
+ * towns and of the things we offer each time), then one cheap call that keeps only real people asking, each with a reply to paste under the post. No huddle.
+ * New leads go into $all (not saved here). Returns ['found', 'kept', 'names', 'error'].
+ */
+function pm_listen_posts(string $brand, array &$all): array
+{
+    $towns = array_values(array_filter(array_map('strval', (array)(pm_agents_config($brand)['cities'] ?? []))));
+    $st = pm_listen_state($brand);
+    $seen = (array)($st['seen'] ?? []);
+    $shift = (int)($st['posts']['n'] ?? 0) + 1; // each sweep searches the next towns and things
+    $site = function_exists('pm_brand_site') ? pm_brand_site($brand) : '';
+    $company = pm_brand_name($brand);
+    $res = ['found' => 0, 'kept' => 0, 'names' => [], 'error' => ''];
+    try {
+        try {
+            $found = pm_listen_search($brand, $towns, array_slice(array_values(array_filter(array_map(fn($x) => (string)($x[1] ?? ''), $seen))), -15), $shift);
+        } catch (Throwable $e) { // the community feed below can still find people
+            $found = '';
+            pm_agent_log('Social', 'The web search of public posts failed: ' . mb_substr($e->getMessage(), 0, 120), true);
+        }
+        [$found] = pm_listen_check_links($found, $seen);
+        $found = trim($found . "\n\n" . pm_listen_reddit($brand, $seen)); // the country's own community, with real dates (free)
+        if ($found !== '') {
+            $system = pm_agents_company_brief('tiny') . "\nYou are " . pm_agent_first('social') . ", head of Social for $company. From search_found ONLY (never invent a person, a link or a detail), "
+                . 'go through EVERY post in search_found one by one and keep each one where a real person or small business asks for, wants to buy, or is trying to find something we offer (we_answer; a close match counts: "a laptop for gaming" is a gaming laptop, "somewhere to sleep near the lake" is a place to stay), with the exact link given there. Skip a business advertising itself, a post that only mentions the topic without asking, '
+                . 'anything older than 90 days or outside our areas. Keep only what the post says. For each: who (the name shown, or empty), platform, url, posted (YYYY-MM-DD), town, '
+                . 'wants (what they asked for, briefly, in their words), email and phone only if written in the post, '
+                . "reply: our public answer under their post, at most 50 words, helpful first and specific to what they asked, from $company (we are a business: never pretend to be a customer, traveller or friend)"
+                . ($site !== '' ? ", no link except $site" : ', no links') . ', no pressure, ending with an easy question. ' . (defined('PM_HUMAN_RULES') ? PM_HUMAN_RULES . ' ' : '') . PM_AGENT_RULES;
+            $user = json_encode(['today' => date('Y-m-d'), 'areas' => $towns, 'we_answer' => pm_listen_wants($brand), 'search_found' => $found], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                . "\nJSON {\"people\":[{\"who\",\"platform\",\"url\",\"posted\",\"town\",\"wants\",\"email\",\"phone\",\"reply\"}]} at most 8 (none is fine).";
+            $out = pm_agent_json($GLOBALS['PM_LISTEN_RAW'] = pm_claude($system, $user, false, 1800, 'write')); // a missed person is a missed sale: the middle model reads the posts
+            [$res['found'], $res['names']] = pm_listen_keep_people($brand, is_array($out) ? (array)($out['people'] ?? (array_is_list($out) ? $out : [])) : [], $all, $seen, $towns, $site); // models often answer with the list alone
+            $res['kept'] = count($res['names']);
+        }
+    } catch (Throwable $e) {
+        $res['error'] = mb_substr($e->getMessage(), 0, 160);
+    }
+    $sweep = ['at' => date('Y-m-d H:i'), 'n' => $shift, 'found' => $res['found'], 'kept' => $res['kept'], 'names' => $res['names'], 'error' => $res['error']];
+    pm_update('listen', function (array $s) use ($brand, $seen, $sweep) {
+        $s[$brand] = ['seen' => $seen + (array)($s[$brand]['seen'] ?? []), 'posts' => $sweep] + (array)($s[$brand] ?? []);
+        return $s;
+    }, fn() => []);
+    if ($res['error'] === '') {
+        pm_agent_log('Social', $res['kept'] ? 'I scouted public posts and found ' . $res['kept'] . ' ' . ($res['kept'] === 1 ? 'person' : 'people') . ' asking for what we offer: ' . implode(', ', $res['names']) . '. They are under Leads > People looking, each with a reply to paste under their post.'
+            : 'I scouted public posts for people asking for what we offer and found nobody new this time.');
+        $res['kept'] && function_exists('pm_tb_post') && pm_tb_post($brand, 'social', 'replies', $res['kept'] . ' ' . ($res['kept'] === 1 ? 'person asks' : 'people ask') . ' on public posts for what we offer; the replies to paste are on each lead under People looking.', 'sf:posts');
+    } else {
+        pm_agent_log('Social', 'The scouting of public posts failed: ' . $res['error'], true);
+    }
+    return $res;
 }
 
 /**

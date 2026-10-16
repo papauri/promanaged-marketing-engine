@@ -20,9 +20,9 @@ $goalOk = $c['acted7'] >= $c['goal'];
   <div class="sf-desk-head">
     <div>
       <h2 class="mt-0"><?= pm_h($nm) ?>'s scouting desk</h2>
-      <p class="hint mt-0">We look across social media for the places where <?= pm_h(pm_sf_buyers($vb)) ?> gather, and where a move from us could bring sales: active groups, pages and creators with an engaged audience, busy conversations and events. Each find says why it matters, the move, who would do it and the words to use. You decide; nothing is posted by itself.</p>
+      <p class="hint mt-0">We look across social media for the places where <?= pm_h(pm_sf_buyers($vb)) ?> gather, and where a move from us could bring sales: active groups, pages and creators with an engaged audience, busy conversations and events. We also read individual posts for people asking for something we offer (<?= pm_h(mb_substr(implode(', ', array_slice(pm_listen_items($vb), 0, 6)), 0, 120)) ?>…) and give you a reply to paste under each. Each find says why it matters, the move, who would do it and the words to use. You decide; nothing is posted by itself.</p>
     </div>
-    <form method="post" class="sf-scoutnow" data-confirm="Scout social media now (one short AI web search and one cheap call)?"><?= $sx('sf_scout') ?>
+    <form method="post" class="sf-scoutnow" data-confirm="Scout social media now: places where our buyers gather, and posts where people ask for what we offer (two short AI web searches and two cheap calls)?"><?= $sx('sf_scout') ?>
       <button class="btn primary"<?= pm_agents_ready() ? '' : ' disabled title="Add an AI key to .env first"' ?>>Scout now</button>
       <small class="muted"><?= $c['at'] !== '' ? 'Last scouted ' . pm_h(date('j M, H:i', strtotime($c['at']))) : 'Not scouted yet' ?><?= $c['error'] !== '' ? '<br><span class="warnt">Last try failed: ' . pm_h(mb_substr($c['error'], 0, 90)) . '</span>' : '' ?></small>
     </form>
@@ -36,6 +36,32 @@ $goalOk = $c['acted7'] >= $c['goal'];
   </div>
   <?php if ($c['new'] > 0 && !$goalOk): ?><p class="hint mb-0"><b><?= pm_h($nm) ?>:</b> <?= $c['new'] ?> find<?= $c['new'] === 1 ? '' : 's' ?> wait<?= $c['new'] === 1 ? 's' : '' ?> for your call, and we have acted on <?= $c['acted7'] ?> of <?= $c['goal'] ?> this week. Hand the good ones to the team, or tell us to look for more like them.</p>
   <?php elseif (!$c['new'] && !$goalOk): ?><p class="hint mb-0"><b><?= pm_h($nm) ?>:</b> nothing waits for a decision and we are short of this week's goal: press <b>Scout now</b>, or mark the ones the team finished as done.</p><?php endif; ?>
+</section>
+
+<?php
+$pst = (array)(pm_listen_state($vb)['posts'] ?? []);
+$asking = array_filter(pm_leads_read(), fn($l) => ($l['brand'] ?? 'promanaged') === $vb && !empty($l['listen']) && ($l['status'] ?? '') === 'new');
+uasort($asking, fn($a, $b) => strcmp((string)($b['listen']['found'] ?? ''), (string)($a['listen']['found'] ?? '')));
+?>
+<section class="card sf-posts" id="posts">
+  <h2 class="mt-0">Posts asking for what we offer <span class="muted t-sm">· <?= count($asking) ?> waiting for a reply<?= !empty($pst['at']) ? ' · posts last scouted ' . pm_h(date('j M, H:i', strtotime((string)$pst['at']))) : '' ?></span></h2>
+  <p class="hint mt-0">People on public posts, in groups and forums asking for something we sell. Open the post, paste the reply under it, then press I replied. No app can comment under other people's posts, so this step is yours.<?= !empty($pst['error']) ? ' <span class="warnt">Last try failed: ' . pm_h(mb_substr((string)$pst['error'], 0, 90)) . '</span>' : '' ?></p>
+  <?php if (!$asking): ?><p class="muted mb-0">Nobody waiting. The desk reads the posts again every few hours in the day, or press Scout now.</p><?php endif; ?>
+  <div class="sf-grid">
+  <?php foreach (array_slice($asking, 0, 6, true) as $al): $lz = (array)$al['listen']; $rb = 'sfp-' . pm_h((string)$al['id']); ?>
+    <article class="sf-card sf-post">
+      <div class="sf-tags"><span class="pill"><?= pm_h((string)$lz['platform']) ?></span><?php if (!empty($lz['posted'])): ?><span class="pill"><?= pm_h(date('j M', strtotime((string)$lz['posted']))) ?></span><?php endif; ?><span class="pill"><?= pm_h((string)$al['city']) ?></span></div>
+      <h3 class="sf-name"><a href="<?= pm_h((string)$lz['url']) ?>" target="_blank" rel="noopener noreferrer"><?= pm_h((string)$al['name']) ?> <span aria-hidden="true">↗</span></a></h3>
+      <p class="sf-why">“<?= pm_h((string)$lz['wants']) ?>”</p>
+      <label for="<?= $rb ?>" class="t-sm muted">Our reply, to paste under their post</label>
+      <textarea id="<?= $rb ?>" rows="3" readonly><?= pm_h((string)$lz['reply']) ?></textarea>
+      <div class="btns"><button type="button" class="btn small" data-copy-target="#<?= $rb ?>">Copy the reply</button><a class="btn small primary" href="<?= pm_h((string)$lz['url']) ?>" target="_blank" rel="noopener noreferrer">Open the post</a>
+        <form method="post" class="inline"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="status"><input type="hidden" name="id" value="<?= pm_h((string)$al['id']) ?>"><input type="hidden" name="status" value="contacted"><input type="hidden" name="bt" value="scout"><button class="btn small" title="You answered under their post: it moves to Contacted">I replied</button></form>
+        <a class="btn small ghost" href="?tab=agents&amp;lead=<?= pm_h(rawurlencode((string)$al['id'])) ?>">Open the lead</a></div>
+    </article>
+  <?php endforeach; ?>
+  </div>
+  <?php if (count($asking) > 6): ?><p class="hint mb-0"><a href="?tab=agents&amp;status=people">All <?= count($asking) ?> people looking</a></p><?php endif; ?>
 </section>
 
 <?php $tabs = [];
