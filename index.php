@@ -1790,6 +1790,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['fb_pages'] = array_map(fn($p) => ['id' => $p['id'], 'name' => $p['name'], 'token' => $p['access_token']], $pages);
             pm_redirect('settings&section=connections', count($pages) . ' Page(s) found. Choose which one belongs to ' . (pm_brand_name($vb)) . '.');
         }
+        if ($do === 'app_save') { // the Facebook app's ID and secret (and the Login for Business configuration), once
+            $kv = [];
+            if (isset($_POST['app_id'])) {
+                $kv['FB_APP_ID'] = preg_replace('/\D/', '', (string)$_POST['app_id']);
+            }
+            if (trim((string)($_POST['app_secret'] ?? '')) !== '') {
+                $kv['FB_APP_SECRET'] = preg_replace('/[^A-Za-z0-9]/', '', (string)$_POST['app_secret']);
+            }
+            if (isset($_POST['config_id'])) {
+                $kv['FB_LOGIN_CONFIG_ID'] = preg_replace('/\D/', '', (string)$_POST['config_id']);
+            }
+            $kv && pm_env_set($kv);
+            $e1 = $kv + pm_env(); // pm_env() is read once per request
+            $readyA = preg_replace('/\D/', '', (string)($e1['FB_APP_ID'] ?? '')) !== '' && trim((string)($e1['FB_APP_SECRET'] ?? '')) !== '';
+            pm_redirect('settings&section=connections', $readyA ? 'Saved. Now press Continue with Facebook.' : 'Saved. Both the App ID and the App Secret are needed.', $readyA ? 'ok' : 'err');
+        }
+        if ($do === 'oauth_start') { // Continue with Facebook: off to Facebook's login, back at fb_connect.php
+            [$okO, $urlO] = pm_fbo_start($vb);
+            if (!$okO) {
+                pm_redirect('settings&section=connections', $urlO, 'err');
+            }
+            header('Location: ' . $urlO);
+            exit;
+        }
+        if ($do === 'connect_state' || $do === 'connect_saved') { // a Page from the login just made, or from the login kept from last time
+            $list = $do === 'connect_state' ? (array)(pm_fbo_get((string)($_POST['state'] ?? ''))['pages'] ?? []) : pm_fbo_saved_pages();
+            $pickO = null;
+            foreach ($list as $p) {
+                if ($p['id'] === (string)($_POST['page'] ?? '')) {
+                    $pickO = $p;
+                }
+            }
+            if (!$pickO) {
+                pm_redirect('settings&section=connections', 'That Page is not in the list any more: press Continue with Facebook again.', 'err');
+            }
+            [$okC, $msgC] = pm_fbo_connect($vb, $pickO);
+            $do === 'connect_state' && pm_fbo_update(function (array &$all) {
+                unset($all[(string)($_POST['state'] ?? '')]);
+            });
+            pm_redirect('settings&section=connections', $msgC, $okC ? 'ok' : 'err');
+        }
         if ($do === 'connect_pick') {
             $pick = null;
             foreach ((array)($_SESSION['fb_pages'] ?? []) as $p) {

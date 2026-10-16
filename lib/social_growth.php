@@ -9,6 +9,7 @@
  *  - Autopilot: deletes clear scams, hides junk, likes fans, posts replies (bold), captures buyers, refreshes the playbook.
  */
 require_once __DIR__ . '/social_manage.php';
+require_once __DIR__ . '/fb_oauth.php'; // Continue with Facebook
 require_once __DIR__ . '/links.php';
 
 /** The brand's website for ads and links ('' if none). */

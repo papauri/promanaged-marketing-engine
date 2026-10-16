@@ -47,54 +47,80 @@ $aiHid = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input ty
   <div class="btns"><button class="btn primary">Save the AI settings</button>
     <button class="btn" name="do" value="refresh_models" title="Look up the newest Gemini models">Refresh the model list</button></div>
 </form>
-<div class="card">
-  <h2>Facebook connection</h2>
-  <?php if ($tinfo): ?>
-    <p><?= !empty($tinfo['ok']) && $tinfo['type'] === 'PAGE' && !$tinfo['missing'] ? '<span class="pill hot">Healthy</span> Permanent Page token with every permission the app needs.'
-        : '<span class="pill warn">Needs attention</span> ' . (empty($tinfo['ok']) ? pm_h($tinfo['error']) : ($tinfo['type'] !== 'PAGE' ? 'The saved token is a personal (user) token' . ($tinfo['expires'] ? ' that expires ' . date('j M H:i', $tinfo['expires']) : '') . ', not a Page token.' : '') . ($tinfo['missing'] ? ' Missing: ' . pm_h(implode(', ', $tinfo['missing'])) . '.' : '')) ?></p>
-  <?php else: ?><p class="hint mt-0">Not connected yet.</p><?php endif; ?>
-  <?php $gg = pm_graph_guard(); ?><p class="hint">Facebook calls today: <?= (int)$gg['calls'] ?> (<?= (int)$gg['cached'] ?> answered from memory instead) · Facebook limit used: <?= (int)$gg['pct'] ?>%<?= (int)$gg['until'] > time() ? ' · <b>paused by Facebook until ' . date('H:i', (int)$gg['until']) . '</b>' : '' ?>. Above 75% the app shows the last known data instead of calling.</p>
-  <?php if ($fb['ready']): ?><form method="post" class="inl"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_check"><input type="hidden" name="brand" value="<?= pm_h($vb) ?>"><button class="btn small">Check the connection now</button></form><?php endif; ?>
-  <?php if (!empty($_SESSION['fb_pages'])): ?>
-    <form method="post"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="fbm"><input type="hidden" name="do" value="connect_pick"><input type="hidden" name="view" value="accounts">
+<?php
+$fbHid = '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="fbm"><input type="hidden" name="view" value="accounts">';
+$fbAppOk = preg_replace('/\D/', '', (string)($e0['FB_APP_ID'] ?? '')) !== '' && trim((string)($e0['FB_APP_SECRET'] ?? '')) !== '';
+$fbState = (string)($_GET['fbpick'] ?? '');
+$fbBack = $fbState !== '' ? pm_fbo_get($fbState) : null;
+$fbSaved = $fbAppOk && !$fbBack ? pm_fbo_saved_pages() : [];
+$fbHealthy = $tinfo && !empty($tinfo['ok']) && $tinfo['type'] === 'PAGE' && !$tinfo['missing'];
+$fbRedirect = pm_fbo_redirect_uri();
+$fbList = function (array $pages, string $do, string $extra) use ($fbHid, $vb, $bname, $fb): string { // the Pages, the one named like the business first and ticked
+    usort($pages, fn($a, $b) => pm_fbo_name_match($b['name'], $vb) <=> pm_fbo_name_match($a['name'], $vb));
+    $h = '<form method="post" class="fbpick">' . $fbHid . '<input type="hidden" name="do" value="' . $do . '">' . $extra . '<p class="mt-0"><b>Which Page is ' . pm_h($bname) . '?</b></p>';
+    foreach ($pages as $i => $pg) {
+        $on = $fb['page_id'] === $pg['id'];
+        $h .= '<label class="check fbpage"><input type="radio" name="page" value="' . pm_h($pg['id']) . '"' . ($i === 0 ? ' checked' : '') . '> <b>' . pm_h($pg['name']) . '</b>' . ($on ? ' <span class="pill hot">connected now</span>' : '') . '</label>';
+    }
+    return $h . '<div class="btns"><button class="btn primary">Use this Page for ' . pm_h($bname) . '</button></div></form>';
+};
+?>
+<div class="card" id="facebook">
+  <div class="fb-head">
+    <div><h2 class="mt-0 mb-0">Facebook and Instagram</h2>
+      <p class="hint mt-0 mb-0"><?= $fbHealthy ? '<span class="pill hot">Connected</span> ' . pm_h($bname) . '\'s Page' . ($fb['ig_id'] !== '' ? ' and its Instagram account are' : ' is') . ' connected, with a token that does not expire.' : ($tinfo ? '<span class="pill warn">Needs attention</span> ' . (empty($tinfo['ok']) ? pm_h((string)$tinfo['error']) : ($tinfo['missing'] ? 'Facebook has not given: ' . pm_h(implode(', ', $tinfo['missing'])) . '.' : 'The saved token is not a Page token.')) . ' Press Continue with Facebook to fix it.' : 'Not connected yet: one press, then choose the Page.') ?></p></div>
+    <?php if ($fbAppOk): ?><form method="post"><?= $fbHid ?><input type="hidden" name="do" value="oauth_start"><button class="btn primary fb-go"><span aria-hidden="true">f</span> <?= $fb['ready'] ? 'Reconnect with Facebook' : 'Continue with Facebook' ?></button></form><?php endif; ?>
+  </div>
+
+  <?php if ($fbState !== '' && !$fbBack): ?><p class="flash warn">That Facebook login has expired (30 minutes). Press Continue with Facebook again.</p>
+  <?php elseif ($fbBack && $fbBack['error'] !== ''): ?><p class="flash warn"><?= pm_h((string)$fbBack['error']) ?></p>
+  <?php elseif ($fbBack && $fbBack['pages']): ?><?= $fbList((array)$fbBack['pages'], 'connect_state', '<input type="hidden" name="state" value="' . pm_h($fbState) . '">') ?>
+  <?php elseif ($fbSaved && !$fbHealthy): ?><p class="hint">From your last Facebook login, no need to log in again:</p><?= $fbList($fbSaved, 'connect_saved', '') ?>
+  <?php elseif (!empty($_SESSION['fb_pages'])): ?>
+    <form method="post"><?= $fbHid ?><input type="hidden" name="do" value="connect_pick">
       <label>Which Page is <?= pm_h($bname) ?>?</label>
       <?php foreach ($_SESSION['fb_pages'] as $pgx): ?><label class="check"><input type="radio" name="page" value="<?= pm_h($pgx['id']) ?>"> <?= pm_h($pgx['name']) ?> <span class="muted">(<?= pm_h($pgx['id']) ?>)</span></label><?php endforeach; ?>
       <div class="btns"><button class="btn primary">Use this Page</button></div></form>
-  <?php else: ?>
-  <?php $scopes = pm_fb_scopes(); $needScopes = array_diff_key($scopes, array_flip(PM_FB_OPTIONAL_SCOPES));
-        $extraScopes = array_intersect_key($scopes, array_flip(PM_FB_OPTIONAL_SCOPES)) + ['instagram_content_publish' => 'publish posts to Instagram']; ?>
-  <details class="fbconnect" <?= (!$tinfo || $tinfo['type'] !== 'PAGE' || $tinfo['missing']) ? 'open' : '' ?>><summary><?= $tinfo ? 'Reconnect Facebook, or add permissions' : 'Connect Facebook in 3 steps' ?></summary>
-    <p class="hint">About 5 minutes, once. Your App Secret and token stay on this computer.</p>
-    <form method="post"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="fbm"><input type="hidden" name="do" value="connect"><input type="hidden" name="view" value="accounts">
+  <?php endif; ?>
+
+  <?php if ($fb['ready']): ?><div class="btns"><form method="post" class="inl"><input type="hidden" name="csrf" value="<?= $csrf ?>"><input type="hidden" name="action" value="social_check"><input type="hidden" name="brand" value="<?= pm_h($vb) ?>"><button class="btn small">Check the connection now</button></form></div><?php endif; ?>
+  <?php $gg = pm_graph_guard(); ?><p class="hint">Facebook calls today: <?= (int)$gg['calls'] ?> (<?= (int)$gg['cached'] ?> answered from memory instead) · limit used: <?= (int)$gg['pct'] ?>%<?= (int)$gg['until'] > time() ? ' · <b>paused by Facebook until ' . date('H:i', (int)$gg['until']) . '</b>' : '' ?>.</p>
+
+  <details class="fbconnect" <?= !$fbAppOk ? 'open' : '' ?>><summary><b>First time only:</b> your Facebook app <?= $fbAppOk ? '<span class="pill hot">set</span>' : '<span class="pill warn">needed once</span>' ?></summary>
     <ol class="fbsteps">
       <li>
-        <h4>Open your Facebook app and copy two things</h4>
-        <p><a class="btn small" href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer">Open Facebook apps &#8599;</a></p>
-        <p>Click your app. No app yet? Press <b>Create app</b>, choose <b>Other</b>, then <b>Business</b>, and name it "<?= pm_h($bname) ?> Manager". Then open <b>App settings &gt; Basic</b> and copy:</p>
-        <div class="row">
-          <div><label>App ID <span class="muted">(the number at the top)</span></label><input type="text" name="app_id" value="<?= pm_h((string)($e0['FB_APP_ID'] ?? '')) ?>" inputmode="numeric"></div>
-          <div><label>App Secret <span class="muted">(press Show, then copy)</span></label><input type="password" name="app_secret" placeholder="<?= !empty($e0['FB_APP_SECRET']) ? 'Saved, leave blank to keep' : '' ?>" autocomplete="new-password"></div>
-        </div>
+        <h4>Copy two things from your Facebook app</h4>
+        <p><a class="btn small" href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer">Open Facebook apps &#8599;</a> Click your app (no app yet? <b>Create app</b>, name it "<?= pm_h($bname) ?> Manager"), open <b>App settings &gt; Basic</b> and copy:</p>
+        <form method="post"><?= $fbHid ?><input type="hidden" name="do" value="app_save">
+          <div class="row">
+            <div><label>App ID <span class="muted">(the number at the top)</span></label><input type="text" name="app_id" value="<?= pm_h((string)($e0['FB_APP_ID'] ?? '')) ?>" inputmode="numeric"></div>
+            <div><label>App Secret <span class="muted">(press Show, then copy)</span></label><input type="password" name="app_secret" placeholder="<?= !empty($e0['FB_APP_SECRET']) ? 'Saved, leave blank to keep' : '' ?>" autocomplete="new-password"></div>
+          </div>
+          <div class="btns"><button class="btn small primary">Save</button></div>
+        </form>
       </li>
       <li>
-        <h4>Make a token in Graph API Explorer</h4>
-        <p><a class="btn small" href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noopener noreferrer">Open Graph API Explorer &#8599;</a></p>
-        <p>Choose your app on the right. Under <b>Permissions</b> add the ones below, press <b>Generate Access Token</b>, and allow it for your Page.</p>
-        <ul class="perms"><?php foreach ($needScopes as $scn => $why): ?><li><code><?= pm_h($scn) ?></code> <span class="muted"><?= pm_h($why) ?></span></li><?php endforeach; ?></ul>
-        <p class="hint">Step 3 finds no Pages? Your Page is in a Meta business, so also add <code>business_management</code> and generate the token again.</p>
-        <details class="more"><summary>Optional: Instagram, ads and reach numbers</summary>
-          <ul class="perms"><?php foreach ($extraScopes as $scn => $why): ?><li><code><?= pm_h($scn) ?></code> <span class="muted"><?= pm_h($why) ?></span></li><?php endforeach; ?></ul></details>
+        <h4>Let Facebook send you back to this app</h4>
+        <p>In the same app: <b>Add product</b> (or Use cases) &gt; <b>Facebook Login</b> &gt; <b>Settings</b>. Under <b>Valid OAuth Redirect URIs</b> paste this address and save:</p>
+        <div class="fb-uri"><code id="fburi"><?= pm_h($fbRedirect) ?></code><button type="button" class="btn small" data-copy-target="#fburi">Copy</button></div>
+        <p class="hint"><?= str_starts_with($fbRedirect, 'http://localhost') ? 'This is the address on this computer: Facebook allows it while the app is in development. On the website, open this page there and paste that address too.' : 'Add the address on this computer too if you also run the app there.' ?>
+          Your app shows <b>Facebook Login for Business</b> instead? Make a configuration with the Page permissions and paste its ID here: </p>
+        <form method="post" class="inl"><?= $fbHid ?><input type="hidden" name="do" value="app_save"><input type="text" name="config_id" value="<?= pm_h((string)($e0['FB_LOGIN_CONFIG_ID'] ?? '')) ?>" placeholder="Configuration ID (only for Facebook Login for Business)" style="max-width:360px"><button class="btn small">Save</button></form>
       </li>
-      <li>
-        <h4>Paste the token and connect</h4>
-        <label>Token from Graph API Explorer</label><textarea name="user_token" rows="2" autocomplete="off" placeholder="Starts with EAA..."></textarea>
-        <div class="btns"><button class="btn primary">Connect</button></div>
-        <p class="hint">The app makes the token permanent and lists your Pages. You pick the right one next, and it is saved for you (no .env editing).</p>
-      </li>
+      <li><h4>Press Continue with Facebook</h4><p class="hint mb-0">Log in, tick your Pages (and Instagram) and allow. Back here, choose the Page: done. The login is kept, so your other businesses connect with one press.</p></li>
     </ol>
+  </details>
+
+  <?php $scopes = pm_fb_scopes(); $needScopes = array_diff_key($scopes, array_flip(PM_FB_OPTIONAL_SCOPES)); $extraScopes = array_intersect_key($scopes, array_flip(PM_FB_OPTIONAL_SCOPES)) + ['instagram_content_publish' => 'publish posts to Instagram']; ?>
+  <details class="more"><summary>Another way: paste a token from Graph API Explorer</summary>
+    <form method="post"><?= $fbHid ?><input type="hidden" name="do" value="connect"><input type="hidden" name="app_id" value="<?= pm_h((string)($e0['FB_APP_ID'] ?? '')) ?>">
+      <p><a class="btn small" href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noopener noreferrer">Open Graph API Explorer &#8599;</a> Choose your app, add these permissions, press <b>Generate Access Token</b> and allow it for your Page:</p>
+      <ul class="perms"><?php foreach ($needScopes as $scn => $why): ?><li><code><?= pm_h($scn) ?></code> <span class="muted"><?= pm_h($why) ?></span></li><?php endforeach; ?><li><code>business_management</code> <span class="muted">when the Page is in a Meta business</span></li></ul>
+      <details class="more"><summary>Optional: Instagram, ads and reach numbers</summary><ul class="perms"><?php foreach ($extraScopes as $scn => $why): ?><li><code><?= pm_h($scn) ?></code> <span class="muted"><?= pm_h($why) ?></span></li><?php endforeach; ?></ul></details>
+      <label>Token from Graph API Explorer</label><textarea name="user_token" rows="2" autocomplete="off" placeholder="Starts with EAA..."></textarea>
+      <div class="btns"><button class="btn">Connect with this token</button></div>
     </form>
   </details>
-  <?php endif; ?>
 </div>
 
 <?php $gi = pm_social_gd_info(); $igT = (array)(pm_social_state()['ig_url_test'][$vb] ?? []); $hb = pm_social_heartbeat_age(); ?>

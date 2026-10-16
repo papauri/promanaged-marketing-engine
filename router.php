@@ -27,6 +27,10 @@ if ($path === '/enquire.php') { // public enquiry form and free website check (n
     require __DIR__ . '/enquire.php';
     return true;
 }
+if ($path === '/fb_connect.php') { // where Facebook sends the owner back after "Continue with Facebook" (one-time state, no login)
+    require __DIR__ . '/fb_connect.php';
+    return true;
+}
 if ($path === '/wa.php') { // WhatsApp Business responder webhook (off unless configured in .env)
     require __DIR__ . '/wa.php';
     return true;
