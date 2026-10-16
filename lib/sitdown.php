@@ -49,7 +49,7 @@ function pm_sitdown_brief(array $l): array
         'has_phone' => trim((string)($l['phone'] ?? '') . (string)($l['whatsapp'] ?? '')) !== '', 'emails_sent' => count((array)($l['sent'] ?? [])),
         'days_since_last_email' => $lt ? (int)floor((time() - $lt) / 86400) : null, 'facts' => array_slice(array_map(fn($x) => (string)($x['fact'] ?? ''), (array)($r['discoveries'] ?? [])), 0, 3),
         'personal_line' => (string)($r['personal'] ?? ''), 'their_last_message' => $last('in'), 'our_waiting_email' => pm_sitdown_email_view($l, (string)($d['email_subject'] ?? ''), (string)($d['email_body'] ?? '')),
-        'trust_flags' => pm_trust_flags((string)($d['email_subject'] ?? ''), (string)($d['email_body'] ?? '')), 'our_waiting_reply' => mb_substr((string)($l['reply_draft']['body'] ?? ''), 0, 500),
+        'trust_flags' => pm_trust_flags((string)($d['email_subject'] ?? ''), (string)($d['email_body'] ?? '')), 'our_waiting_reply' => mb_substr((string)($l['reply_draft']['body'] ?? ''), 0, 2000),
         'lead_with' => (string)($l['pain'] ?? '')];
 }
 

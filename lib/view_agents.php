@@ -223,6 +223,8 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
   <?php endforeach; ?>
   <form method="get" class="typesel" data-noload="1"><input type="hidden" name="tab" value="agents"><input type="hidden" name="status" value="<?= pm_h($filter) ?>">
     <input type="search" name="q" value="<?= pm_h($fq) ?>" placeholder="Search leads" aria-label="Search leads by name, town or contact" class="narrow">
+    <?php $fOn = $ftype !== '' || $fcity !== '' || $fhas !== '' || $fmin || $fsort !== '' || $ffolder !== '' || $fper !== 25; ?>
+    <details class="fmore" <?= $fOn ? 'open' : '' ?>><summary class="btn small">Filters<?= $fOn ? ' · on' : '' ?></summary><span class="fmore-in">
     <select name="type" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Business type"><option value="">All business types</option>
       <?php foreach ($types as $tk => $tn): ?><option value="<?= pm_h($tk) ?>" <?= $ftype === $tk ? 'selected' : '' ?>><?= pm_h($tk) ?> (<?= $tn ?>)</option><?php endforeach; ?></select>
     <select name="city" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Town"><option value="">All towns</option>
@@ -231,7 +233,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     <select name="min" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Lowest fit score"><?php foreach ([0 => 'Any score', 60 => 'Score 60+', 75 => 'Score 75+', 85 => 'Score 85+'] as $mk => $ml): ?><option value="<?= $mk ?>" <?= $fmin === $mk ? 'selected' : '' ?>><?= $ml ?></option><?php endforeach; ?></select>
     <select name="sort" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Order"><?php foreach (['' => 'Best first', 'ready' => 'Most ready first', 'new' => 'Newest first', 'name' => 'Name A to Z', 'city' => 'By town'] as $sk => $sl): ?><option value="<?= $sk ?>" <?= $fsort === $sk ? 'selected' : '' ?>><?= $sl ?></option><?php endforeach; ?></select>
     <?php if ($folders): ?><select name="folder" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Folder"><option value="">All folders</option><?php foreach ($folders as $fk => $fn): ?><option value="<?= pm_h((string)$fk) ?>" <?= $ffolder === (string)$fk ? 'selected' : '' ?>><?= pm_h((string)$fk) ?> (<?= (int)$fn ?>)</option><?php endforeach; ?></select><?php endif; ?>
-    <select name="per" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Leads per page"><?php foreach ([10, 25, 50, 100, 200] as $pk): ?><option value="<?= $pk ?>" <?= $fper === $pk ? 'selected' : '' ?>><?= $pk ?> a page</option><?php endforeach; ?></select>
+    <select name="per" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Leads per page"><?php foreach ([10, 25, 50, 100, 200] as $pk): ?><option value="<?= $pk ?>" <?= $fper === $pk ? 'selected' : '' ?>><?= $pk ?> a page</option><?php endforeach; ?></select></span></details>
     <?php if ($ftype !== '' || $fq !== '' || $fcity !== '' || $fhas !== '' || $fmin || $fsort !== '' || $ffolder !== ''): ?><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?>">Clear</a><?php endif; ?></form>
 </div>
 <?php endif; ?>
@@ -251,10 +253,12 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
   <?php if ($nApprovable): ?><button class="btn primary" name="do" value="send_now" data-confirm="Send the ticked emails now? No daily limit: each one still gets the usual checks (STOP, bounced address, wording) and is never sent twice." title="Sends each ticked email now, one after another">Send now</button>
   <label class="selwhen">or from <input type="datetime-local" name="send_after" aria-label="Send no earlier than (optional)"></label>
   <button class="btn" name="do" value="approve_send" title="Each ticked email goes out on its own, one at a time, in the sending hours (or from the time given)">Send in the sending hours</button><?php endif; ?>
+  <span class="sel-more">
   <span class="selfolder"><input type="text" name="reason" placeholder="Not right? Say why" aria-label="Why the ticked drafts are not right" maxlength="200"><button class="btn small" name="do" value="turn_down" title="Takes the ticked drafts away, tells every Writer why, and writes them again now">Turn down &amp; rewrite</button></span>
   <span class="selfolder"><select name="move_to" aria-label="Move the ticked leads to"><option value="">Move to…</option><?php foreach (['contacted' => 'Contacted (I already emailed or called them)', 'replied' => 'Replied', 'proposal' => 'Proposal sent', 'won' => 'Won', 'lost' => 'Lost', 'optout' => 'Do not contact', 'drafted' => 'Draft ready', 'qualified' => 'Qualified'] as $mk => $ml): ?><option value="<?= $mk ?>"><?= pm_h($ml) ?></option><?php endforeach; ?></select><button class="btn small" name="do" value="move_to">Move</button></span>
   <span class="selfolder"><select name="folder_to" aria-label="Folder"><option value="">Folder…</option><?php foreach ($folders as $fk => $fn): ?><option value="<?= pm_h((string)$fk) ?>" <?= $ffolder === (string)$fk ? 'selected' : '' ?>><?= pm_h((string)$fk) ?></option><?php endforeach; ?></select><input type="text" name="folder_new" placeholder="or a new folder" aria-label="New folder name" maxlength="40"><button class="btn small" name="do" value="folder_add">Put in folder</button><?php if ($folders): ?><button class="btn small ghost" name="do" value="folder_remove">Take out</button><?php endif; ?></span>
   <?php if ($isAdm): ?><button class="btn small danger" name="do" value="delete_ticked" data-confirm="Delete the ticked leads? This cannot be undone.">Delete ticked</button><?php endif; ?>
+  </span><span class="sel-tip hint">Tick leads to move, file, rewrite or delete them.</span>
   <?php if ($adv['lines']): ?><span class="hint advice"><b>Advice<?= !empty($adv['ai']) ? '' : ' from the numbers' ?>:</b> <?= pm_h(implode(' ', array_slice($adv['lines'], 0, 2))) ?> You decide: nothing here stops a send.</span><?php endif; ?>
   <span class="hint"><?= $nApprovable ? $nApprovable . ' email' . ($nApprovable === 1 ? '' : 's') . ' on this page can be sent. Read, tick, then <b>Send now</b>, or let them go out one at a time in the <a href="?tab=targeting#sendschedule">sending hours</a>.' : 'Nothing on this page is ready to send yet.' ?></span>
 </form>
@@ -273,6 +277,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     $canMail = !empty($dr['email_body']) && filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) && $l['status'] !== 'optout';
     $wa = $waOn && !empty($dr['whatsapp']) && ($l['status'] ?? '') !== 'optout' ? pm_wa_link($l, $dr['whatsapp']) : ''; // nobody who said STOP gets a WhatsApp button
     $hasReply = !empty($l['reply_draft']);
+    $sentFirst = $which === 'first' && !empty($l['sent']); // the first email went: its panel folds away and is not offered for sending again
 ?>
 <details class="lead" id="l<?= pm_h($id) ?>" <?= (($which === 'followup' && !$fuReady) || $waiting($l) || $focusId === $id) ? 'open' : '' ?>>
   <summary>
@@ -292,7 +297,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <?= pm_lead_touch_chip($l) ?>
       <?php if (!empty($l['owner'])): ?><span class="pill" title="Owner of this lead"><?= pm_h($l['owner']) ?></span><?php endif; ?>
       <?php foreach ((array)($l['folders'] ?? []) as $lf): ?><a class="pill folder" href="?tab=agents&amp;status=all&amp;folder=<?= pm_h(rawurlencode((string)$lf)) ?>" onclick="event.stopPropagation()" title="Show this folder">▸ <?= pm_h((string)$lf) ?></a><?php endforeach; ?>
-      <?php if (!empty($l['sitdown']['action']) && strtotime((string)$l['sitdown']['at']) > strtotime('-3 days')): ?><span class="pill <?= in_array($l['sitdown']['action'], ['send', 'call'], true) ? 'hot' : '' ?>" title="<?= pm_h((string)($l['sitdown']['angle'] ?: $l['sitdown']['why'])) ?>">Team: <?= pm_h(strtolower(PM_SD_ACTIONS[$l['sitdown']['action']] ?? '')) ?></span><?php endif; ?>
+      <?php if (!empty($l['sitdown']['action']) && strtotime((string)$l['sitdown']['at']) > strtotime('-3 days')): ?><span class="pill <?= in_array($l['sitdown']['action'], ['send', 'call'], true) ? 'hot' : '' ?>" title="<?= pm_h((string)($l['sitdown']['angle'] ?: $l['sitdown']['why'])) ?>">Team: <?= pm_h(strtolower(PM_SD_ACTIONS[$l['sitdown']['action']] ?? ($l['sitdown']['action'] === 'reply' ? 'Answer them' : ''))) ?></span><?php endif; ?>
       <span class="fixcols"><?php /* always last and the same width, so they line up down the list */ ?>
         <span class="pill c-ready <?= $gapOpen ? ($apx['ready'] >= 80 ? 'ok' : ($apx['ready'] < 50 ? 'warn' : '')) : 'blank' ?>"<?= $gapOpen ? ' title="' . pm_h($apx['missing'] ? 'Missing: ' . implode(', ', $apx['missing']) : 'Everything a good approach needs is there') . '"' : '' ?>><?= $gapOpen ? $apx['ready'] . '% ready' : '' ?></span>
         <span class="pill c-score <?= ($l['score'] ?? 0) >= 70 ? 'hot' : '' ?>" title="How good a fit, out of 100"><?= (int)($l['score'] ?? 0) ?></span>
@@ -301,7 +306,13 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     </span>
   </summary>
   <div class="body">
-    <?= !in_array($l['status'], ['won', 'lost', 'optout'], true) && empty($l['listen']) ? pm_approach_html($l, $post, $hid) : '' ?>
+    <?php
+      $lastIn = null; // their latest message: with a reply waiting it sits at the top, next to our answer
+      foreach (array_reverse((array)($l['thread'] ?? []), true) as $ti => $tm) { if (($tm['dir'] ?? '') === 'in') { $lastIn = $ti; break; } }
+      $convoTop = $hasReply && $lastIn !== null;
+      $sdReply = !empty($l['sitdown']) && ($l['sitdown']['kind'] ?? '') === 'reply' ? $l['sitdown'] : null;
+    ?>
+    <?= !$convoTop && !in_array($l['status'], ['won', 'lost', 'optout'], true) && empty($l['listen']) ? pm_approach_html($l, $post, $hid) : '' ?>
     <div class="cols">
       <div class="lc-col">
         <?php if (!empty($l['listen'])): $lz = $l['listen']; ?>
@@ -322,10 +333,10 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
         <?php if ($waOn && trim((string)($l['phone'] ?? '') . (string)($l['whatsapp'] ?? '')) !== ''): ?><p class="hint wa-optin"><?= pm_h(pm_wa_optin_line($l)) ?></p><?php endif; ?>
         <?php if (!empty($l['social_gaps'])): ?><p class="hint gaps"><b>Where they lack online:</b> <?= pm_h(implode(' · ', array_slice($l['social_gaps'], 0, 3))) ?></p><?php endif; ?>
         </section>
-        <?php if (!empty($l['sitdown']['lines'])): $sdz = $l['sitdown']; ?>
+        <?php if (!empty($l['sitdown']['lines']) && !($sdReply && $convoTop)): $sdz = $l['sitdown']; ?>
         <section class="lc"><h4 class="lc-h">The team's sit-down <span class="muted">· <?= pm_h((string)$sdz['at']) ?></span></h4>
           <ul class="talklist"><?php foreach ($sdz['lines'] as [$sw, $ss]): ?><li><time></time><b><?= pm_h(pm_talk_name($sw)) ?>:</b><span><?= pm_h($ss) ?></span></li><?php endforeach; ?></ul>
-          <p class="hint"><b>Decided: <?= pm_h(PM_SD_ACTIONS[$sdz['action']] ?? $sdz['action']) ?></b><?= $sdz['angle'] !== '' ? ' · ' . pm_h($sdz['angle']) : '' ?><?= $sdz['why'] !== '' ? ' · ' . pm_h($sdz['why']) : '' ?></p></section>
+          <p class="hint"><b>Decided: <?= pm_h(PM_SD_ACTIONS[$sdz['action']] ?? ($sdz['action'] === 'reply' ? 'Answer them' : $sdz['action'])) ?></b><?= $sdz['angle'] !== '' ? ' · ' . pm_h($sdz['angle']) : '' ?><?= $sdz['why'] !== '' ? ' · ' . pm_h($sdz['why']) : '' ?></p></section>
         <?php endif; ?>
         <?php if (!empty($l['research'])): $rz = $l['research']; ?>
         <section class="lc"><h4 class="lc-h">What the research found <span class="muted">· <?= pm_h(substr((string)$rz['at'], 0, 10)) ?></span></h4>
@@ -343,7 +354,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
           <?php elseif (!empty($rz['hooks'])): ?><p class="opp"><b>Conversation hooks:</b></p><?php foreach (array_slice($rz['hooks'], 0, 3) as $hz): ?><p class="hook">“<?= pm_h($hz) ?>” <button type="button" class="btn small" data-copy="<?= pm_h($hz) ?>">Copy</button></p><?php endforeach; ?><?php endif; ?>
         </div></section>
         <?php endif; ?>
-        <?php if (!empty($l['thread'])): ?><section class="lc"><h4 class="lc-h">Conversation</h4><div class="thread">
+        <?php if (!empty($l['thread']) && !$convoTop): ?><section class="lc"><h4 class="lc-h">Conversation</h4><div class="thread">
           <?php foreach (array_slice($l['thread'], -4, null, true) as $ti => $tm): ?><div class="tm <?= $tm['dir'] === 'in' ? 'in' : 'out' ?>"><?= pm_adm_btn($csrf, 'msg', ['id' => $id, 'i' => $ti, 'back' => 'agents&lead=' . $id], 'Delete this message' . ($tm['dir'] === 'in' ? ' from them? If it is their only answer, the lead goes back to contacted.' : '?'), '×', 'icon admx') ?><b><?= $tm['dir'] === 'in' ? 'Them' : 'Us' ?></b> · <?= pm_h($tm['at']) ?><?= ($tm['ch'] ?? '') === 'wa' ? ' · WhatsApp' : '' ?><br><?= nl2br(pm_h(mb_substr($tm['text'], 0, 400))) ?></div><?php endforeach; ?></div></section><?php endif; ?>
         <section class="lc"><h4 class="lc-h">Notes</h4>
         <?php foreach (array_slice(array_reverse((array)($l['notes'] ?? []), true), 0, 3, true) as $ni => $n): ?><div class="hint note"><?= pm_adm_btn($csrf, 'note', ['id' => $id, 'i' => $ni, 'back' => 'agents&lead=' . $id], 'Delete this note?', '×', 'icon admx') ?><?= pm_h($n['at']) ?> · <?= pm_h($n['text']) ?><?= !empty($n['by']) ? ' · ' . pm_h($n['by']) : '' ?></div><?php endforeach; ?>
@@ -353,13 +364,36 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       </div>
       <div class="lc-col">
         <?= pm_view_lead_drafts($l, $csrf, $post, $hid) ?>
-        <?php if ($hasReply): $rp = $l['reply_draft']; $rpMail = (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL); $rpWa = pm_wa_link($l, ''); $rpWaText = (string)($rp['whatsapp'] ?? ''); ?>
+        <?php if ($convoTop): $inMsg = $l['thread'][$lastIn]; $earlier = array_slice((array)$l['thread'], 0, $lastIn, true); ?>
+        <section class="lc rx-them"><h4 class="lc-h">They wrote <span class="muted">· <?= pm_h((string)$inMsg['at']) ?><?= ($inMsg['ch'] ?? '') === 'wa' ? ' · WhatsApp' : ' · email' ?><?= !empty($l['last_in_subject']) ? ' · “' . pm_h((string)$l['last_in_subject']) . '”' : '' ?></span></h4>
+          <div class="rx-msg"><?= nl2br(pm_h(trim((string)preg_replace('/(\R[ \t\x{00a0}]*){3,}/u', "\n\n", (string)$inMsg['text'])))) ?></div>
+          <?php if ($earlier): ?><details class="rx-earlier"><summary>Earlier in the conversation (<?= count($earlier) ?>)</summary><div class="thread">
+            <?php foreach (array_slice($earlier, -6, null, true) as $ti => $tm): ?><div class="tm <?= $tm['dir'] === 'in' ? 'in' : 'out' ?>"><?= pm_adm_btn($csrf, 'msg', ['id' => $id, 'i' => $ti, 'back' => 'agents&lead=' . $id], 'Delete this message?', '×', 'icon admx') ?><b><?= $tm['dir'] === 'in' ? 'Them' : 'Us' ?></b> · <?= pm_h($tm['at']) ?><?= ($tm['ch'] ?? '') === 'wa' ? ' · WhatsApp' : '' ?><br><?= nl2br(pm_h(mb_substr($tm['text'], 0, 600))) ?></div><?php endforeach; ?></div></details><?php endif; ?>
+        </section>
+        <?php if ($sdReply): ?>
+        <section class="lc rx-take"><h4 class="lc-h">The team's take <span class="muted">· <?= pm_h((string)$sdReply['at']) ?></span></h4>
+          <?php if (!empty($sdReply['asked'])): ?><p class="rx-k">They asked</p><ul class="rx-list"><?php foreach ($sdReply['asked'] as $x): ?><li><?= pm_h($x) ?></li><?php endforeach; ?></ul><?php endif; ?>
+          <?php if (!empty($sdReply['known'])): ?><p class="rx-k">What we can say for sure</p><ul class="rx-list"><?php foreach ($sdReply['known'] as $x): ?><li><?= pm_h($x) ?></li><?php endforeach; ?></ul><?php endif; ?>
+          <?php if (!empty($sdReply['unknown'])): ?><p class="rx-k warnt">Not in our facts: check before sending</p><ul class="rx-list"><?php foreach ($sdReply['unknown'] as $x): ?><li><?= pm_h($x) ?></li><?php endforeach; ?></ul><?php endif; ?>
+          <?php if (!empty($sdReply['options'])): ?><p class="rx-k">Options</p><div class="rx-opts"><?php foreach ($sdReply['options'] as $o): ?><div class="rx-opt"><b><?= pm_h($o['option']) ?></b><?php if ($o['for'] !== ''): ?><span class="rx-for">For: <?= pm_h($o['for']) ?></span><?php endif; ?><?php if ($o['against'] !== ''): ?><span class="rx-against">Against: <?= pm_h($o['against']) ?></span><?php endif; ?></div><?php endforeach; ?></div><?php endif; ?>
+          <?php if ((string)$sdReply['angle'] !== ''): ?><p class="rx-decision"><b>Decided:</b> <?= pm_h((string)$sdReply['angle']) ?></p><?php endif; ?>
+          <?php if (!empty($sdReply['to_confirm'])): ?><p class="hint warnt"><b>You confirm:</b> <?= pm_h((string)$sdReply['to_confirm']) ?></p><?php endif; ?>
+          <?php if (!empty($sdReply['lines'])): ?><details class="rx-talk"><summary>How the team talked it over</summary><ul class="talklist"><?php foreach ($sdReply['lines'] as [$sw, $ss]): ?><li><b><?= pm_h(pm_talk_name($sw)) ?>:</b><span><?= pm_h($ss) ?></span></li><?php endforeach; ?></ul></details><?php endif; ?>
+        </section>
+        <?php elseif (pm_agents_ready()): ?>
+        <form method="post" class="lc rx-take rx-none"><?= $post($id, 'sitdown') ?><p class="hint my-0">The team has not talked this message over yet.</p><button class="btn small" title="The team works out what they asked, what we know, the options, and writes the answer again (one AI call)">Team sit-down on their message</button></form>
+        <?php endif; ?>
+        <?php endif; ?>
+        <?php if ($hasReply): $rp = $l['reply_draft']; $rpMail = (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL); $rpWa = pm_wa_link($l, ''); $rpWaText = (string)($rp['whatsapp'] ?? ''); $rpTip = pm_reply_length_tip((string)($rp['body'] ?? '')); ?>
         <form method="post" class="replybox"><?= $post($id, 'save_reply') ?>
-          <b>Their reply is waiting</b><?php if (!empty($rp['next_step'])): ?><span class="hint"> Next: <?= pm_h($rp['next_step']) ?></span><?php endif; ?>
-          <?php if (!empty($rp['needs_human'])): ?><span class="hint warnt">Needs your judgement: not safe to send automatically.</span><?php endif; ?>
+          <div class="rx-head"><b>Our answer</b><?php if (!empty($rp['needs_human'])): ?><span class="pill warn" title="Something in it needs your judgement, so it is never sent on its own">read before sending</span><?php endif; ?></div>
+          <?php if (!empty($rp['next_step'])): ?><p class="hint my-0">Next: <?= pm_h($rp['next_step']) ?></p><?php endif; ?>
           <?php if ($rpMail): ?>
+          <label class="rx-lab">Subject</label>
           <input type="text" name="subject" value="<?= pm_h($rp['subject'] ?? '') ?>" aria-label="Subject">
-          <textarea name="body" rows="5" aria-label="Reply by email"><?= pm_h($rp['body'] ?? '') ?></textarea>
+          <label class="rx-lab">Email <?php if ($rpTip !== ''): ?><span class="muted">· <?= pm_h($rpTip) ?></span><?php endif; ?></label>
+          <textarea name="body" rows="<?= max(8, min(22, (int)ceil(mb_strlen((string)($rp['body'] ?? '')) / 70) + substr_count((string)($rp['body'] ?? ''), "\n"))) ?>" aria-label="Reply by email"><?= pm_h($rp['body'] ?? '') ?></textarea>
+          <div class="sigprev" title="Added under the answer when it is sent"><span>Added when sent: your usual signature · <a href="?tab=targeting#defaultmsg">change it</a></span><pre><?= pm_h(pm_reply_signature()) ?></pre></div>
           <?= pm_share_reply_controls((string)($l['brand'] ?? pm_brand()), (array)($rp['attach'] ?? [])) ?>
           <?php else: ?><span class="hint">No email address for this lead: answer on WhatsApp<?= $rpWa === '' ? ' (no mobile number either; add one in the box on the right)' : '' ?>.</span><?php endif; ?>
           <?php if ($waOn && ($rpWa !== '' || !$rpMail)): ?><label class="hint">WhatsApp answer <?= $rpWaText === '' && trim((string)($rp['body'] ?? '')) === '' ? '(write it, or press Draft my answer under More → Paste their reply)' : '' ?></label>
@@ -371,6 +405,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
         </form>
         <?php endif; ?>
         <?php if ($dr || $l['status'] !== 'new' || !empty($l['research']['starters'])): ?>
+        <?php if ($sentFirst): ?><details class="lc rx-first"><summary class="lc-h">The first message we sent <span class="muted">· <?= pm_h(substr((string)((array)$l['sent'])[0], 0, 10)) ?></span></summary><?php endif; ?>
         <form method="post" class="msg msgpanel"><?= $post($id, 'save_draft', $hid('which', $which) . $hid('fmt', '')) ?>
           <div class="mp-head"><h4 class="lc-h"><?= $which === 'followup' ? 'Follow-up ' . pm_followup_nth($l) . ($fuReady ? ' <span class="muted t-sm">· prepared by the Follow-up head ' . pm_h(substr((string)($fuReady['at'] ?? ''), 0, 10)) . '</span>' : '') : 'The first message' ?></h4></div>
           <details class="mp-to"><summary>To: <?= pm_h(implode(' · ', array_filter([(string)($l['contact'] ?? ''), (string)($l['email'] ?? '') ?: 'no email', (string)($l['phone'] ?? '')]))) ?></summary>
@@ -400,6 +435,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
             <?php elseif (trim($waSaved) !== ''): ?><span class="hint">Add a mobile number under Business details to test the WhatsApp on your phone.</span><?php endif; ?>
           </div>
         </form>
+        <?php if ($sentFirst): ?></details><?php endif; ?>
         <?php else: ?><p class="hint">No message yet.</p><?php endif; ?>
       </div>
     </div>
@@ -408,7 +444,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <div class="agrp main" aria-label="Reach them">
       <?php if (!empty($l['listen'])): ?><a class="btn primary" href="<?= pm_h((string)$l['listen']['url']) ?>" target="_blank" rel="noopener noreferrer">Open their post</a><button type="button" class="btn" data-copy="<?= pm_h((string)$l['listen']['reply']) ?>">Copy the reply</button>
         <?php if ($l['status'] === 'new'): ?><form method="post"><?= $post($id, 'status', $hid('status', 'contacted')) ?><button class="btn" title="You answered under their post: it moves to Contacted">I replied</button></form><?php endif; ?><?php endif; ?>
-      <?php if ($canMail): ?><form method="post" onsubmit="return confirm('Send this email to <?= pm_h(addslashes($l['email'])) ?> now?')"><?= $post($id, 'send', $hid('which', $which)) ?><button class="btn primary"><?= $which === 'followup' ? 'Send follow-up' : 'Send email' ?></button></form><?php endif; ?>
+      <?php if ($canMail && !$sentFirst): ?><form method="post" onsubmit="return confirm('Send this email to <?= pm_h(addslashes($l['email'])) ?> now?')"><?= $post($id, 'send', $hid('which', $which)) ?><button class="btn primary"><?= $which === 'followup' ? 'Send follow-up' : 'Send email' ?></button></form><?php endif; ?>
       <?php if ($wa): $waFull = pm_wa_text($l, $dr['whatsapp'], $which === 'first'); ?><a class="btn" data-wa-log data-first data-id="<?= pm_h($id) ?>" data-csrf="<?= pm_h($csrf) ?>" data-text="<?= pm_h($waFull) ?>" data-url="<?= pm_h(pm_wa_link($l, '')) ?>" href="<?= pm_h(pm_wa_link($l, $waFull)) ?>" target="_blank" rel="noopener noreferrer" title="Checked and logged like the WhatsApp page: daily limit, STOP and the wording rules">WhatsApp</a><?php endif; ?>
       <?php if ($tel = pm_tel_link($l)): ?><a class="btn" href="<?= pm_h($tel) ?>">Call</a><?php endif; ?>
       <?php if (($l['status'] ?? '') === 'contacted' && !pm_lead_email_dead($l) && pm_agents_ready()): ?><form method="post"<?= empty($l['followup_draft']) ? '' : ' data-confirm="Write a new follow-up in place of the one shown?"' ?>><?= $post($id, 'followup_ai') ?><button class="btn" title="The Follow-up agent writes a follow-up for you to read; nothing is sent"><?= empty($l['followup_draft']) ? 'Draft follow-up with AI' : 'Draft a new follow-up' ?></button></form><?php endif; ?>

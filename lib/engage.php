@@ -108,21 +108,32 @@ function pm_agent_reply(array $lead, string $incoming, string $ch = 'email'): ar
     $tpl = pm_template();
     $pk = $tpl['packages'][(int)($lead['package'] ?? 0)]['name'] ?? '';
     $thread = array_map(fn($t) => ($t['dir'] === 'in' ? 'THEM' : 'US') . ': ' . $t['text'], array_slice($lead['thread'] ?? [], -6));
-    $system = pm_agents_company_brief() . "\n\nYou are the Reply agent for {$s['company_name']}. A business we contacted has written back. Classify the message and draft the reply.\n"
+    $r = (array)($lead['research'] ?? []);
+    $known = array_values(array_filter(array_merge([(string)($r['personal'] ?? '')], array_map(fn($x) => (string)($x['fact'] ?? ''), array_slice((array)($r['discoveries'] ?? []), 0, 5)),
+        [(string)($r['website']['verdict'] ?? ''), (string)($lead['reason'] ?? '')])));
+    $system = pm_agents_company_brief() . "\n\nA business we contacted has written back to {$s['company_name']}. Before anyone writes, the team sits down and thinks it through, then the answer is written from what they decided.\n"
         . "Intents: interested (wants to know more or talk), question (asks something), meeting_request (proposes or asks for a call, demo or visit), not_now (later), not_interested, "
         . "stop (any request to stop contact, unsubscribe or remove them, in any wording), out_of_office (automatic reply), bounce (delivery failure), other.\n"
-        . "Reply rules: answer only what you can answer from the facts above; never invent prices, dates, features, discounts or guarantees; if they ask for a price or a proposal say we will prepare a tailored proposal and propose a short call. "
-        . "If they propose a time, do not commit: say we will confirm shortly or ask for two alternatives. Be warm, brief (under 120 words), plain text, no sign-off (the app adds it), no links. "
-        . "Set needs_human true if they are angry, complaining, negotiating price or terms, raise legal or security questions, ask for something outside the facts above, or you are unsure. "
-        . "For stop, not_interested, not_now, out_of_office and bounce, reply_body must be empty. "
+        . "The sit-down (sitdown): asked = each thing they asked or want, in plain words; known = what the facts above answer for sure; unknown = what the facts do not settle (a technical detail, a price, an integration, a date): never answer these as if known; "
+        . "options = two or three honest ways we could answer or solve it, each with what speaks for it and against it, thought through logically and technically (how it would really work for them day to day, what they would have to do, what could go wrong); "
+        . "lines = 4 to 6 short lines of the team talking to each other (never to them), one specific sentence each: research (what we know about them and how they work now), replies (what they really want behind the words), advisor (the technical view: what our product does today, what it does not, what would work), writers (how to say it so it reads like a person), director last (the choice and why); "
+        . "decision = the option chosen, in one sentence; to_confirm = what the owner must check or decide before sending (empty when nothing).\n"
+        . "The answer (reply_body) follows the decision. Answer every question they asked, directly, in the order they asked it, and say plainly what we can do today. Where something is in unknown, say honestly that you will check it and come back to them, and offer what does work now; never claim an integration, feature, price, date or guarantee that is not in the facts. "
+        . "If they ask for a price or a proposal say we will prepare a tailored one and suggest a short call. If they propose a time, do not commit: say we will confirm shortly or ask for two alternatives. "
+        . "Write as the person at {$s['company_name']} who signs the email: never name yourself, never mention an agent, an AI, a desk, a sit-down or a colleague by name, and end with your last sentence: no sign-off or name (the app adds the usual signature). "
+        . "Length: as long as a complete, useful answer needs. Around 80 to 200 words reads best; go longer when they asked several or technical questions. Plain text, short paragraphs, no links, no bullet symbols. "
+        . "Set needs_human true if they are angry, complaining, negotiating price or terms, raise legal or security questions, unknown is not empty, or you are unsure. "
+        . "For stop, not_interested, not_now, out_of_office and bounce, reply_body must be empty and sitdown may be empty. "
         . "resume_on: only for not_now, the date (YYYY-MM-DD) they asked to be contacted again, else " . date('Y-m-d', strtotime('+30 days')) . " (today is " . date('Y-m-d') . "). "
-        . 'You are ' . (function_exists('pm_agent_first') ? pm_agent_first('replies') : 'Mphatso') . ', head of the Replies desk: answer like the best human salesperson would, professional, warm, specific to what they wrote and complete, so it never reads as automated, spam or phishing. ' . (function_exists('pm_trust_flags') ? PM_TRUST_RULES . ' ' : '') . (function_exists('pm_tb_line') ? pm_tb_line((string)($lead['brand'] ?? pm_brand()), 'replies', 3) . ' ' : '')
-        . 'tell: as head of Replies, a short note to each department that should act on this reply (writers: what it teaches about how we open; director: a hot lead or a lost one and why; followup: stop or change timing; research: a new fact they gave, like a name or a number); leave a department empty when there is nothing. '
-        . "whatsapp: the same answer as a WhatsApp message, at most 40 words, no subject, no links; empty when reply_body is empty." . (function_exists('pm_share_reply_hint') ? pm_share_reply_hint((string)($lead['brand'] ?? '')) : '') . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
+        . 'Answer like the best human salesperson would: professional, warm, specific to what they wrote and complete, so it never reads as automated, spam or phishing. ' . (function_exists('pm_trust_flags') ? PM_TRUST_RULES . ' ' : '') . (function_exists('pm_tb_line') ? pm_tb_line((string)($lead['brand'] ?? pm_brand()), 'replies', 3) . ' ' : '')
+        . 'tell: a short note to each department that should act on this reply (writers: what it teaches about how we open; director: a hot lead or a lost one and why; followup: stop or change timing; research: a new fact they gave, like a name, a system they use or a number); leave a department empty when there is nothing. '
+        . "whatsapp: the same answer as a WhatsApp message, at most 50 words, no subject, no links; empty when reply_body is empty." . (function_exists('pm_share_reply_hint') ? pm_share_reply_hint((string)($lead['brand'] ?? '')) : '') . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $user = "Business: {$lead['name']} ({$lead['city']}), contact: " . ($lead['contact'] ?? '') . ", package we suggested: $pk, their likely need: " . ($lead['pain'] ?? '') . ".\n"
+        . ($known ? "What our research found about them:\n- " . implode("\n- ", array_map(fn($k) => mb_substr($k, 0, 240), $known)) . "\n" : '')
         . "Conversation so far:\n" . implode("\n", $thread) . "\n\nTheir new message" . ($ch === 'wa' ? ' (on WhatsApp)' : '') . ":\n" . mb_substr($incoming, 0, 4000)
-        . "\n\nReturn JSON: {\"intent\",\"summary\":\"one sentence\",\"needs_human\":bool,\"reply_subject\",\"reply_body\",\"whatsapp\",\"resume_on\",\"next_step\":\"what the owner should do next\",\"tell\":{\"writers\":\"\",\"director\":\"\",\"followup\":\"\",\"research\":\"\"}}";
-    $out = pm_agent_json(pm_claude($system, $user, false, 1200)); // a reply under 120 words + a WhatsApp line + a few short fields: about 400 tokens; 1200 leaves room, never a runaway
+        . "\n\nReturn JSON: {\"intent\",\"summary\":\"one sentence\",\"sitdown\":{\"asked\":[],\"known\":[],\"unknown\":[],\"options\":[{\"option\":\"\",\"for\":\"\",\"against\":\"\"}],\"lines\":[{\"who\":\"research|replies|advisor|writers|director\",\"says\":\"\"}],\"decision\":\"\",\"to_confirm\":\"\"},"
+        . "\"needs_human\":bool,\"reply_subject\",\"reply_body\",\"whatsapp\",\"resume_on\",\"next_step\":\"what the owner should do next\",\"tell\":{\"writers\":\"\",\"director\":\"\",\"followup\":\"\",\"research\":\"\"}}";
+    $out = pm_agent_json(pm_claude($system, $user, false, 3000, 'std')); // a real person wrote back: the stronger model thinks it through (only messages from leads get here; STOP, bounces and auto-replies never do)
     if (!is_array($out)) {
         return pm_reply_fallback('Could not be classified.');
     }
@@ -137,7 +148,98 @@ function pm_agent_reply(array $lead, string $incoming, string $ch = 'email'): ar
     }
     $out['reply_body'] = pm_reply_strip_signoff((string)($out['reply_body'] ?? '')); // the app adds the real signature
     $out['whatsapp'] = pm_reply_strip_signoff($out['whatsapp']);
+    $out['sitdown'] = pm_reply_sitdown_clean($out['sitdown'] ?? null);
+    if ($out['sitdown'] && $out['sitdown']['unknown']) {
+        $out['needs_human'] = true; // something they asked is not in our facts: the owner settles it before it goes
+    }
     return $out;
+}
+
+/**
+ * The team's sit-down about a reply, tidied: ['asked','known','unknown' => [text], 'options' => [['option','for','against']], 'lines' => [[who, says]], 'decision', 'to_confirm'],
+ * or [] when the model gave none (STOP, a bounce, an automatic reply).
+ */
+function pm_reply_sitdown_clean($sd): array
+{
+    if (!is_array($sd)) {
+        return [];
+    }
+    $txt = fn($v, int $n = 300) => mb_substr(trim(strip_tags(is_scalar($v) ? (string)$v : '')), 0, $n);
+    $list = fn($v) => array_values(array_filter(array_map(fn($x) => $txt($x, 240), array_slice(is_array($v) ? $v : [$v], 0, 6)), fn($x) => $x !== ''));
+    $options = [];
+    foreach (array_slice((array)($sd['options'] ?? []), 0, 3) as $o) {
+        $o = is_array($o) ? $o : ['option' => $o];
+        if ($txt($o['option'] ?? '') !== '') {
+            $options[] = ['option' => $txt($o['option']), 'for' => $txt($o['for'] ?? ''), 'against' => $txt($o['against'] ?? '')];
+        }
+    }
+    $lines = [];
+    foreach (array_slice((array)($sd['lines'] ?? []), 0, 6) as $ln) {
+        $who = strtolower($txt(is_array($ln) ? ($ln['who'] ?? '') : 'replies', 40));
+        $who = ['researcher' => 'research', 'writer' => 'writers', 'reply' => 'replies', 'technical' => 'advisor', 'product' => 'advisor'][$who] ?? $who;
+        $says = $txt(is_array($ln) ? ($ln['says'] ?? '') : $ln, 260);
+        if ($says !== '' && in_array($who, ['research', 'replies', 'advisor', 'writers', 'director', 'followup', 'sender'], true)) {
+            $lines[] = [$who, $says];
+        }
+    }
+    $out = ['asked' => $list($sd['asked'] ?? []), 'known' => $list($sd['known'] ?? []), 'unknown' => $list($sd['unknown'] ?? []), 'options' => $options, 'lines' => $lines,
+        'decision' => $txt($sd['decision'] ?? ''), 'to_confirm' => $txt($sd['to_confirm'] ?? '')];
+    return $out['lines'] || $out['options'] || $out['decision'] !== '' ? $out : [];
+}
+
+/** The sit-down about their reply, kept on the lead like the morning sit-down (so the morning run does not talk it over again) and in the agents' conversation. */
+function pm_reply_sitdown_keep(array &$lead, array $sd, array $r): void
+{
+    if (!$sd) {
+        return;
+    }
+    $lead['sitdown'] = ['at' => date('Y-m-d H:i'), 'kind' => 'reply', 'lines' => $sd['lines'], 'action' => 'reply', 'angle' => $sd['decision'], 'why' => (string)($r['summary'] ?? ''),
+        'asked' => $sd['asked'], 'known' => $sd['known'], 'unknown' => $sd['unknown'], 'options' => $sd['options'], 'to_confirm' => $sd['to_confirm']];
+    if (function_exists('pm_talk')) {
+        $brand = (string)($lead['brand'] ?? pm_brand());
+        foreach ($sd['lines'] as $i => [$who, $says]) {
+            pm_talk($brand, $who, ($i === 0 ? 'About the reply from ' . ($lead['name'] ?? 'a lead') . ': ' : '') . $says);
+        }
+    }
+}
+
+/**
+ * The team sits down again about the last message they sent and writes the answer afresh (the "Team sit-down" button on a lead that wrote back).
+ * The message is not added to the conversation again; the answer that was there can be brought back with Undo. Returns what happened.
+ */
+function pm_reply_rethink(array &$lead): string
+{
+    $thread = (array)($lead['thread'] ?? []);
+    $lastIn = null;
+    foreach (array_reverse($thread, true) as $i => $t) {
+        if (($t['dir'] ?? '') === 'in' && trim((string)($t['text'] ?? '')) !== '') {
+            $lastIn = $i;
+            break;
+        }
+    }
+    if ($lastIn === null) {
+        throw new RuntimeException('There is no message from them to talk over.');
+    }
+    $ch = ($thread[$lastIn]['ch'] ?? '') === 'wa' ? 'wa' : 'email';
+    $before = $lead;
+    $before['thread'] = array_slice($thread, 0, $lastIn); // what had been said when they wrote it
+    $r = pm_agent_reply($before, (string)$thread[$lastIn]['text'], $ch);
+    if (trim((string)($r['reply_body'] ?? '')) === '' && trim((string)($r['whatsapp'] ?? '')) === '') {
+        throw new RuntimeException('The team could not write an answer this time. Try again, or write it yourself.');
+    }
+    $old = (array)($lead['reply_draft'] ?? []);
+    if ($old) {
+        $lead['reword_prev'] = ['slot' => 'reply_draft', 'data' => array_intersect_key($old, ['subject' => 1, 'body' => 1, 'whatsapp' => 1])];
+    }
+    $subject = $ch === 'email' && trim((string)($lead['last_in_subject'] ?? '')) !== '' ? 'Re: ' . $lead['last_in_subject'] : (trim((string)($old['subject'] ?? '')) ?: trim((string)($r['reply_subject'] ?? ''))); // in their thread
+    $lead['reply_draft'] = ['subject' => $subject, 'body' => trim((string)$r['reply_body']), 'whatsapp' => pm_wa_reply_clean((string)($r['whatsapp'] ?? '')),
+        'needs_human' => !empty($r['needs_human']), 'next_step' => (string)($r['next_step'] ?? ''), 'ch' => $ch] + array_intersect_key($old, ['attach' => 1]);
+    if (empty($lead['awaiting_reply_since'])) {
+        $lead['awaiting_reply_since'] = date('Y-m-d H:i');
+    }
+    pm_reply_sitdown_keep($lead, (array)($r['sitdown'] ?? []), $r);
+    pm_lead_note($lead, 'Team sit-down on their message: ' . ((string)($r['sitdown']['decision'] ?? '') ?: 'answer written again'));
+    return (string)($r['sitdown']['decision'] ?? '') ?: 'The team talked their message over and wrote the answer again.';
 }
 
 /** What to record when nothing could classify the message: it goes to the owner. */
@@ -776,9 +878,11 @@ function pm_apply_reply(array &$lead, string $text, array $r, string $mode, ?cal
     if (in_array($intent, ['interested', 'question', 'meeting_request'], true)) {
         $lead['want_proposal'] = true;
     }
-    $subject = trim((string)($r['reply_subject'] ?? '')) ?: 'Re: ' . ($lead['drafts']['email_subject'] ?? 'your reply');
+    $theirs = trim((string)($lead['last_in_subject'] ?? ''));
+    $subject = $ch === 'email' && $theirs !== '' ? 'Re: ' . $theirs : (trim((string)($r['reply_subject'] ?? '')) ?: 'Re: ' . ($lead['drafts']['email_subject'] ?? 'your reply')); // in their thread, under their own subject
     $lead['reply_draft'] = ['subject' => $subject, 'body' => trim((string)($r['reply_body'] ?? '')), 'whatsapp' => pm_wa_reply_clean((string)($r['whatsapp'] ?? '')),
         'needs_human' => !empty($r['needs_human']), 'next_step' => (string)($r['next_step'] ?? ''), 'ch' => $ch];
+    pm_reply_sitdown_keep($lead, (array)($r['sitdown'] ?? []), $r);
     $kitBrand = (string)($lead['brand'] ?? pm_brand());
     $want = function_exists('pm_share_wanted_docs') ? pm_share_wanted_docs($kitBrand, $text) : [];
     if (!$want && function_exists('pm_share_wanted_docs') && preg_match('/\battach/i', (string)$lead['reply_draft']['body'])) {
@@ -790,7 +894,7 @@ function pm_apply_reply(array &$lead, string $text, array $r, string $mode, ?cal
     }
     // Auto mode answers only plain questions and interest by email. A call or meeting time is never committed without the owner.
     if ($mode === 'auto' && $send && $ch === 'email' && !$keep && empty($r['needs_human']) && in_array($intent, ['interested', 'question'], true) && $lead['reply_draft']['body'] !== ''
-        && !pm_outreach_lint($subject, $lead['reply_draft']['body'], false) && filter_var($lead['email'] ?? '', FILTER_VALIDATE_EMAIL)) {
+        && !pm_outreach_lint($subject, $lead['reply_draft']['body'], false, true) && filter_var($lead['email'] ?? '', FILTER_VALIDATE_EMAIL)) {
         $res = $send($lead, $subject, $lead['reply_draft']['body'], function_exists('pm_share_attachments') ? pm_share_attachments($kitBrand, (array)($lead['reply_draft']['attach'] ?? [])) : []);
         if (!empty($res[0])) {
             $body = $lead['reply_draft']['body'];
@@ -809,6 +913,9 @@ function pm_apply_reply(array &$lead, string $text, array $r, string $mode, ?cal
 function pm_handle_incoming(array &$lead, string $text, string $ch = 'email', array $m = [], string $mode = 'draft', ?callable $send = null, ?callable $classify = null): array
 {
     $r = pm_reply_precheck($lead, $text, $m);
+    if ($ch === 'email' && empty($m['dsn']) && ($subj = trim((string)preg_replace('/^\s*((re|fwd?|aw|sv)\s*:\s*)+/i', '', (string)($m['subject'] ?? '')))) !== '') {
+        $lead['last_in_subject'] = mb_substr($subj, 0, 150); // the answer goes back under their subject
+    }
     if ($r === null) {
         try {
             $r = ($classify ?? 'pm_agent_reply')($lead, $text, $ch);
@@ -877,12 +984,19 @@ function pm_inbox_unmatched_update(callable $fn): mixed
     }
 }
 
+/** A machine's report, not a person writing (DMARC and TLS reports, delivery and system notices): never an unmatched reply. */
+function pm_inbox_is_report(string $from, string $subject): bool
+{
+    return (bool)preg_match('/dmarc|tls-?rpt|noreply|no-reply|do-not-reply|donotreply|mailer-daemon|postmaster|notifications?@|bounce/i', $from)
+        || (bool)preg_match('/^\s*(report domain:|dmarc aggregate report|aggregate report|report-id|tls report)/i', $subject);
+}
+
 /** The saved unmatched messages, newest first (reads only; creates nothing). */
 function pm_inbox_unmatched_list(): array
 {
     $f = PM_DATA . '/inbox_unmatched.json';
     $l = is_file($f) ? json_decode((string)file_get_contents($f), true) : [];
-    return is_array($l) ? array_values($l) : [];
+    return is_array($l) ? array_values(array_filter($l, fn($u) => is_array($u) && !pm_inbox_is_report((string)($u['from'] ?? ''), (string)($u['subject'] ?? '')))) : [];
 }
 
 function pm_inbox_unmatched_add(array $m): void
@@ -936,7 +1050,7 @@ function pm_inbox_process(array $messages, array &$leads, array &$seen, string $
             ?? pm_match_lead($leads, $m['from_email'], $m); // the business whose mailbox it reached first, then any
         $stopSubj = !$dsn && pm_looks_like_stop((string)($m['subject'] ?? '')); // our List-Unsubscribe header sends "STOP" in the subject, often with no text
         if ($id === null) {
-            if (!$dsn && empty($m['auto']) && empty($m['bulk']) && trim((string)$m['text']) !== '') {
+            if (!$dsn && empty($m['auto']) && empty($m['bulk']) && trim((string)$m['text']) !== '' && !pm_inbox_is_report((string)$m['from_email'], (string)($m['subject'] ?? ''))) {
                 pm_inbox_unmatched_add($m);
                 $report['unmatched'][] = ['from' => $m['from_email'], 'subject' => (string)$m['subject']];
                 pm_agent_log('Reply', 'Unmatched reply from ' . $m['from_email'] . ' kept for you to attach to a lead');
@@ -1108,7 +1222,7 @@ function pm_inbox_kick(): bool
 function pm_reply_strip_signoff(string $body): string
 {
     $t = rtrim(str_replace("\r\n", "\n", $body));
-    $t = (string)preg_replace('/\n[ \t]*(?:(?:warm(?:est)?|kind|best|many|with)\s+)?(?:regards|wishes|thanks|thank you|cheers|sincerely|best|yours(?: sincerely| faithfully| truly)?)[ \t]*[,.!]?[ \t]*(?:\n[^\n]{1,60}){0,3}$/iu', '', $t);
+    $t = (string)preg_replace('/\n[ \t]*(?:(?:warm(?:est)?|kind|best|many|with)\s+)?(?:regards|wishes|thanks|thank you|cheers|sincerely|best|yours(?: sincerely| faithfully| truly)?)[ \t]*[,.!]?[ \t]*(?:\n[^\n]{0,60}){0,4}$/iu', '', $t);
     $names = defined('PM_AGENT_FIRST') ? array_values((array)PM_AGENT_FIRST) : ['Mphatso'];
     if (function_exists('pm_agent_first')) {
         $names[] = pm_agent_first('replies');
@@ -1121,6 +1235,15 @@ function pm_reply_strip_signoff(string $body): string
     return rtrim($t);
 }
 
+/** What goes under every answer we send, exactly as sent: the business's default signature (written under Targeting and messages, else the usual one) and the STOP line. */
+function pm_reply_signature(): string
+{
+    $s = pm_settings();
+    $mine = function_exists('pm_dm_signature') ? pm_dm_signature() : null;
+    $sig = array_filter([$s['signatory_name'] ?? '', ($s['signatory_name'] ?? '') !== '' ? ($s['signatory_title'] ?? '') : '', $s['company_name'], $s['phone'] ?? '', $s['website'] ?? '']);
+    return ($mine ?? "Kind regards,\n" . implode("\n", $sig)) . "\n\n(Reply STOP at any time and we will stop contacting you.)";
+}
+
 /** Send an answer to a lead. Returns [ok, error, msgid]. Replies are not first contact, so they do not use the first-email limits. */
 function pm_send_reply(array $lead, string $subject, string $body, array $attachments = []): array
 {
@@ -1128,18 +1251,16 @@ function pm_send_reply(array $lead, string $subject, string $body, array $attach
     if (($lead['status'] ?? '') === 'optout' || pm_suppressed(pm_leads_read(), (string)($lead['email'] ?? ''), (string)($lead['id'] ?? ''))) {
         return [false, 'That address asked not to be contacted.', ''];
     }
-    $sig = array_filter([$s['signatory_name'] ?? '', ($s['signatory_name'] ?? '') !== '' ? ($s['signatory_title'] ?? '') : '', $s['company_name'], $s['phone'] ?? '', $s['website'] ?? '']);
     $from = $s['smtp']['from_email'] ?: ($s['email'] ?? '');
     $hdr = ['List-Unsubscribe' => '<mailto:' . $from . '?subject=STOP>'];
     if (!empty($lead['last_in_id'])) { // threads under their message
         $hdr['In-Reply-To'] = $hdr['References'] = (string)$lead['last_in_id'];
     }
-    $mine = function_exists('pm_dm_signature') ? pm_dm_signature() : null; // the signature the owner wrote, else the usual one
     $to = (string)($lead['email'] ?? '');
     $rt = strtolower(trim((string)($lead['_reply_to'] ?? '')));
     if ($rt !== '' && filter_var($rt, FILTER_VALIDATE_EMAIL) && !pm_suppressed(pm_leads_read(), $rt, (string)($lead['id'] ?? ''))) {
         $to = $rt; // the colleague who wrote gets the answer
     }
-    return pm_mail($s, ['to' => $to, 'subject' => $subject, 'body' => pm_reply_strip_signoff($body) . "\n\n" . ($mine ?? "Kind regards,\n" . implode("\n", $sig)) . "\n\n(Reply STOP at any time and we will stop contacting you.)",
+    return pm_mail($s, ['to' => $to, 'subject' => $subject, 'body' => pm_reply_strip_signoff($body) . "\n\n" . pm_reply_signature(),
         'headers' => $hdr, 'attachments' => $attachments, 'kind' => 'reply', 'lead' => (string)($lead['id'] ?? '')]);
 }

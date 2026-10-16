@@ -811,6 +811,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!pm_agents_ready()) {
                 $back('The AI needs a key in .env first.', 'err');
             }
+            if (!empty($lead['reply_draft']) || !empty($lead['awaiting_reply_since'])) { // they wrote back: the team talks their message over and writes the answer again
+                @set_time_limit(120);
+                try {
+                    $rtMsg = pm_reply_rethink($leads[$id]);
+                } catch (Throwable $e) {
+                    $back('The sit-down could not be held: ' . $e->getMessage(), 'err');
+                }
+                pm_leads_save($leads);
+                $back('The team talked over what ' . $lead['name'] . ' wrote: ' . $rtMsg . ' Read the answer before you send it (Undo new wording brings the old one back).');
+            }
             try {
                 $sdr = pm_sitdown_ask([['id' => $id] + $lead])[$id] ?? null;
             } catch (Throwable $e) {
@@ -1238,7 +1248,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (trim((string)($rd['body'] ?? '')) === '' || !filter_var($lead['email'] ?? '', FILTER_VALIDATE_EMAIL)) {
                 $back('This lead needs a valid email address and a reply to send.', 'err');
             }
-            if ($problems = pm_outreach_lint((string)$rd['subject'], (string)$rd['body'], false)) {
+            if ($problems = pm_outreach_lint((string)$rd['subject'], (string)$rd['body'], false, true)) {
                 $back('Not sent. ' . implode(' ', $problems), 'err');
             }
             $atts = pm_share_attachments((string)($lead['brand'] ?? pm_brand()), array_values(array_filter(array_map('strval', (array)($_POST['attach'] ?? [])), fn($x) => preg_match('/^[a-f0-9]{20}$/', $x) === 1))); // PDFs ticked under the email
@@ -1271,7 +1281,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($opProbs = pm_onepager_status($opb)['problems']) {
                 $back('The one-page offer is not ready: ' . implode(' ', $opProbs), 'err');
             }
-            if ($problems = pm_outreach_lint($opSub, $opBody, false)) {
+            if ($problems = pm_outreach_lint($opSub, $opBody, false, true)) {
                 $back('Not sent. ' . implode(' ', $problems), 'err');
             }
             $opPrev = pm_brand();

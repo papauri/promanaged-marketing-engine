@@ -1030,3 +1030,37 @@ details.shop-item > summary img, .shop-noimg { width:88px; height:88px; object-f
 .shop-noimg { display:flex; align-items:center; justify-content:center; font-size:var(--fs-1); color:var(--muted); border:1px dashed var(--line-strong) }
 .shop-sum { display:flex; flex-direction:column; gap:2px; min-width:0 }
 .shop-form { margin-top:var(--s-3) } .muted-card { opacity:.75 }
+
+/* Leads: a lead that wrote back reads top to bottom: what they wrote, the team's take, our answer (the first message folds away) */
+.rx-them { border-color:var(--ok-line) }
+.rx-msg { font-size:var(--fs-3); line-height:1.55; color:var(--ink); white-space:normal; max-height:420px; overflow:auto; padding:var(--s-2) var(--s-3); background:var(--ok-bg); border-radius:var(--r-ctl) }
+.rx-earlier { margin-top:var(--s-2) } .rx-earlier > summary, .rx-talk > summary { cursor:pointer; font-size:var(--fs-2); color:var(--muted) }
+.rx-take .rx-k { margin:var(--s-2) 0 2px; font-size:var(--fs-1); font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted) }
+.rx-take .rx-k.warnt { color:var(--warn) }
+.rx-list { margin:0; padding-left:18px; font-size:var(--fs-2); color:var(--ink-2) } .rx-list li { margin:2px 0 }
+.rx-opts { display:grid; gap:var(--s-2) }
+.rx-opt { display:flex; flex-direction:column; gap:2px; padding:var(--s-2) var(--s-3); border:1px solid var(--line); border-radius:var(--r-ctl); background:var(--surface-2); font-size:var(--fs-2) }
+.rx-for { color:var(--ok) } .rx-against { color:var(--bad) }
+.rx-decision { margin:var(--s-3) 0 0; padding:var(--s-2) var(--s-3); border-left:3px solid var(--ok); background:var(--ok-bg); border-radius:0 var(--r-ctl) var(--r-ctl) 0; font-size:var(--fs-2) }
+.rx-talk { margin-top:var(--s-2) }
+.rx-none { display:flex; align-items:center; justify-content:space-between; gap:var(--s-3); flex-wrap:wrap }
+.replybox .rx-head { display:flex; align-items:center; gap:var(--s-2); margin-bottom:var(--s-1) }
+.replybox .rx-lab { display:block; margin:var(--s-2) 0 2px; font-size:var(--fs-1); font-weight:600; color:var(--ink-2) }
+.replybox textarea { font-size:var(--fs-3); line-height:1.55 }
+.replybox .sigprev { background:rgba(255,255,255,.6) }
+details.rx-first > summary { cursor:pointer; margin:0 } details.rx-first[open] > summary { margin-bottom:var(--s-2) }
+details.rx-first .msgpanel { margin:0; border:0; padding:0; background:none; box-shadow:none }
+.lc .talklist li { grid-template-columns:1fr; gap:0 }
+.lc .talklist li time:empty { display:none }
+/* filters: the search and stages stay out, the rest behind one button */
+.filters .fmore { display:inline-flex; position:relative }
+.filters .fmore > summary { list-style:none; cursor:pointer } .filters .fmore > summary::-webkit-details-marker { display:none }
+.filters .fmore[open] { flex-basis:100% }
+.filters .fmore .fmore-in { display:flex; gap:var(--s-2); flex-wrap:wrap; margin-top:var(--s-2); width:100% }
+.filters .fmore[open] > summary { align-self:flex-start }
+.filters .fmore[open] { flex-direction:column }
+/* the bulk bar: moving, filing and deleting appear once a lead is ticked */
+.selbar .sel-more { display:none }
+body:has(.lsel:checked) .selbar .sel-more { display:contents }
+body:has(.lsel:checked) .selbar .sel-tip { display:none }
+.selbar .sel-tip { flex:1 1 auto }

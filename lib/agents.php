@@ -1445,7 +1445,7 @@ function pm_suppressed(array $leads, string $email, string $exceptId = ''): bool
  * Checks a message against the rules that separate honest outreach from spam or phishing.
  * Returns a list of problems; an empty list means it may be sent.
  */
-function pm_outreach_lint(string $subject, string $body, bool $first): array
+function pm_outreach_lint(string $subject, string $body, bool $first, bool $reply = false): array
 {
     $bad = [];
     $subject = trim($subject);
@@ -1472,10 +1472,17 @@ function pm_outreach_lint(string $subject, string $body, bool $first): array
     if (preg_match('/(?<![A-Za-z])(MWK|USD|ZAR|GBP|EUR)(?![A-Za-z])|\$|(?<![A-Za-z])K\s?\d|\d[\d,. ]{3,}\s*(a month|per month|\/\s?month|once|setup)/i', $subject . ' ' . $body) || preg_match('/[£€]/u', $subject . ' ' . $body)) {
         $bad[] = 'Remove prices and amounts from the email: prices belong in the proposal.';
     }
-    if ($words < 20 || $words > ($first ? 190 : 120)) {
+    if (!$reply && ($words < 20 || $words > ($first ? 190 : 120))) { // an answer to their message is as long as it needs to be (the reply box only recommends a length)
         $bad[] = "The message is $words words; keep it " . ($first ? 'between 20 and 190' : 'between 20 and 120') . '.';
     }
     return $bad;
+}
+
+/** A length recommendation for an answer, never a rule: '' when it reads well. */
+function pm_reply_length_tip(string $body): string
+{
+    $w = str_word_count($body);
+    return $w === 0 ? '' : $w . ' words' . ($w > 220 ? ': around 80 to 200 reads best. Fine if they asked a lot; otherwise see what can go.' : ($w < 25 ? ': short. Check every question they asked is answered.' : ''));
 }
 
 function pm_sent_today(array $leads): int
