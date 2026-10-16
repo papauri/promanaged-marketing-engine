@@ -31,7 +31,9 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
 
 <div class="hq-kpis">
   <?= $kpi('Leads', (string)$s['leads'], '?tab=agents&status=all', '', $s['in_play'] . ' in play') ?>
-  <?= $kpi('Replies waiting', (string)$s['replies'], '?tab=agents&status=awaiting', $s['replies'] > 0 ? 'warn' : '', $s['replies'] ? 'answer them first' : 'nobody waiting') ?>
+  <?php $inboxOk = !$hd['ops']['imap'] || pm_home_inbox_fresh($hd['ops']); $inboxAge = $hd['ops']['inbox']['age']; ?>
+  <?= $kpi('Replies waiting', (string)$s['replies'], $s['replies'] || $inboxOk ? '?tab=agents&status=awaiting' : '?tab=agents#check-replies', $s['replies'] > 0 || !$inboxOk ? 'warn' : '',
+      $s['replies'] ? 'answer them first' : ($inboxOk ? 'nobody waiting' : ($inboxAge === null ? 'inbox never read' : 'inbox not read for ' . pm_inbox_ago((int)$inboxAge)))) ?>
   <?= $kpi('Follow-ups due', (string)$s['followups_due'], $s['followups_due'] ? '?tab=agents&status=followups' : '?tab=agents&status=contacted', $s['followups_due'] > 0 ? 'warn' : '',
       $s['waiting_answer'] ? $s['waiting_answer'] . ' not answered' . ($s['followups_due'] === 0 && $s['followups_next'] !== '' ? ' · next ' . date('D j M', strtotime($s['followups_next'])) : '') : 'nobody to follow up') ?>
   <?= $kpi('Posts lined up', (string)$so['planned'], '?tab=social', '', $so['waiting'] ? $so['waiting'] . ' to approve' : ($so['ready'] ? 'Facebook connected' : 'Facebook not connected')) ?>

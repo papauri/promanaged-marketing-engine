@@ -269,6 +269,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         }
         @session_start();
     }
+    try {
+        function_exists('pm_inbox_kick') && pm_inbox_kick(); // replies are read while the app is open even if the scheduled task stopped
+    } catch (Throwable) {
+    }
 }
 
 // ---------- Weekly data archive download (C3-G01): only a file from the archive list, never a path ----------

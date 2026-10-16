@@ -1,7 +1,7 @@
 <?php
 /**
  * The daily swarm. Run by the "Run agents now" button, or on a schedule:
- *   php lib/run_agents.php [travel] [names] [--dry]
+ *   php lib/run_agents.php [travel] [names] [--dry]     php lib/run_agents.php --all   (every business, one after the other)
  * Phases: Scouts (parallel) -> Contact Finders (parallel) -> Qualifiers -> Researchers -> Writers -> Proposals -> Follow-up.
  * Only this script writes leads.json for a run, so parallel workers never collide. One run per brand at a time (data/run_<brand>.lock).
  * --dry: take the lock, then stop before any AI call (used to test the lock).
@@ -18,6 +18,12 @@ set_time_limit(0);
 
 $pos = array_values(array_filter(array_slice($argv, 1), fn($a) => !str_starts_with($a, '--')));
 $dry = in_array('--dry', $argv, true);
+if (in_array('--all', $argv, true)) { // the morning task: every business in the registry, one after the other, each in its own process
+    foreach (pm_brand_ids() as $ab) {
+        passthru(escapeshellarg(pm_php_binary()) . ' ' . escapeshellarg(__FILE__) . ' ' . escapeshellarg($ab) . ($dry ? ' --dry' : ''));
+    }
+    exit(0);
+}
 $brand = pm_brand_norm($pos[0] ?? '');
 pm_brand_set($brand);
 $only = (string)($pos[1] ?? ''); // "names": only look for owner and manager names on the leads already in the list

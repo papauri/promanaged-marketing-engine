@@ -33,8 +33,11 @@ function pm_setup_health(): array
             "{$p}SMTP_HOST, {$p}SMTP_USER, {$p}SMTP_PASS in .env (or Operations > Email)");
         $im = function_exists('pm_imap_settings') ? pm_imap_settings($b) : ['host' => '', 'user' => '', 'pass' => ''];
         $imOk = $im['host'] !== '' && $im['user'] !== '' && $im['pass'] !== '';
-        $row("imap_$b", "Reading replies · $n", 'required', $imOk, $imOk ? 'Reads the inbox at ' . $im['host'] . '.' : 'Replies are not read, so nobody is answered automatically.',
-            "{$p}IMAP_HOST, {$p}IMAP_USER, {$p}IMAP_PASS in .env (or the same as the mail login)");
+        $rs = $imOk && function_exists('pm_inbox_read_status') ? pm_inbox_read_status($b) : ['age' => null, 'err' => ''];
+        $fresh = $rs['age'] !== null && $rs['age'] < 7200 && $rs['err'] === ''; // set up is not enough: the inbox must really be read
+        $row("imap_$b", "Reading replies · $n", 'required', $imOk && $fresh, $imOk ? 'Reads the inbox at ' . $im['host'] . '. '
+            . ($rs['err'] !== '' ? 'The last check failed: ' . $rs['err'] : ($rs['age'] === null ? 'It has never been read: replies may be waiting.' : 'Last read ' . pm_inbox_ago((int)$rs['age']) . ' ago' . ($fresh ? '.' : ': replies may be waiting.'))) : 'Replies are not read, so nobody is answered automatically.',
+            $imOk ? 'Press Check replies on Sales > Leads, and run schedule_agents.bat once so the inbox is read every 15 minutes' : "{$p}IMAP_HOST, {$p}IMAP_USER, {$p}IMAP_PASS in .env (or the same as the mail login)");
         $fb = pm_social_cfg($b);
         $row("fb_$b", "Facebook Page · $n", 'required', $fb['ready'], $fb['ready'] ? 'Connected.' : 'Posts cannot be published and comments cannot be read.', 'Operations > Connections > Connect Facebook in 3 steps');
         $row("ig_$b", "Instagram · $n", 'optional', $fb['ig_id'] !== '', $fb['ig_id'] !== '' ? 'Linked.' : 'Instagram posts stay hand-posted.', "Link the account to the Page, then reconnect Facebook ({$p}IG_USER_ID)");

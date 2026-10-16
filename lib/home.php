@@ -52,9 +52,24 @@ function pm_home_staff(string $brand, array $d): array
         'ops' => [
             $row('Scheduler', 'Sends, posts and refreshes on time', ($d['ops']['scheduler_age'] ?? null) !== null && (int)$d['ops']['scheduler_age'] < 7200, 'it has not run recently: install the scheduled task (Operations > Health and backups)'),
             $row('Mail room', 'Sends your approved emails', !empty($d['ops']['mail']), 'add the mail login under Operations > Email'),
-            $row('Inbox reader', 'Reads replies and classifies them', !empty($d['ops']['imap']), 'add the mailbox login under Operations > Email'),
+            $row('Inbox reader', 'Reads replies and classifies them', !empty($d['ops']['imap']) && pm_home_inbox_fresh($d['ops']), !empty($d['ops']['imap']) ? pm_home_inbox_why($d['ops']) : 'add the mailbox login under Operations > Email'),
         ],
     ];
+}
+
+/** Was the inbox read in the last hour (so "nobody waiting" can be trusted)? */
+function pm_home_inbox_fresh(array $op): bool
+{
+    $age = $op['inbox']['age'] ?? null;
+    return $age !== null && $age < 3600 && ($op['inbox']['err'] ?? '') === '';
+}
+
+/** Why the inbox reader is not on duty, in words. */
+function pm_home_inbox_why(array $op): string
+{
+    $age = $op['inbox']['age'] ?? null;
+    $err = (string)($op['inbox']['err'] ?? '');
+    return $err !== '' ? 'the last inbox check failed: ' . $err : ($age === null ? 'the inbox has never been read: press Check replies' : 'the inbox was last read ' . pm_inbox_ago((int)$age) . ' ago: replies may be waiting');
 }
 
 /** The latest lines of the agents' diary for this business (the diary prefixes other businesses with their name). */
@@ -138,7 +153,8 @@ function pm_home_data(string $brand): array
                 'copy' => count((array)(pm_opt_store($brand)['copy'] ?? [])), 'todo' => (array)($opt['todo'] ?? []), 'kits' => function_exists('pm_bt_pending') ? count(pm_bt_pending($brand)) : 0],
             'insights' => ['enquiries28' => function_exists('pm_sx_social_leads_count') ? pm_sx_social_leads_count($brand, 28) : 0, 'published28' => $pub28, 'won' => (int)$ps['won'], 'proposals' => (int)$ps['proposals_sent'], 'leads' => (int)$ps['leads'],
                 'goal_posts' => function_exists('pm_social_goals') ? (int)pm_social_goals($brand)['posts_per_week'] : 0],
-            'ops' => ['ai' => pm_agents_ready(), 'scheduler_age' => function_exists('pm_social_heartbeat_age') ? pm_social_heartbeat_age() : null, 'mail' => $okOf('smtp_' . $brand), 'imap' => $okOf('imap_' . $brand),
+            'ops' => ['ai' => pm_agents_ready(), 'scheduler_age' => function_exists('pm_social_heartbeat_age') ? pm_social_heartbeat_age() : null, 'mail' => $okOf('smtp_' . $brand), 'imap' => function_exists('pm_imap_settings') && ($imc = pm_imap_settings($brand))['host'] !== '' && $imc['user'] !== '' && $imc['pass'] !== '', // set up; whether it is really read is 'inbox'
+                'inbox' => function_exists('pm_inbox_read_status') ? pm_inbox_read_status($brand) : ['age' => null, 'err' => ''],
                 'essentials_ok' => $hOk, 'essentials' => $hNeed, 'businesses' => count(pm_brand_ids())],
             'activity' => pm_home_activity($brand),
             'today' => ['sent' => (int)$ps['sent_today'], 'cap' => (int)($cfg['send_cap'] ?? 0), 'queue' => $queue, // cap: the day's plan, not a limit
@@ -193,6 +209,7 @@ function pm_home_needs(string $brand, array $d): array
     $op['scheduler_age'] === null && $need['ops'][] = ['Set up the scheduler, so posts, emails and the morning playbook go out on their own', '?tab=settings&section=health', false];
     $op['scheduler_age'] !== null && $op['scheduler_age'] >= 7200 && $need['ops'][] = ['The scheduler last ran ' . max(1, intdiv((int)$op['scheduler_age'], 3600)) . ' h ago', '?tab=settings&section=health', true];
     !$op['mail'] && $need['ops'][] = ['Set up the mailbox so emails can be sent', '?tab=settings&section=email', true];
+    $op['imap'] && !pm_home_inbox_fresh($op) && $need['sales'][] = [ucfirst(pm_home_inbox_why($op)), '?tab=agents#check-replies', true];
     $op['essentials_ok'] < $op['essentials'] && $op['mail'] && $op['ai'] && $need['ops'][] = [$op['essentials_ok'] . ' of ' . $op['essentials'] . ' essentials ready', '?tab=settings&section=health', false];
     return $need;
 }
@@ -234,7 +251,7 @@ function pm_home_depts(string $brand, array $d): array
             'stats' => ['Leads' => $in['leads'], 'Proposals out' => $in['proposals'], 'Won' => $in['won'], 'Social enquiries (4 weeks)' => $in['enquiries28'], 'Weekly post goal' => $in['goal_posts'] ?: '-'],
             'next' => [['Open the results', '?tab=social&view=results', true], ['Run the audit', '?tab=social&view=audit', false], ['Strategy brief', '?tab=home#brief', false]]],
         'ops' => ['mission' => 'Keeps the machinery running: the scheduler, the mail room, the connections and the team.', 'state' => $oSt, 'text' => $oTxt,
-            'stats' => ['AI' => $op['ai'] ? 'On' : 'No key', 'Mail' => $op['mail'] ? 'Ready' : 'Not set', 'Replies read' => $op['imap'] ? 'Yes' : 'No', 'Essentials' => $op['essentials_ok'] . '/' . $op['essentials'], 'Businesses' => $op['businesses']],
+            'stats' => ['AI' => $op['ai'] ? 'On' : 'No key', 'Mail' => $op['mail'] ? 'Ready' : 'Not set', 'Replies read' => !$op['imap'] ? 'No' : (pm_home_inbox_fresh($op) ? 'Yes' : ($op['inbox']['age'] === null ? 'Never' : pm_inbox_ago((int)$op['inbox']['age']) . ' ago')), 'Essentials' => $op['essentials_ok'] . '/' . $op['essentials'], 'Businesses' => $op['businesses']],
             'next' => [['Setup health', '?tab=settings&section=health', true], ['Business details', '?tab=settings&section=business', false], ['Add a business', '?tab=business&new=1', false]]],
     ];
     foreach ($cards as $k => &$c) {

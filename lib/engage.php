@@ -135,6 +135,8 @@ function pm_agent_reply(array $lead, string $incoming, string $ch = 'email'): ar
             $out[$k] = pm_human_polish($out[$k], $chn);
         }
     }
+    $out['reply_body'] = pm_reply_strip_signoff((string)($out['reply_body'] ?? '')); // the app adds the real signature
+    $out['whatsapp'] = pm_reply_strip_signoff($out['whatsapp']);
     return $out;
 }
 
@@ -1005,16 +1007,20 @@ function pm_inbox_poll(?callable $send = null, ?array &$report = null): array
     $mode = pm_agents_config('promanaged')['reply_mode'] ?? 'draft';
     $was = pm_brand();
     $messages = [];
+    $read = array_intersect_key(pm_load('inbox_read', fn() => []), array_flip(array_column(pm_imap_boxes(), 'key'))); // per mailbox: when it was last read, and the last error (the overview warns when it goes stale)
     try {
         foreach (pm_imap_boxes() as $box) { // each brand's own inbox (read once when they share an account)
             try {
                 foreach (pm_imap_recent($box, 14, 80, (array)($uidState[$box['key']] ?? [])) as $m) {
                     $messages[] = $m + ['brands' => $box['brands'], 'box' => $box['key']];
                 }
+                $read[$box['key']] = ['ok' => time(), 'err' => '', 'brands' => $box['brands']];
             } catch (Throwable $e) {
                 pm_agent_log('Reply', 'Inbox check failed for ' . $box['user'] . ': ' . $e->getMessage());
+                $read[$box['key']] = ['ok' => (int)($read[$box['key']]['ok'] ?? 0), 'err' => mb_substr($e->getMessage(), 0, 300), 'err_at' => time(), 'brands' => $box['brands']];
             }
         }
+        pm_save('inbox_read', $read);
         $handled = pm_inbox_process($messages, $leads, $seen, $mode, $send, $report);
         if (function_exists('pm_ml_sync_sent') && ($synced = pm_ml_sync_sent($leads))) {
             $report['synced'] = $synced;
@@ -1040,6 +1046,81 @@ function pm_inbox_poll(?callable $send = null, ?array &$report = null): array
     return [$handled, ($handled ? "$handled repl" . ($handled === 1 ? 'y' : 'ies') . ' handled.' : 'No new replies.') . $extra];
 }
 
+/**
+ * How fresh the inbox of a business is: ['age' => seconds since it was last read (null = never), 'err' => the last error, ''].
+ * Reads data/inbox_read.json only (written by pm_inbox_poll); no network.
+ */
+function pm_inbox_read_status(string $brand): array
+{
+    $read = pm_load('inbox_read', fn() => []);
+    $ok = null;
+    $err = '';
+    foreach (pm_imap_boxes() as $box) {
+        if (!in_array($brand, (array)$box['brands'], true)) {
+            continue;
+        }
+        $r = (array)($read[$box['key']] ?? []);
+        $ok = (int)($r['ok'] ?? 0) ?: null;
+        $err = (int)($r['err_at'] ?? 0) > (int)($r['ok'] ?? 0) ? (string)($r['err'] ?? '') : '';
+    }
+    return ['age' => $ok === null ? null : max(0, time() - $ok), 'err' => $err];
+}
+
+/** "12 minutes", "3 hours", "2 days": how long ago, in words. */
+function pm_inbox_ago(int $s): string
+{
+    return $s < 5400 ? max(1, intdiv($s, 60)) . ' minutes' : ($s < 172800 ? intdiv($s, 3600) . ' hours' : intdiv($s, 86400) . ' days');
+}
+
+/**
+ * The open app keeps the inbox read when the scheduler does not: when any mailbox was last read over 20 minutes ago, lib/poll_run.php is started in the
+ * background (it has its own lock and 10-minute throttle, so many open pages start at most one). Nothing waits for it and no AI runs in the page itself.
+ */
+function pm_inbox_kick(): bool
+{
+    if (PHP_SAPI === 'cli' || !pm_imap_ready() || !pm_can_spawn() || !function_exists('pm_php_binary')) {
+        return false;
+    }
+    $read = pm_load('inbox_read', fn() => []);
+    $stale = false;
+    foreach (pm_imap_boxes() as $box) {
+        $stale = $stale || time() - (int)($read[$box['key']]['ok'] ?? 0) > 1200;
+    }
+    $f = PM_DATA . '/poll_state.json';
+    $polled = is_file($f) ? (int)(json_decode((string)file_get_contents($f), true)['at'] ?? 0) : 0;
+    if (!$stale || time() - $polled < 600) {
+        return false;
+    }
+    $script = __DIR__ . '/poll_run.php';
+    $php = pm_php_binary();
+    if (PHP_OS_FAMILY === 'Windows') {
+        pclose(popen('start /B "" "' . $php . '" "' . $script . '" > NUL 2>&1', 'r'));
+    } else {
+        exec(escapeshellarg($php) . ' ' . escapeshellarg($script) . ' > /dev/null 2>&1 &');
+    }
+    return true;
+}
+
+/**
+ * A reply ends where its words end: a sign-off the AI added ("Warm regards, Mphatso") is cut, since the app adds the real signature when it sends.
+ * Only a closing line on its own (with up to three short name or title lines after it), or a last line that is only an agent's first name, is cut.
+ */
+function pm_reply_strip_signoff(string $body): string
+{
+    $t = rtrim(str_replace("\r\n", "\n", $body));
+    $t = (string)preg_replace('/\n[ \t]*(?:(?:warm(?:est)?|kind|best|many|with)\s+)?(?:regards|wishes|thanks|thank you|cheers|sincerely|best|yours(?: sincerely| faithfully| truly)?)[ \t]*[,.!]?[ \t]*(?:\n[^\n]{1,60}){0,3}$/iu', '', $t);
+    $names = defined('PM_AGENT_FIRST') ? array_values((array)PM_AGENT_FIRST) : ['Mphatso'];
+    if (function_exists('pm_agent_first')) {
+        $names[] = pm_agent_first('replies');
+    }
+    $lines = explode("\n", $t);
+    if (count($lines) > 1 && in_array(trim(trim((string)end($lines)), '-,. '), $names, true)) {
+        array_pop($lines);
+        $t = implode("\n", $lines);
+    }
+    return rtrim($t);
+}
+
 /** Send an answer to a lead. Returns [ok, error, msgid]. Replies are not first contact, so they do not use the first-email limits. */
 function pm_send_reply(array $lead, string $subject, string $body, array $attachments = []): array
 {
@@ -1059,6 +1140,6 @@ function pm_send_reply(array $lead, string $subject, string $body, array $attach
     if ($rt !== '' && filter_var($rt, FILTER_VALIDATE_EMAIL) && !pm_suppressed(pm_leads_read(), $rt, (string)($lead['id'] ?? ''))) {
         $to = $rt; // the colleague who wrote gets the answer
     }
-    return pm_mail($s, ['to' => $to, 'subject' => $subject, 'body' => $body . "\n\n" . ($mine ?? "Kind regards,\n" . implode("\n", $sig)) . "\n\n(Reply STOP at any time and we will stop contacting you.)",
+    return pm_mail($s, ['to' => $to, 'subject' => $subject, 'body' => pm_reply_strip_signoff($body) . "\n\n" . ($mine ?? "Kind regards,\n" . implode("\n", $sig)) . "\n\n(Reply STOP at any time and we will stop contacting you.)",
         'headers' => $hdr, 'attachments' => $attachments, 'kind' => 'reply', 'lead' => (string)($lead['id'] ?? '')]);
 }

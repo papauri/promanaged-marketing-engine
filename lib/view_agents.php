@@ -155,7 +155,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
       </span>
     </div>
     <div class="acts">
-      <?php if (pm_imap_ready()): ?><form method="post"><?= $post('', 'check_replies') ?><button class="btn" <?= $running ? 'disabled' : '' ?>>Check replies</button></form><?php endif; ?>
+      <?php if (pm_imap_ready()): $ir = pm_inbox_read_status(pm_brand()); ?><form method="post" id="check-replies"><?= $post('', 'check_replies') ?><button class="btn<?= $ir['age'] === null || $ir['age'] >= 3600 || $ir['err'] !== '' ? ' primary' : '' ?>" <?= $running ? 'disabled' : '' ?> title="<?= pm_h($ir['err'] !== '' ? 'The last check failed: ' . $ir['err'] : ($ir['age'] === null ? 'The inbox has never been read' : 'Inbox last read ' . pm_inbox_ago((int)$ir['age']) . ' ago')) ?>">Check replies</button></form><?php endif; ?>
       <form method="post"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="mail_log"><input type="hidden" name="do" value="sync"><input type="hidden" name="back" value="agents"><button class="btn" <?= $running ? 'disabled' : '' ?> title="Reads the Sent folders in your mailboxes and marks every lead already emailed as contacted (out of Active), filed in the folder Already contacted">Compare with the Sent folder</button></form>
       <form method="post"><?= $post('', 'find_names') ?><button class="btn" <?= $running ? 'disabled' : '' ?> title="Looks for the owner or manager of leads that have no name yet">Find owner names</button></form>
       <form method="post"><?= $post('', 'run') ?><button class="btn primary" id="runbtn" <?= $running ? 'disabled' : '' ?>><?= $running ? 'Working…' : 'Run the agents' ?></button></form>

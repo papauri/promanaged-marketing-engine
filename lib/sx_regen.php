@@ -46,7 +46,10 @@ function pm_regen_words(array $fields, string $kind, string $note = ''): array
     $voice = trim((string)(pm_brain()['voice'] ?? ''));
     $note = mb_substr(trim($note), 0, 300);
     $system = "You reword marketing text for {$s['company_name']}." . ($voice !== '' ? " Voice: $voice" : '')
-        . "\nWrite every field again in fresh words so it reads new, keeping exactly the same facts, offer, names, prices, dates, links and language. "
+        . ($note !== '' ? "\nThe owner left a note: do what it asks, and change the rest only as much as the note needs (sentences that already work stay as they are). Keep exactly the same facts, offer, names, prices, dates, links and language. "
+            : "\nWrite every field again in fresh words so it reads new, keeping exactly the same facts, offer, names, prices, dates, links and language. ")
+        . 'Fresh words means a new way of saying it, not swapping words for synonyms: never trade a plain word for a rarer one (team, not crew; question, not query). '
+        . ($kind === 'reply' ? 'The body is our answer to a message they sent: it stays a direct answer to it, with no sign-off and no name at the end (the app adds the signature). ' : '')
         . 'Add nothing that is not in the original or in the owner\'s note: no new numbers, prices, places, features, claims or links. Keep each link exactly as written. '
         . 'Plain, warm, human words, short sentences, no exclamation marks in a row, no hashtags inside the text fields. '
         . 'If the owner left a note, follow it within those rules. Never start a caption or message with "Hello" or the business name. Reply JSON only: an object with the field names as its keys.';
@@ -254,7 +257,23 @@ function pm_regen_posts(string $vb, array $ids, string $note = ''): array
 function pm_regen_lead(array $lead, string $slot, array $fields, string $note = ''): array
 {
     $kind = $slot === 'reply_draft' ? 'reply' : 'email';
+    foreach (['subject', 'email_subject'] as $sk) {
+        if (preg_match('/^\s*re\s*:/i', (string)($fields[$sk] ?? ''))) {
+            unset($fields[$sk]); // an answer in their thread keeps its "Re:" subject: a new one breaks the thread and can say something else
+        }
+    }
+    $bodies = $slot === 'reply_draft' ? ['body', 'whatsapp'] : []; // only an answer gets the signature added when it is sent (pm_send_reply); a first email carries its own
+    foreach ($bodies as $bk) {
+        if (isset($fields[$bk])) {
+            $fields[$bk] = pm_reply_strip_signoff((string)$fields[$bk]); // the signature is the app's: a sign-off left in the text ends up mid-message
+        }
+    }
     $new = pm_regen_words($fields, $kind, $note);
+    foreach ($bodies as $bk) {
+        if (isset($new[$bk])) {
+            $new[$bk] = pm_reply_strip_signoff($new[$bk]);
+        }
+    }
     if (!$new) {
         throw new RuntimeException('There is no text to reword yet.');
     }
