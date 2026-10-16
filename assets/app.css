@@ -433,7 +433,7 @@ textarea.cc-new { box-shadow:0 0 0 3px color-mix(in srgb, var(--dept) 35%, trans
 .runtop { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
 .runtop b { display:block; font-size:14px; }
 .runtop .muted { font-size:13px; }
-.acts { display:flex; gap:8px; }
+.acts { display:flex; gap:8px; flex-wrap:wrap; }
 .director > summary { display:flex; gap:8px; align-items:baseline; font-weight:500 !important; }
 .director .lbl { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--dept); font-weight:700; white-space:nowrap; }
 .director ol { margin:0 0 8px 16px; padding:0; }
@@ -815,7 +815,8 @@ main { max-width:none; padding:0; }
 .topright { margin-left:auto; }
 main { padding:12px 12px 80px; }
 .pagehead h1 { font-size:26px; }
-.wiz .two { grid-template-columns:1fr; }
+.wiz .two, .lead .two { grid-template-columns:1fr; }
+form.inline > .btn { flex:none; white-space:nowrap; } form.inline > input { flex:1 1 auto; min-width:0; }
 .dd .menu { position:fixed; left:12px; right:12px; top:auto; min-width:0; }
 }
 @media print {
@@ -845,8 +846,9 @@ input[type=file]::file-selector-button:hover { background:var(--surface-2) }
 /* touch and small screens: 44px controls, 16px fields (no zoom on focus), tables scroll sideways instead of squashing */
 @media (pointer:coarse), (max-width:860px) {
   body { --ctl:44px; --ctl-sm:44px }
-  input[type=text], input[type=email], input[type=number], input[type=date], input[type=password], input[type=search], input[type=url], input[type=tel], input[type=datetime-local], select, textarea { font-size:16px }
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):not([type=hidden]), select, textarea { font-size:16px !important } /* every field, even a compact one in a filter bar: iOS zooms into anything smaller */
   .tabs a, .filters a, .menu .item { min-height:44px; display:inline-flex; align-items:center }
+  .task button { width:32px; height:32px }
   .menu .item { display:flex }
   .btns > form > .btn:only-child { width:auto }
   table.grid, .sx-table, .rs, .hist { display:block; max-width:100%; overflow-x:auto }
@@ -1084,8 +1086,8 @@ details.shop-item > summary img, .shop-noimg { width:88px; height:88px; object-f
 .replybox .sigprev { background:rgba(255,255,255,.6) }
 details.rx-first > summary { cursor:pointer; margin:0 } details.rx-first[open] > summary { margin-bottom:var(--s-2) }
 details.rx-first .msgpanel { margin:0; border:0; padding:0; background:none; box-shadow:none }
-.lc .talklist li { grid-template-columns:1fr; gap:0 }
-.lc .talklist li time:empty { display:none }
+.lc .talklist li, .talklist li:has(> time:empty) { grid-template-columns:1fr; gap:0 }
+.talklist li time:empty { display:none }
 /* filters: the search and stages stay out, the rest behind one button */
 .filters .fmore { display:inline-flex; position:relative }
 .filters .fmore > summary { list-style:none; cursor:pointer } .filters .fmore > summary::-webkit-details-marker { display:none }
