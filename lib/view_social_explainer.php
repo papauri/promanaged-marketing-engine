@@ -65,7 +65,7 @@ echo pm_social_nav('explainer');
       <?php if (!empty($x['chat'])): ?><div class="cc-log"><?php foreach ((array)$x['chat'] as $m): $me = ($m['who'] ?? '') === 'owner'; ?>
         <div class="cc-msg <?= $me ? 'me' : 'agent' ?>"><?php if (!$me): ?><b><?= pm_h($head) ?> · Social</b><?php endif; ?><span><?= pm_h((string)$m['said']) ?></span>
           <?php if (!$me && !empty($m['lesson'])): ?><form method="post" class="mt-1"><?= $fx('ex_remember', '<input type="hidden" name="x" value="' . pm_h($x['id']) . '"><input type="hidden" name="lesson" value="' . pm_h((string)$m['lesson']) . '"><input type="hidden" name="for" value="' . pm_h((string)($m['lesson_for'] ?? 'voice')) . '">') ?><button class="btn small cc-rem">Remember for everything we write: “<?= pm_h((string)$m['lesson']) ?>”</button></form><?php endif; ?></div>
-      <?php endforeach; ?></div><?php else: ?><p class="hint mt-0">Tell <?= pm_h($head) ?> what to change ("shorter headline", "make step 2 about the free set-up", "use a calendar icon for the sync", "speak to lodge managers") or ask why something is there. The picture is redrawn each time.</p><?php endif; ?>
+      <?php endforeach; ?></div><?php else: ?><p class="hint mt-0">Tell <?= pm_h($head) ?> what to change ("shorter headline", "make step 2 about the free set-up", "take the QR code off", "hide the goal line", "speak to lodge managers") or ask why something is there. The picture is redrawn each time.</p><?php endif; ?>
       <form method="post" class="cc-in mt-2"><?= $fx('ex_chat', '<input type="hidden" name="x" value="' . pm_h($x['id']) . '">') ?><textarea name="ask" rows="2" required placeholder="What should change?" aria-label="Message to <?= pm_h($head) ?>"></textarea><button class="btn small primary">Send</button></form>
     </div>
 
@@ -81,10 +81,12 @@ echo pm_social_nav('explainer');
         <label>Our goal (optional)</label><input type="text" name="goal" value="<?= pm_h($ad['goal']) ?>" maxlength="130">
         <label>Call to action</label><input type="text" name="cta" value="<?= pm_h($ad['cta']) ?>" maxlength="70">
         <?php if (($x['pics_mode'] ?? 'icons') !== 'icons'): $pf = pm_ex_pics_fill($vb, $ad)['pics']; ?>
-        <label>The picture at the top <span class="muted">(what the AI illustration shows; a new description makes a new picture, about 5 US cents)</span></label><textarea name="pic_hero" rows="2"><?= pm_h((string)$pf['hero']) ?></textarea>
+        <label>The picture at the top <span class="muted">(what the illustration shows; a new description makes a new picture, about 5 US cents)</span></label><textarea name="pic_hero" rows="2"><?= pm_h((string)$pf['hero']) ?></textarea>
         <?php if (($x['pics_mode'] ?? '') === 'all'): ?><label>A picture for each step <span class="muted">(one a line, in the order of the steps)</span></label><textarea name="pic_steps" rows="4"><?= pm_h(implode("\n", (array)$pf['steps'])) ?></textarea><?php endif; ?>
-        <p class="hint">AI illustrations show generic places, objects and hands only, never your own rooms, products or people, and never any words: the app writes every word itself.</p>
+        <p class="hint">The illustrations show generic places, objects and hands only, never your own rooms, products or people, and never any words: the app writes every word itself.</p>
         <?php endif; ?>
+        <input type="hidden" name="show_set" value="1"><label>What the picture shows</label>
+        <div class="exshow"><?php foreach (PM_EX_PARTS as $pk => $plab): ?><label class="check"><input type="checkbox" name="show[<?= $pk ?>]" value="1" <?= !isset($ad['show'][$pk]) || !empty($ad['show'][$pk]) ? 'checked' : '' ?>> <?= pm_h(ucfirst($plab)) ?></label><?php endforeach; ?></div>
         <label>The post text that goes with the picture</label><textarea name="caption" rows="8" data-chat="post"><?= pm_h((string)($ad['caption'] ?? '')) ?></textarea>
         <div class="btns"><button class="btn small primary">Save and redraw</button></div>
       </form>

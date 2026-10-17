@@ -22,7 +22,10 @@ const PM_EX_ICONS = ['user' => 'a person (sign up, an account)', 'users' => 'peo
     'game' => 'a game controller (gaming gear)', 'heart' => 'a heart (care, local, together)'];
 
 /** How the ad is illustrated: drawn icons only (free), or AI illustrations (each new one about 5 US cents; the same description is never paid twice). */
-const PM_EX_PICS = ['icons' => 'Drawn icons (free)', 'hero' => 'An AI illustration at the top (about 5 US cents)', 'all' => 'AI illustrations at the top and for every step (about 20 to 25 US cents)'];
+const PM_EX_PICS = ['icons' => 'Drawn icons (free)', 'hero' => 'An illustration at the top (about 5 US cents)', 'all' => 'Illustrations at the top and for every step (about 20 to 25 US cents)'];
+
+/** The parts of the ad the owner can show or hide (all shown unless switched off): key => what it is. */
+const PM_EX_PARTS = ['logo' => 'the logo and name at the top', 'qr' => 'the QR code', 'gets' => 'the What you get section', 'goal' => 'the Our goal line', 'cta' => 'the call-to-action box at the bottom', 'foot' => 'the website and email line at the very bottom'];
 
 /** What every AI picture description must keep to (the honesty rules of lib/sx_aiimage.php, in words the team can follow). */
 const PM_EX_PIC_RULES = 'Each picture description is one short scene for a friendly flat illustration: generic places, objects and hands or silhouettes only, never this business\'s own rooms, buildings, products, staff or customers, never a real person, and no words, numbers or logos in the picture.';
@@ -200,8 +203,11 @@ function pm_ex_clean(array $ad, array $plain, string $src): array
     $out = [];
     foreach (['eyebrow' => 60, 'headline' => 70, 'sub' => 120, 'goal' => 110, 'cta' => 60] as $k => $lim) {
         $t = $txt($ad[$k] ?? '', $lim + 20);
-        $out[$k] = $ok($t, $lim) ? $t : (string)($plain[$k] ?? '');
+        $emptied = $t === '' && array_key_exists($k, $ad) && in_array($k, ['eyebrow', 'sub', 'goal'], true); // taken off on purpose: it stays off
+        $out[$k] = $emptied ? '' : ($ok($t, $lim) ? $t : (string)($plain[$k] ?? ''));
     }
+    $show = (array)($ad['show'] ?? $plain['show'] ?? []);
+    $out['show'] = array_map(fn($k) => !array_key_exists($k, $show) || filter_var($show[$k], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) !== false, array_combine(array_keys(PM_EX_PARTS), array_keys(PM_EX_PARTS)));
     foreach (['steps' => [3, 4, ['title' => 34, 'text' => 80]], 'gets' => [2, 4, ['text' => 60]]] as $k => [$min, $max, $fields]) {
         $rows = [];
         foreach (array_slice((array)($ad[$k] ?? []), 0, $max) as $r) {
@@ -387,8 +393,10 @@ function pm_ex_chat_turn(string $brand, array $x, string $ask): array
             . 'Same rules as the meeting: only our facts and what the owner says; no new numbers, prices, times, claims or links; headline at most 8 words, sub at most 14, 3 or 4 steps (title at most 4 words, text at most 12), '
             . '2 to 4 points of at most 8 words, goal at most 14, call to action at most 6. "caption" is the post text that goes with the picture: keep it, or change it if asked. Icons only from: ' . implode(', ', array_keys(PM_EX_ICONS)) . '. '
             . (($x['pics_mode'] ?? 'icons') !== 'icons' ? 'The ad carries AI illustrations described in "pics" (the top, and one per step when there are step pictures): change a description when the owner asks for a different picture, and keep the others word for word (each new picture costs money). ' . PM_EX_PIC_RULES . ' ' : '')
+            . 'The owner is the CEO and has the last word on this ad: do what they ask (words, pictures, what is shown or hidden, what is taken off) and never answer that something cannot be changed; the only thing you may not do is add a claim our facts do not give, and then you say so. '
+            . 'Show or hide parts with "show" (true or false): ' . implode(', ', array_map(fn($k, $v) => "$k = $v", array_keys(PM_EX_PARTS), PM_EX_PARTS)) . '. To take the small top line, the line under the headline or the goal off, leave it empty. '
             . '"say": one or two short sentences to the owner, first person. "lesson": only when the wish should hold for everything we write, as one short standing rule; else empty. '
-            . 'Reply JSON only: {"say":"","ad":{"eyebrow":"","headline":"","sub":"","steps":[{"icon":"","title":"","text":""}],"gets":[{"icon":"","text":""}],"goal":"","cta":"","caption":"","pics":{"hero":"","steps":[""]}},"lesson":"","lesson_for":"voice|never"}';
+            . 'Reply JSON only: {"say":"","ad":{"eyebrow":"","headline":"","sub":"","steps":[{"icon":"","title":"","text":""}],"gets":[{"icon":"","text":""}],"goal":"","cta":"","caption":"","pics":{"hero":"","steps":[""]},"show":{"logo":true,"qr":true,"gets":true,"goal":true,"cta":true,"foot":true}},"lesson":"","lesson_for":"voice|never"}';
         $user = json_encode(['the_ad_now' => $x['ad'], 'chat_so_far' => $chat ?: null, 'owner_now' => mb_substr($ask, 0, 600)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $GLOBALS['PM_AI_REF'] = 'explainer_chat';
         $out = pm_agent_json(pm_claude($system, $user, false, 1400, 'cheap'));
@@ -626,20 +634,18 @@ function pm_ex_draw(string $brand, array $ad, int $W, int $H, string $file): str
                 $alpha = (int)round(127 * max(0, min(1, ($xx / $W - 0.34) / 0.5)) * 0.82);
                 imageline($im, $xx, 0, $xx, $bandH, imagecolorallocatealpha($im, $accent[0], $accent[1], $accent[2], min(127, $alpha)));
             }
-            $lbl = 'AI illustration';
-            $lpx = $px(18);
-            $lw = pm_card_tw($f['sans'], $lpx, $lbl);
-            pm_card_rrect($c, $W - $pad - $lw - $px(20), $bandH - $px(46), $W - $pad, $bandH - $px(14), $px(14), [20, 20, 20]);
-            pm_card_draw($c, [$lbl], $f['sans'], $lpx, [255, 255, 255], $W - $pad - $lw - $px(10), $bandH - $px(42), 1.2);
         } else {
             imagefilledellipse($im, $W - $px(70), $px(40), $px(420), $px(420), pm_card_fill($c, pm_ex_mix($accent, [255, 255, 255], 0.1)));
             imagefilledellipse($im, $W + $px(60), $bandH - $px(10), $px(300), $px(300), pm_card_fill($c, pm_ex_mix($accent, [0, 0, 0], 0.08)));
         }
         imagefilledrectangle($im, 0, $bandH, $W, $H, pm_card_fill($c, $paper)); // the shapes stay inside the band
         $textW = $heroPic !== '' ? (int)round($W * 0.6) - $pad : $W - 2 * $pad; // over a picture the words keep to the coloured side
+        $show = (array)($ad['show'] ?? []) + array_fill_keys(array_keys(PM_EX_PARTS), true);
         $y = $px(48);
         $logo = function_exists('pm_logo_path') ? pm_logo_path() : '';
-        if ($logo !== '' && ($li = @imagecreatefrompng($logo))) {
+        if (!$show['logo']) {
+            $y = $px(56);
+        } elseif ($logo !== '' && ($li = @imagecreatefrompng($logo))) {
             $lh = $px(64);
             $lw = min($px(240), (int)round(imagesx($li) * $lh / max(1, imagesy($li))));
             $lh = (int)round(imagesy($li) * $lw / max(1, imagesx($li)));
@@ -675,18 +681,19 @@ function pm_ex_draw(string $brand, array $ad, int $W, int $H, string $file): str
             pm_card_draw($c, $sl, $f['sans'], $spx, pm_ex_mix($on, $accent, 0.1), $pad, $y + $px(10), 1.25);
         }
         // the sections below share what is left
-        $footH = $px(58);
-        $ctaH = (int)round($H * 0.135);
+        $footH = $show['foot'] ? $px(58) : $px(30);
+        $ctaH = $show['cta'] ? (int)round($H * 0.135) : 0;
         $ctaTop = $H - $footH - $ctaH;
-        $goalH = $ad['goal'] !== '' ? $px(64) : 0;
+        $goalH = $show['goal'] && $ad['goal'] !== '' ? $px(64) : 0;
         $top = $bandH + $px(40);
         $avail = $ctaTop - $px(26) - $goalH - $top;
         $nSteps = count($ad['steps']);
-        $rowsG = (int)ceil(count($ad['gets']) / 2);
+        $rowsG = $show['gets'] ? (int)ceil(count($ad['gets']) / 2) : 0;
         $labH = $px(52);
-        $stepsH = (int)round(($avail - 2 * $labH) * ($stepPics ? 0.62 : $nSteps / ($nSteps + $rowsG * 0.95)));
-        $stepsH = min($stepsH, $avail - 2 * $labH - $px(22) - ($rowsG * $px(84) + max(0, $rowsG - 1) * $px(18))); // what they get keeps room for two lines a tile
-        $getsH = $avail - 2 * $labH - $stepsH - $px(22);
+        $labs = $rowsG ? 2 : 1;
+        $stepsH = $rowsG ? (int)round(($avail - 2 * $labH) * ($stepPics ? 0.62 : $nSteps / ($nSteps + $rowsG * 0.95))) : (int)min($avail - $labH, ($stepPics ? $px(420) : $nSteps * $px(150)));
+        $rowsG && $stepsH = min($stepsH, $avail - 2 * $labH - $px(22) - ($rowsG * $px(84) + max(0, $rowsG - 1) * $px(18))); // what they get keeps room for two lines a tile
+        $getsH = $avail - $labs * $labH - $stepsH - $px(22);
         $label = function (string $t, int $y) use ($c, $f, $accent, $pad, $px) {
             pm_card_spaced($c, mb_strtoupper($t), $px(22), $accent, $pad, $y, (int)max(1, 2 * $px(1)));
             imagefilledrectangle($c['im'], $pad, $y + $px(34), $pad + $px(46), $y + $px(38), pm_card_fill($c, $accent));
@@ -767,7 +774,7 @@ function pm_ex_draw(string $brand, array $ad, int $W, int $H, string $file): str
         }
         // what you get: tiles
         $gTop = $y0 + $stepsH + $px(22);
-        $label('What you get', $gTop);
+        $rowsG && $label('What you get', $gTop);
         $gy = $gTop + $labH;
         $gap = $px(18);
         $cols = count($ad['gets']) === 1 ? 1 : 2;
@@ -776,10 +783,10 @@ function pm_ex_draw(string $brand, array $ad, int $W, int $H, string $file): str
         $idG = (int)min($px(64), $tileH * 0.55);
         $gw = $tileW - $px(22) - $idG - $px(18) - $px(18);
         $gpxAll = $px(29);
-        foreach ($ad['gets'] as $g) { // one text size for every tile: the longest decides
+        foreach ($rowsG ? $ad['gets'] : [] as $g) { // one text size for every tile: the longest decides
             $gpxAll = min($gpxAll, pm_card_fit((string)$g['text'], $f['sansb'], $px(29), $px(18), $gw, $tileH - $px(24), 1.2)[0]);
         }
-        foreach ($ad['gets'] as $i => $g) {
+        foreach ($rowsG ? $ad['gets'] : [] as $i => $g) {
             $col = $i % $cols;
             $row = intdiv($i, $cols);
             $x1 = $pad + $col * ($tileW + $gap);
@@ -792,27 +799,29 @@ function pm_ex_draw(string $brand, array $ad, int $W, int $H, string $file): str
             pm_card_draw($c, $gl, $f['sansb'], $gpx, $ink, $gx, $y1 + (int)(($tileH - count($gl) * $gpx * 1.2) / 2), 1.2);
         }
         // our goal
-        if ($ad['goal'] !== '') {
+        if ($goalH > 0) {
             $goalY = $ctaTop - $px(20) - $goalH;
             [$opx, $ol] = pm_card_fit('Our goal: ' . $ad['goal'], $f['serif'], $px(30), $px(19), $W - 2 * $pad, $goalH - $px(8), 1.2);
             pm_card_draw($c, $ol, $f['serif'], $opx, $deep, $pad, $goalY + (int)(($goalH - count($ol) * $opx * 1.2) / 2), 1.2, 'center', $W - 2 * $pad);
         }
         // the call to action
-        pm_card_rrect($c, $pad, $ctaTop, $W - $pad, $ctaTop + $ctaH - $px(8), $px(30), $accent);
+        $show['cta'] && pm_card_rrect($c, $pad, $ctaTop, $W - $pad, $ctaTop + $ctaH - $px(8), $px(30), $accent);
         $qr = $ctaH - $px(40);
-        $hasQr = pm_camp_qr($im, (string)$cta['link'], $W - $pad - $px(16) - $qr, $ctaTop + $px(16), $qr);
+        $hasQr = $show['cta'] && $show['qr'] && pm_camp_qr($im, (string)$cta['link'], $W - $pad - $px(16) - $qr, $ctaTop + $px(16), $qr);
         $cw = $W - 2 * $pad - $px(64) - ($hasQr ? $qr + $px(24) : 0);
         $l2 = $cta['phone'] !== '' ? 'WhatsApp ' . $cta['phone'] : preg_replace('#^https?://(www\.)?#i', '', (string)$cta['site']);
         [$apx, $al] = pm_card_fit((string)($ad['cta'] ?: $cta['short']), $f['serifb'], $px(50), $px(26), $cw, (int)(($ctaH - $px(8)) * 0.55), 1.08);
         $bh = (int)(count($al) * $apx * 1.08) + ($l2 !== '' ? $px(48) : 0);
         $ty = $ctaTop + (int)(($ctaH - $px(8) - $bh) / 2);
-        $ty = pm_card_draw($c, $al, $f['serifb'], $apx, $on, $pad + $px(32), $ty, 1.08);
-        if ($l2 !== '') {
-            [$lpx, $ll] = pm_card_fit($l2, $f['sansb'], $px(32), $px(18), $cw, $px(42), 1.15);
-            pm_card_draw($c, array_slice($ll, 0, 1), $f['sansb'], $lpx, $on, $pad + $px(32), $ty + $px(8), 1.15);
+        if ($show['cta']) {
+            $ty = pm_card_draw($c, $al, $f['serifb'], $apx, $on, $pad + $px(32), $ty, 1.08);
+            if ($l2 !== '') {
+                [$lpx, $ll] = pm_card_fit($l2, $f['sansb'], $px(32), $px(18), $cw, $px(42), 1.15);
+                pm_card_draw($c, array_slice($ll, 0, 1), $f['sansb'], $lpx, $on, $pad + $px(32), $ty + $px(8), 1.15);
+            }
         }
-        $foot = implode('   ·   ', array_filter([preg_replace('#^https?://(www\.)?#i', '', rtrim((string)($s['website'] ?? ''), '/')), (string)($s['email'] ?? ''), $stepPics ? 'Illustrations made with AI' : '']));
-        if ($foot !== '') {
+        $foot = implode('   ·   ', array_filter([preg_replace('#^https?://(www\.)?#i', '', rtrim((string)($s['website'] ?? ''), '/')), (string)($s['email'] ?? '')]));
+        if ($show['foot'] && $foot !== '') {
             [$fpx, $fl] = pm_card_fit($foot, $f['sans'], $px(24), $px(15), $W - 2 * $pad, $px(32), 1.2);
             pm_card_draw($c, array_slice($fl, 0, 1), $f['sans'], $fpx, $soft, $pad, $H - $footH + $px(12), 1.2, 'center', $W - 2 * $pad);
         }
@@ -866,7 +875,7 @@ function pm_ex_back(string $msg, string $kind = 'ok', string $id = ''): array
 function pm_ex_pics_msg(): string
 {
     $n = (array)($GLOBALS['PM_EX_PICS_NOTE'] ?? []);
-    return trim(((int)($n['made'] ?? 0) > 0 ? (int)$n['made'] . ' new AI illustration' . ((int)$n['made'] === 1 ? '' : 's') . ' made. ' : '') . (string)($n['why'] ?? ''));
+    return trim(((int)($n['made'] ?? 0) > 0 ? (int)$n['made'] . ' new illustration' . ((int)$n['made'] === 1 ? '' : 's') . ' made. ' : '') . (string)($n['why'] ?? ''));
 }
 
 function pm_do_ex_meet(string $vb): array
@@ -979,6 +988,7 @@ function pm_do_ex_save(string $vb): array
     $picLine = fn($v) => pm_swarm_clean(preg_replace('~https?://\S+~', '', (string)$v), 240);
     $ad['pics'] = isset($_POST['pic_hero']) ? ['hero' => $picLine($_POST['pic_hero']), 'steps' => array_slice(array_map($picLine, preg_split('/\R/', (string)($_POST['pic_steps'] ?? '')) ?: []), 0, count($ad['steps']))]
         : (array)($x['ad']['pics'] ?? []); // the owner's own picture descriptions, else the ones there were
+    $ad['show'] = isset($_POST['show_set']) ? array_map(fn($k) => !empty($_POST['show'][$k]), array_combine(array_keys(PM_EX_PARTS), array_keys(PM_EX_PARTS))) : (array)($x['ad']['show'] ?? []);
     $x = pm_ex_put($vb, $id, function (array $a) use ($ad) {
         if ($ad != $a['ad']) {
             $a['prev'][] = $a['ad'];

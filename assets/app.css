@@ -411,6 +411,7 @@ textarea.cc-new { box-shadow:0 0 0 3px color-mix(in srgb, var(--dept) 35%, trans
 .expic .btns { margin-top:var(--s-3); }
 .expics { display:flex; gap:var(--s-2); align-items:center; flex-wrap:wrap; } .expics select { width:auto; max-width:100%; height:var(--ctl-sm); }
 .exchat .cc-log { max-height:420px; }
+.exshow { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:0 var(--s-3); margin-bottom:var(--s-2); }
 @media (max-width:860px) { .exgrid { grid-template-columns:1fr; } }
 
 /* ===== 6. pages ===== */
