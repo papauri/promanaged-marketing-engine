@@ -21,6 +21,12 @@ const PM_EX_ICONS = ['user' => 'a person (sign up, an account)', 'users' => 'peo
     'box' => 'a parcel (sourcing, delivery)', 'bolt' => 'a lightning bolt (fast, easy)', 'pin' => 'a map pin (a place, directions)', 'chart' => 'rising bars (growth, more bookings or sales)',
     'game' => 'a game controller (gaming gear)', 'heart' => 'a heart (care, local, together)'];
 
+/** How the ad is illustrated: drawn icons only (free), or AI illustrations (each new one about 5 US cents; the same description is never paid twice). */
+const PM_EX_PICS = ['icons' => 'Drawn icons (free)', 'hero' => 'An AI illustration at the top (about 5 US cents)', 'all' => 'AI illustrations at the top and for every step (about 20 to 25 US cents)'];
+
+/** What every AI picture description must keep to (the honesty rules of lib/sx_aiimage.php, in words the team can follow). */
+const PM_EX_PIC_RULES = 'Each picture description is one short scene for a friendly flat illustration: generic places, objects and hands or silhouettes only, never this business\'s own rooms, buildings, products, staff or customers, never a real person, and no words, numbers or logos in the picture.';
+
 /* ---------------- storage ---------------- */
 
 function pm_ex_all(string $brand): array
@@ -213,7 +219,82 @@ function pm_ex_clean(array $ad, array $plain, string $src): array
         $out[$k] = count($rows) >= $min ? $rows : (array)$plain[$k];
     }
     $out['caption'] = trim((string)($ad['caption'] ?? ''));
+    $pics = (array)($ad['pics'] ?? $plain['pics'] ?? []);
+    $pic = fn($v) => pm_swarm_clean(preg_replace('~https?://\S+~', '', (string)$v), 240);
+    $out['pics'] = ['hero' => $pic($pics['hero'] ?? ''), 'steps' => array_slice(array_map($pic, array_values((array)($pics['steps'] ?? []))), 0, count($out['steps']))];
     return $out;
+}
+
+/** Descriptions for the pictures the ad still lacks, made by code (no AI call): the top from the business and the headline, each step from its words. */
+function pm_ex_pics_fill(string $brand, array $ad): array
+{
+    $p = (array)($ad['pics'] ?? []) + ['hero' => '', 'steps' => []];
+    if (trim((string)$p['hero']) === '') {
+        $p['hero'] = function_exists('pm_aiimg_brief') ? pm_aiimg_brief($brand, (string)$ad['headline']) : (string)$ad['headline'];
+    }
+    foreach ($ad['steps'] as $i => $st) {
+        if (trim((string)($p['steps'][$i] ?? '')) === '') {
+            $p['steps'][$i] = 'A simple, friendly picture of this step: ' . $st['title'] . ' (' . $st['text'] . '), shown with generic objects and hands only';
+        }
+    }
+    $p['steps'] = array_slice(array_values((array)$p['steps']), 0, count($ad['steps']));
+    $ad['pics'] = $p;
+    return $ad;
+}
+
+/**
+ * The AI pictures the ad's mode asks for, made (or taken from the cache: the same description is never paid twice).
+ * Returns ['hero' => path|'', 'steps' => [i => path|''], 'made' => new pictures paid for, 'why' => what went wrong or ''].
+ */
+function pm_ex_pictures(string $brand, array $x): array
+{
+    $mode = (string)($x['pics_mode'] ?? 'icons');
+    $out = ['hero' => '', 'steps' => [], 'made' => 0, 'why' => ''];
+    if ($mode === 'icons' || !function_exists('pm_aiimg_make') || !pm_aiimg_ready($brand)) {
+        $out['why'] = $mode !== 'icons' ? 'AI pictures are not set up (a Gemini key is needed), so the drawn icons are used.' : '';
+        return $out;
+    }
+    @set_time_limit(300);
+    $ad = pm_ex_pics_fill($brand, (array)$x['ad']);
+    $make = function (string $brief, int $w, int $h, string $style) use ($brand, &$out): string {
+        $r = (array)pm_aiimg_make($brand, $brief, $w, $h, $style);
+        if (!empty($r['ok']) && !empty($r['path']) && is_file((string)$r['path'])) {
+            $out['made'] += empty($r['cached']) ? 1 : 0;
+            return (string)$r['path'];
+        }
+        $out['why'] = $out['why'] ?: 'A picture did not come back' . (($r['why'] ?? '') !== '' ? ' (' . mb_substr((string)$r['why'], 0, 120) . ')' : '') . ', so a drawn icon stands in.';
+        return '';
+    };
+    $out['hero'] = $make((string)$ad['pics']['hero'], 1600, 640, 'illustration');
+    if ($mode === 'all') {
+        foreach ($ad['steps'] as $i => $st) {
+            $out['steps'][$i] = $make((string)$ad['pics']['steps'][$i], 640, 640, 'spot');
+        }
+    }
+    return $out;
+}
+
+/** Copies a picture into a square with rounded corners (the corners take the page colour). */
+function pm_ex_round_copy($im, $src, int $x, int $y, int $size, int $r, array $paper): void
+{
+    $sw = imagesx($src);
+    $sh = imagesy($src);
+    $side = min($sw, $sh);
+    imagecopyresampled($im, $src, $x, $y, (int)(($sw - $side) / 2), (int)(($sh - $side) / 2), $size, $size, $side, $side);
+    $col = imagecolorallocate($im, $paper[0], $paper[1], $paper[2]);
+    for ($k = 0; $k < 4; $k++) { // the four corners: 0 top left, 1 top right, 2 bottom left, 3 bottom right
+        $ccx = $k % 2 ? $x + $size - $r : $x + $r;
+        $ccy = $k < 2 ? $y + $r : $y + $size - $r;
+        for ($yy = 0; $yy < $r; $yy++) {
+            for ($xx = 0; $xx < $r; $xx++) {
+                $px = $k % 2 ? $ccx + $xx : $ccx - $xx - 1;
+                $py = $k < 2 ? $ccy - $yy - 1 : $ccy + $yy;
+                if (($xx + 0.5) ** 2 + ($yy + 0.5) ** 2 > $r * $r) {
+                    imagesetpixel($im, $px, $py, $col);
+                }
+            }
+        }
+    }
 }
 
 /** The post text that goes with the picture, by code: the promise, the steps, what they get, how to reach us. */
@@ -232,7 +313,7 @@ function pm_ex_caption(string $brand, array $ad): string
  * The meeting: the heads decide the ad together in one cheap AI call. Returns ['ad', 'lines' => [[dept, says]], 'why', 'ai' => bool].
  * Without the AI (or when it fails) the ad is built from the facts by code and the meeting says so.
  */
-function pm_ex_meet(string $brand, string $audience, string $focus): array
+function pm_ex_meet(string $brand, string $audience, string $focus, string $mode = 'icons'): array
 {
     $was = pm_brand();
     pm_brand_set($brand);
@@ -259,7 +340,10 @@ function pm_ex_meet(string $brand, string $audience, string $focus): array
             . 'Rules: use only the facts, the offerings and the steps given: no number, price, time, place, feature or claim they do not give, no link, no "best" or "guaranteed", no exclamation marks. '
             . 'The steps say how easy it is to start, from the steps given when there are any. Headline at most 8 words, sub at most 14, each step title at most 4 words and text at most 12, each point at most 8 words, the goal at most 14, the call to action at most 6 words and an invitation to take the first step (the WhatsApp number or website is printed under it, so do not repeat it). '
             . 'Icons only from: ' . implode(', ', array_map(fn($k, $v) => "$k ($v)", array_keys(PM_EX_ICONS), PM_EX_ICONS)) . '. '
-            . 'Reply JSON only: {"lines":[{"who":"social|director|replies|writers|advisor","says":""}],"why":"one line: why this ad","ad":{"eyebrow":"who it is for","headline":"","sub":"","steps":[{"icon":"","title":"","text":""}],"gets":[{"icon":"","text":""}],"goal":"","cta":""}}';
+            . ($mode !== 'icons' ? 'The ad also carries AI illustrations, because pictures speak louder than words: in "pics" describe the picture for the top (the feeling of the promise, a wide scene) '
+                . ($mode === 'all' ? 'and one picture per step, in the same order (what that step looks like, simply)' : '') . '. ' . PM_EX_PIC_RULES . ' ' : '')
+            . 'Reply JSON only: {"lines":[{"who":"social|director|replies|writers|advisor","says":""}],"why":"one line: why this ad","ad":{"eyebrow":"who it is for","headline":"","sub":"","steps":[{"icon":"","title":"","text":""}],"gets":[{"icon":"","text":""}],"goal":"","cta":""'
+            . ($mode !== 'icons' ? ',"pics":{"hero":""' . ($mode === 'all' ? ',"steps":[""]' : '') . '}' : '') . '}}';
         $user = json_encode(array_filter(['audience' => $audience, 'focus' => $focus !== '' ? ($offs[$focus] ?? $focus) : 'everything we offer', 'offerings' => array_values($offs),
             'steps_our_proposals_promise' => array_map(fn($s) => $s[0] . ': ' . $s[1], pm_ex_steps_source($brand, $focus)) ?: null,
             'directors_focus_today' => mb_substr((string)($dir['headline'] ?? $dir['summary'] ?? ''), 0, 300) ?: null, 'what_customers_tell_us' => array_slice($asked, 0, 6) ?: null,
@@ -302,8 +386,9 @@ function pm_ex_chat_turn(string $brand, array $x, string $ask): array
             . 'When the owner asks for a change, make it and return the WHOLE ad with the change in "ad" (keep what they did not ask to change). When they only ask a question, answer it and set "ad" to null. '
             . 'Same rules as the meeting: only our facts and what the owner says; no new numbers, prices, times, claims or links; headline at most 8 words, sub at most 14, 3 or 4 steps (title at most 4 words, text at most 12), '
             . '2 to 4 points of at most 8 words, goal at most 14, call to action at most 6. "caption" is the post text that goes with the picture: keep it, or change it if asked. Icons only from: ' . implode(', ', array_keys(PM_EX_ICONS)) . '. '
+            . (($x['pics_mode'] ?? 'icons') !== 'icons' ? 'The ad carries AI illustrations described in "pics" (the top, and one per step when there are step pictures): change a description when the owner asks for a different picture, and keep the others word for word (each new picture costs money). ' . PM_EX_PIC_RULES . ' ' : '')
             . '"say": one or two short sentences to the owner, first person. "lesson": only when the wish should hold for everything we write, as one short standing rule; else empty. '
-            . 'Reply JSON only: {"say":"","ad":{"eyebrow":"","headline":"","sub":"","steps":[{"icon":"","title":"","text":""}],"gets":[{"icon":"","text":""}],"goal":"","cta":"","caption":""},"lesson":"","lesson_for":"voice|never"}';
+            . 'Reply JSON only: {"say":"","ad":{"eyebrow":"","headline":"","sub":"","steps":[{"icon":"","title":"","text":""}],"gets":[{"icon":"","text":""}],"goal":"","cta":"","caption":"","pics":{"hero":"","steps":[""]}},"lesson":"","lesson_for":"voice|never"}';
         $user = json_encode(['the_ad_now' => $x['ad'], 'chat_so_far' => $chat ?: null, 'owner_now' => mb_substr($ask, 0, 600)], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $GLOBALS['PM_AI_REF'] = 'explainer_chat';
         $out = pm_agent_json(pm_claude($system, $user, false, 1400, 'cheap'));
@@ -523,12 +608,35 @@ function pm_ex_draw(string $brand, array $ad, int $W, int $H, string $file): str
         $pad = (int)round(64 * $k);
         $px = fn(float $v) => (int)round($v * $k);
         $cta = pm_camp_cta($brand, []);
-        // the band
-        $bandH = (int)round($H * ($ad['sub'] !== '' ? 0.275 : 0.245));
+        $heroPic = (string)($ad['_hero'] ?? '');
+        $stepPics = array_filter((array)($ad['_steps'] ?? []), fn($p) => $p !== '' && is_file($p));
+        $load = fn(string $p) => $p !== '' && is_file($p) ? (@imagecreatefromstring((string)file_get_contents($p)) ?: null) : null;
+        // the band: the AI illustration under a wash of the brand colour (strong where the words are), or the brand colour with soft shapes
+        $heroIm = $load($heroPic);
+        $heroPic = $heroIm ? $heroPic : '';
+        $bandH = (int)round($H * ($heroIm ? ($stepPics ? 0.265 : 0.3) : ($ad['sub'] !== '' ? 0.275 : 0.245)));
         imagefilledrectangle($im, 0, 0, $W, $bandH, pm_card_fill($c, $accent));
-        imagefilledellipse($im, $W - $px(70), $px(40), $px(420), $px(420), pm_card_fill($c, pm_ex_mix($accent, [255, 255, 255], 0.1)));
-        imagefilledellipse($im, $W + $px(60), $bandH - $px(10), $px(300), $px(300), pm_card_fill($c, pm_ex_mix($accent, [0, 0, 0], 0.08)));
+        if ($heroIm) {
+            $sw = imagesx($heroIm);
+            $sh = imagesy($heroIm);
+            $sc = max($W / $sw, $bandH / $sh);
+            imagecopyresampled($im, $heroIm, 0, 0, (int)max(0, ($sw - $W / $sc) / 2), (int)max(0, ($sh - $bandH / $sc) / 2), $W, $bandH, (int)ceil($W / $sc), (int)ceil($bandH / $sc));
+            imagedestroy($heroIm);
+            for ($xx = 0; $xx < $W; $xx++) { // opaque behind the words on the left, opening up to the picture on the right
+                $alpha = (int)round(127 * max(0, min(1, ($xx / $W - 0.34) / 0.5)) * 0.82);
+                imageline($im, $xx, 0, $xx, $bandH, imagecolorallocatealpha($im, $accent[0], $accent[1], $accent[2], min(127, $alpha)));
+            }
+            $lbl = 'AI illustration';
+            $lpx = $px(18);
+            $lw = pm_card_tw($f['sans'], $lpx, $lbl);
+            pm_card_rrect($c, $W - $pad - $lw - $px(20), $bandH - $px(46), $W - $pad, $bandH - $px(14), $px(14), [20, 20, 20]);
+            pm_card_draw($c, [$lbl], $f['sans'], $lpx, [255, 255, 255], $W - $pad - $lw - $px(10), $bandH - $px(42), 1.2);
+        } else {
+            imagefilledellipse($im, $W - $px(70), $px(40), $px(420), $px(420), pm_card_fill($c, pm_ex_mix($accent, [255, 255, 255], 0.1)));
+            imagefilledellipse($im, $W + $px(60), $bandH - $px(10), $px(300), $px(300), pm_card_fill($c, pm_ex_mix($accent, [0, 0, 0], 0.08)));
+        }
         imagefilledrectangle($im, 0, $bandH, $W, $H, pm_card_fill($c, $paper)); // the shapes stay inside the band
+        $textW = $heroPic !== '' ? (int)round($W * 0.6) - $pad : $W - 2 * $pad; // over a picture the words keep to the coloured side
         $y = $px(48);
         $logo = function_exists('pm_logo_path') ? pm_logo_path() : '';
         if ($logo !== '' && ($li = @imagecreatefrompng($logo))) {
@@ -550,20 +658,20 @@ function pm_ex_draw(string $brand, array $ad, int $W, int $H, string $file): str
         if ($eb !== '') {
             $gapE = (int)max(1, 2 * $k);
             $epx = $px(24);
-            while ($epx > $px(15) && pm_card_spaced_w($c, $eb, $epx, $gapE) > $W - 2 * $pad) {
+            while ($epx > $px(15) && pm_card_spaced_w($c, $eb, $epx, $gapE) > $textW) {
                 $epx -= 1;
             }
-            while (mb_strlen($eb) > 10 && pm_card_spaced_w($c, $eb, $epx, $gapE) > $W - 2 * $pad) { // still too long: whole words off the end
+            while (mb_strlen($eb) > 10 && pm_card_spaced_w($c, $eb, $epx, $gapE) > $textW) { // still too long: whole words off the end
                 $eb = preg_replace('/\s+\S*$/u', '', $eb);
             }
             pm_card_spaced($c, rtrim($eb, ' ,;:'), $epx, pm_ex_mix($on, $accent, 0.15), $pad, $y, $gapE);
             $y += $px(42);
         }
-        $subH = $ad['sub'] !== '' ? $px(72) : 0;
-        [$hpx, $hl] = pm_card_fit((string)$ad['headline'], $f['serifb'], $px(76), $px(40), $W - 2 * $pad - $px(40), max($px(60), $bandH - $y - $subH - $px(26)), 1.08);
+        $subH = $ad['sub'] !== '' ? $px($heroPic !== '' ? 40 : 72) : 0; // over a picture the headline comes first, the promise takes what is left
+        [$hpx, $hl] = pm_card_fit((string)$ad['headline'], $f['serifb'], $px(76), $px(40), $textW - ($heroPic !== '' ? 0 : $px(40)), max($px(60), $bandH - $y - $subH - $px(26)), 1.08);
         $y = pm_card_draw($c, $hl, $f['serifb'], $hpx, $on, $pad, $y, 1.08);
         if ($ad['sub'] !== '') {
-            [$spx, $sl] = pm_card_fit((string)$ad['sub'], $f['sans'], $px(32), $px(22), $W - 2 * $pad, max($px(30), $bandH - $y - $px(18)), 1.25);
+            [$spx, $sl] = pm_card_fit((string)$ad['sub'], $f['sans'], $px(32), $px(22), $textW, max($px(30), $bandH - $y - $px(18)), 1.25);
             pm_card_draw($c, $sl, $f['sans'], $spx, pm_ex_mix($on, $accent, 0.1), $pad, $y + $px(10), 1.25);
         }
         // the sections below share what is left
@@ -576,7 +684,8 @@ function pm_ex_draw(string $brand, array $ad, int $W, int $H, string $file): str
         $nSteps = count($ad['steps']);
         $rowsG = (int)ceil(count($ad['gets']) / 2);
         $labH = $px(52);
-        $stepsH = (int)round(($avail - 2 * $labH) * ($nSteps / ($nSteps + $rowsG * 0.95)));
+        $stepsH = (int)round(($avail - 2 * $labH) * ($stepPics ? 0.62 : $nSteps / ($nSteps + $rowsG * 0.95)));
+        $stepsH = min($stepsH, $avail - 2 * $labH - $px(22) - ($rowsG * $px(84) + max(0, $rowsG - 1) * $px(18))); // what they get keeps room for two lines a tile
         $getsH = $avail - 2 * $labH - $stepsH - $px(22);
         $label = function (string $t, int $y) use ($c, $f, $accent, $pad, $px) {
             pm_card_spaced($c, mb_strtoupper($t), $px(22), $accent, $pad, $y, (int)max(1, 2 * $px(1)));
@@ -590,14 +699,57 @@ function pm_ex_draw(string $brand, array $ad, int $W, int $H, string $file): str
         $cx = $pad + (int)($d / 2);
         $tx = $pad + $d + $px(30);
         $tw = $W - $tx - $pad;
-        for ($i = 0; $i < $nSteps - 1; $i++) { // the path between the circles, dashed
+        if ($stepPics) { // pictures for the steps: a row of cards, each with its picture, its number, a title and a line
+            $gapS = $px(16);
+            $cardW = (int)floor(($W - 2 * $pad - ($nSteps - 1) * $gapS) / max(1, $nSteps));
+            $img = (int)min($cardW, $stepsH - $px(126));
+            $tpxAll = $px(30);
+            foreach ($ad['steps'] as $st) { // one title size and one text size for every card: the longest decides
+                $tpxAll = min($tpxAll, pm_card_fit((string)$st['title'], $f['sansb'], $px(30), $px(18), $cardW, $px(70), 1.12)[0]);
+            }
+            $titleH = 0;
+            foreach ($ad['steps'] as $st) {
+                $titleH = max($titleH, (int)ceil(min(2, count(pm_card_wrap((string)$st['title'], $f['sansb'], $tpxAll, $cardW))) * $tpxAll * 1.12) + 2);
+            }
+            $txtRoom = max($px(30), $stepsH - $img - $px(14) - $titleH - $px(6));
+            $bpxAll = $px(23);
+            foreach ($ad['steps'] as $st) {
+                $bpxAll = min($bpxAll, pm_card_fit((string)$st['text'], $f['sans'], $px(23), $px(15), $cardW, $txtRoom, 1.2)[0]);
+            }
+            foreach ($ad['steps'] as $i => $st) {
+                $x1 = $pad + $i * ($cardW + $gapS);
+                $ix = $x1 + (int)(($cardW - $img) / 2);
+                $pi = $load((string)($ad['_steps'][$i] ?? ''));
+                pm_card_rrect($c, $ix, $y0, $ix + $img, $y0 + $img, $px(20), $tint);
+                if ($pi) {
+                    pm_ex_round_copy($im, $pi, $ix, $y0, $img, $px(20), $paper);
+                    imagedestroy($pi);
+                } else {
+                    pm_ex_icon($im, (string)$st['icon'], $ix + (int)($img / 2), $y0 + (int)($img / 2), (int)($img * 0.5), $accent, $on, $f);
+                }
+                $nd = $px(46);
+                $ncx = $ix + $px(10) + (int)($nd / 2);
+                $ncy = $y0 + $px(10) + (int)($nd / 2);
+                imagefilledellipse($im, $ncx, $ncy, $nd + $px(6), $nd + $px(6), pm_card_fill($c, $paper));
+                imagefilledellipse($im, $ncx, $ncy, $nd, $nd, pm_card_fill($c, $deep));
+                $num = (string)($i + 1);
+                $npx = $nd * 0.6;
+                pm_card_draw($c, [$num], $f['sansb'], $npx, pm_card_on($deep), $ncx - (int)(pm_card_tw($f['sansb'], $npx, $num) / 2), $ncy - (int)($npx * 0.55), 1.0);
+                $ty = $y0 + $img + $px(14);
+                [$tpx, $tl] = pm_card_fit((string)$st['title'], $f['sansb'], (int)$tpxAll, (int)$tpxAll, $cardW, $titleH, 1.12);
+                pm_card_draw($c, array_slice($tl, 0, 2), $f['sansb'], $tpx, $ink, $x1, $ty, 1.12, 'center', $cardW);
+                [$bpx, $bl] = pm_card_fit((string)$st['text'], $f['sans'], (int)$bpxAll, $px(15), $cardW, $txtRoom, 1.2);
+                pm_card_draw($c, $bl, $f['sans'], $bpx, $soft, $x1, $ty + $titleH + $px(6), 1.2, 'center', $cardW);
+            }
+        }
+        for ($i = 0; !$stepPics && $i < $nSteps - 1; $i++) { // the path between the circles, dashed
             $ya = $y0 + $i * $rowH + (int)($rowH / 2) + (int)($d / 2);
             $yb = $y0 + ($i + 1) * $rowH + (int)($rowH / 2) - (int)($d / 2);
             for ($yy = $ya + $px(6); $yy < $yb - $px(4); $yy += $px(16)) {
                 imagefilledrectangle($im, $cx - $px(3), $yy, $cx + $px(3), min($yb - $px(4), $yy + $px(8)), pm_card_fill($c, pm_ex_mix($accent, [255, 255, 255], 0.45)));
             }
         }
-        foreach ($ad['steps'] as $i => $st) {
+        foreach ($stepPics ? [] : $ad['steps'] as $i => $st) {
             $cy = $y0 + $i * $rowH + (int)($rowH / 2);
             pm_ex_icon($im, (string)$st['icon'], $cx, $cy, $d, $accent, $on, $f);
             $nd = (int)($d * 0.42);
@@ -659,7 +811,7 @@ function pm_ex_draw(string $brand, array $ad, int $W, int $H, string $file): str
             [$lpx, $ll] = pm_card_fit($l2, $f['sansb'], $px(32), $px(18), $cw, $px(42), 1.15);
             pm_card_draw($c, array_slice($ll, 0, 1), $f['sansb'], $lpx, $on, $pad + $px(32), $ty + $px(8), 1.15);
         }
-        $foot = implode('   ·   ', array_filter([preg_replace('#^https?://(www\.)?#i', '', rtrim((string)($s['website'] ?? ''), '/')), (string)($s['email'] ?? '')]));
+        $foot = implode('   ·   ', array_filter([preg_replace('#^https?://(www\.)?#i', '', rtrim((string)($s['website'] ?? ''), '/')), (string)($s['email'] ?? ''), $stepPics ? 'Illustrations made with AI' : '']));
         if ($foot !== '') {
             [$fpx, $fl] = pm_card_fit($foot, $f['sans'], $px(24), $px(15), $W - 2 * $pad, $px(32), 1.2);
             pm_card_draw($c, array_slice($fl, 0, 1), $f['sans'], $fpx, $soft, $pad, $H - $footH + $px(12), 1.2, 'center', $W - 2 * $pad);
@@ -680,8 +832,11 @@ function pm_ex_draw(string $brand, array $ad, int $W, int $H, string $file): str
 function pm_ex_render(string $brand, array $x): string
 {
     $base = pm_ex_dir() . '/' . preg_replace('/[^a-f0-9]/', '', (string)$x['id']);
-    $share = pm_ex_draw($brand, (array)$x['ad'], 1080, 1350, $base . '-share.png');
-    $print = pm_ex_draw($brand, (array)$x['ad'], 1654, 2339, $base . '-print.png');
+    $pics = pm_ex_pictures($brand, $x);
+    $GLOBALS['PM_EX_PICS_NOTE'] = $pics;
+    $ad = (array)$x['ad'] + ['_hero' => $pics['hero'], '_steps' => $pics['steps']];
+    $share = pm_ex_draw($brand, $ad, 1080, 1350, $base . '-share.png');
+    $print = pm_ex_draw($brand, $ad, 1654, 2339, $base . '-print.png');
     if ($print !== '' && class_exists('TCPDF')) {
         try {
             $pdf = new TCPDF('P', 'mm', 'A4', true, 'UTF-8', false);
@@ -707,27 +862,56 @@ function pm_ex_back(string $msg, string $kind = 'ok', string $id = ''): array
 }
 
 /** Call the team together: a new ad for the audience and focus chosen. */
+/** What happened to the AI pictures on the last drawing, for the owner: '' when nothing to say. */
+function pm_ex_pics_msg(): string
+{
+    $n = (array)($GLOBALS['PM_EX_PICS_NOTE'] ?? []);
+    return trim(((int)($n['made'] ?? 0) > 0 ? (int)$n['made'] . ' new AI illustration' . ((int)$n['made'] === 1 ? '' : 's') . ' made. ' : '') . (string)($n['why'] ?? ''));
+}
+
 function pm_do_ex_meet(string $vb): array
 {
-    @set_time_limit(120);
+    @set_time_limit(400);
+    $mode = isset(PM_EX_PICS[$_POST['pics'] ?? '']) ? (string)$_POST['pics'] : 'icons';
     $aud = mb_substr(trim((string)($_POST['audience'] ?? '')), 0, 120) ?: (pm_ex_audiences($vb)[0] ?? '');
     $focus = (string)($_POST['focus'] ?? '');
     $focus = isset(pm_ex_offerings($vb)[$focus]) ? $focus : '';
-    $m = pm_ex_meet($vb, $aud, $focus);
+    $m = pm_ex_meet($vb, $aud, $focus, $mode);
     $id = bin2hex(random_bytes(6));
-    $x = pm_ex_put($vb, '', fn() => ['id' => $id, 'audience' => $aud, 'focus' => $focus, 'ad' => $m['ad'], 'lines' => $m['lines'], 'why' => $m['why'], 'status' => 'draft', 'chat' => [], 'prev' => [],
+    $x = pm_ex_put($vb, '', fn() => ['id' => $id, 'audience' => $aud, 'focus' => $focus, 'pics_mode' => $mode, 'ad' => $m['ad'], 'lines' => $m['lines'], 'why' => $m['why'], 'status' => 'draft', 'chat' => [], 'prev' => [],
         'at' => date('Y-m-d H:i'), 'by' => (string)($GLOBALS['PM_WHO'] ?? ''), 'ai' => $m['ai']]);
     if (!$x || pm_ex_render($vb, $x) === '') {
         return pm_ex_back('The ad was decided but the picture could not be drawn (check that GD and the fonts are there: Operations > Connections).', 'err', $id);
     }
     pm_tb_post($vb, 'social', 'director', 'We made a one-page ad for ' . ($aud ?: 'our audience') . ': "' . $x['ad']['headline'] . '". It waits for the owner\'s approval.', 'ex:' . $id);
-    return pm_ex_back($m['ai'] ? 'The team met and decided the ad. Read it, chat with ' . pm_agent_first('social') . ' to fine-tune it, then approve it.' : $m['lines'][0][1], $m['ai'] ? 'ok' : 'err', $id);
+    return pm_ex_back(trim(($m['ai'] ? 'The team met and decided the ad. Read it, chat with ' . pm_agent_first('social') . ' to fine-tune it, then approve it.' : $m['lines'][0][1]) . ' ' . pm_ex_pics_msg()), $m['ai'] ? 'ok' : 'err', $id);
+}
+
+/** Change how the ad is illustrated (drawn icons, or AI illustrations at the top or everywhere), and draw it again. */
+function pm_do_ex_pics(string $vb): array
+{
+    @set_time_limit(400);
+    $id = preg_replace('/[^a-f0-9]/', '', (string)($_POST['x'] ?? ''));
+    $mode = isset(PM_EX_PICS[$_POST['pics'] ?? '']) ? (string)$_POST['pics'] : 'icons';
+    $x = pm_ex_put($vb, $id, function (array $a) use ($vb, $mode) {
+        if (($a['pics_mode'] ?? 'icons') !== $mode) {
+            $a['pics_mode'] = $mode;
+            $a['status'] = 'draft'; // a changed ad is approved again
+            $mode !== 'icons' && $a['ad'] = pm_ex_pics_fill($vb, (array)$a['ad']);
+        }
+        return $a;
+    });
+    if (!$x) {
+        return pm_ex_back('That ad is gone.', 'err');
+    }
+    pm_ex_render($vb, $x);
+    return pm_ex_back(trim('Drawn again with ' . lcfirst(preg_replace('/ \(.*$/', '', PM_EX_PICS[$mode])) . '. ' . pm_ex_pics_msg()), 'ok', $id);
 }
 
 /** Chat with the head of Social: the ad changes as asked and is redrawn. */
 function pm_do_ex_chat(string $vb): array
 {
-    @set_time_limit(90);
+    @set_time_limit(400);
     $id = preg_replace('/[^a-f0-9]/', '', (string)($_POST['x'] ?? ''));
     $ask = trim((string)($_POST['ask'] ?? ''));
     $x = pm_ex_get($vb, $id);
@@ -755,7 +939,7 @@ function pm_do_ex_chat(string $vb): array
         return $a;
     });
     $r['ad'] && $x && pm_ex_render($vb, $x);
-    return pm_ex_back($r['ad'] ? 'Redrawn.' : 'Answered.', 'ok', $id);
+    return pm_ex_back(trim(($r['ad'] ? 'Redrawn.' : 'Answered.') . ' ' . ($r['ad'] ? pm_ex_pics_msg() : '')), 'ok', $id);
 }
 
 /** The owner's own words for the ad (the form under the picture). */
@@ -792,6 +976,9 @@ function pm_do_ex_save(string $vb): array
         return pm_ex_back('Keep a headline, at least two steps and one thing they get.', 'err', $id);
     }
     $ad['caption'] = trim(str_replace("\r\n", "\n", (string)($_POST['caption'] ?? ''))) ?: pm_ex_caption($vb, $ad);
+    $picLine = fn($v) => pm_swarm_clean(preg_replace('~https?://\S+~', '', (string)$v), 240);
+    $ad['pics'] = isset($_POST['pic_hero']) ? ['hero' => $picLine($_POST['pic_hero']), 'steps' => array_slice(array_map($picLine, preg_split('/\R/', (string)($_POST['pic_steps'] ?? '')) ?: []), 0, count($ad['steps']))]
+        : (array)($x['ad']['pics'] ?? []); // the owner's own picture descriptions, else the ones there were
     $x = pm_ex_put($vb, $id, function (array $a) use ($ad) {
         if ($ad != $a['ad']) {
             $a['prev'][] = $a['ad'];

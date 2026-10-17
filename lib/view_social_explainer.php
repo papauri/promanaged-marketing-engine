@@ -11,6 +11,8 @@ $x = $xid !== '' ? pm_ex_get($vb, $xid) : ($ads[0] ?? null);
 $auds = pm_ex_audiences($vb);
 $offs = pm_ex_offerings($vb);
 $head = pm_agent_first('social');
+$picsOk = function_exists('pm_aiimg_ready') && pm_aiimg_ready($vb);
+$picSel = fn(string $on) => '<select name="pics">' . implode('', array_map(fn($k, $v) => '<option value="' . $k . '"' . ($k === $on ? ' selected' : '') . '>' . pm_h($v) . '</option>', array_keys(PM_EX_PICS), PM_EX_PICS)) . '</select>';
 echo pm_social_nav('explainer');
 ?>
 <div class="card">
@@ -19,10 +21,11 @@ echo pm_social_nav('explainer');
   <form method="post"><?= $fx('ex_meet') ?>
     <div class="row">
       <div><label>Who is it for?</label><input type="text" name="audience" list="exauds" value="<?= pm_h($auds[0] ?? '') ?>" maxlength="120"><datalist id="exauds"><?php foreach ($auds as $a): ?><option value="<?= pm_h($a) ?>"><?php endforeach; ?></datalist></div>
+      <?php if ($picsOk): ?><div><label>Pictures</label><?= $picSel('hero') ?></div><?php endif; ?>
       <div><label>What should it sell?</label><select name="focus"><option value="">Everything we offer</option><?php foreach ($offs as $k => $full): ?><option value="<?= pm_h($k) ?>" title="<?= pm_h($full) ?>"><?= pm_h($k) ?></option><?php endforeach; ?></select></div>
     </div>
     <div class="btns"><button class="btn primary"><?= $ads ? 'Call the team together for a new ad' : 'Call the team together' ?></button>
-      <span class="hint"><?= pm_agents_ready() ? 'One small AI call; the picture is drawn by the app for free.' : 'No AI key yet: the ad is built from your own words.' ?></span></div>
+      <span class="hint"><?= pm_agents_ready() ? 'One small AI call for the words; the ad is drawn by the app for free, and AI illustrations cost what the Pictures choice says.' : 'No AI key yet: the ad is built from your own words.' ?></span></div>
   </form>
   <?php if (count($ads) > 1): ?><nav class="filters mt-2" aria-label="Ads"><?php foreach ($ads as $a): ?><a href="?tab=social&amp;view=explainer&amp;x=<?= pm_h($a['id']) ?>"<?= $x && $a['id'] === $x['id'] ? ' class="on" aria-current="true"' : '' ?>><?= pm_h(mb_strimwidth((string)($a['audience'] ?: 'Ad'), 0, 34, '…')) ?> <span class="muted t-sm"><?= ($a['status'] ?? '') === 'approved' ? '· approved' : '· ' . pm_h(date('j M', strtotime((string)$a['at']))) ?></span></a><?php endforeach; ?></nav><?php endif; ?>
 </div>
@@ -43,6 +46,7 @@ echo pm_social_nav('explainer');
       <?php if (!$approved): ?><form method="post" class="inl"><?= $fx('ex_approve', '<input type="hidden" name="x" value="' . pm_h($x['id']) . '">') ?><button class="btn primary">Approve and put it in the plan</button></form>
       <?php else: ?><span class="chip ok">Approved<?= !empty($x['approved_by']) ? ' by ' . pm_h((string)$x['approved_by']) : '' ?> · <?= pm_h(date('j M H:i', strtotime((string)$x['approved_at']))) ?></span><a class="btn small" href="?tab=social">In the plan for <?= pm_h(date('D j M H:i', strtotime((string)($x['post_when'] ?? 'now')))) ?></a><?php endif; ?>
       <?php if (!empty($files['share'])): ?><a class="btn small" href="<?= $src('share', true) ?>">Download picture</a><?php endif; ?>
+      <?php if ($picsOk): ?><form method="post" class="inl expics"><?= $fx('ex_pics', '<input type="hidden" name="x" value="' . pm_h($x['id']) . '">') ?><?= $picSel((string)($x['pics_mode'] ?? 'icons')) ?><button class="btn small">Draw it with these pictures</button></form><?php endif; ?>
       <?php if (!empty($files['a4'])): ?><a class="btn small" href="<?= $src('a4', true) ?>">A4 PDF to print</a><?php endif; ?>
       <?php if (!empty($x['prev'])): ?><form method="post" class="inl"><?= $fx('ex_undo', '<input type="hidden" name="x" value="' . pm_h($x['id']) . '">') ?><button class="btn small ghost">Undo the last change</button></form><?php endif; ?>
       <form method="post" class="inl"><?= $fx('ex_delete', '<input type="hidden" name="x" value="' . pm_h($x['id']) . '">') ?><button class="btn small danger" data-confirm="Delete this ad?">Delete</button></form>
@@ -76,6 +80,11 @@ echo pm_social_nav('explainer');
         <p class="hint">Icons: <?= pm_h(implode(', ', array_keys(PM_EX_ICONS))) ?>.</p>
         <label>Our goal (optional)</label><input type="text" name="goal" value="<?= pm_h($ad['goal']) ?>" maxlength="130">
         <label>Call to action</label><input type="text" name="cta" value="<?= pm_h($ad['cta']) ?>" maxlength="70">
+        <?php if (($x['pics_mode'] ?? 'icons') !== 'icons'): $pf = pm_ex_pics_fill($vb, $ad)['pics']; ?>
+        <label>The picture at the top <span class="muted">(what the AI illustration shows; a new description makes a new picture, about 5 US cents)</span></label><textarea name="pic_hero" rows="2"><?= pm_h((string)$pf['hero']) ?></textarea>
+        <?php if (($x['pics_mode'] ?? '') === 'all'): ?><label>A picture for each step <span class="muted">(one a line, in the order of the steps)</span></label><textarea name="pic_steps" rows="4"><?= pm_h(implode("\n", (array)$pf['steps'])) ?></textarea><?php endif; ?>
+        <p class="hint">AI illustrations show generic places, objects and hands only, never your own rooms, products or people, and never any words: the app writes every word itself.</p>
+        <?php endif; ?>
         <label>The post text that goes with the picture</label><textarea name="caption" rows="8" data-chat="post"><?= pm_h((string)($ad['caption'] ?? '')) ?></textarea>
         <div class="btns"><button class="btn small primary">Save and redraw</button></div>
       </form>

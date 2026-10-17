@@ -18,6 +18,7 @@ const PM_AIIMG_STYLES = [
     'illustration' => 'a clean modern flat illustration with simple shapes',
     'abstract' => 'an abstract composition of soft gradients, light and simple geometric shapes',
     'flatlay' => 'a tidy top-down flat-lay photograph of generic objects on a plain surface',
+    'spot' => 'a friendly flat vector spot illustration with simple rounded shapes and a few soft colours, one clear subject on a plain very light background',
 ];
 
 /** Gemini's aspect ratios for images: the nearest one is asked for, then the picture is cropped to the exact size. */
@@ -139,14 +140,15 @@ function pm_aiimg_brief(string $brand, string $topic): string
 function pm_aiimg_prompt(string $brand, string $brief, string $style, string $ratio): string
 {
     $accent = pm_aiimg_accent($brand);
-    return 'Create a background picture: ' . trim($brief) . ' Style: ' . (PM_AIIMG_STYLES[$style] ?? PM_AIIMG_STYLES['photo']) . '. '
+    $spot = $style === 'spot'; // one step of a one-page ad: a small picture of one idea, not a background
+    return ($spot ? 'Create an illustration: ' : 'Create a background picture: ') . trim($brief) . ' Style: ' . (PM_AIIMG_STYLES[$style] ?? PM_AIIMG_STYLES['photo']) . '. '
         . ($accent !== '' ? 'Let the colour ' . $accent . ' appear gently in the palette. ' : '')
         . 'Aspect ratio ' . $ratio . '. '
         . 'Rules: absolutely no text, letters, numbers, signs, logos, labels or watermarks anywhere in the picture. '
         . 'It is a generic mood picture, not a picture of any real business, building, product or brand: show no hotel rooms, chalets, huts, venues, shop fronts or products '
         . 'that a viewer could take for the business\'s own. '
         . 'No identifiable people: at most hands, silhouettes or people seen from behind or far away. '
-        . 'Keep a calm area with little detail where words will be placed later.';
+        . ($spot ? 'Centre the subject with plain space around it, so it reads at a small size.' : 'Keep a calm area with little detail where words will be placed later.');
 }
 
 /** Cover-crops PNG/JPEG bytes to exactly $w x $h and saves a PNG. Returns the path or ''. */
