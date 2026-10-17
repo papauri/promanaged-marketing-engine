@@ -24,6 +24,7 @@ function pm_social_view_file(string $view): string
         $view === 'numbers' => 'view_social_numbers.php',
         $view === 'leadposts' => 'view_social_leadposts.php',
         $view === 'campaign' => 'view_social_campaign.php',
+        $view === 'explainer' => 'view_social_explainer.php',
         $view === 'channels' => 'view_social_channels.php',
         $view === 'optimise' => 'view_social_optimise.php',
         $view === 'studio' => 'view_social_studio.php',

@@ -228,6 +228,9 @@ if (isset($_GET['simg']) && preg_match('/^[a-f0-9]{20}$/', (string)$_GET['simg']
     readfile($sf);
     exit;
 }
+if (isset($_GET['explainer']) && function_exists('pm_ex_serve')) { // a one-page ad's picture or PDF (lib/sx_explainer.php)
+    pm_ex_serve();
+}
 if (isset($_GET['camp']) && function_exists('pm_camp_serve')) { // a campaign's flyer files or its zip pack (lib/sx_campaign.php)
     pm_camp_serve();
 }

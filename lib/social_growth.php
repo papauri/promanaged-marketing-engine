@@ -25,6 +25,7 @@ function pm_social_nav(string $on): string
     $GLOBALS['PM_DEPT'] = $GLOBALS['PM_DEPT'] ?? $dept;
     $sub = ['' => 'Plan posts, approve them and watch what goes out.', 'leadposts' => 'Bold posts with a button and a keyword that bring in client details. Free and unlimited.',
         'campaign' => 'One message to every channel at once: feed, stories, carousel, WhatsApp and a flyer, with one approval.',
+        'explainer' => 'One picture that explains the business to one audience, step by step: the heads decide it together, you fine-tune and approve it.',
         'content' => 'What we post about: the mix, proof, ideas and photos, and which old posts to bring back.', 'channels' => 'Where else to post, and today\'s hand-post tasks.',
         'leads' => 'Everyone who came to us on social media, by channel, with the answer or follow-up to send.',
         'shop' => 'Everything we sell, kept here and shown in the Facebook and Instagram Shop through Commerce Manager\'s feed.',

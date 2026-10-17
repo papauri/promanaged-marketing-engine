@@ -405,6 +405,13 @@ textarea.cc-new { box-shadow:0 0 0 3px color-mix(in srgb, var(--dept) 35%, trans
 .pgsteps { margin:var(--s-2) 0 var(--s-3); }
 .pgmsg { display:grid; gap:var(--s-2); margin-top:var(--s-3); padding-top:var(--s-3); border-top:1px solid var(--line); }
 
+/* Social > One-page ad (lib/sx_explainer.php) */
+.exgrid { display:grid; grid-template-columns:minmax(0,5fr) minmax(0,6fr); gap:var(--s-4); align-items:start; }
+.expic img { display:block; width:100%; height:auto; border-radius:12px; border:1px solid var(--line); }
+.expic .btns { margin-top:var(--s-3); }
+.exchat .cc-log { max-height:420px; }
+@media (max-width:860px) { .exgrid { grid-template-columns:1fr; } }
+
 /* ===== 6. pages ===== */
 .layout { display:grid; grid-template-columns:1fr 340px; gap:16px; align-items:start; }
 .sticky { position:sticky; top:16px; }

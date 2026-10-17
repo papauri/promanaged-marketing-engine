@@ -39,7 +39,7 @@ function pm_ui_nav(): array
             'Pipeline' => ['?tab=agents' => 'Leads', '?tab=mailbox' => 'Mailbox', '?tab=whatsapp' => 'WhatsApp', '?tab=targeting' => 'Targeting and messages'],
             'Proposals' => ['?tab=proposal' => 'New proposal', '?tab=history' => 'History', '?tab=template' => 'Template and prices']]],
         'social' => ['label' => 'Social', 'name' => 'Social department', 'job' => 'Publish and answer the audience', 'color' => '#b4532a', 'href' => '?tab=social', 'groups' => [
-            'Publish' => ['?tab=social' => 'Plan', '?tab=social&view=shop' => 'Shop', '?tab=social&view=leadposts' => 'Lead posts', '?tab=social&view=campaign' => 'Campaigns', '?tab=social&view=content' => 'Content', '?tab=social&view=channels' => 'Channels'],
+            'Publish' => ['?tab=social' => 'Plan', '?tab=social&view=shop' => 'Shop', '?tab=social&view=leadposts' => 'Lead posts', '?tab=social&view=campaign' => 'Campaigns', '?tab=social&view=explainer' => 'One-page ad', '?tab=social&view=content' => 'Content', '?tab=social&view=channels' => 'Channels'],
             'Community' => ['?tab=social&view=scout' => 'Scouting', '?tab=social&view=leads' => 'Social leads', '?tab=social&view=inbox' => 'Inbox', '?tab=social&view=page' => 'Page posts', '?tab=social&view=growth' => 'Playbook'],
             'Paid' => ['?tab=social&view=ads' => 'Ads', '?tab=social&view=gads' => 'Google Ads']]],
         'brand' => ['label' => 'Brand', 'name' => 'Brand and creative department', 'job' => 'Look and sound right everywhere', 'color' => '#8a6a2f', 'href' => '?tab=social&view=studio', 'groups' => [
