@@ -17,7 +17,7 @@ const PM_HD_WHERE = ['leads' => ['Leads', '?tab=agents'], 'followups' => ['Follo
     'profiles' => ['Profiles', '?tab=social&view=optimise'], 'ads' => ['Google Ads', '?tab=social&view=gads'], 'targeting' => ['Targeting', '?tab=targeting']];
 
 /** The heads who take moves. */
-const PM_HD_DEPTS = ['director', 'scouts', 'research', 'writers', 'followup', 'replies', 'social'];
+const PM_HD_DEPTS = ['director', 'scouts', 'research', 'contact', 'writers', 'sender', 'followup', 'replies', 'social'];
 
 function pm_hd_state(string $brand): array
 {
@@ -112,6 +112,9 @@ function pm_hd_hold(string $brand, bool $force = false, string $by = 'scheduler'
         return 'director';
     };
     $clean = fn($v, int $n) => function_exists('pm_swarm_clean') ? pm_swarm_clean($v, $n) : mb_substr(trim(strip_tags(is_scalar($v) ? (string)$v : '')), 0, $n);
+    if (is_array($out) && array_is_list($out)) { // the moves alone, without the wrapper
+        $out = ['moves' => $out];
+    }
     $moves = [];
     foreach ((array)($out['moves'] ?? []) as $m) {
         $what = $clean($m['what'] ?? '', 220);
