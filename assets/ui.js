@@ -19,11 +19,21 @@
       closeAll(d);
       d.classList.toggle('open', on);
       b.setAttribute('aria-expanded', on ? 'true' : 'false');
+      if (on) fit(d);
       e.preventDefault();
       return;
     }
     if (!(e.target.closest && e.target.closest('.dd .menu'))) closeAll();
   });
+  /* the app rail: a department's flyout opens beside its tile, lifted so it stays inside the window */
+  function fit(d) {
+    var m = d.closest('.apprail') && d.querySelector('.menu');
+    if (!m || window.innerWidth <= 860) return;
+    m.style.top = '';
+    var r = m.getBoundingClientRect(), over = r.bottom - (window.innerHeight - 8);
+    if (over > 0) m.style.top = -Math.min(over, Math.max(0, r.top - 56)) + 'px';
+  }
+  document.querySelectorAll('.apprail .navdd').forEach(function (d) { d.addEventListener('mouseenter', function () { fit(d); }); });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       var open = document.querySelector('.dd.open > .ddbtn');

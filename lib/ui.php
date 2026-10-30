@@ -2,9 +2,9 @@
 /**
  * The shared look of every screen. The firm is organised as departments, and every screen belongs to one:
  *   Overview (the agency desk), Sales, Social, Brand, Insights, Operations.
- * One registry (pm_ui_nav) says which pages each department owns; the top bar, the department label in the page header, the tab strip inside a department and the colour of the screen all come
- * from it, so they cannot drift apart.
- *   pm_ui_topbar($ctx)        the sticky bar at the top: business switcher, one entry per department, status
+ * One registry (pm_ui_nav) says which pages each department owns; the app rail, the department label in the page header and the tab strip inside a department all come
+ * from it, so they cannot drift apart. One colour everywhere: the business's, made safe for white text (pm_ui_safe_accent).
+ *   pm_ui_topbar($ctx)        the header (business switcher, search, status, account) and the app rail after it (one tile per department)
  *   pm_ui_dept_of($tab,$view) which department a screen belongs to
  *   pm_ui_dept_tabs($dept)    the pages of a department that live inside the Social screen, as tab-strip items
  *   pm_ui_tabs($items, $on)   the underline tabs under a page header (a department's pages, Proposals)
@@ -257,16 +257,39 @@ function pm_ui_accent(array $settings, string $b): string
     return preg_match('/^#[0-9a-fA-F]{6}$/', $c) ? $c : ($b === 'travel' ? '#047857' : '#17375E');
 }
 
-/** The business menu: who the screens are for, and the way to add another. */
+/** The one accent of the screens: the business colour, darkened (mixed with black in steps) until white text on it reads at 4.5:1 or better. */
+function pm_ui_safe_accent(string $hex): string
+{
+    if (!preg_match('/^#?([0-9a-fA-F]{6})$/', $hex, $m)) {
+        return '#17375e';
+    }
+    $rgb = array_map('hexdec', str_split($m[1], 2));
+    $lin = fn(float $c) => ($c /= 255) <= 0.03928 ? $c / 12.92 : (($c + 0.055) / 1.055) ** 2.4;
+    for ($t = 0.0; $t <= 1.0; $t += 0.05) {
+        $c = array_map(fn($v) => (int)round($v * (1 - $t)), $rgb);
+        $l = 0.2126 * $lin($c[0]) + 0.7152 * $lin($c[1]) + 0.0722 * $lin($c[2]);
+        if (1.05 / ($l + 0.05) >= 4.5) {
+            return sprintf('#%02x%02x%02x', ...$c);
+        }
+    }
+    return '#000000';
+}
+
+/** The business menu behind the app launcher (the waffle): who the screens are for, and the way to add another. */
 function pm_ui_biz_menu(array $settings, string $vb, string $tab, string $view): string
 {
     $keep = $tab === 'business' ? 'home' : $tab;
     $logo = pm_brand_asset($vb, 'logo');
-    $hasLogo = is_file(PM_ROOT . '/' . $logo);
-    $h = '<div class="dd biz"><button type="button" class="ddbtn bizbtn" aria-haspopup="true" aria-expanded="false">'
-        . ($hasLogo ? '<img class="' . ($vb === 'travel' ? 'sq' : '') . '" src="' . pm_h($logo) . '?v=' . (int)@filemtime(PM_ROOT . '/' . $logo) . '" alt="">' : pm_ui_dot(pm_ui_accent($settings, $vb)))
-        . '<span class="bizname">' . pm_h(pm_brand_name($vb)) . '</span><span class="caret"></span></button>'
-        . '<div class="menu" role="menu"><div class="menuhd">Working on</div>';
+    $waffle = '<svg class="ico" viewBox="0 0 20 20" width="20" height="20" fill="currentColor" aria-hidden="true">';
+    foreach ([3, 10, 17] as $y) {
+        foreach ([3, 10, 17] as $x) {
+            $waffle .= '<circle cx="' . $x . '" cy="' . $y . '" r="1.7"/>';
+        }
+    }
+    $h = '<div class="dd biz"><button type="button" class="ddbtn bizbtn" aria-haspopup="true" aria-expanded="false" aria-label="Switch business" title="Switch business">' . $waffle . '</svg></button>'
+        . '<div class="menu" role="menu">'
+        . (is_file(PM_ROOT . '/' . $logo) ? '<div class="bizlogo"><img class="' . ($vb === 'travel' ? 'sq' : '') . '" src="' . pm_h($logo) . '?v=' . (int)@filemtime(PM_ROOT . '/' . $logo) . '" alt=""></div>' : '')
+        . '<div class="menuhd">Working on</div>';
     foreach (pm_user_brands() as $bid) { // only the businesses this person may open
         $href = '?tab=' . $keep . ($view !== '' && $tab === 'social' ? '&view=' . $view : '') . '&brand=' . $bid;
         $h .= '<a role="menuitem" href="' . pm_h($href) . '" class="item' . ($bid === $vb ? ' on' : '') . '">' . pm_ui_dot(pm_ui_accent($settings, $bid)) . '<span>'
@@ -276,17 +299,14 @@ function pm_ui_biz_menu(array $settings, string $vb, string $tab, string $view):
         . '<a role="menuitem" class="item" href="?tab=settings"><span class="plus">⚙</span><span>Business settings</span></a></div></div>';
 }
 
-/** The sticky top bar. $c: tab, view, vb, settings, csrf, team (list), who, hbAge (seconds or null). */
-function pm_ui_topbar(array $c): string
+/** The app rail on the left (a bottom tab bar on phones): one tile per department, its pages in a flyout. */
+function pm_ui_rail(string $tab, string $view, string $section): string
 {
-    $tab = (string)$c['tab'];
-    $view = (string)($c['view'] ?? '');
-    $section = (string)($c['section'] ?? '');
     $cur = pm_ui_dept_of($tab, $view, $section);
-    $h = '<header class="topbar"><div class="topin">' . pm_ui_biz_menu($c['settings'], (string)$c['vb'], $tab, $view) . '<nav class="mainnav" aria-label="Departments">';
+    $h = '<nav class="apprail" aria-label="Departments">';
     foreach (pm_ui_nav() as $k => $n) {
         $on = $cur === $k;
-        $dd = '';
+        $dd = '<div class="menuhd fly-hd">' . pm_h($n['label']) . '</div>';
         $pages = 0;
         foreach ($n['groups'] as $g => $items) {
             $dd .= '<div class="menuhd">' . pm_h($g) . '</div>';
@@ -298,24 +318,39 @@ function pm_ui_topbar(array $c): string
                 $dd .= '<a role="menuitem" class="item' . (pm_ui_href_on($href, $tab, $view, $section) ? ' on' : '') . '" href="' . pm_h($href) . '">' . pm_h($lab) . '</a>';
             }
         }
-        $link = '<a class="navitem" href="' . pm_h($n['href']) . '"' . ($on ? ' aria-current="page"' : '') . '>' . pm_ui_icon($k) . '<span>' . pm_h($n['label']) . '</span></a>';
-        $h .= '<div class="dd navdd' . ($on ? ' on' : '') . '" style="' . pm_h(pm_ui_dept_style($k)) . '">' . $link;
+        $h .= '<div class="dd navdd' . ($on ? ' on' : '') . '"><a class="navitem" href="' . pm_h($n['href']) . '"' . ($on ? ' aria-current="page"' : '') . ' title="' . pm_h($n['job']) . '">'
+            . pm_ui_icon($k, 20) . '<span>' . pm_h($n['label']) . '</span></a>';
         if ($pages > 1) {
             $h .= '<button type="button" class="ddbtn caretbtn" aria-haspopup="true" aria-expanded="false" aria-label="' . pm_h($n['label']) . ' pages"><span class="caret"></span></button><div class="menu" role="menu">' . $dd . '</div>';
         }
         $h .= '</div>';
     }
-    $h .= '</nav><div class="topright">';
+    return $h . '</nav>';
+}
+
+/** The header (a band in the business colour, like Outlook's) and the app rail after it. $c: tab, view, vb, settings, csrf, team (list), who, hbAge (seconds or null). */
+function pm_ui_topbar(array $c): string
+{
+    $tab = (string)$c['tab'];
+    $view = (string)($c['view'] ?? '');
+    $section = (string)($c['section'] ?? '');
+    $vb = (string)$c['vb'];
+    $q = $tab === 'agents' ? trim((string)($_GET['q'] ?? '')) : '';
+    $h = '<header class="topbar"><div class="topin"><div class="topleft">' . pm_ui_biz_menu($c['settings'], $vb, $tab, $view)
+        . '<a class="appname" href="?tab=home">' . pm_h(pm_brand_name($vb)) . '</a></div>'
+        . '<form class="topsearch" method="get" action="index.php" role="search"><input type="hidden" name="tab" value="agents"><input type="hidden" name="status" value="all"><input type="hidden" name="brand" value="' . pm_h($vb) . '">'
+        . '<svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>'
+        . '<input type="search" name="q" value="' . pm_h($q) . '" placeholder="Search leads" aria-label="Search leads by name, town or contact" autocomplete="off"></form><div class="topright">';
     $age = $c['hbAge'];
     $min = $age === null ? 0 : intdiv((int)$age, 60);
     $txt = $age === null ? 'Scheduler has not run yet' : 'Scheduler ran ' . ($min >= 120 ? intdiv($min, 60) . ' h' : $min . ' min') . ' ago';
     $cls = $age === null || $age >= 2700 ? ($age !== null && $age >= 7200 ? 'bad' : 'warn') : 'ok';
-    $h .= '<a class="status ' . $cls . '" href="?tab=settings&amp;section=health" title="' . pm_h($txt . '. Posts and emails go out when the scheduler runs (every 15 to 30 minutes), or when the app is open.') . '" aria-label="' . pm_h($txt) . '"><i class="dot"></i></a>'; // a dot only: the words are in the tooltip and on the Overview, so the bar never runs out of room
+    $h .= '<a class="status ' . $cls . '" href="?tab=settings&amp;section=health" title="' . pm_h($txt . '. Posts and emails go out when the scheduler runs (every 15 to 30 minutes), or when the app is open.') . '" aria-label="' . pm_h($txt) . '"><i class="dot"></i></a>' // a dot only: the words are in the tooltip and on the Overview
+        . '<a class="helpbtn" href="?tab=guide" aria-label="Guide" title="Guide"' . ($tab === 'guide' ? ' aria-current="page"' : '') . '>?</a>';
     $team = (array)$c['team'];
     if (pm_user()) {
-        return $h . pm_auth_avatar() . '</div></div></header>'; // signed in: the account menu says who is working
-    }
-    if ($team) {
+        $h .= pm_auth_avatar(); // signed in: the account menu says who is working
+    } elseif ($team) {
         $h .= '<form method="post" class="who" data-quiet><input type="hidden" name="csrf" value="' . pm_h((string)$c['csrf']) . '"><input type="hidden" name="action" value="who"><input type="hidden" name="back" value="' . pm_h($tab) . '">'
             . '<select name="who" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Who is working"><option value="">Working as…</option>';
         foreach ($team as $m) {
@@ -323,7 +358,7 @@ function pm_ui_topbar(array $c): string
         }
         $h .= '</select></form>';
     }
-    return $h . '</div></div></header>';
+    return $h . '</div></div></header>' . pm_ui_rail($tab, $view, $section); // the rail is a sibling: a fixed child of the sticky header would be trapped by it
 }
 
 /** One card per business: who it is, how ready it is, and the way to switch to it or change it. */

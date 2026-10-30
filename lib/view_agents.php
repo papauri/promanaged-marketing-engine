@@ -156,6 +156,8 @@ $fpTitle = $ffolder !== '' ? $ffolder : (['mine' => 'Mine', 'active' => 'Active'
     </span></p>
   <div class="prog" id="runprog" <?= $running ? '' : 'hidden' ?>><i id="runfill" style="width:<?= (int)(100 * (int)($run['step'] ?? 0) / max(1, (int)($run['steps'] ?? 7))) ?>%"></i></div>
 </div>
+<!-- 2. Leads: the list column, its notices on top; on a wide screen app.js adds the reading pane beside it, right under the command bar -->
+<div class="leadpanes"><div class="leadcol">
 <?php if (pm_brand() === 'travel'): $tmAll = pm_leads(); $tmTodo = pm_tm_rewrite_candidates($tmAll); $tmKept = pm_tm_rewrite_kept($tmAll); if ($tmTodo): ?>
 <div class="card nofold" id="tmformat">
   <b>Travel Malawi's emails have a new standard format.</b> It is short and personal: who we are, what we found about that place, the directory we are building together, and the link to <?= pm_h(preg_replace('#^https?://#', '', (string)pm_tm_email_cfg()['link'])) ?>. You can change the wording in Sales &gt; Targeting and messages.
@@ -223,14 +225,13 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 </details>
 <?php endif; ?>
 
-<!-- 5. Leads -->
 <?php if ($focusId !== ''): ?>
 <div class="focusbar"><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?><?= pm_h($fq2()) ?>&at=<?= pm_h(rawurlencode($focusId)) ?>#l<?= pm_h($focusId) ?>">← All leads</a> <span class="muted">Focused on <b><?= pm_h($leadsAll[$focusId]['name']) ?></b></span></div>
 <?php else: ?>
 <div class="listbar">
   <h2><?= pm_h($fpTitle) ?> <span class="muted tnum"><?= $nList ?></span></h2>
   <form method="get" class="typesel" data-noload="1"><input type="hidden" name="tab" value="agents"><input type="hidden" name="status" value="<?= pm_h($filter) ?>"><?php if ($ffolder !== ''): ?><input type="hidden" name="folder" value="<?= pm_h($ffolder) ?>"><?php endif; ?>
-    <input type="search" name="q" value="<?= pm_h($fq) ?>" placeholder="Search leads" aria-label="Search leads by name, town or contact" class="narrow">
+    <input type="search" name="q" value="<?= pm_h($fq) ?>" placeholder="Search in <?= pm_h($fpTitle) ?>" aria-label="Search this folder by name, town or contact" class="narrow">
     <?php $fOn = $ftype !== '' || $fcity !== '' || $fhas !== '' || $fmin || $fsort !== '' || $fper !== 25; ?>
     <details class="fmore" <?= $fOn ? 'open' : '' ?>><summary class="btn small">Filters<?= $fOn ? ' · on' : '' ?></summary><span class="fmore-in">
     <select name="type" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Business type"><option value="">All business types</option>
@@ -276,6 +277,10 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <?= $pager ?>
 <?php if ($running): ?><p class="flash runlock" id="runlock">The agents are working: sending, research and drafting on the leads wait until they finish, so two jobs never clash. The page unlocks by itself.</p><?php endif; ?>
 <div class="leadlist<?= $running ? ' locked' : '' ?><?= $fper >= 50 ? ' dense' : '' ?>">
+<?php $ini = function (string $n): string { // initials for the row's avatar, like a mail list: Sunbird Capital Hotel -> SC
+    $w = array_values(array_filter(preg_split('/\s+/u', trim((string)preg_replace('/[^\p{L}\p{N}\s]+/u', ' ', $n)), -1, PREG_SPLIT_NO_EMPTY), fn($x) => mb_strtolower($x) !== 'the'));
+    return mb_strtoupper(mb_substr($w[0] ?? '?', 0, 1) . (isset($w[1]) ? mb_substr($w[1], 0, 1) : ''));
+}; ?>
 <?php foreach ($shown as $l):
     $id = $l['id'];
     $fuReady = $l['status'] === 'contacted' && empty($l['followup_draft']) ? pm_followup_ready($l) : null; // written ahead by the Follow-up head: shown and editable, sent by Follow up
@@ -289,7 +294,9 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <details class="lead<?= $hasReply || $waiting($l) ? ' unread' : '' // they wrote: marked like unread mail ?>" id="l<?= pm_h($id) ?>" <?= $focusId === $id ? 'open' : '' // one lead open at a time: the row chips say what each one needs ?>>
   <summary>
     <?php if ($pickable($l)): ?><label class="lpick" onclick="event.stopPropagation()" title="<?= $approvable($l) ? 'Tick to send this email' : ($fuOpen($l) ? 'Tick to follow up' : 'Tick to move, file or delete') ?>"><input type="checkbox" class="lsel" form="leadsel" name="ids[]" value="<?= pm_h($id) ?>" aria-label="Tick <?= pm_h($l['name']) ?>"></label><?php else: ?><span class="lpick none"></span><?php endif; ?>
+    <span class="lav av<?= crc32((string)$l['name']) % 8 ?>" aria-hidden="true"><?= pm_h($ini((string)$l['name'])) ?></span>
     <span class="who"><b><?= pm_h($l['name']) ?></b><small><?= pm_h($l['type']) ?> · <?= pm_h($l['city']) ?></small></span>
+    <span class="lmeta tnum" title="How good a fit, out of 100"><?= (int)($l['score'] ?? 0) ?></span>
     <span class="tags">
       <?= pm_pg_chip($l) ?><?= function_exists('pm_win_chip') ? pm_win_chip($l) : '' ?><?php if ($hasReply): ?><span class="pill warn">reply waiting</span><?php elseif ($waiting($l)): ?><span class="pill warn">they wrote</span><?php elseif ($l['status'] === 'contacted' && $waitAns($l)): $fuOn = pm_followup_due_on($l, ['max_followups' => 99] + $acfg); $fuNow = isset($fuDue[(string)$id]) || !empty($l['followup_draft']); ?><span class="pill <?= $fuNow ? 'warn' : '' ?>" title="<?= $which === 'followup' ? 'The follow-up is written: open the lead to read it' : 'The Follow-up head prepares it' ?>">follow-up <?= pm_followup_nth($l) ?> <?= $fuNow ? 'due now' : ($fuOn !== '' ? 'on ' . pm_h(date('D j M', strtotime($fuOn))) : 'prepared') ?></span><?php endif; ?>
       <?php foreach (pm_lead_open_drafts($l) as $od): ?><span class="pill warn"><?= ['winback' => 'win-back ready', 'postsign' => 'thank-you asks ready', 'reverify' => 'contact re-checked'][$od] ?></span><?php endforeach; ?>
@@ -510,6 +517,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <?php endforeach; ?>
 </div>
 <?= $pager ?>
+</div></div>
 
 <!-- 6. More -->
 <details class="card morecard"><summary>More: add a lead yourself, the archive</summary>

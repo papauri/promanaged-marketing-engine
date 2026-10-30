@@ -63,7 +63,7 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
   <section class="card hq-need">
     <h2>What needs you <span class="muted t-sm"><?= $nNeed ? '· ' . $nNeed . ' thing' . ($nNeed === 1 ? '' : 's') : '· nothing right now' ?></span></h2>
     <?php foreach ($cards as $k => $c): $items = $needs[$k] ?? []; ?>
-      <div class="hq-needdept" style="<?= pm_h(pm_ui_dept_style($k)) ?>">
+      <div class="hq-needdept">
         <a class="hq-needrow <?= $items ? ($items[0][2] ? 'warn' : 'todo') : 'ok' ?>" href="<?= pm_h($items[0][1] ?? $reg[$k]['href']) ?>"><span class="dico"><?= pm_ui_icon($k, 16) ?></span><span><b><?= pm_h($reg[$k]['name']) ?></b><small><i class="sdot <?= $items ? 'warn' : 'ok' ?>"></i><?= pm_h($items ? $items[0][0] : ($k === 'insights' ? $c['text'] : 'All clear')) ?></small></span><i class="go">&rsaquo;</i></a>
         <?php foreach (array_slice($items, 1) as $it): ?><a class="hq-needsub" href="<?= pm_h($it[1]) ?>"><i class="sdot <?= $it[2] ? 'warn' : '' ?>"></i><?= pm_h($it[0]) ?></a><?php endforeach; ?>
       </div>

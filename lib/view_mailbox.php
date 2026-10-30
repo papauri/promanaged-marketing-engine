@@ -27,6 +27,13 @@ $outsideLeads = array_filter($leadsB, fn($l) => !empty($l['outside']) && strtoti
 $sx = fn(string $do, string $extra = '') => '<input type="hidden" name="csrf" value="' . pm_h($csrf) . '"><input type="hidden" name="action" value="social_ext"><input type="hidden" name="do" value="' . $do . '">' . $extra;
 $hid = fn(string $n, string $v) => '<input type="hidden" name="' . $n . '" value="' . pm_h($v) . '">';
 $tone = ['enquiry' => 'warn', 'client' => 'ok', 'lead' => 'ok', 'partner' => 'info', 'spam' => 'bad', 'bounce' => 'bad'];
+// the round initials avatar of a mail row, its colour fixed by a hash of the sender (same palette as the Leads rows)
+$mbAv = fn(string $s) => ['#0f6cbd', '#8764b8', '#038387', '#c239b3', '#ca5010', '#498205', '#4f6bed', '#986f0b'][crc32(mb_strtolower(trim($s))) % 8];
+$mbIni = function (string $s): string {
+    $s = trim(str_contains($s, ' ') ? $s : preg_replace('/@.*$|[._\-+]+/', ' ', $s));
+    $w = preg_split('/\s+/u', preg_replace('/[^\p{L}\p{N}\s]+/u', '', $s), -1, PREG_SPLIT_NO_EMPTY);
+    return mb_strtoupper($w ? mb_substr($w[0], 0, 1) . (isset($w[1]) ? mb_substr($w[1], 0, 1) : mb_substr($w[0], 1, 1)) : '?');
+};
 ?>
 <?php
 $nOf = fn(string $k) => count(array_filter($items, fn($it) => $in($it, $k)));
@@ -47,19 +54,19 @@ $readNow = '<form method="post" class="sf-scoutnow">' . $sx('mb_read') . '<butto
 <?php [$page, $pager] = pm_ui_page($rows, 25); ?>
 <?php if (!$page): ?><div class="card"><p class="muted mt-0 mb-0"><?= $c['at'] === '' ? 'The mailbox has not been read yet: press Read the mailbox now.' : 'Nothing here.' ?></p></div><?php else: ?>
 <div class="card mb-list">
-<?php foreach ($page as $key => $it): $lid = (string)($it['lead'] ?? ''); $ln = $lid !== '' ? (string)($leadsB[$lid]['name'] ?? '') : ''; ?>
-  <div class="mb-row<?= pm_mb_needs_look($it) ? ' look' : '' ?>">
-    <div class="mb-dir" title="<?= $it['dir'] === 'in' ? 'Came in' : 'We sent it' ?>"><?= $it['dir'] === 'in' ? '↘' : '↗' ?></div>
+<?php foreach ($page as $key => $it): $lid = (string)($it['lead'] ?? ''); $ln = $lid !== '' ? (string)($leadsB[$lid]['name'] ?? '') : ''; $look = pm_mb_needs_look($it); $who = $it['dir'] === 'in' && (string)$it['name'] !== '' ? (string)$it['name'] : (string)$it['addr']; $ts = strtotime((string)$it['at']); ?>
+  <div class="mb-row<?= $look ? ' look' : '' ?><?= !empty($it['done']) ? ' done' : '' ?>" style="--av:<?= $mbAv($who) ?>">
+    <span class="av-in" aria-hidden="true"><?= pm_h($mbIni($who)) ?></span>
     <div class="mb-main">
-      <div class="mb-top"><b><?= pm_h($it['dir'] === 'in' ? ((string)$it['name'] !== '' ? (string)$it['name'] : (string)$it['addr']) : 'To ' . (string)$it['addr']) ?></b>
-        <?php if ($it['dir'] === 'in' && (string)$it['name'] !== ''): ?><span class="muted t-sm"><?= pm_h((string)$it['addr']) ?></span><?php endif; ?>
-        <time class="muted t-sm"><?= pm_h(date('j M H:i', strtotime((string)$it['at']))) ?></time></div>
-      <div class="mb-subj"><?= pm_h((string)$it['subject'] !== '' ? (string)$it['subject'] : '(no subject)') ?></div>
+      <div class="mb-top"><b class="mb-from" title="<?= pm_h((string)$it['addr']) ?>"><?= pm_h(($it['dir'] === 'in' ? '' : 'To ') . $who) ?></b>
+        <?php if ($who !== (string)$it['addr']): ?><span class="mb-addr"><?= pm_h((string)$it['addr']) ?></span><?php endif; ?>
+        <?php $hm = strlen(trim((string)$it['at'])) > 10 ? ' H:i' : ''; // some sent mail carries the day only ?><time datetime="<?= pm_h(date($hm ? 'c' : 'Y-m-d', $ts)) ?>" title="<?= pm_h(date('j M Y' . ($hm ? ',' . $hm : ''), $ts)) ?>"><?= pm_h(date('Y-m-d', $ts) === date('Y-m-d') ? ($hm ? date('H:i', $ts) : 'Today') : ($ts > strtotime('-6 days') ? date('D' . $hm, $ts) : date('j M', $ts))) ?></time></div>
+      <div class="mb-line"><span class="mb-subj"><?= pm_h((string)$it['subject'] !== '' ? (string)$it['subject'] : '(no subject)') ?></span>
+        <span class="mb-tags"><?php if ($look): ?><span class="pill <?= $tone[$it['kind']] ?? '' ?>"><?= pm_h(PM_MB_KINDS[$it['kind']] ?? $it['kind']) ?></span><?php elseif ($ln === ''): ?><span class="mb-kind"><?= pm_h(PM_MB_KINDS[$it['kind']] ?? $it['kind']) ?></span><?php endif; ?>
+          <?php if ($ln !== ''): ?><a class="mb-lead" href="?tab=agents&amp;lead=<?= pm_h($lid) ?>" title="Matched by <?= pm_h((string)($it['how'] ?? '')) ?>">▸ <?= pm_h($ln) ?></a><?php endif; ?>
+          <?php if (!empty($it['business']) && $ln === ''): ?><span class="mb-kind">writes for <?= pm_h((string)$it['business']) ?></span><?php endif; ?>
+          <?php if (!empty($it['done'])): ?><span class="mb-kind">put aside</span><?php endif; ?></span></div>
       <?php if (!empty($it['summary']) || (string)$it['snippet'] !== ''): ?><div class="mb-snip"><?= pm_h(!empty($it['summary']) ? (string)$it['summary'] : mb_substr((string)$it['snippet'], 0, 180)) ?></div><?php endif; ?>
-      <div class="mb-tags"><span class="pill <?= $tone[$it['kind']] ?? '' ?>"><?= pm_h(PM_MB_KINDS[$it['kind']] ?? $it['kind']) ?></span>
-        <?php if ($ln !== ''): ?><a class="pill ok" href="?tab=agents&amp;lead=<?= pm_h($lid) ?>" title="Matched by <?= pm_h((string)($it['how'] ?? '')) ?>">▸ <?= pm_h($ln) ?></a><span class="muted t-sm">by <?= pm_h((string)($it['how'] ?? '')) ?></span><?php endif; ?>
-        <?php if (!empty($it['business']) && $ln === ''): ?><span class="muted t-sm">writes for <?= pm_h((string)$it['business']) ?></span><?php endif; ?>
-        <?php if (!empty($it['done'])): ?><span class="muted t-sm">put aside</span><?php endif; ?></div>
     </div>
     <?php if ($lid === '' && ($it['dir'] === 'in' ? !in_array($it['kind'], ['own', 'bounce'], true) : $it['kind'] === 'sent')): // any email we received can become a lead, even one put aside or sorted as a supplier, newsletter or spam ?>
     <form method="post" class="mb-act"><?= $sx('mb_act', $hid('key', (string)$key) . $hid('f', $f)) ?>

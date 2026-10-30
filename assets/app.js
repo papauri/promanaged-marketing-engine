@@ -310,7 +310,7 @@
   clearTimeout(runTimer);
   var rb = document.getElementById('runbar');
   if (rb && rb.dataset.running === '1') {
-    document.querySelectorAll('.leadlist.locked form button, .leadlist.locked form input[type=checkbox], .selbar.locked button, .selbar.locked input, .lsel').forEach(function (b) { // one job at a time: lead actions wait for the run
+    document.querySelectorAll('.leadlist.locked form button, .leadlist.locked form input[type=checkbox], .readpane.locked form button, .readpane.locked form input[type=checkbox], .selbar.locked button, .selbar.locked input, .lsel').forEach(function (b) { // one job at a time: lead actions wait for the run
       b.disabled = true; b.title = 'Wait for the agents to finish';
     });
     var fill = document.getElementById('runfill'), sub = document.getElementById('runsub');
@@ -344,6 +344,88 @@
   window.addEventListener('load', function () { all(); setTimeout(all, 300); });
   window.addEventListener('resize', function () { all(); });
   document.addEventListener('pm:swap', function () { all(); });
+  document.addEventListener('pm:pane', function (e) { all(e.detail); }); // a lead's body moved into the reading pane
+})();
+
+/* Leads read like mail on a wide screen: the opened lead's body moves (not a copy, so its forms and ids keep working) into a reading pane right of the list,
+   and goes back into its own row when another lead opens or the window gets narrower. Narrower, or without JS, leads open in place as before. */
+(function () {
+  if (!window.matchMedia) return;
+  var mq = window.matchMedia('(min-width:1280px)'), sel = null;
+  var wrap = function () { return document.querySelector('.leadpanes'); };
+  var pane = function () { var w = wrap(); return w && w.querySelector(':scope > .readpane'); };
+  var on = function () { var w = wrap(); return !!(w && w.classList.contains('on')); };
+  function empty(p) {
+    p.innerHTML = '<div class="rdp-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><p>Select a lead to read it</p></div>';
+  }
+  function home() { // the shown body goes back into its own row
+    var d = sel, p = pane(), b = p && p.querySelector(':scope > .body');
+    if (d && b) d.appendChild(b);
+    if (d) d.classList.remove('sel');
+    sel = null;
+    return d;
+  }
+  function show(d) {
+    var p = pane();
+    if (!p || d === sel || !d.isConnected) return;
+    var prev = home();
+    if (prev && prev !== d) prev.open = false;
+    var b = d.querySelector(':scope > .body');
+    if (!b) { empty(p); return; }
+    var who = d.querySelector(':scope > summary .who'), tags = d.querySelector(':scope > summary .tags');
+    var h = document.createElement('div'), t = document.createElement('h2'), s = document.createElement('p');
+    h.className = 'rdp-head'; s.className = 'rdp-sub';
+    t.textContent = who && who.querySelector('b') ? who.querySelector('b').textContent : '';
+    s.textContent = who && who.querySelector('small') ? who.querySelector('small').textContent : '';
+    h.appendChild(t); h.appendChild(s);
+    if (tags) { var c = tags.cloneNode(true); c.querySelectorAll('[id]').forEach(function (x) { x.removeAttribute('id'); }); h.appendChild(c); }
+    p.textContent = '';
+    p.appendChild(h); p.appendChild(b);
+    p.setAttribute('aria-label', 'Reading pane: ' + t.textContent);
+    p.classList.toggle('locked', !!d.closest('.leadlist.locked'));
+    p.scrollTop = 0;
+    sel = d; d.classList.add('sel');
+    document.dispatchEvent(new CustomEvent('pm:pane', { detail: p }));
+  }
+  function apply() {
+    var w = wrap(), p = pane();
+    if (!w || !p) return;
+    if (mq.matches) {
+      w.classList.add('on'); p.hidden = false;
+      var open = Array.prototype.slice.call(w.querySelectorAll('.leadlist details.lead[open]'));
+      var t = location.hash.indexOf('#l') === 0 && document.getElementById(location.hash.slice(1));
+      var pick = sel || (open.indexOf(t) > -1 ? t : open[0]);
+      open.forEach(function (d) { if (d !== pick) d.open = false; });
+      if (pick) show(pick); else if (!sel) empty(p);
+    } else {
+      var d = home();
+      w.classList.remove('on'); p.hidden = true; empty(p);
+      if (d) d.open = true; // the lead that was in the pane stays open, now in place
+    }
+  }
+  function init() {
+    sel = null;
+    var w = wrap();
+    if (!w) return;
+    if (!pane()) {
+      var p = document.createElement('section');
+      p.className = 'lead readpane'; p.hidden = true; p.setAttribute('aria-label', 'Reading pane');
+      w.appendChild(p);
+    }
+    apply();
+  }
+  document.addEventListener('toggle', function (e) { // a row opened: by a click, Enter, a #l<id> link or code
+    var d = e.target;
+    if (d.matches && d.matches('details.lead') && d.open && on() && d.closest('.leadpanes')) show(d);
+  }, true);
+  document.addEventListener('click', function (e) { // the selected row stays selected, like mail
+    if (!sel || !on() || !e.target.closest) return;
+    var s = e.target.closest('details.lead > summary');
+    if (s && s.parentNode === sel && !e.target.closest('a, label, input')) e.preventDefault();
+  });
+  if (mq.addEventListener) mq.addEventListener('change', apply); else if (mq.addListener) mq.addListener(apply);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+  document.addEventListener('pm:swap', init);
 })();
 
 /* Pages of 10: every table with more than 10 rows, and every list marked data-page-items="<selector of its rows>", shows 10 at a time with

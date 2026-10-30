@@ -2466,13 +2466,13 @@ $GLOBALS['PM_DEPT'] = pm_ui_dept_of($tab, (string)($_GET['view'] ?? ''), $sectio
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title><?= pm_h($vb === 'promanaged' ? $settings['company_name'] : pm_brand_title($settings, $vb)) ?> · Marketing</title>
 <style>:root{--accent:<?= pm_h(pm_ui_accent($settings, $vb)) ?>}</style>
 <link rel="stylesheet" href="assets/app.css?v=<?= @filemtime(PM_ROOT . '/assets/app.css') ?>">
 <?php if ($vb !== 'promanaged' && is_file(PM_ROOT . '/' . pm_brand_asset($vb, 'favicon'))): ?><link rel="icon" href="<?= pm_h(pm_brand_asset($vb, 'favicon')) ?>"><?php endif; ?>
 </head>
-<body style="<?= pm_h(pm_ui_dept_style($GLOBALS['PM_DEPT'])) ?>" data-dept="<?= pm_h($GLOBALS['PM_DEPT']) ?>" data-ai="<?= pm_agents_ready() ? '1' : '0' ?>">
+<body style="--dept:<?= pm_h(pm_ui_safe_accent(pm_ui_accent($settings, $vb))) ?>" data-dept="<?= pm_h($GLOBALS['PM_DEPT']) ?>" data-ai="<?= pm_agents_ready() ? '1' : '0' ?>">
 <?php
 $team = array_values(array_filter((array)($settings['team'] ?? [])));
 echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'section' => $section, 'vb' => $vb, 'settings' => $settings, 'csrf' => $csrf, 'team' => $team, 'who' => $GLOBALS['PM_WHO'], 'hbAge' => pm_social_heartbeat_age()]);
