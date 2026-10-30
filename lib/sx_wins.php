@@ -277,5 +277,8 @@ function pm_win_chip(array $l): string
     if (!empty($l['live_listing']) && empty($l['progress'])) {
         return '<span class="pill hot" title="Live on ulendomalawi.com">live</span>';
     }
+    if (function_exists('pm_wl_due') && pm_wl_due($l)) {
+        return '<span class="pill warn" title="A customer now: their welcome is ready on the lead">welcome them</span>';
+    }
     return !empty($l['win_hint']) && !in_array($l['status'] ?? '', ['won', 'lost', 'optout'], true) ? '<span class="pill ok" title="' . pm_h((string)$l['win_hint']['why']) . '">looks won</span>' : '';
 }

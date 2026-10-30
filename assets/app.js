@@ -379,6 +379,14 @@
     show();
     goHash();
     window.addEventListener('hashchange', goHash);
+    if (after.hasAttribute('data-page-items')) { // a row taken out of the list (sent, skipped): the next one moves up into the page
+      new MutationObserver(function () {
+        rows = rows.filter(function (r) { return r.isConnected; });
+        pages = Math.max(1, Math.ceil(rows.length / PER));
+        at = Math.min(at, pages - 1);
+        show();
+      }).observe(after, { childList: true });
+    }
   }
   function init() {
     document.querySelectorAll('table:not([data-nopage])').forEach(function (t) {

@@ -64,7 +64,7 @@ usort($wrote, fn($a, $b) => strcmp((string)($a['awaiting_reply_since'] ?? $a['la
   <div class="card empty">Nothing to send right now. <?= $vb === 'travel' ? 'Run the agents to find more stays.' : 'Run the agents to find more leads.' ?> Leads need a mobile number and a drafted message.</div>
 <?php endif; ?>
 
-<div id="waq" data-csrf="<?= pm_h($csrf) ?>" data-left="<?= $left ?>">
+<div id="waq" data-page-items=".wacard" data-csrf="<?= pm_h($csrf) ?>" data-left="<?= $left ?>">
 <?php foreach ($queue as $q): $l = $q['lead']; ?>
   <div class="card wacard" data-id="<?= pm_h($l['id']) ?>" data-url="<?= pm_h($q['url']) ?>">
     <div class="wahead">

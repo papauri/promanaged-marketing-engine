@@ -105,8 +105,12 @@ function pm_lint_ext(array $p, string $channel = 'facebook', ?array $pool = null
     if (preg_match('#https?://|www\.|wa\.me|\b[a-z0-9-]+\.(com|org|net|mw|co|io|app|ai)\b#i', mb_substr($caption, 0, 110))) {
         $block('There is a link in the first 110 characters. Put the hook first; the link goes at the end.');
     }
+    // 1b. Travel Malawi is an information directory (Tourism Act, 2025): no bookings, payments or in-app chat through it
+    if ($brand === 'travel' && defined('PM_TM_BOOKING_POST') && preg_match(PM_TM_BOOKING_POST, $all, $bm)) {
+        $block('Says "' . trim($bm[0]) . '": Travel Malawi is an information directory, so never say guests book, pay or call through it. Say travellers find the stay and contact it directly.');
+    }
     // 2. opening
-    $first = mb_strtolower(trim(preg_replace('/^[^\p{L}\p{N}]+/u', '', $caption)));
+    $first =mb_strtolower(trim(preg_replace('/^[^\p{L}\p{N}]+/u', '', $caption)));
     if ($first !== '' && (str_starts_with($first, 'hello') || array_filter(pm_sx_brand_names($brand), fn($n) => str_starts_with($first, mb_strtolower($n))))) {
         $block('Starts with "Hello" or the business name. Start with what the reader gets or a question.');
     }

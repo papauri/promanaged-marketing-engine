@@ -1502,6 +1502,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fdOk && pm_leads_save($leads);
             $back($fdMsg, $fdOk ? 'ok' : 'err');
         }
+        if (in_array($do, ['welcome_send', 'welcome_wa', 'welcome_skip'], true)) { // the welcome for a new customer (lib/sx_welcome.php)
+            if (!pm_wl_due($lead)) {
+                $back('That welcome was already sent or put aside.', 'err');
+            }
+            if ($do === 'welcome_skip') {
+                pm_wl_sent($leads[$id], 'skipped');
+                pm_leads_save($leads);
+                $back('Welcome put aside.');
+            }
+            if ($do === 'welcome_wa') {
+                $wlWa = pm_wa_link($lead, pm_pg_wa_text($lead, trim((string)($_POST['whatsapp'] ?? pm_wl_render($lead)['whatsapp']))));
+                if ($wlWa === '' || ($lead['status'] ?? '') === 'optout') {
+                    $back('No WhatsApp number for this lead.', 'err');
+                }
+                pm_wl_sent($leads[$id], 'WhatsApp');
+                $leads[$id]['thread'][] = ['dir' => 'out', 'at' => date('Y-m-d H:i'), 'text' => mb_substr(trim((string)($_POST['whatsapp'] ?? '')), 0, 3000), 'ch' => 'wa'];
+                pm_leads_save($leads);
+                header('Location: ' . $wlWa);
+                exit;
+            }
+            $wlSub = trim((string)($_POST['subject'] ?? ''));
+            $wlBody = trim((string)($_POST['body'] ?? ''));
+            if ($wlSub === '' || $wlBody === '' || !filter_var($lead['email'] ?? '', FILTER_VALIDATE_EMAIL)) {
+                $back('This lead needs a valid email address, a subject and the welcome.', 'err');
+            }
+            if ($wlBad = pm_outreach_lint($wlSub, $wlBody, false, true)) {
+                $back('Not sent: ' . implode(' ', $wlBad), 'err');
+            }
+            [$okW, $whyW] = pm_send_reply($lead, $wlSub, $wlBody);
+            if (!$okW) {
+                $back('Could not send: ' . pm_mail_fail($settings, (string)$whyW), 'err');
+            }
+            $leads[$id]['thread'][] = ['dir' => 'out', 'at' => date('Y-m-d H:i'), 'text' => mb_substr($wlBody, 0, 3000), 'ch' => 'email'];
+            pm_wl_sent($leads[$id], 'email');
+            pm_leads_save($leads);
+            $back('Welcome sent to ' . $lead['name'] . '.');
+        }
         if ($do === 'win_yes' || $do === 'win_no') { // a likely win confirmed or not (lib/sx_wins.php)
             $winMsg = pm_win_answer($leads[$id], $do === 'win_yes');
             pm_leads_save($leads);

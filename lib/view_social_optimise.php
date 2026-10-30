@@ -51,20 +51,20 @@ $item = fn(array $i): string => pm_opt_item_html($i, $vb, $csrf);
   <?php if (count($hist) > 1): ?><p class="hint mt-2">Recent: <?= pm_h(implode(' → ', array_map(fn($d, $s) => date('j M', strtotime($d)) . ' ' . (int)$s . '%', array_keys(array_slice($hist, -6, null, true)), array_slice($hist, -6, null, true)))) ?></p><?php endif; ?>
 </div>
 
-<?php $copyStore = pm_copy_store($vb); $plainOf = fn(string $k) => pm_copy_plain($vb, $k); ?>
-<div class="card" id="words">
-  <h2>Profile words</h2>
+<?php $copyStore = pm_copy_store($vb); $plainOf = fn(string $k) => pm_copy_plain($vb, $k); ?> <?php $sigNow = pm_copy_sig($vb); $fresh = array_filter($copyStore, fn($c) => ($c['sig'] ?? '') === $sigNow); // options written before the business details changed are hidden: they may say what is no longer true ?>
+<details class="card" id="words" <?= $fresh ? 'open' : '' ?>>
+  <summary class="opt-sum"><b>Profile words</b><span class="muted"><?= $fresh ? count($fresh) . ' with options' : 'the intro, description and bio for each channel, written for you' ?></span></summary>
   <p class="hint mt-0">The intro, description and bio for each channel you tick: three options each (their outcome first, who it is for with proof, short with an easy next step), written with the marketing psychology that makes people message, from your facts only and checked for machine-sounding wording. Choose one and it becomes the suggestion on Profiles and the Audit.</p>
   <form method="post"><?= $fx('copy_write') ?>
     <div class="btns mt-0"><?php foreach (PM_COPY_GROUPS as $gk => $gl): ?><label class="check"><input type="checkbox" name="groups[]" value="<?= $gk ?>" <?= in_array($gk, ['business', 'facebook', 'instagram', 'whatsapp', 'google'], true) ? 'checked' : '' ?>> <?= pm_h($gl) ?></label><?php endforeach; ?></div>
     <div class="btns"><button class="btn primary" <?= pm_agents_ready() ? '' : 'disabled title="Add an AI key to .env first"' ?>>Write 3 options for each (AI)</button><?php if ($copyStore): ?><button class="btn small" name="do" value="copy_clear">Clear the options</button><?php endif; ?></div>
   </form>
-  <?php $sigNow = pm_copy_sig($vb); if (array_filter($copyStore, fn($c) => ($c['sig'] ?? '') !== $sigNow)): ?><p class="flash warn">Some options were written before your business details last changed, or before the new marketing wording. Write them again so they match (one AI call).</p><?php endif; ?>
+  <?php if (count($fresh) < count($copyStore)): ?><p class="flash warn">Options written before your business details last changed are hidden, so nothing out of date goes on a profile. Write them again (one AI call).</p><?php endif; ?>
   <?php foreach (PM_COPY_FIELDS as $k => [$label, $limit, $what, $grp]): $cur = $copyStore[$k] ?? null; $plain = $plainOf($k); $chosen = trim((string)(pm_opt_store($vb)['ai'][$k] ?? '')); ?>
   <div class="sx-card my-2" id="w-<?= pm_h($k) ?>">
     <div class="sxh" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b><?= pm_h($label) ?></b><span class="sx-chip"><?= pm_h(PM_COPY_GROUPS[$grp]) ?> · up to <?= (int)$limit ?></span><span class="muted"><?= pm_h($what) ?></span></div>
     <?php if ($plain !== ''): ?><p class="hint mt-1">Plain version: <?= pm_h($plain) ?> <button type="button" class="btn small" data-copy="<?= pm_h($plain) ?>">Copy</button></p><?php endif; ?>
-    <?php foreach ((array)($cur['options'] ?? []) as $i => $o): ?>
+    <?php foreach ((array)(isset($fresh[$k]) ? ($cur['options'] ?? []) : []) as $i => $o): ?>
     <div class="opt-choice<?= $chosen === $o['text'] ? ' chosen' : '' ?>">
       <span class="sx-chip"><?= pm_h(PM_COPY_VOICES[$o['voice']] ?? $o['voice']) ?> · <?= mb_strlen($o['text']) ?>/<?= (int)$limit ?></span><?= $chosen === $o['text'] ? ' <span class="sx-chip ok">chosen</span>' : '' ?>
       <p class="my-1"><?= pm_h($o['text']) ?></p>
@@ -77,7 +77,7 @@ $item = fn(array $i): string => pm_opt_item_html($i, $vb, $csrf);
     <?php endforeach; ?>
   </div>
   <?php endforeach; ?>
-</div>
+</details>
 
 
 <?php foreach ($run['channels'] as $k => $c):

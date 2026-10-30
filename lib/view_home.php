@@ -96,8 +96,8 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
   <h2>The team's report <span class="muted t-sm">· every head reports to <?= pm_h(pm_agent_first('director')) ?><?= !empty($bd['standup']) ? ' (stand-up at ' . pm_h($bd['standup']) . ')' : '' ?>, updated <?= pm_h(date('H:i', (int)($bd['ts'] ?? strtotime((string)$bd['at'])))) ?></span></h2>
   <?php if ($goals): ?><p class="hq-headline"><?= $nOk ?> of <?= count($goals) ?> heads on track for the month<?= $nOk < count($goals) ? '; the ones behind say what holds them up and who they asked.' : '.' ?></p><?php endif; ?>
   <?php if (!empty($bd['chain'])): ?><p class="hint mt-0"><?= pm_h((string)$bd['chain']) ?></p><?php endif; ?>
-  <ul class="hq-heads" id="goals">
-  <?php foreach ($rows as $dept => $r): $gx = $r['goal'] ?? null; ?>
+  <?php $onTrack = array_filter($rows, fn($r) => !empty($r['goal']['ok'])); $headList = function (array $list) { // the heads behind (and those with no goal) in full; the ones on track fold away
+  foreach ($list as $dept => $r): $gx = $r['goal'] ?? null; ?>
     <li class="<?= $gx ? ($gx['ok'] ? 'ok' : 'behind') : '' ?>">
       <div class="hq-head-who"><b><?= pm_h(pm_talk_name($dept)) ?></b><?php if ($gx): ?><span class="chip <?= $gx['ok'] ? 'ok' : 'warn' ?>"><?= $gx['ok'] ? 'on track' : 'behind' ?></span><?php endif; ?></div>
       <div class="hq-head-say">
@@ -105,8 +105,10 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
         <?php if ($gx): ?><small>Goal: <?= pm_h($gx['goal']) ?> · now <?= pm_h($gx['have']) ?>.<?= $gx['why'] !== '' ? ' ' . pm_h($gx['why']) : '' ?><?= $gx['ask_to'] !== '' ? ' <b>' . ($gx['ask_to'] === 'owner' ? 'Asks you' : 'Asked ' . pm_h(pm_talk_name($gx['ask_to']))) . ':</b> "' . pm_h($gx['ask']) . '"' : '' ?></small><?php endif; ?>
       </div>
     </li>
-  <?php endforeach; ?>
-  </ul>
+  <?php endforeach; };
+  ?>
+  <ul class="hq-heads" id="goals"><?php $headList(array_diff_key($rows, $onTrack)); ?></ul>
+  <?php if ($onTrack): ?><details class="hq-ontrack"><summary><?= count($onTrack) ?> on track: <?= pm_h(implode(', ', array_map('pm_talk_name', array_keys($onTrack)))) ?></summary><ul class="hq-heads"><?php $headList($onTrack); ?></ul></details><?php endif; ?>
   <?php if ($bd['checks']): ?><div class="hq-checks"><b><?= pm_h(pm_agent_first('director')) ?> checked the report against what we have</b><ul><?php foreach ($bd['checks'] as [$ct, $ch]): ?><li><a href="<?= pm_h($ch) ?>"><?= pm_h($ct) ?></a></li><?php endforeach; ?></ul></div><?php endif; ?>
 </section>
 <?php endif; ?>
@@ -126,18 +128,17 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
 <h3>Latest from the team</h3>
 <section class="card hq-feed">
   <?php if (!$hd['activity']): ?><p class="muted">Nothing yet. When the agents run, what they did is written here.</p>
-  <?php else: ?><ul><?php foreach (array_filter($hd['activity'], fn($a) => $a['agent'] !== 'Director') as $a): ?>
+  <?php else: ?><ul><?php foreach (array_slice(array_filter($hd['activity'], fn($a) => $a['agent'] !== 'Director'), 0, 6) as $a): ?>
     <li class="<?= $a['error'] ? 'err' : '' ?>"><time><?= pm_h($a['at'] !== '' ? date('j M H:i', strtotime($a['at'])) : '') ?></time><b><?= pm_h($a['agent']) ?></b><span><?= pm_h(mb_substr($a['msg'], 0, 220)) ?></span></li>
   <?php endforeach; ?></ul><?php endif; ?>
 </section>
 
 <?php $tbRows = function_exists('pm_tb_rows') ? array_filter(pm_tb_rows($vb, 30), fn($r) => empty($r['struck'])) : []; ?>
-<h3 id="teamtalk">How the team is talking</h3>
-<section class="card hq-feed">
-  <p class="hint mt-0">The departments pass notes to each other (no AI): what replies taught the Writers, what you turned down and why, the Director's orders for the day. Each agent reads the notes addressed to it. Strike a note that is wrong and they stop reading it.</p>
+<details class="card hq-feed" id="teamtalk"><summary>How the team is talking<?= $tbRows ? ' <span class="muted t-sm">· ' . min(15, count($tbRows)) . ' notes</span>' : '' ?></summary>
+  <p class="hint">The departments pass notes to each other (no AI): what replies taught the Writers, what you turned down and why, the Director's orders for the day. Each agent reads the notes addressed to it. Strike a note that is wrong and they stop reading it.</p>
   <?php if (!$tbRows): ?><p class="muted">No notes yet. They appear as replies come in, as you turn drafts down, and when the Director plans the day.</p>
   <?php else: $csrfH = pm_h((string)($_SESSION['csrf'] ?? '')); ?><ul><?php foreach (array_slice($tbRows, 0, 15) as $r): ?>
-    <li><time><?= pm_h(date('j M H:i', strtotime((string)$r['at']))) ?></time><b><?= pm_h((PM_TB_DEPTS[$r['from']] ?? $r['from']) . ' → ' . (PM_TB_DEPTS[$r['to']] ?? $r['to'])) ?></b><span><?= pm_h((string)$r['text']) ?></span>
+    <li class="tb"><time><?= pm_h(date('j M H:i', strtotime((string)$r['at']))) ?></time><b><?= pm_h((PM_TB_DEPTS[$r['from']] ?? $r['from']) . ' → ' . (PM_TB_DEPTS[$r['to']] ?? $r['to'])) ?></b><span><?= pm_h((string)$r['text']) ?></span>
       <form method="post" class="inline"><input type="hidden" name="csrf" value="<?= $csrfH ?>"><input type="hidden" name="action" value="agents"><input type="hidden" name="do" value="tb_strike"><input type="hidden" name="bt" value="home"><input type="hidden" name="note" value="<?= pm_h((string)$r['id']) ?>"><button class="btn small ghost" title="The agents stop reading this note">Strike</button></form></li>
   <?php endforeach; ?></ul><?php endif; ?>
-</section>
+</details>

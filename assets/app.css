@@ -369,6 +369,8 @@ details.card.sec[open] > summary { margin-bottom:0; }
 .hq-feed ul { margin:0; padding:0; list-style:none; display:grid; gap:2px; }
 .hq-feed li { display:grid; grid-template-columns:96px 120px minmax(0, 1fr); gap:8px; padding:8px 0; border-bottom:1px solid var(--line); font-size:13px; }
 .hq-feed li:last-child { border-bottom:0; }
+.hq-feed li.tb { grid-template-columns:96px 150px minmax(0, 1fr) auto; align-items:start; }
+.hq-feed > summary { cursor:pointer; font-weight:600; font-size:var(--fs-3); }
 .hq-feed time { color:var(--muted); }
 .hq-feed b { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .hq-feed li.err span { color:var(--bad); }
@@ -409,10 +411,10 @@ textarea.cc-new { box-shadow:0 0 0 3px color-mix(in srgb, var(--dept) 35%, trans
 .exgrid { display:grid; grid-template-columns:minmax(0,5fr) minmax(0,6fr); gap:var(--s-4); align-items:start; }
 .expic img { display:block; width:100%; height:auto; border-radius:12px; border:1px solid var(--line); }
 .expic .btns { margin-top:var(--s-3); }
-.expics { display:flex; gap:var(--s-2); align-items:center; flex-wrap:wrap; } .expics select { width:auto; max-width:100%; height:var(--ctl-sm); }
+.expics { display:flex; gap:var(--s-2); align-items:center; flex-wrap:wrap; min-width:0; } .expics select { width:auto; max-width:100%; min-width:0; height:var(--ctl-sm); }
 .exchat .cc-log { max-height:420px; }
 .exshow { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:0 var(--s-3); margin-bottom:var(--s-2); }
-@media (max-width:860px) { .exgrid { grid-template-columns:1fr; } }
+@media (max-width:860px) { .exgrid { grid-template-columns:minmax(0,1fr); } }
 
 /* ===== 6. pages ===== */
 .layout { display:grid; grid-template-columns:1fr 340px; gap:16px; align-items:start; }
@@ -583,7 +585,7 @@ details.sugg.reply .sitem { border-left-color:#2e7d32; }
 .wppage .wphead b { flex:1; }
 .wppage iframe { width:100%; max-width:500px; display:block; margin:0 auto; background:#f0f2f5; border-radius:8px; }
 .unm { display:flex; gap:12px; justify-content:space-between; align-items:flex-start; padding:8px 0; border-top:1px solid var(--line); font-size:13px; }
-.unm form { display:flex; gap:4px; flex-wrap:wrap; align-items:center; max-width:46%; }
+.unm form { display:flex; gap:4px; flex-wrap:wrap; align-items:center; max-width:480px; justify-content:flex-end; }
 .unm select { max-width:220px; }
 .approvebar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; background:var(--ok-bg); border:1px solid var(--ok-line); border-radius:var(--r-ctl); padding:8px 12px; margin-bottom:8px; font-size:13px; }
 .approvebar label { display:flex; align-items:center; gap:6px; margin:0; color:var(--ink-2); white-space:nowrap }
@@ -838,12 +840,13 @@ form.inline > .btn { flex:none; white-space:nowrap; } form.inline > input { flex
 @media (max-width:860px) {
 .hq-top { grid-template-columns:1fr; }
 .hq-hero h1 { font-size:30px; }
-.hq-feed li { grid-template-columns:1fr; gap:0; }
+.hq-feed li, .hq-feed li.tb { grid-template-columns:1fr; gap:0; }
 .ap-cols { grid-template-columns:1fr; }
 .navitem .ico { display:none; }
 .eyebrows .job { border-left:0; padding-left:0; }
 .row { grid-template-columns:1fr; }
 .lead .tags { justify-content:flex-start; }
+.btn { max-width:100%; white-space:normal; height:auto; min-height:var(--ctl); padding-block:var(--s-2); } /* a long label wraps instead of running off the screen */
 }
 @media (max-width:980px) { .stu .top { grid-template-columns:1fr } }
 @media (max-width:640px) { .rs th, .rs td { padding:var(--s-1); font-size:var(--fs-1) } }
@@ -999,6 +1002,8 @@ main.swapping { opacity:.55; pointer-events:none; transition:opacity .12s; }
 .hq-heads { list-style:none; margin:var(--s-3) 0 0; padding:0 }
 .hq-heads li { display:grid; grid-template-columns:minmax(150px, 210px) 1fr; gap:var(--s-1) var(--s-4); padding:var(--s-3) 0; border-top:1px solid var(--line) }
 .hq-heads li:first-child { border-top:0 }
+.hq-ontrack { margin-top:var(--s-2); border-top:1px solid var(--line); padding-top:var(--s-2) }
+.hq-ontrack > summary { cursor:pointer; color:var(--ok); font-size:var(--fs-2); font-weight:500 }
 .hq-head-who { display:flex; flex-direction:column; align-items:flex-start; gap:var(--s-1); font-size:var(--fs-3) }
 .hq-head-say p { margin:0 0 2px; font-size:var(--fs-3); color:var(--ink-2) }
 .hq-head-say a { color:inherit; text-decoration:none } .hq-head-say a:hover { text-decoration:underline }

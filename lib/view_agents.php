@@ -165,7 +165,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
 </div>
 
 <?php if ($unmatched): $cands = array_filter($leadsAll, fn($x) => !empty($x['sent']) || !empty($x['last_contacted']) || !empty($x['wa_sent'])); uasort($cands, fn($a, $b) => strcasecmp($a['name'], $b['name'])); ?>
-<div class="card unmatched"><h2>Unmatched replies <span class="pill warn"><?= count($unmatched) ?></span></h2>
+<details class="card unmatched"><summary><b>Unmatched replies</b> <span class="pill warn"><?= count($unmatched) ?></span> <span class="muted t-sm">from people who are not leads: attach, make a lead or dismiss</span></summary>
   <p class="hint">Mail that reached your inbox from someone we could not match to a lead. Attach it to the right lead and the reply agent handles it like any reply, make a new lead of it (it waits for our answer), or dismiss it.</p>
   <?php $umBrands = pm_user_brands(); // the new lead is for the business picked (the one open by default) ?>
   <?php foreach (array_slice($unmatched, 0, 10) as $u): ?>
@@ -178,7 +178,7 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
         <button class="btn small" formnovalidate name="do" value="dismiss_unmatched">Dismiss</button></form></div>
   <?php endforeach; ?>
   <?php if (count($unmatched) > 10): ?><p class="hint">And <?= count($unmatched) - 10 ?> more: handle these first.</p><?php endif; ?>
-</div>
+</details>
 <?php endif; ?>
 
 <?php
@@ -282,7 +282,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     $hasReply = !empty($l['reply_draft']);
     $sentFirst = $which === 'first' && !empty($l['sent']); // the first email went: its panel folds away and is not offered for sending again
 ?>
-<details class="lead" id="l<?= pm_h($id) ?>" <?= (($which === 'followup' && !$fuReady) || $waiting($l) || $focusId === $id) ? 'open' : '' ?>>
+<details class="lead" id="l<?= pm_h($id) ?>" <?= $focusId === $id ? 'open' : '' // one lead open at a time: the row chips say what each one needs ?>>
   <summary>
     <?php if ($pickable($l)): ?><label class="lpick" onclick="event.stopPropagation()" title="<?= $approvable($l) ? 'Tick to send this email' : ($fuOpen($l) ? 'Tick to follow up' : 'Tick to move, file or delete') ?>"><input type="checkbox" class="lsel" form="leadsel" name="ids[]" value="<?= pm_h($id) ?>" aria-label="Tick <?= pm_h($l['name']) ?>"></label><?php else: ?><span class="lpick none"></span><?php endif; ?>
     <span class="who"><b><?= pm_h($l['name']) ?></b><small><?= pm_h($l['type']) ?> · <?= pm_h($l['city']) ?></small></span>
@@ -298,8 +298,8 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
       <?php if ($l['status'] === 'lost' && !empty($l['lost_reason'])): ?><span class="pill"><?= pm_h(pm_lost_reasons()[$l['lost_reason']] ?? $l['lost_reason']) ?></span><?php endif; ?>
       <?php if (!empty($l['proposal_ai'])): ?><span class="pill hot">proposal ready</span><?php endif; ?>
       <?= pm_lead_touch_chip($l) ?>
-      <?php if (!empty($l['owner'])): ?><span class="pill" title="Owner of this lead"><?= pm_h($l['owner']) ?></span><?php endif; ?>
-      <?php foreach ((array)($l['folders'] ?? []) as $lf): ?><a class="pill folder" href="?tab=agents&amp;status=all&amp;folder=<?= pm_h(rawurlencode((string)$lf)) ?>" onclick="event.stopPropagation()" title="Show this folder">▸ <?= pm_h((string)$lf) ?></a><?php endforeach; ?>
+      <?php if (!empty($l['owner']) && $l['owner'] !== ($GLOBALS['PM_WHO'] ?? '')): // your own leads need no name on them ?><span class="pill" title="Owner of this lead"><?= pm_h($l['owner']) ?></span><?php endif; ?>
+      <?php foreach (array_diff((array)($l['folders'] ?? []), $l['status'] === 'contacted' ? ['Already contacted'] : []) as $lf): // the status already says it ?><a class="pill folder" href="?tab=agents&amp;status=all&amp;folder=<?= pm_h(rawurlencode((string)$lf)) ?>" onclick="event.stopPropagation()" title="Show this folder">▸ <?= pm_h((string)$lf) ?></a><?php endforeach; ?>
       <?php if (!empty($l['sitdown']['action']) && strtotime((string)$l['sitdown']['at']) > strtotime('-3 days')): ?><span class="pill <?= in_array($l['sitdown']['action'], ['send', 'call'], true) ? 'hot' : '' ?>" title="<?= pm_h((string)($l['sitdown']['angle'] ?: $l['sitdown']['why'])) ?>">Team: <?= pm_h(strtolower(PM_SD_ACTIONS[$l['sitdown']['action']] ?? ($l['sitdown']['action'] === 'reply' ? 'Answer them' : ''))) ?></span><?php endif; ?>
       <span class="fixcols"><?php /* always last and the same width, so they line up down the list */ ?>
         <span class="pill c-ready <?= $gapOpen ? ($apx['ready'] >= 80 ? 'ok' : ($apx['ready'] < 50 ? 'warn' : '')) : 'blank' ?>"<?= $gapOpen ? ' title="' . pm_h($apx['missing'] ? 'Missing: ' . implode(', ', $apx['missing']) : 'Everything a good approach needs is there') . '"' : '' ?>><?= $gapOpen ? $apx['ready'] . '% ready' : '' ?></span>
@@ -407,6 +407,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
             <?php if ($waOn && $rpWa !== ''): ?><a class="btn small" data-wa-log data-id="<?= pm_h($id) ?>" data-csrf="<?= pm_h($csrf) ?>" data-url="<?= pm_h($rpWa) ?>" href="<?= pm_h($rpWa) ?>" target="_blank" rel="noopener noreferrer">Reply on WhatsApp</a><?php endif; ?></div>
         </form>
         <?php endif; ?>
+        <?= function_exists('pm_wl_panel') ? pm_wl_panel($l, fn($do) => $post($id, $do), $waOn) : '' // a new customer: the welcome, ready to send (lib/sx_welcome.php) ?>
         <?= function_exists('pm_win_panel') ? pm_win_panel($l, fn($do) => $post($id, $do)) : '' // looks won (live on ulendomalawi.com, on our website, or their yes), lib/sx_wins.php ?>
         <?= pm_pg_panel($l, fn($do) => $post($id, $do), $waOn) // their progress after they said yes: steps, where it stands, the update to send ?>
         <?php if ($dr || $l['status'] !== 'new' || !empty($l['research']['starters'])): ?>

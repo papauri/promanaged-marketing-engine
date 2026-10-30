@@ -40,6 +40,13 @@ function pm_view_msgdefaults(string $vb, string $csrf): void
     <label>WhatsApp</label><textarea name="dm[ok_whatsapp]" rows="4" data-grow data-chat="tpl_whatsapp"><?= pm_h($c['ok_whatsapp']) ?></textarea>
     <p class="hint <?= $pv['ok_problems'] ? 'warnt' : '' ?>">The answer is <b><?= (int)$pv['ok_words'] ?></b> words with an example lead (an answer is as long as it needs to be).<?= $pv['ok_problems'] ? ' Fix before it can be sent: ' . pm_h(implode(' ', $pv['ok_problems'])) : ' It passes the checks.' ?></p>
   </div>
+  <div class="card" id="wlmsg"><h2>Welcome a new customer · <?= pm_h($bn) ?></h2>
+    <p class="hint mt-0">When a lead is Won, its card offers this welcome, ready to send (no AI). <code>{listing}</code> is their live page<?= $vb === 'travel' ? ' on ulendomalawi.com' : '' ?>; a line with it is left out until there is one. Your signature is added when it is sent.</p>
+    <label>Subject</label><input type="text" name="dm[wl_subject]" value="<?= pm_h($c['wl_subject']) ?>" maxlength="120">
+    <label>Email</label><textarea name="dm[wl_body]" rows="9" data-grow data-chat="tpl_followup"><?= pm_h($c['wl_body']) ?></textarea>
+    <label>WhatsApp</label><textarea name="dm[wl_whatsapp]" rows="3" data-grow data-chat="tpl_whatsapp"><?= pm_h($c['wl_whatsapp']) ?></textarea>
+    <p class="hint <?= $pv['wl_problems'] ? 'warnt' : '' ?>">The welcome is <b><?= (int)$pv['wl_words'] ?></b> words with an example customer.<?= $pv['wl_problems'] ? ' Fix before it can be sent: ' . pm_h(implode(' ', $pv['wl_problems'])) : ' It passes the checks.' ?></p>
+  </div>
   <div class="card"><h2>Signatures</h2>
     <p class="hint mt-0">The signature ends every first email and reply, and the sign-off ends every WhatsApp message, whether the AI or the default message wrote it. Until you save, messages end as they always did (your name and details).
       A line whose words are missing, such as <code>{phone}</code> with no phone number, is left out. Your name comes from the person working (the team menu), else the signatory in Business details.</p>

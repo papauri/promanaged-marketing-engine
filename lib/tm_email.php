@@ -35,6 +35,17 @@ const PM_TM_SUBJECT = 'A free listing for {name}';
 /** The listing page a host signs up on (Travel-Malawi: src/App.tsx, /list-your-property). */
 const PM_TM_LIST_URL = 'ulendomalawi.com/list-your-property';
 
+/** The welcome for a host who joined (Sales > Targeting and messages > Welcome a new customer): short, warm, what it means for them, how to keep it working. */
+function pm_tm_wl_seed(): array
+{
+    return ['wl_subject' => 'Welcome to {company}, {name}',
+        'wl_body' => "Hello {first_name},\n\nWelcome to {company}, and thank you for listing {name} with us. We are glad to have you with us as we build Malawi's own directory of independent stays together.\n\n"
+            . "Your page: {listing}\n\n"
+            . "Travellers find you there and contact you directly by phone, WhatsApp or email, with zero commission and zero listing fees. Keep your photos, rates and details up to date from your dashboard: a fresh listing is the one travellers choose.\n\n"
+            . "If you would like a hand with anything, just reply to this email or reach us at info@ulendomalawi.com.",
+        'wl_whatsapp' => 'Welcome to {company}, and thank you for listing {name} with us. Travellers find you on your page and contact you directly, with zero commission. Keep your photos and rates fresh from your dashboard, and reply here any time you need a hand.' . "\n{listing}"];
+}
+
 /** The owner's answer to a host who says they are interested (Sales > Targeting and messages > When they are interested); the signature is added when it is sent. */
 function pm_tm_ok_seed(): array
 {
@@ -389,6 +400,69 @@ function pm_tm_fix_once(): void
         [$n, $kept] = pm_tm_directory_v6();
         pm_update('migrations', fn(array $m) => $m + ['tm_directory_v6' => date('c') . " ($n drafts, $kept approved or edited kept)"], fn() => []);
     }
+    if (empty($done['tm_directory_v7'])) {
+        $n = pm_tm_directory_v7();
+        pm_update('migrations', fn(array $m) => $m + ['tm_directory_v7' => date('c') . " ($n drafts)"], fn() => []);
+    }
+}
+
+/**
+ * The step before only looked at first emails not sent yet; the WhatsApp queue and the prepared follow-ups of leads we already emailed still said guests book,
+ * pay or video call through us. Those unsent WhatsApp messages and follow-ups (not edited or approved by the owner) take the directory wording, or the default
+ * message when the AI's own lines say it. A won lead's leftover follow-up goes. Returns how many leads changed.
+ */
+function pm_tm_directory_v7(): int
+{
+    $n = 0;
+    pm_update('leads', function (array $cur) use (&$n) {
+        foreach ($cur as $id => $l) {
+            if (($l['brand'] ?? 'promanaged') !== 'travel' || in_array($l['status'] ?? '', ['optout', 'lost'], true)) {
+                continue;
+            }
+            $before = $cur[$id];
+            $wa = strtr(str_replace("\r", '', (string)($l['drafts']['whatsapp'] ?? '')), PM_TM_DIRECTORY_SWAP);
+            if (empty($l['wa_sent']) && $wa !== '' && preg_match(PM_TM_BOOKING_DRAFT, $wa)) {
+                $wa = pm_dm_as('travel', fn() => pm_dm_render(['id' => $id] + $l)['whatsapp']);
+            }
+            if (empty($l['wa_sent']) && $wa !== (string)($l['drafts']['whatsapp'] ?? '')) {
+                $cur[$id]['drafts']['whatsapp'] = $wa;
+            }
+            $f = (array)($l['followup_draft'] ?? []);
+            if ($f && ($l['status'] ?? '') === 'won') {
+                unset($cur[$id]['followup_draft'], $cur[$id]['followup_approved']);
+            } elseif ($f && empty($f['edited_at']) && empty($l['followup_approved']) && preg_match(PM_TM_BOOKING_DRAFT, (string)($f['email_body'] ?? '') . "\n" . (string)($f['whatsapp'] ?? ''))) {
+                $cur[$id]['followup_draft'] = pm_dm_as('travel', fn() => pm_dm_followup_render(['id' => $id] + $l)) + ['source' => 'default'];
+            }
+            if ($cur[$id] !== $before) {
+                pm_lead_note($cur[$id], 'Unsent WhatsApp or follow-up updated: Travel Malawi is a directory, travellers contact the stay directly');
+                $n++;
+            }
+        }
+        return $cur;
+    }, fn() => []);
+    // planned posts that say bookings: held for new words (the post checks now block them), and the partnership messages are written again this week
+    $held = 0;
+    pm_update('social_posts', function (array $all) use (&$held) {
+        foreach ($all as $i => $p) {
+            if (!is_array($p) || ($p['brand'] ?? '') !== 'travel' || !in_array($p['status'] ?? '', PM_SOCIAL_UNSENT, true)
+                || !function_exists('pm_sx_post_texts') || !preg_match(PM_TM_BOOKING_POST, implode("\n", pm_sx_post_texts($p)) . "\n" . (string)($p['script'] ?? ''))) {
+                continue;
+            }
+            $all[$i]['status'] = 'needs_edit';
+            $all[$i]['lint'] = ['It describes bookings, payments or calls through us; Travel Malawi is an information directory now. Give it new words (New wording, or Talk it over), then approve it again.'];
+            unset($all[$i]['approved_at'], $all[$i]['approved_by']);
+            $held++;
+        }
+        return $all;
+    }, fn() => []);
+    pm_update('partners', function (array $all) {
+        unset($all['travel']['day']);
+        return $all;
+    }, fn() => []);
+    if ($held && function_exists('pm_tb_post')) {
+        pm_tb_post('travel', 'director', 'social', "$held planned posts described bookings or payments through us and are held for new words: Travel Malawi is a directory now.", 'order:directory:posts');
+    }
+    return $n + $held;
 }
 
 /** The earlier first-message wording that described a booking platform, and what directory mode says instead (saved text and unsent drafts). */
@@ -399,6 +473,9 @@ const PM_TM_DIRECTORY_SWAP = [
 
 /** A draft that still describes the booking platform after the swaps (bookings, payments or calls through us). */
 const PM_TM_BOOKING_DRAFT = '/video call|\bbook(s|ing|ed)? (you |them )?direct|\bguests (book|pay) you|\bchat (with|and) (you|the host)|booking requests/i';
+
+/** Words a Travel Malawi post may not use in directory mode (lib/sx_lint.php blocks them). */
+const PM_TM_BOOKING_POST = '/\bguests? (can |will )?(book|pay|reserve) (with )?(you|the (host|property|stay))\b|\bbook(ing|ed)? (you |them |it )?direct(ly)?\b|\bdirect bookings?\b|booking (requests?|confirmations?)|video call|in-app chat|chat (with|and) (you|the host|hosts) in the app|double bookings?|\bvouchers?\b|\bbook (now|today|your stay)\b/i';
 
 /** A fact line written for the booking platform (dropped from the saved facts; the directory facts replace it). */
 const PM_TM_BOOKING_LINE = '/\bbook(ing|ings|ed)?\b|voucher|video call|chat with the host|promotions|pay the property|for now: no commission|^Ulendo, the AI chat concierge|^The concierge team can set the listing up for the host: they build/i';

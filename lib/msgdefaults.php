@@ -12,7 +12,7 @@
 
 const PM_DM_VARS = ['first_name' => 'their first name', 'name' => 'their business', 'city' => 'their town', 'currency' => 'the money of their country (kwacha in Malawi, never dollars)', 'type' => 'kind of business', 'intro' => 'who is writing ("I\'m Grace from ...")',
     'sender' => 'your name', 'company' => 'your business name', 'tagline' => 'your tagline', 'phone' => 'your phone', 'email' => 'your email', 'website' => 'your website',
-    'address' => 'your address', 'title' => 'your job title', 'link' => 'your website link', 'opening' => 'the personal line about this lead from the day\'s study (one true detail about them); with nothing found, how you came across them'];
+    'address' => 'your address', 'title' => 'your job title', 'link' => 'your website link', 'listing' => 'their live page on our website, when there is one (a line with it is left out otherwise)', 'opening' => 'the personal line about this lead from the day\'s study (one true detail about them); with nothing found, how you came across them'];
 
 /** The default opening line (who is writing and how they came across the lead), with {placeholders}. */
 const PM_DM_OPENING_TRAVEL = 'I would love {name} in {city} to be part of something new.'; // no name (the signature has it), no posing as a traveller
@@ -43,7 +43,7 @@ function pm_dm_seed(string $brand): array
     if ($brand === 'travel') {
         return ['email_subject' => PM_TM_SUBJECT, 'email_body' => pm_tm_email_compose([], '', true),
             'whatsapp' => pm_tm_wa_first('Hello {first_name}, this is {company}.'), // the share kit's links follow it by themselves
-            'signature' => $sig, 'wa_signature' => '— {sender}, {company}'] + pm_tm_followup_seed() + pm_tm_ok_seed();
+            'signature' => $sig, 'wa_signature' => '— {sender}, {company}'] + pm_tm_followup_seed() + pm_tm_ok_seed() + pm_tm_wl_seed();
     }
     return ['email_subject' => 'A short note for {name}',
         'email_body' => "Hello {first_name},\n\n{intro}.\n\n{opening} If it would be useful, I can send you a short plan for your business.\n\n"
@@ -55,11 +55,14 @@ function pm_dm_seed(string $brand): array
             . "If it would help, I can put together a short one-page plan for {name}, written around how you work today. A one-line reply is all it takes.\n\nAnd if the timing is not right, no problem at all.",
         'fu_whatsapp' => 'Hello {first_name}, {company} here again. Just following up on my email: if it would help, I can put together a short one-page plan for {name}. A quick reply is all it takes.',
         'ok_body' => "Hello {first_name},\n\nThank you for getting back to me, I am glad this is of interest.\n\nThe next step is simple: tell me a little about how {name} works today and what you would like to improve, and I will put together a short plan with the options that fit. If it is easier, we can have a short call at a time that suits you.\n\nIf you have any questions in the meantime, just reply to this email.",
-        'ok_whatsapp' => 'Thank you for getting back to me. The next step is simple: tell me a little about how {name} works today and what you would like to improve, and I will put together a short plan. A short call works too, at a time that suits you.'];
+        'ok_whatsapp' => 'Thank you for getting back to me. The next step is simple: tell me a little about how {name} works today and what you would like to improve, and I will put together a short plan. A short call works too, at a time that suits you.',
+        'wl_subject' => 'Welcome to {company}, {name}',
+        'wl_body' => "Hello {first_name},\n\nWelcome to {company}, and thank you for choosing us. We are glad to be working with {name}.\n\nHere is what happens next: we will be in touch shortly to agree the first steps, and we will keep you posted at every stage, so you always know where things stand.\n\nIf you have a question at any time, just reply to this email.",
+        'wl_whatsapp' => 'Welcome to {company}, and thank you for choosing us. We will be in touch shortly with the first steps and keep you posted at every stage. Any question, just reply here.'];
 }
 
 /** The fields of the default message, in the order of the form. */
-const PM_DM_FIELDS = ['email_subject', 'email_body', 'whatsapp', 'fu_subject', 'fu_body', 'fu_whatsapp', 'ok_body', 'ok_whatsapp'];
+const PM_DM_FIELDS = ['email_subject', 'email_body', 'whatsapp', 'fu_subject', 'fu_body', 'fu_whatsapp', 'ok_body', 'ok_whatsapp', 'wl_subject', 'wl_body', 'wl_whatsapp'];
 
 /** The business's default message as it stands: ['use', 'email_subject', 'email_body', 'whatsapp', 'signature' (null = never saved), 'wa_signature' (null = never saved), 'saved' => bool]. */
 function pm_dm_cfg(string $brand = ''): array
@@ -106,7 +109,8 @@ function pm_dm_vars(array $lead = [], string $opening = ''): array
         'type' => trim((string)($lead['type'] ?? '')) ?: 'business', 'sender' => $sender, 'intro' => $me !== '' ? "I'm $me from $company" : "I am writing from $company", 'company' => $company,
         'tagline' => trim((string)($s['tagline'] ?? '')), 'phone' => trim((string)($s['phone'] ?? '')), 'email' => trim((string)($s['email'] ?? '')), 'website' => trim((string)($s['website'] ?? '')),
         'address' => trim((string)($s['address'] ?? '')), 'currency' => pm_local_currency($lead)['word'], 'title' => $sender !== '' && $sender === trim((string)($s['signatory_name'] ?? '')) ? trim((string)($s['signatory_title'] ?? '')) : '',
-        'link' => $link !== '' ? $link : (trim((string)($s['website'] ?? '')) !== '' ? 'https://' . preg_replace('#^https?://#i', '', trim((string)$s['website'])) : '')];
+        'link' => $link !== '' ? $link : (trim((string)($s['website'] ?? '')) !== '' ? 'https://' . preg_replace('#^https?://#i', '', trim((string)$s['website'])) : ''),
+        'listing' => (string)($lead['live_listing']['url'] ?? '')]; // lib/sx_wins.php: their page, once it is live
     $personal = function_exists('pm_lead_personal') ? pm_lead_personal($lead) : ''; // the day's study wrote it: no AI here
     $v['opening'] = $opening !== '' ? $opening : ($personal !== '' ? $personal : pm_dm_fill(pm_brand() === 'travel' ? PM_DM_OPENING_TRAVEL : PM_DM_OPENING, $v));
     return $v;
@@ -275,7 +279,13 @@ function pm_dm_preview(): array
     }
     return ['subject' => $r['email_subject'], 'email' => $email, 'whatsapp' => pm_wa_text($lead, $r['whatsapp'], true), 'words' => str_word_count($r['email_body']), 'problems' => $problems,
         'fu_subject' => $f['email_subject'], 'fu_email' => $f['email_body'] . pm_outreach_footer(pm_settings()), 'fu_whatsapp' => $f['whatsapp'], 'fu_words' => str_word_count($f['email_body']), 'fu_problems' => $fuProblems,
-        'ok_email' => $ok['body'] . "\n\n" . pm_reply_signature(), 'ok_whatsapp' => $ok['whatsapp'] !== '' ? pm_wa_text($lead, $ok['whatsapp']) : '', 'ok_words' => str_word_count($ok['body']), 'ok_problems' => $okProblems];
+        'ok_email' => $ok['body'] . "\n\n" . pm_reply_signature(), 'ok_whatsapp' => $ok['whatsapp'] !== '' ? pm_wa_text($lead, $ok['whatsapp']) : '', 'ok_words' => str_word_count($ok['body']), 'ok_problems' => $okProblems]
+        + (function_exists('pm_wl_render') ? (function () use ($lead, $c) {
+            $w = pm_wl_render($lead + ['live_listing' => ['url' => pm_brand() === 'travel' ? PM_WIN_LISTING_URL . 'example' : '']]);
+            $p = pm_outreach_lint($w['subject'], $w['body'], false, true);
+            ($bad = pm_dm_unknown($c['wl_subject'] . ' ' . $c['wl_body'] . ' ' . $c['wl_whatsapp'])) && $p[] = 'Unknown placeholder ' . implode(', ', $bad) . ': it would be sent as typed.';
+            return ['wl_words' => str_word_count($w['body']), 'wl_problems' => $p];
+        })() : ['wl_words' => 0, 'wl_problems' => []]);
 }
 
 /** Saves the form of one business (the fields posted in $_POST['dm']). Returns [message, kind]. */
@@ -295,7 +305,8 @@ function pm_dm_save(string $brand): array
     $t = fn(string $k, int $max) => mb_substr(trim(str_replace("\r\n", "\n", (string)($in[$k] ?? ''))), 0, $max);
     $row = ['use' => ($in['use'] ?? '') === 'default' ? 'default' : 'ai', 'email_subject' => $t('email_subject', 120), 'email_body' => $t('email_body', 3000), 'whatsapp' => $t('whatsapp', 700),
         'signature' => $t('signature', 500), 'wa_signature' => $t('wa_signature', 160), 'fu_subject' => $t('fu_subject', 120), 'fu_body' => $t('fu_body', 2000), 'fu_whatsapp' => $t('fu_whatsapp', 700),
-        'ok_body' => $t('ok_body', 4000), 'ok_whatsapp' => $t('ok_whatsapp', 900)];
+        'ok_body' => $t('ok_body', 4000), 'ok_whatsapp' => $t('ok_whatsapp', 900),
+        'wl_subject' => $t('wl_subject', 120), 'wl_body' => $t('wl_body', 2500), 'wl_whatsapp' => $t('wl_whatsapp', 700)];
     pm_update('message_defaults', function (array $all) use ($brand, $row) {
         $all[$brand] = $row;
         return $all;
