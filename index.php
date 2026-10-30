@@ -1502,6 +1502,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fdOk && pm_leads_save($leads);
             $back($fdMsg, $fdOk ? 'ok' : 'err');
         }
+        if ($do === 'win_yes' || $do === 'win_no') { // a likely win confirmed or not (lib/sx_wins.php)
+            $winMsg = pm_win_answer($leads[$id], $do === 'win_yes');
+            pm_leads_save($leads);
+            $back($winMsg);
+        }
         if ($do === 'reply_default') { // the business's own answer for a lead who says they are interested, no AI
             [$rdOk, $rdMsg] = pm_dm_ok_apply($leads[$id]);
             $rdOk && pm_leads_save($leads);

@@ -252,6 +252,11 @@ function pm_mb_read(string $brand, int $max = 120): array
         $s['error'] = $res['error'];
         return $s;
     });
+    $rc = pm_mb_reconcile($brand); // the mailbox and the leads in step, every read (code only)
+    $res['linked'] += $rc['linked'];
+    $res['made'] = $rc['made'];
+    $res['answered'] = $rc['answered'];
+    $res['unmatched_done'] = $rc['unmatched'];
     return $res;
 }
 
@@ -496,10 +501,169 @@ function pm_mb_counts(string $brand): array
     return $c;
 }
 
-/** An email a person should look at: human, from someone we do not know as a lead, and not put aside. */
+/** An email a person should look at: human, from someone we do not know as a lead, not answered yet and not put aside. */
 function pm_mb_needs_look(array $it): bool
 {
-    return $it['dir'] === 'in' && empty($it['lead']) && empty($it['done']) && in_array($it['kind'], ['enquiry', 'client', 'partner', 'other'], true);
+    return $it['dir'] === 'in' && empty($it['lead']) && empty($it['done']) && empty($it['answered']) && in_array($it['kind'], ['enquiry', 'client', 'partner', 'other'], true) && !pm_mb_is_test($it);
+}
+
+/** A subject without its Re:, Fwd: and [SPAM] tags, for following a thread ('' when too short to mean anything). */
+function pm_mb_thread_subject(string $s): string
+{
+    $s = trim(mb_strtolower($s));
+    do {
+        $was = $s;
+        $s = trim((string)preg_replace('/^((re|fw|fwd|aw|sv)\s*:|\[[^\]]{1,20}\])\s*/iu', '', $s));
+    } while ($s !== $was);
+    return mb_strlen($s) >= 12 ? $s : '';
+}
+
+/** A test email (ours from a website form test, or an example address): never a lead. */
+function pm_mb_is_test(array $it): bool
+{
+    return (bool)preg_match('/@example\.(com|org|net)$/i', (string)$it['addr']) || (bool)preg_match('/\b(website )?test\b|\bQA\b|^\s*\[test\]/i', (string)$it['subject']);
+}
+
+/**
+ * The head of Replies keeps the mailbox and the leads in step after every read (code only, no AI): every email nobody could place is matched again (a lead
+ * may have its address now, or the email answers a thread of a lead's), an enquiry becomes a lead by itself (not a test), an email we answered by hand stops
+ * asking for a look, a lead whose last message we answered from the mailbox stops waiting for our answer (its unsent drafted answer is dropped), and the
+ * unmatched replies that now belong to a lead, or that we answered, leave Leads > Unmatched replies. Returns ['linked', 'made' => [names], 'answered' => [names], 'unmatched'].
+ */
+function pm_mb_reconcile(string $brand): array
+{
+    $res = ['linked' => 0, 'made' => [], 'answered' => [], 'unmatched' => 0];
+    $cut = date('Y-m-d H:i', strtotime('-30 days'));
+    // 1. an enquiry is a lead: made now, so our answers and their next emails link to it
+    foreach (pm_mb_state($brand)['items'] as $it) {
+        if (count($res['made']) < 10 && $it['dir'] === 'in' && empty($it['lead']) && empty($it['done']) && $it['kind'] === 'enquiry' && (string)$it['at'] >= $cut
+            && filter_var($it['addr'], FILTER_VALIDATE_EMAIL) && !pm_mb_is_test($it)) {
+            $id = pm_lead_from_email($brand, $it, 'mailbox');
+            $res['made'][] = (string)(pm_leads_read()[$id]['name'] ?? $it['addr']);
+        }
+    }
+    // 2. every unplaced email matched again: address, company domain, or the thread (the same subject as an email of a lead's)
+    $leads = pm_leads_read();
+    [$byMail, $byDom] = pm_mb_index($leads, $brand);
+    $answered = [];
+    pm_mb_update($brand, function (array $s) use ($byMail, $byDom, $leads, $brand, &$res, &$answered) {
+        $bySubj = [];
+        foreach ($s['items'] as $it) {
+            if (!empty($it['lead']) && isset($leads[$it['lead']]) && ($t = pm_mb_thread_subject((string)$it['subject'])) !== '') {
+                $bySubj[$t] = (string)$it['lead'];
+            }
+        }
+        foreach ($s['items'] as $k => $it) {
+            if (!empty($it['lead']) || in_array($it['kind'], ['own', 'bounce', 'spam', 'newsletter', 'notification', 'auto'], true)) {
+                continue;
+            }
+            $hit = [null, ''];
+            foreach ($it['dir'] === 'out' ? (array)($it['to_all'] ?? []) : [(string)$it['addr']] as $a) {
+                if (($hit = pm_mb_match((string)$a, $byMail, $byDom))[0] !== null) {
+                    break;
+                }
+            }
+            if ($hit[0] === null && ($t = pm_mb_thread_subject((string)$it['subject'])) !== '' && isset($bySubj[$t])) {
+                $hit = [$bySubj[$t], 'the same email thread'];
+            }
+            if ($hit[0] !== null && pm_brand_norm((string)($leads[$hit[0]]['brand'] ?? 'promanaged')) === $brand) {
+                [$s['items'][$k]['lead'], $s['items'][$k]['how']] = $hit;
+                $s['items'][$k]['kind'] = in_array($it['kind'], ['other', 'enquiry', 'client', 'partner', 'sent', 'admin', 'supplier', 'personal'], true) ? 'lead' : $it['kind'];
+                $res['linked']++;
+            }
+        }
+        // 3. an email from someone not a lead that we answered by hand: no longer waiting for a look
+        foreach ($s['items'] as $k => $it) {
+            if ($it['dir'] !== 'in' || !empty($it['lead']) || !empty($it['answered']) || !filter_var($it['addr'], FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+            foreach ($s['items'] as $o) {
+                if ($o['dir'] === 'out' && (string)$o['at'] > (string)$it['at'] && in_array(strtolower((string)$it['addr']), (array)($o['to_all'] ?? [$o['addr']]), true)) {
+                    $s['items'][$k]['answered'] = (string)$o['at'];
+                    break;
+                }
+            }
+        }
+        foreach ($s['items'] as $it) { // what we sent each lead, for step 4
+            if ($it['dir'] === 'out' && !empty($it['lead'])) {
+                $answered[(string)$it['lead']][] = $it;
+            }
+        }
+        return $s;
+    });
+    // 4. a lead waiting for our answer that we answered from the mailbox: answered
+    $names = [];
+    pm_update('leads', function (array $cur) use ($answered, $brand, &$names) {
+        foreach ($answered as $id => $outs) {
+            $l = $cur[$id] ?? null;
+            $since = (string)($l['awaiting_reply_since'] ?? '');
+            if (!$l || pm_brand_norm((string)($l['brand'] ?? 'promanaged')) !== $brand || $since === '') {
+                continue;
+            }
+            usort($outs, fn($a, $b) => strcmp((string)$b['at'], (string)$a['at']));
+            $o = $outs[0];
+            if ((string)$o['at'] <= $since) {
+                continue;
+            }
+            $cur[$id]['thread'][] = ['dir' => 'out', 'at' => (string)$o['at'], 'text' => '(Answered from the mailbox, outside the app) ' . (string)$o['subject'], 'ch' => 'email'];
+            $cur[$id]['last_out'] = (string)$o['at'];
+            unset($cur[$id]['awaiting_reply_since']);
+            if (!empty($l['reply_draft']['body'])) {
+                $cur[$id]['reply_draft_dropped'] = (array)$l['reply_draft'] + ['dropped' => date('Y-m-d H:i')]; // kept, in case it is wanted
+            }
+            $cur[$id]['reply_draft'] = null;
+            if (($l['status'] ?? '') === 'replied') {
+                $cur[$id]['status'] = 'contacted';
+                $cur[$id]['followups'] = 0;
+                $cur[$id]['last_contacted'] = (string)$o['at'];
+            }
+            pm_lead_note($cur[$id], 'Answered from the mailbox on ' . $o['at'] . ' (' . ($o['subject'] !== '' ? $o['subject'] : 'no subject') . '): no longer waiting for our answer' . (!empty($l['reply_draft']['body']) ? '; the drafted answer was not sent and is put away' : ''));
+            $names[] = (string)$l['name'];
+        }
+        return $cur;
+    }, fn() => []);
+    $res['answered'] = $names;
+    // 5. Leads > Unmatched replies: what belongs to a lead now goes on it (it waits for our answer unless we answered it), what we answered leaves
+    $st = pm_mb_state($brand);
+    [$byMail, $byDom] = pm_mb_index(pm_leads_read(), $brand);
+    foreach (pm_inbox_unmatched_list() as $u) {
+        $addr = strtolower((string)($u['from'] ?? ''));
+        $ans = '';
+        foreach ($st['items'] as $o) {
+            if ($o['dir'] === 'out' && (string)$o['at'] > (string)($u['at'] ?? '') && in_array($addr, (array)($o['to_all'] ?? [$o['addr']]), true)) {
+                $ans = (string)$o['at'];
+                break;
+            }
+        }
+        [$lid] = pm_mb_match($addr, $byMail, $byDom);
+        if ($lid === null && $ans === '') {
+            continue;
+        }
+        if ($lid !== null) {
+            pm_update('leads', function (array $cur) use ($lid, $u, $ans) {
+                if (!isset($cur[$lid])) {
+                    return $cur;
+                }
+                $cur[$lid]['thread'][] = ['dir' => 'in', 'at' => (string)$u['at'], 'text' => trim((string)$u['subject'] . "\n\n" . (string)($u['text'] ?: $u['snippet'])), 'ch' => 'email'];
+                $cur[$lid]['last_reply'] = (string)$u['at'];
+                !empty($u['msgid']) && $cur[$lid]['last_in_id'] = (string)$u['msgid'];
+                if ($ans === '' && !in_array($cur[$lid]['status'] ?? '', ['optout', 'lost', 'won'], true)) {
+                    $cur[$lid]['awaiting_reply_since'] = (string)$u['at'];
+                    $cur[$lid]['status'] = in_array($cur[$lid]['status'] ?? '', ['contacted', 'new', 'qualified', 'drafted'], true) ? 'replied' : $cur[$lid]['status'];
+                }
+                pm_lead_note($cur[$lid], 'Their email of ' . $u['at'] . ' (' . ($u['subject'] ?: 'no subject') . ') was unmatched; it is on the lead now' . ($ans !== '' ? ', answered on ' . $ans : ', waiting for our answer'));
+                return $cur;
+            }, fn() => []);
+        }
+        pm_inbox_unmatched_take((string)$u['uid']);
+        $res['unmatched']++;
+    }
+    if ($res['made'] || $names) {
+        $line = trim(($res['made'] ? 'New leads from emails: ' . implode(', ', array_slice($res['made'], 0, 4)) . '. ' : '') . ($names ? 'Answered by hand, no longer waiting: ' . implode(', ', array_slice($names, 0, 4)) . '.' : ''));
+        function_exists('pm_tb_post') && pm_tb_post($brand, 'replies', 'director', $line, 'mb:reconcile');
+        pm_agent_log('Reply', 'Mailbox: ' . $line);
+    }
+    return $res;
 }
 
 /* ---------------- the owner's actions ---------------- */
@@ -556,7 +720,10 @@ function pm_do_mb_read(string $vb): array
     $r = pm_mb_read($vb);
     return ['msg' => $r['error'] !== '' ? 'The mailbox could not be read: ' . $r['error'] : 'Read ' . $r['in'] . ' new email' . ($r['in'] === 1 ? '' : 's') . ' in the Inbox and ' . $r['out'] . ' in Sent.'
         . ($r['outside'] ? ' Already in touch outside the app, now out of cold outreach: ' . implode(', ', $r['outside']) . '.' : '')
-        . (!empty($r['bounced']) ? ' Bounced, moved to "' . PM_BOUNCE_FOLDER . '": ' . implode(', ', $r['bounced']) . '.' : ''), 'kind' => $r['error'] !== '' ? 'err' : 'ok', 'to' => 'mailbox'];
+        . (!empty($r['bounced']) ? ' Bounced, moved to "' . PM_BOUNCE_FOLDER . '": ' . implode(', ', $r['bounced']) . '.' : '')
+        . (!empty($r['made']) ? ' New leads from enquiries: ' . implode(', ', $r['made']) . '.' : '')
+        . (!empty($r['answered']) ? ' Answered by hand, no longer waiting for our answer: ' . implode(', ', $r['answered']) . '.' : '')
+        . (!empty($r['unmatched_done']) ? ' ' . $r['unmatched_done'] . ' unmatched repl' . ($r['unmatched_done'] === 1 ? 'y' : 'ies') . ' placed or answered.' : ''), 'kind' => $r['error'] !== '' ? 'err' : 'ok', 'to' => 'mailbox'];
 }
 
 function pm_do_mb_act(string $vb): array
