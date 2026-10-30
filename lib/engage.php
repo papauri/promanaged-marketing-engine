@@ -86,15 +86,15 @@ function pm_resume_date(string $d, int $defDays): string
     return $defDays > 0 ? date('Y-m-d', strtotime("+$defDays days")) : '';
 }
 
-/** WhatsApp reply text: no links, at most 40 words. */
-function pm_wa_reply_clean(string $t): string
+/** WhatsApp reply text: no links, at most $max words (40; more when it is the owner's own interested answer). */
+function pm_wa_reply_clean(string $t, int $max = 40): string
 {
     $t = trim(preg_replace('#https?://\S+|www\.\S+#i', '', $t));
     $w = preg_split('/\s+/u', $t, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-    if (count($w) <= 40) {
+    if (count($w) <= $max) {
         return implode(' ', $w);
     }
-    $cut = implode(' ', array_slice($w, 0, 40));
+    $cut = implode(' ', array_slice($w, 0, $max));
     return preg_match('/^(.{40,}[.!?])(?!.*[.!?])/us', $cut, $m) ? $m[1] : rtrim($cut, ',;: ') . '.';
 }
 
@@ -121,7 +121,7 @@ function pm_agent_reply(array $lead, string $incoming, string $ch = 'email'): ar
         . "The answer (reply_body) follows the decision. Answer every question they asked, directly, in the order they asked it, and say plainly what we can do today. Where something is in unknown, say honestly that you will check it and come back to them, and offer what does work now; never claim an integration, feature, price, date or guarantee that is not in the facts. "
         . "If they ask for a price or a proposal say we will prepare a tailored one and suggest a short call. If they propose a time, do not commit: say we will confirm shortly or ask for two alternatives. "
         . "Write as the person at {$s['company_name']} who signs the email: never name yourself, never mention an agent, an AI, a desk, a sit-down or a colleague by name, and end with your last sentence: no sign-off or name (the app adds the usual signature). "
-        . "Length: as long as a complete, useful answer needs. Around 80 to 200 words reads best; go longer when they asked several or technical questions. Plain text, short paragraphs, no links, no bullet symbols. "
+        . "Length: as long as a complete, useful answer needs. Around 80 to 200 words reads best; go longer when they asked several or technical questions. Plain text, short paragraphs, no links, no bullet symbols (the owner's own answer below, when there is one, keeps its link, its numbered steps and its lines as written). "
         . "Set needs_human true if they are angry, complaining, negotiating price or terms, raise legal or security questions, unknown is not empty, or you are unsure. "
         . "For stop, not_interested, not_now, out_of_office and bounce, reply_body must be empty and sitdown may be empty. "
         . "resume_on: only for not_now, the date (YYYY-MM-DD) they asked to be contacted again, else " . date('Y-m-d', strtotime('+30 days')) . " (today is " . date('Y-m-d') . "). "
@@ -130,6 +130,8 @@ function pm_agent_reply(array $lead, string $incoming, string $ch = 'email'): ar
         . "whatsapp: the same answer as a WhatsApp message, at most 50 words, no subject, no links; empty when reply_body is empty." . (function_exists('pm_share_reply_hint') ? pm_share_reply_hint((string)($lead['brand'] ?? '')) : '') . ' ' . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $user = "Business: {$lead['name']} ({$lead['city']}), contact: " . ($lead['contact'] ?? '') . ", package we suggested: $pk, their likely need: " . ($lead['pain'] ?? '') . ".\n"
         . ($known ? "What our research found about them:\n- " . implode("\n- ", array_map(fn($k) => mb_substr($k, 0, 240), $known)) . "\n" : '')
+        . (($okBrief = function_exists('pm_dm_ok_brief') ? pm_dm_as(pm_brand_norm((string)($lead['brand'] ?? pm_brand())), fn() => pm_dm_ok_brief($lead)) : '') !== ''
+            ? $okBrief . "When the intent is interested or they ask how to join or what happens next, reply_body IS that answer, in its words, with its steps, link and notes kept: only add, at the start, one short line answering anything else they asked or said, and leave out a step they have clearly done already. Its WhatsApp version is the base of whatsapp (it may be longer than 50 words).\n" : '') // the owner's own words for a yes (Sales > Targeting and messages)
         . "Conversation so far:\n" . implode("\n", $thread) . "\n\nTheir new message" . ($ch === 'wa' ? ' (on WhatsApp)' : '') . ":\n" . mb_substr($incoming, 0, 4000)
         . "\n\nReturn JSON: {\"intent\",\"summary\":\"one sentence\",\"sitdown\":{\"asked\":[],\"known\":[],\"unknown\":[],\"options\":[{\"option\":\"\",\"for\":\"\",\"against\":\"\"}],\"lines\":[{\"who\":\"research|replies|advisor|writers|director\",\"says\":\"\"}],\"decision\":\"\",\"to_confirm\":\"\"},"
         . "\"needs_human\":bool,\"reply_subject\",\"reply_body\",\"whatsapp\",\"resume_on\",\"next_step\":\"what the owner should do next\",\"tell\":{\"writers\":\"\",\"director\":\"\",\"followup\":\"\",\"research\":\"\"}}";
@@ -140,7 +142,8 @@ function pm_agent_reply(array $lead, string $incoming, string $ch = 'email'): ar
     $out['intent'] = in_array($out['intent'] ?? '', PM_REPLY_INTENTS, true) ? $out['intent'] : 'other';
     $out['needs_human'] = !empty($out['needs_human']);
     $out['resume_on'] = $out['intent'] === 'not_now' ? pm_resume_date((string)($out['resume_on'] ?? ''), 30) : '';
-    $out['whatsapp'] = pm_wa_reply_clean(pm_human_polish((string)($out['whatsapp'] ?? ''), 'whatsapp'));
+    $out['wa_max'] = $okBrief !== '' && $out['intent'] === 'interested' ? 90 : 40; // the owner's interested answer is longer than a usual WhatsApp reply
+    $out['whatsapp'] = pm_wa_reply_clean(pm_human_polish((string)($out['whatsapp'] ?? ''), 'whatsapp'), $out['wa_max']);
     foreach (['reply_body' => 'email', 'reply_subject' => 'subject'] as $k => $chn) {
         if (isset($out[$k]) && is_string($out[$k])) {
             $out[$k] = pm_human_polish($out[$k], $chn);
@@ -237,7 +240,7 @@ function pm_reply_rethink(array &$lead): string
         $lead['reword_prev'] = ['slot' => 'reply_draft', 'data' => array_intersect_key($old, ['subject' => 1, 'body' => 1, 'whatsapp' => 1])];
     }
     $subject = $ch === 'email' && trim((string)($lead['last_in_subject'] ?? '')) !== '' ? 'Re: ' . $lead['last_in_subject'] : (trim((string)($old['subject'] ?? '')) ?: trim((string)($r['reply_subject'] ?? ''))); // in their thread
-    $lead['reply_draft'] = ['subject' => $subject, 'body' => trim((string)$r['reply_body']), 'whatsapp' => pm_wa_reply_clean((string)($r['whatsapp'] ?? '')),
+    $lead['reply_draft'] = ['subject' => $subject, 'body' => trim((string)$r['reply_body']), 'whatsapp' => pm_wa_reply_clean((string)($r['whatsapp'] ?? ''), (int)($r['wa_max'] ?? 40)),
         'needs_human' => !empty($r['needs_human']), 'next_step' => (string)($r['next_step'] ?? ''), 'ch' => $ch] + array_intersect_key($old, ['attach' => 1]);
     if (empty($lead['awaiting_reply_since'])) {
         $lead['awaiting_reply_since'] = date('Y-m-d H:i');
@@ -885,7 +888,7 @@ function pm_apply_reply(array &$lead, string $text, array $r, string $mode, ?cal
     }
     $theirs = trim((string)($lead['last_in_subject'] ?? ''));
     $subject = $ch === 'email' && $theirs !== '' ? 'Re: ' . $theirs : (trim((string)($r['reply_subject'] ?? '')) ?: 'Re: ' . ($lead['drafts']['email_subject'] ?? 'your reply')); // in their thread, under their own subject
-    $lead['reply_draft'] = ['subject' => $subject, 'body' => trim((string)($r['reply_body'] ?? '')), 'whatsapp' => pm_wa_reply_clean((string)($r['whatsapp'] ?? '')),
+    $lead['reply_draft'] = ['subject' => $subject, 'body' => trim((string)($r['reply_body'] ?? '')), 'whatsapp' => pm_wa_reply_clean((string)($r['whatsapp'] ?? ''), (int)($r['wa_max'] ?? 40)),
         'needs_human' => !empty($r['needs_human']), 'next_step' => (string)($r['next_step'] ?? ''), 'ch' => $ch];
     pm_reply_sitdown_keep($lead, (array)($r['sitdown'] ?? []), $r);
     $kitBrand = (string)($lead['brand'] ?? pm_brand());

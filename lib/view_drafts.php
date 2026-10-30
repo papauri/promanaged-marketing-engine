@@ -28,7 +28,7 @@ function pm_view_lead_drafts(array $l, string $csrf, callable $post, callable $h
         $h .= '<form method="post" class="replybox"><b>Win-back draft</b> <span class="hint">A fresh angle after a "no". Read it and send it only if the time is right.</span>'
             . $post($id, 'send_winback')
             . '<input type="text" name="email_subject" value="' . pm_h((string)($w['email_subject'] ?? '')) . '" aria-label="Win-back subject">'
-            . '<textarea name="email_body" rows="4" aria-label="Win-back email">' . pm_h((string)($w['email_body'] ?? '')) . '</textarea>'
+            . '<textarea name="email_body" rows="4" data-chat="followup" aria-label="Win-back email">' . pm_h((string)($w['email_body'] ?? '')) . '</textarea>'
             . '<label class="hint">WhatsApp version</label><textarea name="whatsapp" rows="2" aria-label="Win-back WhatsApp">' . pm_h($waText) . '</textarea>'
             . '<div class="btns"><button class="btn small" name="do" value="save_winback">Save edits</button>'
             . ($waBiz && $waText !== '' ? '<button class="btn small primary" name="do" value="winback_wa_biz" onclick="return confirm(\'Send this win-back on WhatsApp Business now?\')">Send on WhatsApp Business</button>' : '')
@@ -49,7 +49,7 @@ function pm_view_lead_drafts(array $l, string $csrf, callable $post, callable $h
             $txt = trim((string)($p[$k] ?? ''));
             $wa = $txt !== '' ? pm_wa_link($l, pm_wa_text($l, $txt)) : '';
             $h .= '<label class="hint">' . pm_h($lab) . (!empty($sent[$k]) ? ' · <b>sent ' . pm_h((string)$sent[$k]) . '</b>' : '') . '</label>'
-                . '<textarea name="ps_' . $k . '" rows="3" aria-label="' . pm_h($lab) . '">' . pm_h($txt) . '</textarea>'
+                . '<textarea name="ps_' . $k . '" rows="3" data-chat="followup" aria-label="' . pm_h($lab) . '">' . pm_h($txt) . '</textarea>'
                 . '<div class="btns">' . ($k === 'review' && empty($l['review_posted_at']) ? '<button class="btn small" name="do" value="review_posted" title="Press when you have seen their review on Google: it is counted on the Results screen">They posted the review</button>' : '') . ($waBiz && $txt !== '' ? '<button class="btn small primary" name="do" value="postsign_wa_biz" onclick="this.form.which.value=\'' . $k . '\';return confirm(\'Send this on WhatsApp Business now?\')">Send on WhatsApp Business</button>' : '') . ($mail && $txt !== '' ? '<button class="btn small primary" name="do" value="postsign_send" onclick="this.form.which.value=\'' . $k . '\';return confirm(\'Send this to ' . pm_h(addslashes((string)$l['email'])) . ' now?\')">Send by email</button>' : '')
                 . ($wa !== '' ? '<a class="btn small" href="' . pm_h($wa) . '" target="_blank" rel="noopener noreferrer">WhatsApp</a>' : '')
                 . ($txt !== '' ? '<button type="button" class="btn small" data-copy="' . pm_h($txt) . '">Copy</button>' : '') . '</div>';

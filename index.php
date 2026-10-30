@@ -1491,6 +1491,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fdOk && pm_leads_save($leads);
             $back($fdMsg, $fdOk ? 'ok' : 'err');
         }
+        if ($do === 'reply_default') { // the business's own answer for a lead who says they are interested, no AI
+            [$rdOk, $rdMsg] = pm_dm_ok_apply($leads[$id]);
+            $rdOk && pm_leads_save($leads);
+            $back($rdMsg, $rdOk ? 'ok' : 'err');
+        }
         if ($do === 'use_default') { // the business's default message instead of an AI draft
             [$udOk, $udMsg] = pm_dm_apply($leads[$id], !empty($_POST['plain']));
             $udOk && pm_leads_save($leads);
@@ -2701,7 +2706,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
       <p class="hint mt-0">One email per document type. Placeholders: {business} {contact} {reference} {package} {setup} {monthly} {daily} {first_year} {valid_until} {type_plural} {pain_title} {pain_cost} {or_call} {signature}</p>
       <?php foreach (['pitch' => 'Pitch only', 'contract' => 'Contract only', 'both' => 'Pitch + contract'] as $ek => $el): ?>
         <br><label><b><?= $el ?></b> &middot; subject</label><input type="text" name="tpl[emails][<?= $ek ?>][subject]" value="<?= pm_h($tpl['emails'][$ek]['subject']) ?>">
-        <label class="mt-2">Message</label><textarea name="tpl[emails][<?= $ek ?>][body]" rows="12"><?= pm_h($tpl['emails'][$ek]['body']) ?></textarea>
+        <label class="mt-2">Message</label><textarea name="tpl[emails][<?= $ek ?>][body]" rows="12" data-chat="tpl_proposal"><?= pm_h($tpl['emails'][$ek]['body']) ?></textarea>
       <?php endforeach; ?>
     </div>
     </div>
@@ -2718,7 +2723,7 @@ echo pm_ui_topbar(['tab' => $tab, 'view' => (string)($_GET['view'] ?? ''), 'sect
       <?php foreach (PM_LINE_LISTS as $k => [$lab, $cols]): ?><label class="mt-2"><?= pm_h($lab) ?></label><textarea name="ln[<?= $k ?>]" rows="<?= max(3, min(9, count($L[$k] ?? []) + 1)) ?>"><?= pm_h(pm_rows_to_text($L[$k] ?? [], $cols)) ?></textarea><?php endforeach; ?>
       <?php foreach (['pitch' => 'Pitch only', 'contract' => 'Contract only', 'both' => 'Pitch + contract'] as $ek => $el): ?>
         <label class="mt-3"><b>Email: <?= $el ?></b> &middot; subject</label><input type="text" name="ln[emails][<?= $ek ?>][subject]" value="<?= pm_h($L['emails'][$ek]['subject'] ?? '') ?>">
-        <textarea class="mt-1" name="ln[emails][<?= $ek ?>][body]" rows="9"><?= pm_h($L['emails'][$ek]['body'] ?? '') ?></textarea>
+        <textarea class="mt-1" name="ln[emails][<?= $ek ?>][body]" rows="9" data-chat="tpl_proposal"><?= pm_h($L['emails'][$ek]['body'] ?? '') ?></textarea>
       <?php endforeach; ?>
       <div class="mt-3" style="display:flex;gap:8px"><button class="btn primary" style="max-width:240px">Save <?= pm_h($lname) ?></button></div>
     </form>

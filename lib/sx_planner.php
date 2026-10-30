@@ -167,9 +167,9 @@ function pm_sx_offline_copy(array $slot, string $brand): array
                 break;
             }
             $open = $brand === 'travel'
-                ? ['Run an independent lodge, guest house or B&B in Malawi?', 'Want guests to find you and book you directly?', 'Is your stay easy for travellers to find?']
+                ? ['Run an independent lodge, guest house or B&B in Malawi?', 'Want travellers to find you and contact you directly?', 'Is your stay easy for travellers to find?']
                 : ['Not sure how your website looks to a customer?', 'Do customers find you online?', 'Wondering what your website is missing?'];
-            $k = array_search($s['topic'], $brand === 'travel' ? ['List your stay with Travel Malawi', 'Direct bookings for independent stays', 'Put your lodge in front of travellers'] : ['A closer look at your website', 'Do customers find you online?', 'Not sure what your website is missing?'], true);
+            $k = array_search($s['topic'], $brand === 'travel' ? ['List your stay with Travel Malawi', 'Zero commission for independent stays', 'Put your lodge in front of travellers'] : ['A closer look at your website', 'Do customers find you online?', 'Not sure what your website is missing?'], true);
             $paras = [$open[$k === false ? 0 : $k], $more ? implode(' ', array_map('pm_sx_end', $more)) : '', pm_sx_end($line)];
             $r = ['caption' => pm_sx_join($paras), 'headline' => $brand === 'travel' ? 'List your stay' : 'A closer look at your website', 'sub' => pm_sx_clip(rtrim($line, '.'), 100), 'hook' => 'magnet'];
             break;

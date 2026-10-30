@@ -23,16 +23,22 @@ function pm_view_msgdefaults(string $vb, string $csrf): void
       <label class="check"><input type="radio" name="dm[use]" value="default" <?= $c['use'] === 'default' ? 'checked' : '' ?>> The default message below, for every lead, with no AI</label>
     </div>
     <label>Email subject</label><input type="text" name="dm[email_subject]" value="<?= pm_h($c['email_subject']) ?>" maxlength="120">
-    <label>Email<?= $vb === 'travel' ? ' <span class="muted">· <code>{opening}</code> is the line written for each lead</span>' : '' ?></label><textarea name="dm[email_body]" rows="14" data-grow><?= pm_h($c['email_body']) ?></textarea>
-    <label>WhatsApp message</label><textarea name="dm[whatsapp]" rows="3" data-grow><?= pm_h($c['whatsapp']) ?></textarea>
+    <label>Email<?= $vb === 'travel' ? ' <span class="muted">· <code>{opening}</code> is the line written for each lead</span>' : '' ?></label><textarea name="dm[email_body]" rows="14" data-grow data-chat="tpl_email"><?= pm_h($c['email_body']) ?></textarea>
+    <label>WhatsApp message</label><textarea name="dm[whatsapp]" rows="3" data-grow data-chat="tpl_whatsapp"><?= pm_h($c['whatsapp']) ?></textarea>
     <p class="hint <?= $pv['problems'] ? 'warnt' : '' ?>">The email is <b><?= (int)$pv['words'] ?></b> words with an example lead (first emails may be 20 to 190, with at most one link in the text).<?= $pv['problems'] ? ' Fix before it can be sent: ' . pm_h(implode(' ', $pv['problems'])) : ' It passes the checks.' ?></p>
   </div>
   <div class="card"><h2>Default follow-up · <?= pm_h($bn) ?></h2>
     <p class="hint mt-0">For a business we wrote to that has not replied. A contacted lead's card has <b>Use default follow-up</b> any time; when follow-ups fall due they are made from it with no AI if the default message drafts new leads, or if there is no AI key (and whenever the AI fails). The same placeholders work here. A second or later follow-up says "a little while ago" and ends with a graceful last note in place of your last paragraph.</p>
     <label>Follow-up subject</label><input type="text" name="dm[fu_subject]" value="<?= pm_h($c['fu_subject']) ?>" maxlength="120">
-    <label>Follow-up email</label><textarea name="dm[fu_body]" rows="9" data-grow><?= pm_h($c['fu_body']) ?></textarea>
-    <label>Follow-up WhatsApp</label><textarea name="dm[fu_whatsapp]" rows="3" data-grow><?= pm_h($c['fu_whatsapp']) ?></textarea>
+    <label>Follow-up email</label><textarea name="dm[fu_body]" rows="9" data-grow data-chat="tpl_followup"><?= pm_h($c['fu_body']) ?></textarea>
+    <label>Follow-up WhatsApp</label><textarea name="dm[fu_whatsapp]" rows="3" data-grow data-chat="tpl_whatsapp"><?= pm_h($c['fu_whatsapp']) ?></textarea>
     <p class="hint <?= $pv['fu_problems'] ? 'warnt' : '' ?>">The follow-up is <b><?= (int)$pv['fu_words'] ?></b> words with an example lead (follow-ups may be 20 to 120).<?= $pv['fu_problems'] ? ' Fix before it can be sent: ' . pm_h(implode(' ', $pv['fu_problems'])) : ' It passes the checks.' ?></p>
+  </div>
+  <div class="card" id="okmsg"><h2>When they are interested · <?= pm_h($bn) ?></h2>
+    <p class="hint mt-0">Your answer for a business that writes back interested or asks how to start. The Replies head writes from it<?= $vb === 'travel' || $c['ok_saved'] ? '' : ' once you save it' ?>: your steps, link and notes stay as you wrote them, with one line on anything else they asked. A lead who wrote back has <b>Use interested answer</b> on its card, no AI. Your signature is added when it is sent, so leave the sign-off out.</p>
+    <label>Email</label><textarea name="dm[ok_body]" rows="16" data-grow data-chat="tpl_reply"><?= pm_h($c['ok_body']) ?></textarea>
+    <label>WhatsApp</label><textarea name="dm[ok_whatsapp]" rows="4" data-grow data-chat="tpl_whatsapp"><?= pm_h($c['ok_whatsapp']) ?></textarea>
+    <p class="hint <?= $pv['ok_problems'] ? 'warnt' : '' ?>">The answer is <b><?= (int)$pv['ok_words'] ?></b> words with an example lead (an answer is as long as it needs to be).<?= $pv['ok_problems'] ? ' Fix before it can be sent: ' . pm_h(implode(' ', $pv['ok_problems'])) : ' It passes the checks.' ?></p>
   </div>
   <div class="card"><h2>Signatures</h2>
     <p class="hint mt-0">The signature ends every first email and reply, and the sign-off ends every WhatsApp message, whether the AI or the default message wrote it. Until you save, messages end as they always did (your name and details).
@@ -51,6 +57,10 @@ function pm_view_msgdefaults(string $vb, string $csrf): void
     <div class="split mt-2">
       <div><label>Follow-up · <?= pm_h($pv['fu_subject']) ?></label><pre><?= pm_h($pv['fu_email']) ?></pre></div>
       <?php if ($pv['fu_whatsapp'] !== ''): ?><div><label>Follow-up WhatsApp</label><pre><?= pm_h($pv['fu_whatsapp']) ?></pre></div><?php endif; ?>
+    </div>
+    <div class="split mt-2">
+      <div><label>When they are interested</label><pre><?= pm_h($pv['ok_email']) ?></pre></div>
+      <?php if ($pv['ok_whatsapp'] !== ''): ?><div><label>When they are interested · WhatsApp</label><pre><?= pm_h($pv['ok_whatsapp']) ?></pre></div><?php endif; ?>
     </div>
   </details>
   <div class="btns formbar"><button class="btn primary">Save the default message</button>

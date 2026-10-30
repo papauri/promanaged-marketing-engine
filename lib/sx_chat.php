@@ -1,6 +1,7 @@
 <?php
 /**
- * Talk it over: the owner chats with the agent who wrote a message, under any message box (lead emails and WhatsApps, answers to replies, follow-ups, posts,
+ * Talk it over: the owner chats with the agent who wrote a message, under any message box (lead emails and WhatsApps, answers to replies, follow-ups, win-backs,
+ * thank-you asks, progress updates, the default messages and proposal emails of Sales > Targeting and messages and Template and prices, posts,
  * comment and inbox replies, the Facebook bio). "Shorter", "warmer", "mention the free listing", "why did you open like that?": the agent answers in a line and,
  * when the owner asks for a change, puts the whole new version in the box (Undo puts the old one back; nothing is saved until the owner saves the form).
  * One cheap AI call a turn, with the last few turns, the business's facts and, on a lead, what we know about them and what they wrote.
@@ -18,6 +19,11 @@ const PM_CC_KINDS = [
     'post' => ['social', 'post', 2200, 'post'],
     'comment' => ['social', 'reply on social media', 1500, 'reply'],
     'bio' => ['social', 'Page bio', 255, 'profile'],
+    'tpl_email' => ['writers', 'default first email', 3000, 'email'], // Sales > Targeting and messages: the same text for every lead
+    'tpl_followup' => ['followup', 'default follow-up email', 2000, 'email'],
+    'tpl_reply' => ['replies', 'default answer for a lead who is interested', 4000, 'reply'],
+    'tpl_whatsapp' => ['writers', 'default WhatsApp message', 900, 'whatsapp'],
+    'tpl_proposal' => ['writers', 'default email that goes with a proposal', 3000, 'email'],
 ];
 
 /** The kind of a box from what the browser knows: its name, the form's "do" and "which", or data-chat on the box. */
@@ -77,6 +83,7 @@ function pm_cc_turn(string $kind, string $text, string $ask, array $chat, array 
         . 'Rules: use only the facts above, the text, what we know about the lead and what the owner says: no new numbers, prices, dates, places, features, claims or links. Keep every link and every {placeholder} exactly as written. Keep the language of the text unless the owner asks for another. '
         . ($chan === 'email' || $chan === 'reply' ? 'No sign-off and no name at the end: the app adds the signature. ' : '')
         . ($kind === 'whatsapp' ? 'No greeting line and no sign-off: the app adds them. ' : '')
+        . (str_starts_with($kind, 'tpl_') ? 'It is the business\'s default text, the same for every lead: the app fills in each {placeholder} for the lead it goes to. ' : '')
         . ($chan === 'reply' && $lead ? 'It is our answer to their last message: it must still answer it. ' : '')
         . "At most $cap characters. Plain, warm, human words, short sentences, never pushy. "
         . '"say": one or two short sentences to the owner, in the first person, plain (what you changed, or your answer). '

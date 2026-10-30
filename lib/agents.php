@@ -57,11 +57,11 @@ function pm_travel_agent_defaults(): array
     return [
         // What Travel Malawi offers (its own, never ProManaged IT's), from its facts: every agent and writer reads this
         'offerings' => [
-            "Listing: a free listing on Malawi's own directory of independent stays, with no commission, no listing fee and no monthly charge",
-            "Bookings: booking requests straight to the host's dashboard, confirmations over WhatsApp, and guests who pay the property directly in kwacha",
-            'Set-up help: the concierge team builds the page, verifies the photos and messages the host on WhatsApp',
-            'Calendar sync: two-way iCal sync with the booking system the host already uses (RoomRaccoon, NightsBridge, Airbnb, Booking.com, Google Calendar), so there are no double bookings and nothing to update twice',
-            'Ulendo concierge: an AI companion that helps write the listing and answer guest enquiries',
+            "Listing: a free listing on Malawi's own directory of independent stays, with zero commission and zero listing fees",
+            'Direct contact: travellers reach the host directly by phone, WhatsApp or email and agree terms and payment with them; no bookings or payments go through us',
+            'Set-up help: the concierge team sets the listing up from the photos and rates the host sends',
+            'Availability calendar: on request, a display-only calendar of open nights that syncs by iCal with the system the host already uses (RoomRaccoon, NightsBridge, Airbnb, Booking.com, Google Calendar)',
+            'Ulendo concierge: an AI companion that helps write the listing and helps travellers plan their trip',
         ],
         'sectors' => ['lodges and guest houses', 'bed and breakfasts and cottages', 'safari camps and eco-lodges', 'lakeshore resorts and beach lodges', 'boutique and city hotels', 'backpackers and hostels'],
         'cities' => ['Cape Maclear', 'Nkhata Bay', 'Mangochi', 'Salima', 'Nkhotakota', 'Livingstonia', 'Karonga', 'Liwonde', 'Zomba', 'Mulanje', 'Blantyre', 'Lilongwe', 'Mzuzu', 'Chintheche'],
@@ -966,8 +966,33 @@ function pm_agent_list(mixed $out): array
  * What every agent is told about us. Kept as short as the job allows, because every word is paid for on every call.
  * Levels: tiny (writers, follow-up) < short (scouts, lookups) < packages < full (qualifier: packages and pain points).
  */
-/** Travel Malawi's two-way calendar sync, as it works in the platform (Travel-Malawi: server/icalService.ts, Rooms & Rates > Sync iCal, synced in the background about every 25 minutes). */
-const PM_TM_ICAL_FACT = 'Two-way calendar sync (iCal): a host who already uses RoomRaccoon, NightsBridge, Airbnb, Booking.com or Google Calendar pastes that calendar\'s iCal link for each room under Rooms & Rates > Sync iCal, and dates booked there are blocked on Travel Malawi automatically (checked about every half hour); each room, or the whole place, also has its own Travel Malawi calendar link to add to their system, so bookings made on Travel Malawi show up there too. No double bookings, no updating two calendars, and they keep the system they use; the concierge team can link the calendars for them';
+/** Travel Malawi's calendar sync before directory mode (written into saved facts by the tm_ical_v5 step; tm_directory_v6 replaces it). */
+const PM_TM_ICAL_FACT_OLD = 'Two-way calendar sync (iCal): a host who already uses RoomRaccoon, NightsBridge, Airbnb, Booking.com or Google Calendar pastes that calendar\'s iCal link for each room under Rooms & Rates > Sync iCal, and dates booked there are blocked on Travel Malawi automatically (checked about every half hour); each room, or the whole place, also has its own Travel Malawi calendar link to add to their system, so bookings made on Travel Malawi show up there too. No double bookings, no updating two calendars, and they keep the system they use; the concierge team can link the calendars for them';
+
+/** The availability calendar as it works in directory mode (Travel-Malawi: agents/directives/D3-directory-mode.md, src/lib/availability.ts): a per-property exception, display only. */
+const PM_TM_ICAL_FACT = 'Availability calendar (optional, our team switches it on for a property): the listing shows travellers which nights are open or unavailable, for display only (nothing is booked through it); the host blocks dates and can sync it both ways by iCal with RoomRaccoon, NightsBridge, Airbnb, Booking.com or Google Calendar, so they keep the system they use; the concierge team can link the calendars for them';
+
+/** What Travel Malawi is, in the words every agent reads: an information directory (Tourism Act, 2025), never a booking site. */
+const PM_TM_ABOUT = "Malawi's own directory of independent lodges, B&Bs, cottages, guest houses and safari camps (stays only), built together with the hosts who run them. It is an information directory: travellers discover a stay and contact it directly by phone, WhatsApp or email; it takes no bookings, payments or commission, unlike Booking.com and the other big sites that take a cut of every stay. Hosts are partners building it with us.";
+
+/** What Travel Malawi must never say (directory mode, the Tourism Act, 2025). */
+const PM_TM_NEVER = "Never promise bookings, traffic or income. Never say Travel Malawi takes bookings, reservations, payments or deposits, or that guests chat with, message or call the host in the app: travellers contact the property directly. Never say a property is licensed, verified or approved by the Ministry or by us.";
+
+/** Travel Malawi's facts, one per line: the platform in directory mode and the owner's own answer to an interested host. */
+const PM_TM_FACTS = "Listing is free: zero commission and zero listing fees, so the host keeps 100% of what they earn\n"
+    . "Getting listed takes about 5 minutes at ulendomalawi.com/list-your-property: create a free account, add the stay's details (a few photos, room types and \"from\" rates in MWK or USD, and the phone number, WhatsApp or email), then submit it for review; the team does a quick review and the stay goes live\n"
+    . "Travellers contact the property directly by phone, WhatsApp or email from the listing's \"Contact the property\" section and agree terms and payment with the host; Travel Malawi takes no bookings or payments and takes no part in the exchange\n"
+    . "Every listing needs at least one direct contact: a phone number, WhatsApp or email\n"
+    . "Hosts have full control: they update their photos, rates and details any time from their dashboard\n"
+    . "The concierge team can set the listing up for the host: a host can simply reply with a few photos and their rates\n"
+    . "Ulendo, the AI concierge, helps hosts write their listing (it can read photos, menus and documents) and helps travellers plan their trip; it never books, holds rooms or messages a host for a traveller\n"
+    . "Listings show the rooms with indicative \"from\" rates, menus, amenities, maps and directions; travellers can save and compare stays\n"
+    . "A listing shows the stay's reviews from different sources side by side, not only the platform's own; that openness is why travellers trust the place\n"
+    . "Licences: accommodation operators are responsible for their own statutory documents, business permits and tourism operating licences from the Department of Tourism (Tourism Act, 2025); Travel Malawi is an independent information directory and does not issue, verify or endorse licensing compliance; a host may add their tourism licence number, shown as provided by the property\n"
+    . PM_TM_ICAL_FACT . "\n"
+    . "A manager can be given their own access to the listing\n"
+    . "Maps and directions keep working offline for remote stays\n"
+    . "There is a host starter guide";
 
 /** Booking systems and channels a host's website shows, by name (what the calendar sync connects to). */
 const PM_BOOKING_SYSTEMS = ['roomraccoon' => 'RoomRaccoon', 'nightsbridge' => 'NightsBridge', 'cloudbeds' => 'Cloudbeds', 'beds24' => 'Beds24', 'checkfront' => 'Checkfront', 'siteminder' => 'SiteMinder',
@@ -981,11 +1006,11 @@ function pm_brain_defaults(string $brand): array
     }
     if ($brand === 'travel') {
         return [
-            'about' => "Malawi's own directory of independent lodges, B&Bs, cottages, guest houses and safari camps (stays only), built together with the hosts who run them: a direct booking platform that is free to join, with no commission, unlike Booking.com and the other big booking sites that take a cut of every stay. Hosts are partners building it with us.",
-            'facts' => "Listing and onboarding are free for now: no commission, no listing fee, no monthly charge\nGuests pay the property directly, in kwacha: Airtel Money, TNM Mpamba, bank transfer or cash on arrival; no payment goes through the platform\nGuests can chat with the host in the app and voice or video call them, so they see the place and ask the host directly\nUlendo, the AI chat concierge, is a companion for owners and managers: it helps write the listing (it can read photos, menus and documents) and helps answer guest enquiries\nThe concierge team can set the listing up for the host: they build the page, verify the photos and message the host on WhatsApp within 24 hours\nBooking requests reach the host's dashboard and confirmations go out over WhatsApp\nConfirmed guests get a digital voucher with a QR code that staff scan on arrival, with directions and optional WiFi details\nHosts control their own rooms, rates and blocked dates, and can run promotions (slashed prices, flash sales, early-bird offers)\n" . PM_TM_ICAL_FACT . "\nA manager can be given their own access to the listing\nEvery listing is reviewed before it goes live; only guests with a confirmed booking can leave a review\nA listing shows the stay's reviews from different sources side by side, not only the platform's own; that openness is why travellers trust the place and book\nMaps and directions keep working offline for remote stays\nThere is a host starter guide", // read from ulendomalawi.com: what wins a host over
+            'about' => PM_TM_ABOUT,
+            'facts' => PM_TM_FACTS, // read from the Travel Malawi platform (directory mode) and the owner's own host answer
             'audience' => 'Owners and managers of independent places to stay in Malawi; travellers looking for them.',
             'voice' => 'Warm, local, proud of Malawi, plain words.',
-            'never' => 'Never promise bookings, traffic or income.',
+            'never' => PM_TM_NEVER,
         ];
     }
     return [
@@ -1072,7 +1097,7 @@ function pm_agent_scout(string $sector, string $city, int $want, array $knownNam
     $label = pm_sector_label($sector);
     if (pm_brand() === 'travel') {
         $place = pm_city_place($city);
-        $system = pm_agents_company_brief('short') . "\nYou are the Scout. Web-search for real, trading independent stays in {$place}: {$label}. Prefer ones that gain from direct bookings "
+        $system = pm_agents_company_brief('short') . "\nYou are the Scout. Web-search for real, trading independent stays in {$place}: {$label}. Prefer ones that gain from being found and contacted directly "
             . "(mostly on third-party sites, phone/WhatsApp-only, no or outdated website). Exclude chains and non-stays. Only include stays that publish enquiry contacts. " . PM_AGENT_RULES;
     } elseif (pm_brand_is_custom(pm_brand())) {
         $place = pm_city_place($city);
@@ -1217,7 +1242,7 @@ function pm_agent_write(array $leads): array
     $s = pm_settings();
     $tpl = pm_template();
     $ask = pm_brand() === 'travel'
-        ? "Invite the stay to list on {$s['company_name']} free; the gain is direct bookings with no commission. "
+        ? "Invite the stay to list on {$s['company_name']} free; the gain is travellers who find them and contact them directly, with no commission or listing fee. "
         : "";
     $sender = pm_sender_name();
     $subjectLine = function_exists('pm_email_exp_example') ? pm_email_exp_example(pm_brand()) : '';
@@ -1476,8 +1501,8 @@ function pm_outreach_lint(string $subject, string $body, bool $first, bool $repl
     if (preg_match_all('#https?://|www\.#i', $body) > 1 || preg_match('#\b(bit\.ly|tinyurl|t\.co|goo\.gl|wa\.me)\b#i', $body)) {
         $bad[] = 'Too many links or a link shortener. Use at most one plain link to your own website.';
     }
-    // £ and € are matched as real characters (/u): as bytes they would also hit the em dash in a sign-off "— Company"
-    if (preg_match('/(?<![A-Za-z])(MWK|USD|ZAR|GBP|EUR)(?![A-Za-z])|\$|(?<![A-Za-z])K\s?\d|\d[\d,. ]{3,}\s*(a month|per month|\/\s?month|once|setup)/i', $subject . ' ' . $body) || preg_match('/[£€]/u', $subject . ' ' . $body)) {
+    // £ and € are matched as real characters (/u): as bytes they would also hit the em dash in a sign-off "— Company"; a currency named without an amount ("rates in MWK or USD") is not a price
+    if (preg_match('/(?<![A-Za-z])(MWK|USD|ZAR|GBP|EUR)\s?\d|\d\s?(MWK|USD|ZAR|GBP|EUR)(?![A-Za-z])|\$|(?<![A-Za-z])K\s?\d|\d[\d,. ]{3,}\s*(a month|per month|\/\s?month|once|setup)/i', $subject . ' ' . $body) || preg_match('/[£€]/u', $subject . ' ' . $body)) {
         $bad[] = 'Remove prices and amounts from the email: prices belong in the proposal.';
     }
     if (!$reply && ($words < 20 || $words > ($first ? 190 : 120))) { // an answer to their message is as long as it needs to be (the reply box only recommends a length)
@@ -1747,7 +1772,7 @@ function pm_wa_quick_replies(): array
 {
     $b = pm_brand_name(pm_brand());
     $what = pm_brand() === 'travel'
-        ? 'Travel Malawi is a direct booking site for independent stays in Malawi. Guests book you directly, you keep your rate, and requests reach you on WhatsApp. Listing is free for now.'
+        ? 'Travel Malawi is Malawi\'s own directory of independent stays. Travellers find you and contact you directly by phone, WhatsApp or email, and you keep 100% of what you earn. Listing is free, with no commission.'
         : (pm_brand_is_custom(pm_brand())
             ? trim((string)(pm_brain()['about'] ?? '')) . ' I can send a short note on how we could help your business.'
             : 'We build software and websites, source computers and equipment, and provide IT support for businesses in ' . pm_markets()['home'] . (pm_markets()['worldwide'] ? ' and abroad' : '') . '. I can send a one-page plan for your business.');

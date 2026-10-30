@@ -362,7 +362,7 @@ function pm_agent_watch(string $brand, array $knownNames): array
 {
     $travel = $brand === 'travel';
     $who = $travel
-        ? 'independent stays in Malawi that went online, reopened or started taking direct bookings in the last few weeks'
+        ? 'independent stays in Malawi that went online, reopened or started taking guests directly in the last few weeks'
         : (pm_brand_is_custom($brand)
             ? 'Malawi organisations that fit what we offer and show a fresh signal: a new website, a hiring advert, a reopening, an expansion or a move online'
             : 'Malawi businesses with a fresh signal: a new website, a hiring advert for admin or IT, a reopening, or a shop moving its operations online');

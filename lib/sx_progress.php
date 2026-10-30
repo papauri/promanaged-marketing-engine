@@ -2,7 +2,7 @@
 /**
  * Customer progress: after someone says yes, the owner keeps them posted on what they bought (a website, a system, an order, a Travel Malawi listing).
  * The steps are the ones their proposal promised ("Getting started" in Template and prices, by business line: for Travel Malawi create the account,
- * add the property, review, go live, receive requests). On the lead the owner marks where it stands (in progress, waiting for them, done) with an optional
+ * add the stay details, submit for review, go live). On the lead the owner marks where it stands (in progress, waiting for them, done) with an optional
  * note or link; the Follow-up head writes the update straight away, by code, no AI (Talk it over can rework it), and it goes out only when the owner
  * presses Send (by email, in their thread, with the usual signature) or WhatsApp.
  * The swarm hears it: the Director gets each change on the team board, and when a customer goes live Social is told so it can welcome them on the Page.

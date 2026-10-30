@@ -447,7 +447,7 @@ function pm_sx_bank_build(string $brand, string $start): array
     $line = pm_sx_magnet_line($brand);
     $hint = $brand === 'travel' ? 'hostsignup' : 'freecheck';
     $angles = $brand === 'travel'
-        ? ['List your stay with Travel Malawi', 'Direct bookings for independent stays', 'Put your lodge in front of travellers']
+        ? ['List your stay with Travel Malawi', 'Zero commission for independent stays', 'Put your lodge in front of travellers']
         : ['A closer look at your website', 'Do customers find you online?', 'Not sure what your website is missing?'];
     if (pm_brand_is_custom($brand)) { // the business's own free first step; with none set up there is nothing to invite people to
         $mg = trim((string)pm_brand_profile($brand)['magnet']);

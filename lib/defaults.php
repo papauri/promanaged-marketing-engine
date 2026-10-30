@@ -34,7 +34,7 @@ function pm_default_settings(): array
         'link_on'         => false,  // off until you switch it on in Settings
         // Travel Malawi: a separate brand that speaks for itself (stays only). Used when a package or lead belongs to it.
         'travel' => [
-            'company_name' => 'Travel Malawi', 'tagline' => 'Direct bookings for independent stays across Malawi', 'address' => 'Malawi',
+            'company_name' => 'Travel Malawi', 'tagline' => PM_TM_TAGLINE, 'address' => 'Malawi',
             'phone' => '', 'email' => '', 'website' => 'ulendomalawi.com', 'signatory_name' => '', 'signatory_title' => 'Founder',
             'accent_color' => '#047857', 'from_email' => '', // blank = send from the same mailbox, shown as "Travel Malawi"
             'link_url' => 'https://ulendomalawi.com', 'link_on' => true, // shown in Travel Malawi emails and WhatsApp messages
