@@ -710,10 +710,12 @@ try {
         && (!empty($l['email']) || !empty($l['phone'])) && empty($l['drafts']) && !pm_lead_is_client($l))); // a client is messaged personally, never with a cold draft
     usort($todo, fn($a, $b) => $b['score'] <=> $a['score']);
     $todo = array_slice($todo, 0, 30);
-    if ($hold && $todo && $cfg['enabled']['writer']) {
+    $redo = $hold ? array_values(array_filter($todo, fn($l) => !empty($l['rewrite_reason']))) : []; // held: the emails the sit-down took back are still written again (each replaces the draft it took)
+    if ($hold && $todo && $cfg['enabled']['writer'] && !$redo) {
         $pauseLog();
         $stats['paused'] = true;
     } elseif ($cfg['enabled']['writer'] && $todo) {
+        $todo = $hold ? $redo : $todo;
         $progress('Writers drafting ' . count($todo) . ' messages');
         $byAi = !(function_exists('pm_dm_use_default') && pm_dm_use_default($brand)); // the default message has one subject for all: not part of the subject experiment
         $results = [];
