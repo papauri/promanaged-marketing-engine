@@ -519,20 +519,11 @@ function pm_mb_act(string $brand, string $key, string $do, string $leadId = ''):
         return [true, 'Put aside.'];
     }
     $leads = pm_leads();
-    if ($do === 'new') { // a new enquiry becomes a lead that waits for our answer
-        $name = trim((string)($it['business'] ?? '')) ?: (trim((string)$it['name']) ?: (string)$it['addr']);
-        $leadId = pm_lead_id($name, '', $brand);
-        if (!isset($leads[$leadId])) {
-            $now = date('Y-m-d H:i');
-            $leads[$leadId] = ['id' => $leadId, 'brand' => $brand, 'name' => mb_substr($name, 0, 120), 'type' => 'Enquiry', 'city' => '', 'address' => '', 'website' => '', 'phone' => '',
-                'email' => filter_var($it['addr'], FILTER_VALIDATE_EMAIL) ? (string)$it['addr'] : '', 'whatsapp' => '', 'contact' => (string)$it['name'], 'contact_title' => '', 'evidence' => [],
-                'need_signals' => [(string)($it['summary'] ?? $it['subject'])], 'score' => 70, 'status' => 'replied', 'notes' => [], 'drafts' => [], 'sent' => [], 'followups' => 0,
-                'created' => $now, 'updated' => $now, 'source' => 'email', 'src' => ['kind' => 'mailbox'], 'awaiting_reply_since' => $it['at'], 'last_reply' => $it['at'],
-                'thread' => [['dir' => 'in', 'at' => $it['at'], 'text' => trim((string)$it['subject'] . "\n\n" . (string)($it['text'] ?: $it['snippet'])), 'ch' => 'email']]]
-                + (!empty($it['msgid']) ? ['last_in_id' => (string)$it['msgid']] : []);
-            pm_lead_note($leads[$leadId], 'Made from an email in the mailbox (' . ($it['subject'] ?: 'no subject') . ')');
-            pm_leads_save($leads);
+    if ($do === 'new') { // any email we received becomes a lead that waits for our answer
+        if ($it['dir'] !== 'in') {
+            return [false, 'Only an email we received can become a lead.'];
         }
+        $leadId = pm_lead_from_email($brand, $it, 'mailbox');
     } elseif (!isset($leads[$leadId])) {
         return [false, 'Pick the lead this email belongs to.'];
     } else { // linked: their address is remembered, and a lead we have not written to leaves cold outreach
@@ -549,7 +540,8 @@ function pm_mb_act(string $brand, string $key, string $do, string $leadId = ''):
     pm_mb_update($brand, function ($s) use ($key, $leadId) {
         $s['items'][$key]['lead'] = $leadId;
         $s['items'][$key]['how'] = 'linked by you';
-        $s['items'][$key]['kind'] = in_array($s['items'][$key]['kind'], ['other', 'enquiry', 'client', 'partner'], true) ? 'lead' : $s['items'][$key]['kind'];
+        $s['items'][$key]['kind'] = in_array($s['items'][$key]['kind'], ['other', 'enquiry', 'client', 'partner'], true) || $do === 'new' ? 'lead' : $s['items'][$key]['kind'];
+        unset($s['items'][$key]['done']); // a lead now, not put aside
         return $s;
     });
     $nm = (string)(pm_leads_read()[$leadId]['name'] ?? 'the lead');

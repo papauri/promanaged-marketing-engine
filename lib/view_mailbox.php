@@ -71,14 +71,14 @@ echo pm_ui_tabs($tabs, $f, 'Mailbox');
         <?php if (!empty($it['business']) && $ln === ''): ?><span class="muted t-sm">writes for <?= pm_h((string)$it['business']) ?></span><?php endif; ?>
         <?php if (!empty($it['done'])): ?><span class="muted t-sm">put aside</span><?php endif; ?></div>
     </div>
-    <?php if ($lid === '' && in_array($it['kind'], ['enquiry', 'client', 'partner', 'other', 'sent'], true) && empty($it['done'])): ?>
+    <?php if ($lid === '' && ($it['dir'] === 'in' ? !in_array($it['kind'], ['own', 'bounce'], true) : $it['kind'] === 'sent')): // any email we received can become a lead, even one put aside or sorted as a supplier, newsletter or spam ?>
     <form method="post" class="mb-act"><?= $sx('mb_act', $hid('key', (string)$key) . $hid('f', $f)) ?>
       <select name="lead" aria-label="The lead this email belongs to"><option value="">Link to a lead…</option>
         <?php foreach ((array)($it['suggest'] ?? []) as $sg): if (isset($leadsB[$sg])): ?><option value="<?= pm_h((string)$sg) ?>">★ <?= pm_h((string)$leadsB[$sg]['name']) ?></option><?php endif; endforeach; ?>
         <?php foreach ($leadsB as $oid => $ol): ?><option value="<?= pm_h((string)$oid) ?>"><?= pm_h((string)$ol['name']) ?></option><?php endforeach; ?></select>
       <div class="btns"><button class="btn small primary" name="mb" value="link">Link</button>
-        <?php if ($it['dir'] === 'in' && in_array($it['kind'], ['enquiry', 'client', 'partner', 'other'], true)): ?><button class="btn small" name="mb" value="new" title="A new lead that waits for our answer">Make a lead</button><?php endif; ?>
-        <button class="btn small ghost" name="mb" value="aside">Not a lead</button></div>
+        <?php if ($it['dir'] === 'in'): ?><button class="btn small" name="mb" value="new" title="A new lead that waits for our answer">Make a lead</button><?php endif; ?>
+        <?php if (empty($it['done'])): ?><button class="btn small ghost" name="mb" value="aside">Not a lead</button><?php endif; ?></div>
     </form>
     <?php endif; ?>
   </div>

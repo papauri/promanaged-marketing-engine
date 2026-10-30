@@ -1021,6 +1021,62 @@ function pm_inbox_unmatched_add(array $m): void
     });
 }
 
+/**
+ * Makes a lead of an email from someone who is not one (Leads > Unmatched replies, Sales > Mailbox): a lead of $brand that waits for our answer, with their email as
+ * the first message of the thread, so the Replies head and Talk it over can answer it like any reply. No AI. A lead of that business with the same address is used
+ * instead of a second one. The email leaves the unmatched list, and the mailbox shows it linked. $m: addr, name, business, subject, text, snippet, at, msgid, summary.
+ * Returns the lead's id.
+ */
+function pm_lead_from_email(string $brand, array $m, string $from = 'mailbox'): string
+{
+    $addr = strtolower(trim((string)($m['addr'] ?? '')));
+    $addr = filter_var($addr, FILTER_VALIDATE_EMAIL) ? $addr : '';
+    $person = trim((string)($m['name'] ?? ''));
+    $dom = $addr !== '' && function_exists('pm_mb_domain') ? pm_mb_domain($addr) : '';
+    $name = trim((string)($m['business'] ?? '')) ?: ($person !== '' ? $person : ($dom !== '' ? $dom : ($addr !== '' ? $addr : 'Email enquiry')));
+    $at = trim((string)($m['at'] ?? '')) ?: date('Y-m-d H:i');
+    $subject = trim((string)($m['subject'] ?? ''));
+    $msgid = (string)($m['msgid'] ?? '');
+    $id = '';
+    pm_update('leads', function (array $leads) use ($brand, $addr, $person, $dom, $name, $at, $subject, $msgid, $m, $from, &$id) {
+        foreach ($leads as $lid => $l) {
+            if ($addr !== '' && pm_brand_norm((string)($l['brand'] ?? 'promanaged')) === $brand && in_array($addr, array_map('strtolower', array_merge([(string)($l['email'] ?? '')], (array)($l['alt_emails'] ?? []))), true)) {
+                $id = (string)$lid; // already a lead: nothing new to make
+                return $leads;
+            }
+        }
+        $id = pm_lead_id($name, '', $brand);
+        if (isset($leads[$id])) {
+            return $leads;
+        }
+        $now = date('Y-m-d H:i');
+        $leads[$id] = ['id' => $id, 'brand' => $brand, 'name' => mb_substr($name, 0, 120), 'type' => 'Enquiry', 'city' => '', 'address' => '', 'website' => $dom, 'phone' => '',
+            'email' => $addr, 'whatsapp' => '', 'contact' => $person !== '' && !str_contains($person, '@') ? $person : '', 'contact_title' => '', 'evidence' => [],
+            'need_signals' => [mb_substr(trim((string)($m['summary'] ?? '')) ?: $subject, 0, 240)], 'score' => 70, 'status' => 'replied', 'notes' => [], 'drafts' => [], 'sent' => [], 'followups' => 0,
+            'created' => $now, 'updated' => $now, 'source' => 'email', 'src' => ['kind' => $from], 'awaiting_reply_since' => $at, 'last_reply' => $at,
+            'thread' => [['dir' => 'in', 'at' => $at, 'text' => trim($subject . "\n\n" . (string)(($m['text'] ?? '') ?: ($m['snippet'] ?? ''))), 'ch' => 'email']]]
+            + ($msgid !== '' ? ['last_in_id' => $msgid] : []);
+        pm_lead_note($leads[$id], 'Made from an email ' . ($from === 'inbox' ? 'we could not match to a lead' : 'in the mailbox') . ' (' . ($subject !== '' ? $subject : 'no subject') . ')');
+        return $leads;
+    }, fn() => []);
+    if ($msgid !== '') {
+        pm_inbox_unmatched_take(md5($msgid));
+        if (function_exists('pm_mb_update')) { // the same email in the mailbox list shows the lead
+            pm_mb_update($brand, function ($s) use ($msgid, $id) {
+                foreach ((array)$s['items'] as $k => $it) {
+                    if (($it['msgid'] ?? '') === $msgid && empty($it['lead'])) {
+                        $s['items'][$k]['lead'] = $id;
+                        $s['items'][$k]['how'] = 'made a lead by you';
+                        $s['items'][$k]['kind'] = 'lead';
+                    }
+                }
+                return $s;
+            });
+        }
+    }
+    return $id;
+}
+
 /** Remove one unmatched message (by its uid) and return it, or null. */
 function pm_inbox_unmatched_take(string $uid): ?array
 {

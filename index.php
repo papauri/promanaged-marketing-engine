@@ -1051,11 +1051,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $n = pm_ss_set_after($leads, $ids, $when);
             $back($when !== '' ? "$n scheduled to go no earlier than $when." : "$n cleared: they go out at the next open time.", $n ? 'ok' : 'err');
         }
-        if ($do === 'attach_unmatched' || $do === 'dismiss_unmatched') {
+        if ($do === 'attach_unmatched' || $do === 'dismiss_unmatched' || $do === 'unmatched_lead') {
             $uid = (string)($_POST['uid'] ?? '');
             if ($do === 'dismiss_unmatched') {
                 pm_inbox_unmatched_take($uid);
                 $back('Dismissed.');
+            }
+            if ($do === 'unmatched_lead') { // someone who is not a lead yet: a new lead waiting for our answer, no AI (lib/engage.php)
+                $umFor = (string)($_POST['for'] ?? pm_brand());
+                $umItem = current(array_filter(pm_inbox_unmatched_list(), fn($it) => ($it['uid'] ?? '') === $uid)) ?: null;
+                if (!$umItem || !pm_brand_valid($umFor) || !pm_user_can_brand($umFor)) {
+                    $back($umItem ? 'Pick a business you work on.' : 'That message is already handled.', 'err');
+                }
+                $umId = pm_lead_from_email($umFor, ['addr' => $umItem['from'] ?? ''] + $umItem, 'inbox');
+                pm_inbox_unmatched_take($uid); // also when it has no message id
+                $id = $umId;
+                $back('Made a lead: ' . (string)(pm_leads()[$umId]['name'] ?? 'new lead') . ' (' . pm_brand_name($umFor) . '). Their email is on it, waiting for our answer: Team sit-down or Use interested answer drafts one.');
             }
             $to = (string)($_POST['to'] ?? '');
             $item = null;

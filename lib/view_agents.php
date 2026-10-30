@@ -166,12 +166,15 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
 
 <?php if ($unmatched): $cands = array_filter($leadsAll, fn($x) => !empty($x['sent']) || !empty($x['last_contacted']) || !empty($x['wa_sent'])); uasort($cands, fn($a, $b) => strcasecmp($a['name'], $b['name'])); ?>
 <div class="card unmatched"><h2>Unmatched replies <span class="pill warn"><?= count($unmatched) ?></span></h2>
-  <p class="hint">Mail that reached your inbox from someone we could not match to a lead. Attach it to the right lead and the reply agent handles it like any reply, or dismiss it.</p>
+  <p class="hint">Mail that reached your inbox from someone we could not match to a lead. Attach it to the right lead and the reply agent handles it like any reply, make a new lead of it (it waits for our answer), or dismiss it.</p>
+  <?php $umBrands = pm_user_brands(); // the new lead is for the business picked (the one open by default) ?>
   <?php foreach (array_slice($unmatched, 0, 10) as $u): ?>
     <div class="unm"><div><b><?= pm_h($u['name'] !== '' ? $u['name'] . ' · ' : '') ?><?= pm_h($u['from']) ?></b> <span class="muted">· <?= pm_h($u['at']) ?></span><br><b><?= pm_h($u['subject']) ?></b><br><span class="muted"><?= pm_h($u['snippet']) ?></span></div>
       <form method="post" class="inline"><?= $post('', 'attach_unmatched', $hid('uid', $u['uid'])) ?>
         <select name="to" aria-label="Lead to attach to" required><option value="">Attach to lead…</option><?php foreach (array_slice($cands, 0, 400) as $c): ?><option value="<?= pm_h($c['id']) ?>"><?= pm_h($c['name'] . ' (' . $c['city'] . ')') ?></option><?php endforeach; ?></select>
         <button class="btn small primary">Attach to lead</button>
+        <?php if (count($umBrands) > 1): ?><select name="for" aria-label="The business the new lead is for"><?php foreach ($umBrands as $ub): ?><option value="<?= pm_h($ub) ?>"<?= $ub === pm_brand() ? ' selected' : '' ?>><?= pm_h(pm_brand_name($ub)) ?></option><?php endforeach; ?></select><?php endif; ?>
+        <button class="btn small" formnovalidate name="do" value="unmatched_lead" title="A new lead with their email as the first message, waiting for our answer (no AI)">Make a lead</button>
         <button class="btn small" formnovalidate name="do" value="dismiss_unmatched">Dismiss</button></form></div>
   <?php endforeach; ?>
   <?php if (count($unmatched) > 10): ?><p class="hint">And <?= count($unmatched) - 10 ?> more: handle these first.</p><?php endif; ?>
