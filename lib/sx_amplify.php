@@ -375,7 +375,7 @@ function pm_panel_plan_top_partners(string $vb, array $ctx = []): string
     if (!$rows) {
         return '';
     }
-    $h = '<div class="card sx-card py-3 px-4"><b class="t-sm">Partnership radar</b> <span class="muted t-xs">· pages worth working with; drafts only, you send them by hand</span>';
+    $h = '<div class="card"><h2>Partnership radar <span class="muted t-sm">· pages worth working with; drafts only, you send them by hand</span></h2>';
     foreach ($rows as $r) {
         $h .= '<div class="mt-2 t-sm"><b>' . pm_h((string)$r['name']) . '</b>' . ($r['kind'] !== '' ? ' <span class="muted">· ' . pm_h((string)$r['kind']) . '</span>' : '')
             . ' <a href="' . pm_h((string)$r['url']) . '" target="_blank" rel="noopener noreferrer">open page</a>'

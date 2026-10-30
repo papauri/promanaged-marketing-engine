@@ -71,6 +71,8 @@ $tile = fn(string $label, string $value, string $note, string $href) => '<a clas
   </section>
 </div>
 
+<?= function_exists('pm_hd_card') ? pm_hd_card($vb, (string)($_SESSION['csrf'] ?? '')) : '' // the heads' promotion sit-down and its moves (lib/sx_huddle.php) ?>
+
 <section class="card hq-today" aria-label="Today">
   <?php $fg = $td['goal']; ?><?= $tile('Firm goal this month', $fg['signed'][0] . ' of ' . $fg['signed'][1] . ' signed', $fg['replies'][0] . ' of ' . $fg['replies'][1] . ' replies · ' . $fg['pace'], '?tab=social&view=results') ?>
   <?= $tile('Emails today', $td['sent'] . ($td['cap'] ? ' (plan ' . $td['cap'] . ')' : ''), $td['queue'] ? $td['queue'] . ' in the queue' . ($td['next'] === 'paused' ? ', sending paused' : ($td['next'] !== '' ? ', next ' . $td['next'] : '')) : 'nothing queued', '?tab=agents') ?>

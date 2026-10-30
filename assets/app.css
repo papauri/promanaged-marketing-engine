@@ -27,7 +27,7 @@ button.link { border:0; background:none; color:var(--dept); cursor:pointer; padd
 .muted { color:var(--muted) }
 details summary { cursor:pointer; color:var(--muted); font-size:13px; margin-top:4px; }
 .hint { font-size:12px; color:var(--muted); margin-top:4px; margin:4px 0 }
-h3 { font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); margin:28px 0 10px; font-weight:600 }
+h3 { font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted); margin:var(--s-5) 0 var(--s-2); font-weight:600 }
 .checks { display:flex; gap:16px; flex-wrap:wrap; margin-top:8px; }
 .person { margin:0 0 4px; font-size:14px; }
 .shead { display:flex; flex-wrap:wrap; gap:var(--s-1); align-items:center; margin-bottom:var(--s-2); }
@@ -59,7 +59,7 @@ fieldset + .row, fieldset + label, .row + fieldset { margin-top:12px; }
 h3 + .btgrid { margin-top:4px; }
 
 /* ===== 3. shell ===== */
-.flash { padding:var(--s-3) var(--s-4); border-radius:14px; margin-bottom:var(--s-4); border:1px solid; border-left-width:4px; box-shadow:var(--sh-card); animation:rise .4s var(--ease) both }
+.flash { padding:var(--s-3) var(--s-5); border-radius:var(--r-card); margin-bottom:var(--s-4); border:1px solid; border-left-width:4px; box-shadow:var(--sh-card); animation:rise .4s var(--ease) both }
 .flash.ok { background:var(--ok-bg); border-color:var(--ok-line); border-left-color:var(--ok) }
 .flash.err { background:var(--bad-bg); border-color:var(--bad-line); border-left-color:var(--bad) }
 .who select { height:32px; font-size:13px; width:auto; border-radius:var(--r-pill); background-color:rgba(255,255,255,.07); border-color:rgba(255,255,255,.14); color:#fff }
@@ -107,7 +107,7 @@ h3 + .btgrid { margin-top:4px; }
 .pagehead .eyebrows { margin-bottom:10px; }
 .pagehead .sub { max-width:68ch; margin:8px 0 0; font-size:14px; }
 .headacts { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-.tabs { display:flex; width:fit-content; max-width:100%; gap:2px; padding:4px; margin:0 0 20px; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-pill); box-shadow:var(--sh-card); overflow-x:auto; scrollbar-width:none; }
+.tabs { display:flex; width:fit-content; max-width:100%; gap:2px; padding:4px; margin:0 0 var(--s-4); background:var(--surface); border:1px solid var(--line); border-radius:var(--r-pill); box-shadow:var(--sh-card); overflow-x:auto; scrollbar-width:none; }
 .tabs::-webkit-scrollbar { display:none; }
 .tabs a { padding:7px 14px; color:var(--muted); text-decoration:none; font-size:13px; line-height:18px; font-weight:500; white-space:nowrap; border-radius:var(--r-pill); transition:color .15s, background .15s; }
 .tabs a:hover { color:var(--ink); background:var(--surface-2); }
@@ -136,7 +136,8 @@ h3 + .btgrid { margin-top:4px; }
 .card.bad { background:var(--bad-bg); border-color:var(--bad-line) }
 .card-head { display:flex; align-items:center; justify-content:space-between; gap:var(--s-2); min-height:var(--ctl-sm); margin:0 0 var(--s-2) }
 .card-head h2 { margin:0 }
-.card h2 { font-size:15px; text-transform:none; letter-spacing:-.01em; color:var(--ink); margin:0 0 8px; font-weight:600 }
+.card h2, details.card > summary { font-size:15px; text-transform:none; letter-spacing:-.01em; color:var(--ink); font-weight:600 } /* one title size for every card, open or folded */
+.card h2 { margin:0 0 var(--s-2) }
 .seg { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
 .seg label { flex:1; margin:0; text-align:center; padding:8px; cursor:pointer; color:var(--ink); font-size:13px; border-right:1px solid var(--line); }
 .seg label:last-child { border-right:0; }
@@ -173,7 +174,7 @@ table.grid tbody tr:hover, .sx-table tbody tr:hover, .hist tbody tr:hover { back
 .chip.info, .pill.info, .sx-chip.info { background:color-mix(in srgb, var(--dept) 10%, #fff); border-color:color-mix(in srgb, var(--dept) 30%, #fff); color:var(--dept); font-weight:600 }
 .chip.dot::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; flex:none }
 .pick { cursor:pointer }
-.card.find { padding:12px; }
+
 .suggest { position:relative; }
 .suglist { position:absolute; z-index:40; left:0; right:0; top:calc(100% + 4px); margin:0; padding:4px; list-style:none; background:#fff; border:1px solid var(--line); border-radius:var(--r-ctl); box-shadow:var(--sh-pop); max-height:360px; overflow:auto; }
 .suglist[hidden] { display:none; }
@@ -201,7 +202,7 @@ table.grid tbody tr:hover, .sx-table tbody tr:hover, .hist tbody tr:hover { back
 .filters a small { color:var(--muted); margin-left:3px; }
 .filters a.on { background:var(--ink); color:#fff; border-color:var(--ink) }
 .filters a.on small { color:#c9ccd1; }
-.card.empty { color:var(--muted); text-align:center; padding:28px }
+.card.empty { color:var(--muted); text-align:center; padding:var(--s-5) }
 /* the Approach block on a lead card: readiness, what is missing, the plan */
 .approach { margin:var(--s-3) 0 var(--s-2); padding:var(--s-3) var(--s-4); background:var(--surface-2); border:1px solid var(--line); border-radius:14px }
 .ap-head { display:flex; align-items:center; gap:var(--s-3); flex-wrap:wrap; margin-bottom:var(--s-2) }
@@ -234,7 +235,7 @@ table.compact input { height:var(--ctl-sm); }
 .btns.stick { position:sticky; bottom:0; background:var(--surface); padding:8px 0; z-index:5; }
 .lostf { display:flex; gap:4px; }
 .lostf select { min-width:0; flex:1; }
-.sx-card { padding:var(--s-3) var(--s-4); }
+.sx-card { padding:var(--s-4) var(--s-5); } /* the same as a card; inside a card it is smaller (below) */
 .sx-card h3, .sx-card h4 { margin-top:0; }
 .sx-chips { display:flex; gap:4px; flex-wrap:wrap; margin:4px 0 8px; }
 .sx-table td.num, .sx-table th.num { text-align:right; font-variant-numeric:tabular-nums; }
@@ -280,7 +281,7 @@ table.compact input { height:var(--ctl-sm); }
 .formbar input[type=email], .formbar input[type=text] { flex:1 1 300px; width:auto !important; min-width:300px !important; max-width:420px; }
 
 /* ===== 5. patterns ===== */
-details.card > summary { cursor:pointer; list-style:none; margin:0; color:var(--ink); font-size:14px; font-weight:600; min-height:24px }
+details.card > summary { cursor:pointer; list-style:none; margin:0; min-height:24px }
 details.card > summary::-webkit-details-marker { display:none; }
 details.card[open] > summary { margin-bottom:12px }
 details.lead { margin-bottom:var(--s-2); }
@@ -370,7 +371,7 @@ details.card.sec[open] > summary { margin-bottom:0; }
 .hq-feed li { display:grid; grid-template-columns:96px 120px minmax(0, 1fr); gap:8px; padding:8px 0; border-bottom:1px solid var(--line); font-size:13px; }
 .hq-feed li:last-child { border-bottom:0; }
 .hq-feed li.tb { grid-template-columns:96px 150px minmax(0, 1fr) auto; align-items:start; }
-.hq-feed > summary { cursor:pointer; font-weight:600; font-size:var(--fs-3); }
+
 .hq-feed time { color:var(--muted); }
 .hq-feed b { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .hq-feed li.err span { color:var(--bad); }
@@ -636,7 +637,7 @@ details.sec > .secbody { margin-top:12px; }
 .proofrow { margin-bottom:12px; padding-bottom:12px; border-bottom:1px dashed var(--line); }
 .proofrow input, .proofrow select, .proofrow textarea { margin-bottom:4px; }
 .crew { display:flex; flex-wrap:wrap; gap:4px 16px; margin:4px 0 12px; }
-.inboxhead { padding:12px 16px; }
+
 .lead .tags, .btns, .findrow, .sxh, .sxb, .sx-chips, .opt-chans, .chips, .shead, .runtop, .acts, .headacts, .wahead, .opt-sum, .opt-top, .chipbar, form.inline, .inl { align-items:center; }
 .findrow:has(input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select) .btn.small,
 form.inline:has(input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select) .btn.small,
@@ -1002,6 +1003,13 @@ main.swapping { opacity:.55; pointer-events:none; transition:opacity .12s; }
 .hq-heads { list-style:none; margin:var(--s-3) 0 0; padding:0 }
 .hq-heads li { display:grid; grid-template-columns:minmax(150px, 210px) 1fr; gap:var(--s-1) var(--s-4); padding:var(--s-3) 0; border-top:1px solid var(--line) }
 .hq-heads li:first-child { border-top:0 }
+/* The promotion sit-down on the Overview (lib/sx_huddle.php) */
+.hd-moves { list-style:none; margin:0; padding:0 }
+.hd-moves li { display:flex; align-items:center; gap:var(--s-3); padding:var(--s-2) 0; border-top:1px solid var(--line) }
+.hd-moves li:first-child { border-top:0 }
+.hd-moves li.done b { color:var(--muted); text-decoration:line-through; font-weight:500 }
+.hd-moves .grow { min-width:0 }
+@media (max-width:860px) { .hd-moves li { flex-wrap:wrap } }
 .hq-ontrack { margin-top:var(--s-2); border-top:1px solid var(--line); padding-top:var(--s-2) }
 .hq-ontrack > summary { cursor:pointer; color:var(--ok); font-size:var(--fs-2); font-weight:500 }
 .hq-head-who { display:flex; flex-direction:column; align-items:flex-start; gap:var(--s-1); font-size:var(--fs-3) }
@@ -1046,7 +1054,7 @@ a.sf-stat:hover { border-color:var(--line-strong) }
 .hq-head-who .chip { align-self:flex-start }
 
 /* Sales > Mailbox: one row per email, direction, who, subject, what it is and whose; the owner places what code could not */
-.mb-list { padding:var(--s-2) var(--s-4) }
+.mb-list { padding-block:var(--s-2) }
 .mb-row { display:grid; grid-template-columns:28px minmax(0, 1fr) minmax(0, 300px); gap:var(--s-3); padding:var(--s-3) 0; border-top:1px solid var(--line); align-items:start }
 .mb-row:first-child { border-top:0 }
 .mb-row.look .mb-dir { color:var(--warn) }
@@ -1124,7 +1132,7 @@ body:has(.lsel:checked) .selbar .sel-tip { display:none }
 .sc-src { display:flex; flex-wrap:wrap; gap:var(--s-2); margin-top:var(--s-3) }
 .sc-chip { display:inline-flex; gap:6px; align-items:center; padding:4px 10px; border-radius:var(--r-pill); border:1px solid var(--line); background:var(--surface-2); font-size:var(--fs-1); color:var(--ink-2) }
 .sc-chip.ok { border-color:var(--ok-line); background:var(--ok-bg) } .sc-chip.off { color:var(--muted) }
-.sc-list { padding-top:var(--s-3) }
+
 .sc-row { border-top:1px solid var(--line) } .sc-row:first-of-type { border-top:0 }
 .sc-row > summary { list-style:none; display:grid; grid-template-columns:auto 1fr auto; gap:var(--s-3); align-items:center; padding:10px 4px; cursor:pointer }
 .sc-row > summary::-webkit-details-marker { display:none }

@@ -58,27 +58,36 @@ function pm_tm_ok_seed(): array
         'ok_whatsapp' => 'Thank you for your interest! Getting listed is free and takes about 5 minutes: visit ' . PM_TM_LIST_URL . ', create your free account, add a few photos, your room types and "from" rates and your phone, WhatsApp or email, then submit it for a quick review and your stay goes live. Zero commission and zero listing fees: travellers contact you directly. Want a hand setting it up? Just reply here.'];
 }
 
-/** The invitation that ends every first email: the one link in the text (the share kit adds the direct links below it), and the easiest way in: reply with photos and rates, we do the rest. */
-const PM_TM_INVITE = "Please visit {link} to list {name} for free. Even easier: just reply with a few photos of your rooms and the outside, and your rates, and our team will set up your page for you and let you know as soon as you are online. It is all free, and there is no catch: we are building Malawi's tourism together.";
+/** The invitation that ends every first email: how easy listing is (the owner's own steps), with the one link in the text (the share kit adds the direct links below it). Hosts list themselves: we never ask them to send us photos. */
+const PM_TM_INVITE = "Listing {name} is free and takes about 5 minutes: visit https://ulendomalawi.com/list-your-property, create your free account, add your stay details (a few photos, your room types and \"from\" rates, and your phone, WhatsApp or email), then submit it for a quick review and your stay goes live. If you would like a hand, just reply to this email.";
+
+/** The invitation when it asked hosts to send photos by reply (saved text and unsent drafts are brought up to date once, tm_ease_v8). */
+const PM_TM_INVITE_V4 = "Please visit {link} to list {name} for free. Even easier: just reply with a few photos of your rooms and the outside, and your rates, and our team will set up your page for you and let you know as soon as you are online. It is all free, and there is no catch: we are building Malawi's tourism together.";
 
 /** The invitation before it offered to do it from photos (unsent drafts are brought up to date once). */
 const PM_TM_INVITE_V3 = "Please visit {link} to list {name} for free and manage your page and your online presence yourself, or simply reply and our team will set it up for you. There is no catch: we are building Malawi's tourism together.";
 
-/** The offer every Travel Malawi follow-up makes (the AI is told to make it too): photos and rates by reply, we set it up, free. */
-const PM_TM_PHOTOS_OFFER = 'You can simply reply with a few photos of your rooms and the outside, and your rates, and our team will set up your page for you and let you know as soon as you are online. It is all free.';
+/** How easy it is, which every Travel Malawi follow-up shows (the AI is told to as well): the owner's four steps, about 5 minutes, free. */
+const PM_TM_PHOTOS_OFFER = 'Getting listed is free and takes about 5 minutes: visit ulendomalawi.com/list-your-property, create a free account, add a few photos, your room types and "from" rates and your contact details, then submit it for a quick review and your stay goes live.';
 
-/** The default follow-up to a stay that has not replied: short and human, the photos offer, no pressure. */
+/** The default follow-up to a stay that has not replied: short and human, how easy listing is (the owner's own four steps), no pressure. */
 function pm_tm_followup_seed(): array
 {
-    return ['fu_subject' => 'Photos are all we need for {name}',
+    return ['fu_subject' => 'Listing {name} takes about 5 minutes',
         'fu_body' => "Good day {first_name},\n\nI wrote to you a few days ago about listing {name} on {company}, the directory of Malawi's own stays we are building together with the hosts who run them.\n\n"
-            . "To make it easy, there is nothing to fill in. Just reply to this email with a few photos of your rooms and the outside, and your rates, and our team will set up your page for you and let you know as soon as you are online. It is free, with no commission.\n\n"
-            . "And if now is not a good time, no problem at all.",
-        'fu_whatsapp' => "Good day {first_name}, {company} here again. To list {name} free, just reply here with a few photos of your rooms and the outside, and your rates, and we will set up your page and let you know once you are online. No commission, no catch."];
+            . "Getting listed is completely free and takes only about 5 minutes:\n1. Visit " . PM_TM_LIST_URL . "\n2. Create your free account\n3. Add your stay details: a few photos, your room types and \"from\" rates, and your phone number, WhatsApp or email\n4. Submit for review: we do a quick check and your stay goes live\n\n"
+            . "Zero commission and zero listing fees: travellers contact you directly. And if now is not a good time, no problem at all.",
+        'fu_whatsapp' => "Good day {first_name}, {company} here again. Listing {name} is free and takes about 5 minutes: visit " . PM_TM_LIST_URL . ", create your free account, add your photos, rooms and rates, and submit it for a quick review. Zero commission: travellers contact you directly."];
 }
 
-/** The end of the first WhatsApp message: the easiest way in. */
-const PM_TM_WA_PHOTOS = 'Just reply here with a few photos of your rooms and the outside, and your rates, and we will set up your page and let you know once you are online.';
+/** The follow-up wording that asked hosts to send photos (tm_ease_v8 replaces it where nobody edited it). */
+const PM_TM_PHOTOS_ASK = '/\b(reply|send)\b[^.]{0,40}\b(a few |some )?photos\b|photos are all we need/i';
+
+/** The end of the first WhatsApp message: how easy it is. */
+const PM_TM_WA_PHOTOS = 'Listing is free and takes about 5 minutes at ulendomalawi.com/list-your-property: create your free account, add your photos, rooms and rates, and submit it for a quick review.';
+
+/** The end of the first WhatsApp message when it asked for photos by reply. */
+const PM_TM_WA_PHOTOS_OLD = 'Just reply here with a few photos of your rooms and the outside, and your rates, and we will set up your page and let you know once you are online.';
 
 /** The first WhatsApp message to a stay: the aim (without the longer gains, to stay short) and the photos offer. */
 function pm_tm_wa_first(string $hello): string
@@ -404,6 +413,72 @@ function pm_tm_fix_once(): void
         $n = pm_tm_directory_v7();
         pm_update('migrations', fn(array $m) => $m + ['tm_directory_v7' => date('c') . " ($n drafts)"], fn() => []);
     }
+    if (empty($done['tm_ease_v8'])) {
+        $n = pm_tm_ease_v8();
+        pm_update('migrations', fn(array $m) => $m + ['tm_ease_v8' => date('c') . " ($n drafts)"], fn() => []);
+    }
+}
+
+/**
+ * Hosts list themselves, in about 5 minutes (the owner's own email): no more "reply with a few photos and we set it up". The saved facts, the saved default
+ * message and unsent first emails, WhatsApp messages and follow-ups nobody edited or approved show how easy listing is instead. Returns how many leads changed.
+ */
+function pm_tm_ease_v8(): int
+{
+    pm_update('settings', function (array $s) {
+        if (isset($s['travel']['brain']['facts'])) {
+            $s['travel']['brain']['facts'] = str_replace(PM_TM_SETUP_FACT_OLD, PM_TM_SETUP_FACT, (string)$s['travel']['brain']['facts']);
+        }
+        return $s;
+    }, 'pm_default_settings');
+    $inviteOld = '/' . str_replace(['\{link\}', '\{name\}'], ['\S+', '(.+?)'], preg_quote(PM_TM_INVITE_V4, '/')) . '/u';
+    $invite = str_replace('{name}', '$1', PM_TM_INVITE);
+    pm_update('message_defaults', function (array $all) use ($inviteOld) {
+        $t = (array)($all['travel'] ?? []);
+        isset($t['email_body']) && $t['email_body'] = str_replace(PM_TM_INVITE_V4, PM_TM_INVITE, (string)$t['email_body']);
+        isset($t['whatsapp']) && $t['whatsapp'] = str_replace(PM_TM_WA_PHOTOS_OLD, PM_TM_WA_PHOTOS, (string)$t['whatsapp']);
+        foreach (['fu_subject', 'fu_body', 'fu_whatsapp'] as $k) {
+            if (isset($t[$k]) && preg_match(PM_TM_PHOTOS_ASK, (string)$t[$k])) {
+                unset($t[$k]); // never saved = the new starting text
+            }
+        }
+        $all['travel'] = $t;
+        return $all;
+    }, fn() => []);
+    $n = 0;
+    pm_update('leads', function (array $cur) use (&$n, $inviteOld, $invite) {
+        foreach ($cur as $id => $l) {
+            if (($l['brand'] ?? 'promanaged') !== 'travel' || in_array($l['status'] ?? '', ['optout', 'lost', 'won'], true)) {
+                continue;
+            }
+            $before = $cur[$id];
+            $d = (array)($l['drafts'] ?? []);
+            if (empty($l['sent']) && empty($l['approved_at']) && empty($d['edited_at']) && !empty($d['email_body'])) {
+                $cur[$id]['drafts']['email_body'] = (string)preg_replace($inviteOld, $invite, (string)$d['email_body']);
+            }
+            if (empty($l['wa_sent']) && !empty($d['whatsapp'])) {
+                $wa = str_replace(PM_TM_WA_PHOTOS_OLD, PM_TM_WA_PHOTOS, (string)$d['whatsapp']);
+                $cur[$id]['drafts']['whatsapp'] = preg_match(PM_TM_PHOTOS_ASK, $wa) ? pm_dm_as('travel', fn() => pm_dm_render(['id' => $id] + $l)['whatsapp']) : $wa;
+            }
+            $f = (array)($l['followup_draft'] ?? []);
+            if ($f && empty($f['edited_at']) && empty($l['followup_approved']) && preg_match(PM_TM_PHOTOS_ASK, (string)($f['email_body'] ?? '') . "\n" . (string)($f['whatsapp'] ?? '') . "\n" . (string)($f['email_subject'] ?? ''))) {
+                $cur[$id]['followup_draft'] = pm_dm_as('travel', fn() => pm_dm_followup_render(['id' => $id] + $l)) + ['source' => 'default'];
+            }
+            if ($cur[$id] !== $before) {
+                pm_lead_note($cur[$id], 'Unsent message updated: it shows how easy listing is (about 5 minutes online) instead of asking for photos');
+                $n++;
+            }
+        }
+        return $cur;
+    }, fn() => []);
+    if (function_exists('pm_tb_post')) {
+        foreach (['writers' => 'From the owner: never ask a host to send us photos. Show how easy it is: listing is free and takes about 5 minutes at ulendomalawi.com/list-your-property (create a free account, add photos, rooms, "from" rates and contact details, submit for a quick review, live).',
+            'followup' => 'From the owner: follow-ups show how easy listing is (the four steps, about 5 minutes, free, zero commission) and never ask the host to send us photos.',
+            'replies' => 'From the owner: when a host asks how to join, answer with the steps at ulendomalawi.com/list-your-property; never ask them to send us photos. If they want a hand, we help them through it.'] as $to => $text) {
+            pm_tb_post('travel', 'director', $to, $text, 'order:ease:' . $to);
+        }
+    }
+    return $n;
 }
 
 /**

@@ -731,7 +731,7 @@ function pm_sx_goal_strip(string $vb): string
     if (!$bars) {
         return '';
     }
-    $h = '<div class="card sx-card py-3 px-4"><b class="t-sm">Goals</b>';
+    $h = '<div class="card"><h2>Goals</h2>';
     foreach ($bars as [$l, $v, $t, $note]) {
         $pct = (int)min(100, round($v / max(1, $t) * 100));
         $h .= '<div class="mt-2" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="t-sm" style="min-width:150px">' . pm_h($l) . '</span>'

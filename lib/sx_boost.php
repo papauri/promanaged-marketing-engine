@@ -396,7 +396,7 @@ function pm_job_channels_x(string $brand): string
 /** A lead's audience segment for promanaged — the same grouping the pipeline uses (pm_lead_group), so the planner and the funnel agree. */
 function pm_pro_audience(array $lead): string
 {
-    return ($lead['brand'] ?? 'promanaged') === 'travel' ? (function_exists('pm_classify_audience') ? (string)pm_classify_audience($lead) : '') : pm_lead_group($lead);
+    return ($lead['brand'] ?? 'promanaged') === 'travel' ? (function_exists('pm_classify_audience') ? (string)pm_classify_audience(implode(' ', array_filter([(string)($lead['type'] ?? ''), (string)($lead['need'] ?? ''), (string)($lead['pain'] ?? ''), implode(' ', array_map('strval', (array)($lead['need_signals'] ?? [])))]))) : '') : pm_lead_group($lead); // pm_classify_audience reads words, not the lead
 }
 
 /** Job: stamp a missing 'audience' on every lead (rule-based, zero AI). */
@@ -486,7 +486,7 @@ function pm_plan_learnings(string $brand): string
 function pm_panel_plan_top_strategy(string $vb, array $ctx = []): string
 {
     $line = pm_plan_learnings($vb);
-    $h = '<div class="card sx-card py-3 px-4"><b class="t-sm">Why this week\'s mix</b><p class="muted t-sm mt-1 mb-0">'
+    $h = '<div class="card"><h2>Why this week\'s mix</h2><p class="muted t-sm mb-0">'
         . ($line !== '' ? pm_h($line) : 'Not enough data yet — the planner follows the default mix until the scoreboard has measured posts.') . '</p>';
     foreach (array_slice(pm_proactive($vb), 0, 3) as $pr) {
         $h .= '<div class="mt-2 t-sm"><b>' . pm_h($pr['where']) . '</b><br>' . pm_h($pr['comment']) . '</div>';

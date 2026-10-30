@@ -59,7 +59,7 @@ function pm_travel_agent_defaults(): array
         'offerings' => [
             "Listing: a free listing on Malawi's own directory of independent stays, with zero commission and zero listing fees",
             'Direct contact: travellers reach the host directly by phone, WhatsApp or email and agree terms and payment with them; no bookings or payments go through us',
-            'Set-up help: the concierge team sets the listing up from the photos and rates the host sends',
+            'Set-up help: listing takes about 5 minutes online, and the team helps any host who would like a hand',
             'Availability calendar: on request, a display-only calendar of open nights that syncs by iCal with the system the host already uses (RoomRaccoon, NightsBridge, Airbnb, Booking.com, Google Calendar)',
             'Ulendo concierge: an AI companion that helps write the listing and helps travellers plan their trip',
         ],
@@ -978,13 +978,17 @@ const PM_TM_ABOUT = "Malawi's own directory of independent lodges, B&Bs, cottage
 /** What Travel Malawi must never say (directory mode, the Tourism Act, 2025). */
 const PM_TM_NEVER = "Never promise bookings, traffic or income. Never say Travel Malawi takes bookings, reservations, payments or deposits, or that guests chat with, message or call the host in the app: travellers contact the property directly. Never say a property is licensed, verified or approved by the Ministry or by us.";
 
+/** How a host gets listed (the owner's own email): they do it themselves online; we never ask them to send us photos. The line it replaced is PM_TM_SETUP_FACT_OLD. */
+const PM_TM_SETUP_FACT = 'Hosts list their stay themselves online in about 5 minutes; a host who would like a hand can reply and the team helps them through it (never ask a host to send us photos)';
+const PM_TM_SETUP_FACT_OLD = 'The concierge team can set the listing up for the host: a host can simply reply with a few photos and their rates';
+
 /** Travel Malawi's facts, one per line: the platform in directory mode and the owner's own answer to an interested host. */
 const PM_TM_FACTS = "Listing is free: zero commission and zero listing fees, so the host keeps 100% of what they earn\n"
     . "Getting listed takes about 5 minutes at ulendomalawi.com/list-your-property: create a free account, add the stay's details (a few photos, room types and \"from\" rates in MWK or USD, and the phone number, WhatsApp or email), then submit it for review; the team does a quick review and the stay goes live\n"
     . "Travellers contact the property directly by phone, WhatsApp or email from the listing's \"Contact the property\" section and agree terms and payment with the host; Travel Malawi takes no bookings or payments and takes no part in the exchange\n"
     . "Every listing needs at least one direct contact: a phone number, WhatsApp or email\n"
     . "Hosts have full control: they update their photos, rates and details any time from their dashboard\n"
-    . "The concierge team can set the listing up for the host: a host can simply reply with a few photos and their rates\n"
+    . PM_TM_SETUP_FACT . "\n"
     . "Ulendo, the AI concierge, helps hosts write their listing (it can read photos, menus and documents) and helps travellers plan their trip; it never books, holds rooms or messages a host for a traveller\n"
     . "Listings show the rooms with indicative \"from\" rates, menus, amenities, maps and directions; travellers can save and compare stays\n"
     . "A listing shows the stay's reviews from different sources side by side, not only the platform's own; that openness is why travellers trust the place\n"
@@ -1306,7 +1310,7 @@ function pm_agent_followup(array $leads, bool $prepare = false): array
     $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou are the Follow-up agent for {$s['company_name']}. Write a 40 to 70-word follow-up email and a 25 to 45-word WhatsApp that add ONE new angle (a different gain, or a one-page plan offer).  Read their_last_message and our_last_message: never repeat our last message, never quote words they did not write, and if their_last_message is empty never say they said anything. followups_already_sent tells you how many nudges came before: each one must add a different reason. Say when we wrote exactly as days_since_our_last_email allows (1 = yesterday; the app also sets it from the real date when it is sent, because a follow-up may be written ahead). follow_up_number says which follow-up this is, of follow_ups_allowed: word it for that number. Number 1: a light, friendly check-in that assumes they are busy, not uninterested, with the one new angle. A middle one: a fresh, genuinely useful reason, shorter still. The last allowed one: a gracious final note that says plainly this is the last time you will write about it, leaves the door open with warmth, and asks nothing hard. Never say 'just following up' or 'circling back', never 'as per my last email', never make them feel chased. Sound like a respected professional who would be glad to help, not a salesperson."
         . "Match the state: for \"opened\" (they opened our proposal or email but stayed quiet) gently reference what they saw and add one new, true reason; for \"silent\" (never engaged) be shorter and lead with one specific fact about their business (from what_we_know when given: our research's facts, news and hooks; never invent one);for \"replied\" pick up their last words, never repeat a whole earlier message. "
         . "Write like one real person following up with one owner, warm and brief: a greeting with their first name when given ('Good day,' otherwise), say you wrote a few days ago, the new angle, and leave the door open ('if now is not a good time, no problem at all'). "
-        . (pm_brand() === 'travel' ? 'Always make this offer, speaking to them as you, lightly reworded if you like: "' . PM_TM_PHOTOS_OFFER . '" Keep the email under 90 words in all. ' : '')
+        . (pm_brand() === 'travel' ? 'Always show how easy it is to list, speaking to them as you, lightly reworded if you like: "' . PM_TM_PHOTOS_OFFER . '" Never ask them to send us photos. Keep the email under 120 words in all. ' : '')
         . "No prices, no guilt, no pressure, no urgency. Plain text, no sign-off. Each item has subject_style: write that item's email subject in that style, $subjectRule. "
         . pm_email_exp_followup_example(pm_brand()) . ' ' . pm_market_pulse_line() . ' '
         . pm_tb_line(pm_brand(), 'followup') . ' ' . PM_TRUST_RULES . ' Where an item has owner_feedback, the owner turned the last follow-up down for that reason: write a new one that fixes exactly that, and decide send. '
