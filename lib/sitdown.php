@@ -30,6 +30,29 @@ function pm_trust_flags(string $subject, string $body): array
     return $f;
 }
 
+/** The message waiting for this lead (the follow-up once we have written to them, else the first email), as the sit-down reads it. */
+function pm_sitdown_draft(array $l): array
+{
+    return ($l['status'] ?? '') === 'contacted' && !empty($l['followup_draft']['email_body']) ? (array)$l['followup_draft'] : (array)($l['drafts'] ?? []);
+}
+
+/** What the team decided about this lead before, oldest first: [['at', 'action']]. Older leads carry it only in their notes ("Team sit-down: Send it as it is: ..."). */
+function pm_sitdown_history(array $l): array
+{
+    if (isset($l['sitdown']['hist'])) {
+        return (array)$l['sitdown']['hist'];
+    }
+    $out = [];
+    foreach ((array)($l['notes'] ?? []) as $n) {
+        foreach (PM_SD_ACTIONS as $act => $label) {
+            if (str_starts_with((string)($n['text'] ?? ''), 'Team sit-down: ' . $label)) {
+                $out[] = ['at' => (string)($n['at'] ?? ''), 'action' => $act];
+            }
+        }
+    }
+    return array_slice($out, -5);
+}
+
 /** What the team knows about one lead, kept short for the sit-down. */
 function pm_sitdown_brief(array $l): array
 {
@@ -42,15 +65,24 @@ function pm_sitdown_brief(array $l): array
         return '';
     };
     $r = (array)($l['research'] ?? []);
-    $d = ($l['status'] ?? '') === 'contacted' && !empty($l['followup_draft']['email_body']) ? (array)$l['followup_draft'] : (array)($l['drafts'] ?? []);
+    $d = pm_sitdown_draft($l);
     $lt = strtotime((string)($l['last_contacted'] ?? ''));
+    $hist = pm_sitdown_history($l);
+    $since = '';
+    foreach (array_reverse($hist) as $h) { // the oldest of the latest run of "send" verdicts: how long the owner has left an email the team agreed on
+        if (($h['action'] ?? '') !== 'send') {
+            break;
+        }
+        $since = (string)($h['at'] ?? '');
+    }
+    $ts = $since !== '' ? strtotime($since) : false;
     return ['id' => (string)$l['id'], 'name' => (string)$l['name'], 'kind' => (string)($l['type'] ?? ''), 'town' => (string)($l['city'] ?? ''), 'score' => (int)($l['score'] ?? 0),
         'stage' => (string)($l['status'] ?? ''), 'owner_name_known' => trim((string)($l['contact'] ?? '')) !== '', 'has_email' => (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL),
         'has_phone' => trim((string)($l['phone'] ?? '') . (string)($l['whatsapp'] ?? '')) !== '', 'emails_sent' => count((array)($l['sent'] ?? [])),
         'days_since_last_email' => $lt ? (int)floor((time() - $lt) / 86400) : null, 'facts' => array_slice(array_map(fn($x) => (string)($x['fact'] ?? ''), (array)($r['discoveries'] ?? [])), 0, 3),
         'personal_line' => (string)($r['personal'] ?? ''), 'their_last_message' => $last('in'), 'our_waiting_email' => pm_sitdown_email_view($l, (string)($d['email_subject'] ?? ''), (string)($d['email_body'] ?? '')),
         'trust_flags' => pm_trust_flags((string)($d['email_subject'] ?? ''), (string)($d['email_body'] ?? '')), 'our_waiting_reply' => mb_substr((string)($l['reply_draft']['body'] ?? ''), 0, 2000),
-        'lead_with' => (string)($l['pain'] ?? '')];
+        'lead_with' => (string)($l['pain'] ?? ''), 'we_decided_before' => array_column($hist, 'action'), 'days_owner_left_it' => $ts ? (int)floor((time() - $ts) / 86400) : null];
 }
 
 /** The sit-down for up to six leads in one cheap AI call: [id => ['lines' => [[who, says]], 'action', 'angle', 'wait_days', 'why']]. */
@@ -64,6 +96,7 @@ function pm_sitdown_ask(array $leads): array
         . 'If the sender sees anything that would make this owner distrust the email, or the email is not professional, warm, specific and useful, the decision is rewrite, with exactly what to fix. ' . PM_TRUST_RULES . ' '
         . 'For each lead write 4 to 6 lines of the team talking to EACH OTHER about the lead (never to the lead), each line an object {"who","says"}: one short sentence in the first person, sharp and specific to that lead, from the facts given only (no invented facts), the director last. '
         . 'Then the decision: action "send" (our waiting email is right), "rewrite" (give the new angle in one sentence: what to open with and why it will land), "wait" (wait_days 2 to 21), "call" (a phone call would win it), or "drop" (not a fit). '
+        . 'Think for yourselves and never repeat an old verdict out of habit: when we_decided_before ends in "send" and the owner has left that email unsent for days_owner_left_it days, look at it again as that owner would. If it could be sent to any business (no fact only they would recognise, an offer that is vague), the decision is rewrite with the sharper angle; keep "send" only when you can say in why the one thing in it that will make this owner answer. '
         . 'Think like the best salespeople in the world: the angle that this owner, in this town, will care about today. ' . pm_firm_line(pm_brand()) . ' ' . pm_tb_line(pm_brand(), 'writers', 3) . ' ' . PM_AGENT_RULES;
     $out = pm_agent_json(pm_claude($sys, json_encode($items, JSON_UNESCAPED_UNICODE) . "\nJSON: {\"items\":[{\"id\":\"\",\"lines\":[{\"who\":\"research|replies|writers|sender|followup|director\",\"says\":\"\"}],\"action\":\"send|rewrite|wait|call|drop\",\"angle\":\"\",\"wait_days\":0,\"why\":\"one sentence\"}]}", false, 220 + 260 * count($items), 'cheap'));
     $res = [];
@@ -100,7 +133,10 @@ function pm_sitdown_ask(array $leads): array
  */
 function pm_sitdown_apply(array &$lead, array $s, string $brand): string
 {
-    $lead['sitdown'] = ['at' => date('Y-m-d H:i'), 'lines' => $s['lines'], 'action' => $s['action'], 'angle' => $s['angle'], 'why' => $s['why']];
+    $d = pm_sitdown_draft($lead);
+    $lead['sitdown'] = ['at' => date('Y-m-d H:i'), 'lines' => $s['lines'], 'action' => $s['action'], 'angle' => $s['angle'], 'why' => $s['why'],
+        'hash' => md5((string)($d['email_subject'] ?? '') . '|' . (string)($d['email_body'] ?? '')), // a "send" on this same email is not talked over again for a week
+        'hist' => array_slice(array_merge(pm_sitdown_history($lead), [['at' => date('Y-m-d H:i'), 'action' => $s['action']]]), -5)];
     if (function_exists('pm_talk')) {
         foreach ($s['lines'] as $i => [$who, $says]) {
             pm_talk($brand, $who, ($i === 0 ? 'About ' . ($lead['name'] ?? 'a lead') . ': ' : '') . $says);
@@ -147,11 +183,21 @@ function pm_sitdown_apply(array &$lead, array $s, string $brand): string
     return $s['action'];
 }
 
-/** The day's leads worth a sit-down: who wrote back first, then follow-ups due, then the best emails ready to send; not one talked over in the last 3 days unless they wrote since. */
+/**
+ * The day's leads worth a sit-down: who wrote back first, then follow-ups due, then the best emails ready to send; not one talked over in the last 3 days unless
+ * they wrote since, and not one the team agreed to send in the last 7 days while that same email still waits (saying "send" again changes nothing and costs a call).
+ */
 function pm_sitdown_due(array $leads, array $cfg, int $max = 12): array
 {
-    $fresh = fn($l) => !empty($l['sitdown']['at']) && strtotime((string)$l['sitdown']['at']) > strtotime('-3 days')
-        && strcmp((string)($l['last_reply'] ?? ''), (string)$l['sitdown']['at']) <= 0;
+    $fresh = function (array $l): bool {
+        $at = (string)($l['sitdown']['at'] ?? '');
+        if ($at === '' || strcmp((string)($l['last_reply'] ?? ''), $at) > 0) {
+            return false;
+        }
+        $d = pm_sitdown_draft($l);
+        $same = ($l['sitdown']['action'] ?? '') === 'send' && ($l['sitdown']['hash'] ?? '') === md5((string)($d['email_subject'] ?? '') . '|' . (string)($d['email_body'] ?? ''));
+        return strtotime($at) > strtotime($same ? '-7 days' : '-3 days');
+    };
     $open = array_filter($leads, fn($l) => !in_array($l['status'] ?? '', ['won', 'lost', 'optout'], true) && !$fresh($l) && empty($l['approved_at']));
     $replied = array_filter($open, fn($l) => ($l['status'] ?? '') === 'replied' || !empty($l['awaiting_reply_since']));
     $fu = function_exists('pm_followup_due') ? array_intersect_key($open, pm_followup_due($open, $cfg, true)) : [];

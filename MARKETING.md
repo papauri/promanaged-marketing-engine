@@ -121,6 +121,13 @@ accepted by being made; they are logged in the Done log below, not in the regist
 
 ## 6 · Done log
 
+### Owner request in chat, 2026-10-31 — "a boost on our leads and their capacity to think for themselves"
+
+- Found: the swarm had stood still since 18 Oct. 22 unsent drafts tripped the backlog pause, which stopped every scout, and the sit-down said "send it as it is" about the same drafts every three days (Fashion Closet four times), a paid call that changed nothing.
+- **The scouts keep a small stream going while drafts wait** (`pm_backlog_state` `reserve`/`trickle`, `lib/run_agents.php`): when paused they still search the single best area each day, but only until one day's sends of reachable, scored leads wait for a draft. The Writers stay held, so the pile of drafts does not grow, and studied leads are ready as soon as the owner clears it.
+- **The sit-down remembers what it decided** (`lib/sitdown.php`): every lead keeps its last five verdicts (older leads have them read from their notes). A "send" on an email that has not changed is not talked over again for a week. On the next look the team sees how long the owner has left that email, and must either name the one thing in it that will make this owner answer or rewrite it with a sharper angle. In a trial on a copy of the data it rewrote 5 of 11 drafts it had passed before.
+- **The Sender names where to start** (`lib/heads.php`): the ask to the owner now names the three best drafts, the ones the team agreed to send and the highest scores first.
+
 ### Owner request in chat, 2026-10-13 — "full logs visible to admin only for oversight of the marketing team; follow-ups over different times; AI makes it an auditing department"
 
 - **Audit department** (admin only; `lib/sx_teamaudit.php`, `lib/view_audit.php`, registered in `pm_ui_nav()`): Activity log, Follow-ups, AI auditor. Insights' "Audit" is now "Page audit".

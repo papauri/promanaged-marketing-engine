@@ -2196,12 +2196,15 @@ function pm_lead_mark(string $leadId, string $email, string $business, string $s
  * Backpressure, pure: how many drafts wait unsent (drafted, nothing sent by email or WhatsApp) and what that means for today's run.
  * pause = scouts skipped (backlog >= 2 x send_cap); hold_new = writers/researchers skip NEW cold leads (backlog >= send_cap);
  * room = how many leads may still be added today (new_per_day minus leads created today, counted from the leads themselves).
+ * reserve = reachable leads scored and waiting for a first draft; trickle = while paused, how many new leads the scouts may still bring today so a day's
+ * worth of leads is ready the moment the owner clears the drafts (0 when the reserve already holds a day's sends).
  */
 function pm_backlog_state(array $leads, array $cfg, string $brand = ''): array
 {
     $brand = $brand !== '' ? $brand : pm_brand();
     $backlog = 0;
     $today = 0;
+    $reserve = 0;
     $d = date('Y-m-d');
     foreach ($leads as $l) {
         if (($l['brand'] ?? 'promanaged') !== $brand) {
@@ -2210,12 +2213,16 @@ function pm_backlog_state(array $leads, array $cfg, string $brand = ''): array
         if (($l['status'] ?? '') === 'drafted' && empty($l['sent']) && empty($l['wa_sent'])) {
             $backlog++;
         }
+        $reserve += in_array($l['status'] ?? '', ['new', 'qualified'], true) && empty($l['drafts']) && trim((string)($l['email'] ?? '') . (string)($l['phone'] ?? '')) !== ''
+            && (($l['status'] ?? '') === 'new' || (int)($l['score'] ?? 0) >= 60) && substr((string)($l['snooze_until'] ?? ''), 0, 10) <= $d ? 1 : 0;
         $today += str_starts_with((string)($l['created'] ?? ''), $d) ? 1 : 0;
     }
     $cap = max(1, (int)($cfg['send_cap'] ?? 10));
     $on = (bool)($cfg['backlog_pause'] ?? true);
-    return ['backlog' => $backlog, 'cap' => $cap, 'pause' => $on && $backlog >= 2 * $cap, 'hold_new' => $on && $backlog >= $cap,
-        'added_today' => $today, 'room' => max(0, (int)($cfg['new_per_day'] ?? 10) - $today)];
+    $pause = $on && $backlog >= 2 * $cap;
+    $room = max(0, (int)($cfg['new_per_day'] ?? 10) - $today);
+    return ['backlog' => $backlog, 'cap' => $cap, 'pause' => $pause, 'hold_new' => $on && $backlog >= $cap,
+        'added_today' => $today, 'room' => $room, 'reserve' => $reserve, 'trickle' => $pause ? max(0, min($room, $cap - $reserve, max(2, (int)ceil($cap / 3)))) : 0];
 }
 
 /* ---------------- Orchestration helpers ---------------- */

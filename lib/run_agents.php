@@ -257,15 +257,22 @@ try {
     $today = date('Y-m-d');
 
     // ---- 1. Scouts ----
+    // While paused the scouts still search the one best area a day, but only until a day's sends of reachable leads wait for a draft: when the owner clears the
+    // drafts the Writers have studied leads at hand, and the pile of drafts does not grow (the Writers stay held).
+    $scoutRoom = $bs['pause'] ? $bs['trickle'] : $bs['room'];
     if ($cfg['enabled']['scout']) {
-        if ($bs['pause']) {
+        if ($bs['pause'] && $scoutRoom <= 0) {
             $pauseLog();
             $stats['paused'] = true;
-        } elseif ($bs['room'] <= 0) {
+        } elseif ($scoutRoom <= 0) {
             pm_agent_log('Scout', "Skipped: {$bs['added_today']} leads already added today (limit {$cfg['new_per_day']})");
         } else {
-            $targets = array_slice(pm_scout_targets($cfg, function_exists('pm_director_focus_weights') ? pm_director_focus_weights() : null), 0, max(1, min($bs['room'], (int)$cfg['scouts_per_day'])));
-            $want = max(2, (int)ceil($bs['room'] * 1.5 / max(1, count($targets))));
+            if ($bs['pause']) {
+                $stats['paused'] = true;
+                pm_agent_log('Scout', "{$bs['backlog']} drafts wait for you, so I search one area only: {$bs['reserve']} reachable leads wait for a draft and a day's sends is {$bs['cap']}");
+            }
+            $targets = array_slice(pm_scout_targets($cfg, function_exists('pm_director_focus_weights') ? pm_director_focus_weights() : null), 0, $bs['pause'] ? 1 : max(1, min($scoutRoom, (int)$cfg['scouts_per_day'])));
+            $want = max(2, (int)ceil($scoutRoom * 1.5 / max(1, count($targets))));
             $progress('Scouts searching ' . count($targets) . ' areas');
             $jobs = [];
             foreach ($targets as [$sector, $city]) {
@@ -308,7 +315,7 @@ try {
                         }
                         continue;
                     }
-                    if ($stats['added'] >= $bs['room']) {
+                    if ($stats['added'] >= $scoutRoom) {
                         continue;
                     }
                     if ($brand !== 'travel' && array_filter((array)($cfg['existing_clients'] ?? []), fn($x) => $x !== '' && stripos((string)$b['name'], (string)$x) !== false)) {

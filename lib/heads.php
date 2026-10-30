@@ -69,8 +69,12 @@ function pm_heads_goals(string $brand): array
         $needWeek = $perDay * min(5, $workdays);
         $sOk = $sent7 >= $needWeek || (int)$st['approved_waiting'] > 0;
         $sTo = (int)$st['drafts_unsent'] >= $perDay ? 'owner' : 'writers';
+        $first = array_filter($L, fn($l) => $open($l) && empty($l['sent']) && empty($l['approved_at']) && !empty($l['drafts']['email_body']) && $mail($l));
+        uasort($first, fn($a, $b) => [($b['sitdown']['action'] ?? '') === 'send', (int)($b['score'] ?? 0)] <=> [($a['sitdown']['action'] ?? '') === 'send', (int)($a['score'] ?? 0)]);
+        $first = array_map(fn($l) => (string)$l['name'], array_slice($first, 0, 3));
+        $startWith = $first ? ' Start with ' . (count($first) > 1 ? implode(', ', array_slice($first, 0, -1)) . ' and ' . end($first) : $first[0]) . ': the team rates them highest.' : '';
         $set('sender', "Send {$perDay} messages a working day", $n($sent7, 'message', 'messages') . ' sent in 7 days of ' . $needWeek, $sOk, $sOk ? '' : ($sTo === 'owner' ? $n((int)$st['drafts_unsent'], 'draft waits', 'drafts wait') . ' for approval.' : 'Too few drafts to send.'),
-            $sTo, $sTo === 'owner' ? 'Please read and approve ' . $n(min((int)$st['drafts_unsent'], $perDay * 2), 'draft', 'drafts') . " today: we need {$perDay} out a working day to make the month's goal." : "I have only {$ready} ready and need {$perDay} a working day: please draft more.");
+            $sTo, $sTo === 'owner' ? 'Please read and approve ' . $n(min((int)$st['drafts_unsent'], $perDay * 2), 'draft', 'drafts') . " today: we need {$perDay} out a working day to make the month's goal.{$startWith}" : "I have only {$ready} ready and need {$perDay} a working day: please draft more.");
 
         // the Writers: a day's messages ready
         $wOk = $ready >= $perDay;
