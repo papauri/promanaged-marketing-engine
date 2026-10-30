@@ -181,6 +181,30 @@ function pm_ui_tabs(array $items, string $on, string $label = 'Sections'): strin
 }
 
 /**
+ * The folder pane of a list page (Outlook-like): groups of folders, each with its count on the right, the open one marked.
+ * $groups = ['Group title' => [['label' => ..., 'n' => int|null, 'href' => ..., 'on' => bool, 'hot' => bool], ...]]; an empty group is left out.
+ * 'hot' makes a count stand out (something waits for you there), like unread mail.
+ */
+function pm_ui_folderpane(array $groups, string $label = 'Folders'): string
+{
+    $h = '<nav class="folderpane" aria-label="' . pm_h($label) . '">';
+    foreach ($groups as $title => $items) {
+        if (!$items) {
+            continue;
+        }
+        $h .= '<div class="fp-group"><div class="fp-hd">' . pm_h((string)$title) . '</div>';
+        foreach ($items as $it) {
+            $n = $it['n'] ?? null;
+            $cls = 'fp-item' . (!empty($it['on']) ? ' on' : '') . (!empty($it['hot']) && $n ? ' hot' : '') . ($n === 0 ? ' zero' : '');
+            $h .= '<a class="' . $cls . '" href="' . pm_h((string)$it['href']) . '"' . (!empty($it['on']) ? ' aria-current="page"' : '') . '><span class="fp-name">' . pm_h((string)$it['label']) . '</span>'
+                . ($n !== null ? '<span class="fp-n">' . (int)$n . '</span>' : '') . '</a>';
+        }
+        $h .= '</div>';
+    }
+    return $h . '</nav>';
+}
+
+/**
  * One page of a long list, cut on the server: [the rows of this page, the pager HTML ('' when everything fits on one page)].
  * The page comes from ?$param= (1 = first), or from $page when it is above 0 (e.g. the page that holds a linked row). The pager's links keep every
  * other GET parameter of the current address, except 'at' (a one-off "open the page of this row").

@@ -28,33 +28,23 @@ $sx = fn(string $do, string $extra = '') => '<input type="hidden" name="csrf" va
 $hid = fn(string $n, string $v) => '<input type="hidden" name="' . $n . '" value="' . pm_h($v) . '">';
 $tone = ['enquiry' => 'warn', 'client' => 'ok', 'lead' => 'ok', 'partner' => 'info', 'spam' => 'bad', 'bounce' => 'bad'];
 ?>
-<?= pm_ui_head('Mailbox · ' . pm_h($bname), 'What is in our mailbox, what sort of email each one is and whose it is, so a business we already talk to is never cold-emailed. Read-only: nothing is marked read, moved or deleted.') ?>
-<?= pm_ui_strip('mailbox') ?>
-<section class="card mb-desk">
-  <div class="sf-desk-head">
-    <div><h2 class="mt-0"><?= pm_h($nm) ?>'s mailbox desk</h2>
-      <p class="hint mt-0">Every 30 minutes <?= pm_h($nm) ?> reads the Inbox and the Sent folder, links each email to its lead (by address, a colleague's address, the company's domain or the thread) and says what the rest are. A lead we have not written to that is already talking to us, or that someone emailed by hand, is taken out of cold outreach straight away.</p></div>
-    <form method="post" class="sf-scoutnow"><?= $sx('mb_read') ?><button class="btn primary">Read the mailbox now</button>
-      <small class="muted"><?= $c['at'] !== '' ? 'Last read ' . pm_h(date('j M, H:i', strtotime($c['at']))) : 'Not read yet' ?><?= $c['error'] !== '' ? '<br><span class="warnt">' . pm_h(mb_substr($c['error'], 0, 100)) . '</span>' : '' ?></small></form>
-  </div>
-  <div class="sf-stats">
-    <a class="sf-stat<?= $c['look'] ? ' warn' : '' ?>" href="?tab=mailbox&amp;f=look"><span>Need a look</span><b><?= $c['look'] ?></b><small>people we do not know as leads yet</small></a>
-    <a class="sf-stat" href="?tab=mailbox&amp;f=leads"><span>Linked to leads</span><b><?= $c['linked'] ?></b><small>of <?= $c['in'] + $c['out'] ?> emails in 30 days</small></a>
-    <div class="sf-stat<?= $c['outside'] ? ' ok' : '' ?>"><span>Caught in time</span><b><?= $c['outside'] ?></b><small>leads already in touch outside the app, kept out of cold outreach</small></div>
-    <?php $rest = array_filter($items, fn($it) => $in($it, 'rest')); $rk = array_count_values(array_map(fn($it) => (string)$it['kind'], $rest)); arsort($rk); ?>
-    <a class="sf-stat" href="?tab=mailbox&amp;f=rest"><span>Everything else</span><b><?= count($rest) ?></b><small><?= $rk ? pm_h(implode(', ', array_map(fn($k, $n) => $n . ' ' . strtolower(PM_MB_KINDS[$k] ?? $k), array_keys(array_slice($rk, 0, 4, true)), array_slice($rk, 0, 4, true)))) : 'nothing' ?></small></a>
-  </div>
-  <?php if ($outsideLeads): ?><p class="hint mb-0"><b>Caught in time:</b> <?php foreach (array_slice($outsideLeads, 0, 8, true) as $oid => $ol): ?><a class="pill ok" href="?tab=agents&amp;lead=<?= pm_h((string)$oid) ?>"><?= pm_h((string)$ol['name']) ?></a> <?php endforeach; ?> were already talking to us (or emailed by hand), so they get no cold email or follow-up from the app.</p><?php endif; ?>
-</section>
-
 <?php
-$tabs = [];
-foreach (['look' => 'Need a look', 'leads' => 'Linked to leads', 'out' => 'Sent to people not in leads', 'rest' => 'Everything else', 'all' => 'All'] as $k => $lab) {
-    $tabs[$k] = [pm_h($lab) . ' (' . count(array_filter($items, fn($it) => $in($it, $k))) . ')', '?tab=mailbox&f=' . $k];
-}
-echo pm_ui_tabs($tabs, $f, 'Mailbox');
-[$page, $pager] = pm_ui_page($rows, 25);
+$nOf = fn(string $k) => count(array_filter($items, fn($it) => $in($it, $k)));
+$fpItem = fn(string $k, string $label, bool $hot = false) => ['label' => $label, 'n' => $nOf($k), 'href' => '?tab=mailbox&f=' . $k, 'on' => $f === $k, 'hot' => $hot];
+$fpTitles = ['look' => 'Need a look', 'leads' => 'Linked to leads', 'out' => 'Sent to people not in leads', 'rest' => 'Everything else', 'all' => 'All mail'];
+$rest = array_filter($items, fn($it) => $in($it, 'rest')); $rk = array_count_values(array_map(fn($it) => (string)$it['kind'], $rest)); arsort($rk);
+$readNow = '<form method="post" class="sf-scoutnow">' . $sx('mb_read') . '<button class="btn primary">Read the mailbox now</button><small class="muted">'
+    . ($c['at'] !== '' ? 'Last read ' . pm_h(date('j M, H:i', strtotime($c['at']))) : 'Not read yet') . ($c['error'] !== '' ? '<br><span class="warnt">' . pm_h(mb_substr($c['error'], 0, 100)) . '</span>' : '') . '</small></form>';
 ?>
+<?= pm_ui_head('Mailbox · ' . pm_h($bname), 'Every 30 minutes ' . pm_h($nm) . ' reads the Inbox and Sent folder and links each email to its lead, so a business we already talk to is never cold-emailed. Read-only: nothing is marked read, moved or deleted.', $readNow) ?>
+<?= pm_ui_strip('mailbox') ?>
+<div class="mailview">
+<aside class="mailside"><?= pm_ui_folderpane(['Last 30 days' => [$fpItem('look', 'Need a look', true), $fpItem('leads', 'Linked to leads'), $fpItem('out', 'Sent, not to leads'), $fpItem('rest', 'Everything else'), $fpItem('all', 'All mail')]], 'Mailbox folders') ?></aside>
+<div class="mailmain">
+<div class="listbar mt-0"><h2><?= pm_h($fpTitles[$f]) ?> <span class="muted tnum"><?= count($rows) ?></span></h2>
+  <?php if ($f === 'rest' && $rk): ?><span class="muted t-sm"><?= pm_h(implode(', ', array_map(fn($k, $n) => $n . ' ' . strtolower(PM_MB_KINDS[$k] ?? $k), array_keys(array_slice($rk, 0, 4, true)), array_slice($rk, 0, 4, true)))) ?></span><?php endif; ?></div>
+<?php if ($outsideLeads): ?><p class="hint mt-0"><b>Caught in time:</b> <?php foreach (array_slice($outsideLeads, 0, 8, true) as $oid => $ol): ?><a class="pill ok" href="?tab=agents&amp;lead=<?= pm_h((string)$oid) ?>"><?= pm_h((string)$ol['name']) ?></a> <?php endforeach; ?> were already talking to us (or emailed by hand), so they get no cold email or follow-up from the app.</p><?php endif; ?>
+<?php [$page, $pager] = pm_ui_page($rows, 25); ?>
 <?php if (!$page): ?><div class="card"><p class="muted mt-0 mb-0"><?= $c['at'] === '' ? 'The mailbox has not been read yet: press Read the mailbox now.' : 'Nothing here.' ?></p></div><?php else: ?>
 <div class="card mb-list">
 <?php foreach ($page as $key => $it): $lid = (string)($it['lead'] ?? ''); $ln = $lid !== '' ? (string)($leadsB[$lid]['name'] ?? '') : ''; ?>
@@ -86,3 +76,4 @@ echo pm_ui_tabs($tabs, $f, 'Mailbox');
 </div>
 <?= $pager ?>
 <?php endif; ?>
+</div></div>

@@ -56,18 +56,18 @@ $inStatus = fn($l, $f) => $f === 'people' ? $people($l) : ($f === 'all' ? true :
     : ($f === 'followups' ? $waitAns($l) : ($f === 'closed' ? in_array($l['status'], ['lost', 'optout'], true)
     : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? $todo($l) : $l['status'] === $f)))))))));
 $inSearch = fn($l) => ($fq === '' || mb_stripos($l['name'] . ' ' . $l['city'] . ' ' . ($l['contact'] ?? '') . ' ' . ($l['type'] ?? '') . ' ' . ($l['email'] ?? ''), $fq) !== false)
-    && ($fcity === '' || strcasecmp(trim((string)($l['city'] ?? '')), $fcity) === 0) && $hasOk($l) && (int)($l['score'] ?? 0) >= $fmin
-    && ($ffolder === '' || in_array($ffolder, (array)($l['folders'] ?? []), true));
+    && ($fcity === '' || strcasecmp(trim((string)($l['city'] ?? '')), $fcity) === 0) && $hasOk($l) && (int)($l['score'] ?? 0) >= $fmin;
+$inFolder = fn($l) => $ffolder === '' || in_array($ffolder, (array)($l['folders'] ?? []), true); // a folder is a place of its own (the pane): its leads in every status
 $cities = array_count_values(array_filter(array_map(fn($l) => trim((string)($l['city'] ?? '')), $leadsAll)));
 ksort($cities);
 // business-type dropdown: similar types grouped (hotel, lodge, resort... -> Hotels & lodges), counted inside the chosen status
 $types = [];
 foreach ($leadsAll as $l) {
-    if ($inStatus($l, $filter) && $inSearch($l)) { $g = pm_lead_group($l); $types[$g] = ($types[$g] ?? 0) + 1; }
+    if ($inStatus($l, $filter) && $inSearch($l) && $inFolder($l)) { $g = pm_lead_group($l); $types[$g] = ($types[$g] ?? 0) + 1; }
 }
 arsort($types);
 if ($ftype !== '' && !isset($types[$ftype])) { $types[$ftype] = 0; }
-$base = array_filter($leadsAll, fn($l) => ($ftype === '' || pm_lead_group($l) === $ftype) && $inSearch($l)); // status counts follow the type and search
+$base = array_filter($leadsAll, fn($l) => ($ftype === '' || pm_lead_group($l) === $ftype) && $inSearch($l)); // the pane's counts follow the type and search, not the folder
 $counts = array_fill_keys(array_keys(PM_LEAD_STATUSES), 0);
 foreach ($base as $l) { $counts[$l['status']] = ($counts[$l['status']] ?? 0) + 1; }
 $counts['active'] = count(array_filter($base, fn($l) => $inStatus($l, 'active')));
@@ -80,7 +80,7 @@ $counts['people'] = count(array_filter($base, $people));
 $counts['closed'] = count(array_filter($base, fn($l) => $inStatus($l, 'closed')));
 $counts['all'] = count($base);
 $counts['mine'] = $who === '' ? 0 : count(array_filter($base, fn($l) => $inStatus($l, 'mine')));
-$shown = array_filter($base, fn($l) => $inStatus($l, $filter));
+$shown = array_filter($base, fn($l) => $inStatus($l, $filter) && $inFolder($l));
 if ($focusId !== '') { $shown = [$focusId => $leadsAll[$focusId]]; }
 usort($shown, match ($fsort) {
     'new' => fn($a, $b) => strcmp((string)($b['created'] ?? ''), (string)($a['created'] ?? '')),
@@ -90,6 +90,7 @@ usort($shown, match ($fsort) {
     default => fn($a, $b) => [$waiting($b), $b['score'] ?? 0] <=> [$waiting($a), $a['score'] ?? 0],
 });
 $atPos = array_search((string)($_GET['at'] ?? ''), array_column($shown, 'id'), true); // ?at=<id>: open the page that holds this lead
+$nList = count($shown); // the whole list, before it is cut into pages
 [$shown, $pager] = pm_ui_page($shown, $fper, 'p', $atPos === false ? 0 : intdiv((int)$atPos, $fper) + 1);
 $unmatched = pm_inbox_unmatched_list();
 $hasApprove = function_exists('pm_approve_for_send');
@@ -120,16 +121,41 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
   <div class="flash err"><b>One thing to set up first.</b> Add <code><?= pm_h(pm_agents_missing_key()) ?>=...</code> to <code>.env</code>, then reload.</div>
 <?php endif; ?>
 
-<!-- 1. Find a business -->
-<div class="card find">
-  <form method="post" class="findrow"><?= $post('', 'lookup') ?><?= $hid('brand', pm_brand()) ?>
-    <input type="text" name="biz" required data-suggest data-web="1" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Find a business by name, <?= pm_brand() === 'travel' ? 'e.g. Mufasa Eco Lodge' : (pm_brand_is_custom(pm_brand()) ? '' : 'e.g. Sunbird Capital Hotel') ?>" aria-label="Business name">
-    <input type="text" name="city" placeholder="City (optional)" aria-label="City" class="narrow">
-    <button class="btn primary">Find</button>
-  </form>
-  <p class="hint mt-1">Start typing: it suggests businesses you already know, then ones a web search finds (those are marked, and only fill the box).</p>
+<?php
+$fpItem = fn(string $k, string $label, bool $hot = false) => ['label' => $label, 'n' => (int)($counts[$k] ?? 0), 'href' => '?tab=agents&status=' . $k . $fq2(['folder' => '']), 'on' => $ffolder === '' && $filter === $k, 'hot' => $hot];
+$fpLists = ['Favourites' => array_merge($who !== '' ? [$fpItem('mine', 'Mine')] : [], [$fpItem('active', 'Active'), $fpItem('awaiting', 'Needs reply', true), $fpItem('ready', 'Ready to send', true), $fpItem('followups', 'Follow-ups')]),
+    'Pipeline' => [$fpItem('drafted', 'Draft ready'), $fpItem('contacted', 'Contacted'), $fpItem('replied', 'Replied', true), $fpItem('proposal', 'Proposal sent'), $fpItem('won', 'Won'), $fpItem('closed', 'Closed'), $fpItem('all', 'All leads')],
+    'To look at' => [$fpItem('people', 'People looking', true), $fpItem('noemail', 'No email'), $fpItem('gaps', 'Missing details')],
+    'My folders' => array_map(fn($fk, $fn) => ['label' => (string)$fk, 'n' => (int)$fn, 'href' => '?tab=agents&status=all' . $fq2(['folder' => (string)$fk]), 'on' => $ffolder === (string)$fk], array_keys($folders), $folders)];
+$fpTitle = $ffolder !== '' ? $ffolder : (['mine' => 'Mine', 'active' => 'Active', 'awaiting' => 'Needs reply', 'ready' => 'Ready to send', 'followups' => 'Follow-ups', 'people' => 'People looking', 'noemail' => 'No email', 'gaps' => 'Missing details', 'closed' => 'Closed', 'all' => 'All leads'][$filter] ?? (PM_LEAD_STATUSES[$filter] ?? 'Leads'));
+?>
+<div class="mailview">
+<aside class="mailside"><?= pm_ui_folderpane($fpLists, 'Lead lists and folders') ?>
+<?php if (!$folders): ?><p class="hint fp-tip">Tick leads and use <b>Put in folder</b> to make your own folders.</p><?php endif; ?></aside>
+<div class="mailmain">
+<!-- 1. Find a business, run the agents: one command bar -->
+<div class="card cmdbar runbar" id="runbar" data-running="<?= $running ? '1' : '0' ?>">
+  <div class="runtop">
+    <form method="post" class="findrow grow"><?= $post('', 'lookup') ?><?= $hid('brand', pm_brand()) ?>
+      <input type="text" name="biz" required data-suggest data-web="1" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Find a business by name<?= pm_brand() === 'travel' ? ', e.g. Mufasa Eco Lodge' : (pm_brand_is_custom(pm_brand()) ? '' : ', e.g. Sunbird Capital Hotel') ?>" aria-label="Business name" title="Suggests businesses you already know, then ones a web search finds (those are marked, and only fill the box)">
+      <input type="text" name="city" placeholder="City" aria-label="City (optional)" class="narrow">
+      <button class="btn">Find</button>
+    </form>
+    <div class="acts">
+      <?php if (pm_imap_ready()): $ir = pm_inbox_read_status(pm_brand()); ?><form method="post" id="check-replies"><?= $post('', 'check_replies') ?><button class="btn<?= $ir['age'] === null || $ir['age'] >= 3600 || $ir['err'] !== '' ? ' primary' : '' ?>" <?= $running ? 'disabled' : '' ?> title="<?= pm_h($ir['err'] !== '' ? 'The last check failed: ' . $ir['err'] : ($ir['age'] === null ? 'The inbox has never been read' : 'Inbox last read ' . pm_inbox_ago((int)$ir['age']) . ' ago')) ?>">Check replies</button></form><?php endif; ?>
+      <div class="dd"><button type="button" class="ddbtn btn" aria-haspopup="true" aria-expanded="false">More <span class="caret"></span></button><div class="menu" role="menu">
+        <form method="post"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="mail_log"><input type="hidden" name="do" value="sync"><input type="hidden" name="back" value="agents"><button class="item" role="menuitem" <?= $running ? 'disabled' : '' ?> title="Reads the Sent folders in your mailboxes and marks every lead already emailed as contacted (out of Active), filed in the folder Already contacted">Compare with the Sent folder</button></form>
+        <form method="post"><?= $post('', 'find_names') ?><button class="item" role="menuitem" <?= $running ? 'disabled' : '' ?> title="Looks for the owner or manager of leads that have no name yet">Find owner names</button></form>
+      </div></div>
+      <form method="post"><?= $post('', 'run') ?><button class="btn primary" id="runbtn" <?= $running ? 'disabled' : '' ?>><?= $running ? 'Working…' : 'Run the agents' ?></button></form>
+    </div>
+  </div>
+  <p class="runline"><?php if ($running): ?><b>Agents are searching</b> · <?php endif; ?>
+    <span class="muted" id="runsub">
+        <?php if ($running): ?><?= pm_h($run['phase'] ?? 'Starting') ?><?php elseif (($run['state'] ?? '') === 'done' && ($run['mode'] ?? '') === 'names'): ?>Name search <?= pm_h(date('j M, H:i', strtotime((string)($run['finished'] ?? 'now')))) ?>: <?= (int)($run['stats']['named'] ?? 0) ?> leads have an owner or manager name<?php elseif (($run['state'] ?? '') === 'done'): $st = $run['stats'] ?? []; ?>Last run <?= pm_h(date('j M, H:i', strtotime((string)($run['finished'] ?? 'now')))) ?>: <?= (int)($st['added'] ?? 0) ?> new, <?= (int)($st['qualified'] ?? 0) ?> qualified, <?= (int)($st['drafted'] ?? 0) ?> drafts<?php $studied = count(array_filter($leadsAll, fn($x) => str_starts_with((string)($x['research']['at'] ?? ''), date('Y-m-d')))); ?>, <?= $studied ?> studied today<?= !empty($st['errors']) ? ', ' . (int)$st['errors'] . ' errors' : '' ?><?php elseif (in_array($run['state'] ?? '', ['error', 'stalled'], true)): ?><?= $run['state'] === 'stalled' ? 'The last run stopped responding.' : 'The last run failed: ' . pm_h($run['msg'] ?? '') ?><?php else: ?>Scouts search the web, then qualify and draft. Nothing is sent without you.<?php endif; ?>
+    </span></p>
+  <div class="prog" id="runprog" <?= $running ? '' : 'hidden' ?>><i id="runfill" style="width:<?= (int)(100 * (int)($run['step'] ?? 0) / max(1, (int)($run['steps'] ?? 7))) ?>%"></i></div>
 </div>
-
 <?php if (pm_brand() === 'travel'): $tmAll = pm_leads(); $tmTodo = pm_tm_rewrite_candidates($tmAll); $tmKept = pm_tm_rewrite_kept($tmAll); if ($tmTodo): ?>
 <div class="card nofold" id="tmformat">
   <b>Travel Malawi's emails have a new standard format.</b> It is short and personal: who we are, what we found about that place, the directory we are building together, and the link to <?= pm_h(preg_replace('#^https?://#', '', (string)pm_tm_email_cfg()['link'])) ?>. You can change the wording in Sales &gt; Targeting and messages.
@@ -144,25 +170,6 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
   <form method="post" class="btns"><?= $post('', 'fix_subjects') ?><button class="btn primary">Fix <?= count($sjTodo) ?> subject line<?= count($sjTodo) === 1 ? '' : 's' ?></button></form>
 </div>
 <?php endif; ?>
-
-<!-- 2. Run the agents + progress -->
-<div class="card runbar" id="runbar" data-running="<?= $running ? '1' : '0' ?>">
-  <div class="runtop">
-    <div>
-      <b><?= $running ? 'Agents are searching' : 'Find new leads' ?></b>
-      <span class="muted" id="runsub">
-        <?php if ($running): ?><?= pm_h($run['phase'] ?? 'Starting') ?><?php elseif (($run['state'] ?? '') === 'done' && ($run['mode'] ?? '') === 'names'): ?>Name search <?= pm_h(date('j M, H:i', strtotime((string)($run['finished'] ?? 'now')))) ?>: <?= (int)($run['stats']['named'] ?? 0) ?> leads have an owner or manager name<?php elseif (($run['state'] ?? '') === 'done'): $st = $run['stats'] ?? []; ?>Last run <?= pm_h(date('j M, H:i', strtotime((string)($run['finished'] ?? 'now')))) ?>: <?= (int)($st['added'] ?? 0) ?> new, <?= (int)($st['qualified'] ?? 0) ?> qualified, <?= (int)($st['drafted'] ?? 0) ?> drafts<?php $studied = count(array_filter($leadsAll, fn($x) => str_starts_with((string)($x['research']['at'] ?? ''), date('Y-m-d')))); ?>, <?= $studied ?> studied today<?= !empty($st['errors']) ? ', ' . (int)$st['errors'] . ' errors' : '' ?><?php elseif (in_array($run['state'] ?? '', ['error', 'stalled'], true)): ?><?= $run['state'] === 'stalled' ? 'The last run stopped responding.' : 'The last run failed: ' . pm_h($run['msg'] ?? '') ?><?php else: ?>Scouts search the web, then qualify and draft. Nothing is sent without you.<?php endif; ?>
-      </span>
-    </div>
-    <div class="acts">
-      <?php if (pm_imap_ready()): $ir = pm_inbox_read_status(pm_brand()); ?><form method="post" id="check-replies"><?= $post('', 'check_replies') ?><button class="btn<?= $ir['age'] === null || $ir['age'] >= 3600 || $ir['err'] !== '' ? ' primary' : '' ?>" <?= $running ? 'disabled' : '' ?> title="<?= pm_h($ir['err'] !== '' ? 'The last check failed: ' . $ir['err'] : ($ir['age'] === null ? 'The inbox has never been read' : 'Inbox last read ' . pm_inbox_ago((int)$ir['age']) . ' ago')) ?>">Check replies</button></form><?php endif; ?>
-      <form method="post"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="mail_log"><input type="hidden" name="do" value="sync"><input type="hidden" name="back" value="agents"><button class="btn" <?= $running ? 'disabled' : '' ?> title="Reads the Sent folders in your mailboxes and marks every lead already emailed as contacted (out of Active), filed in the folder Already contacted">Compare with the Sent folder</button></form>
-      <form method="post"><?= $post('', 'find_names') ?><button class="btn" <?= $running ? 'disabled' : '' ?> title="Looks for the owner or manager of leads that have no name yet">Find owner names</button></form>
-      <form method="post"><?= $post('', 'run') ?><button class="btn primary" id="runbtn" <?= $running ? 'disabled' : '' ?>><?= $running ? 'Working…' : 'Run the agents' ?></button></form>
-    </div>
-  </div>
-  <div class="prog" id="runprog" <?= $running ? '' : 'hidden' ?>><i id="runfill" style="width:<?= (int)(100 * (int)($run['step'] ?? 0) / max(1, (int)($run['steps'] ?? 7))) ?>%"></i></div>
-</div>
 
 <?php if ($unmatched): $cands = array_filter($leadsAll, fn($x) => !empty($x['sent']) || !empty($x['last_contacted']) || !empty($x['wa_sent'])); uasort($cands, fn($a, $b) => strcasecmp($a['name'], $b['name'])); ?>
 <details class="card unmatched"><summary><b>Unmatched replies</b> <span class="pill warn"><?= count($unmatched) ?></span> <span class="muted t-sm">from people who are not leads: attach, make a lead or dismiss</span></summary>
@@ -220,13 +227,11 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
 <?php if ($focusId !== ''): ?>
 <div class="focusbar"><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?><?= pm_h($fq2()) ?>&at=<?= pm_h(rawurlencode($focusId)) ?>#l<?= pm_h($focusId) ?>">← All leads</a> <span class="muted">Focused on <b><?= pm_h($leadsAll[$focusId]['name']) ?></b></span></div>
 <?php else: ?>
-<div class="filters">
-  <?php foreach (($who !== '' ? ['mine' => 'Mine'] : []) + ['active' => 'Active', 'people' => 'People looking', 'ready' => 'Ready to send', 'awaiting' => 'Needs reply', 'noemail' => 'No email', 'gaps' => 'Missing details', 'drafted' => 'Draft ready', 'followups' => 'Follow-ups', 'contacted' => 'Contacted', 'replied' => 'Replied', 'proposal' => 'Proposal sent', 'won' => 'Won', 'closed' => 'Closed', 'all' => 'All'] as $k => $l): ?>
-    <a href="?tab=agents&status=<?= $k ?><?= pm_h($fq2()) ?>" class="<?= $filter === $k ? 'on' : '' ?>"><?= $l ?> <small><?= (int)($counts[$k] ?? 0) ?></small></a>
-  <?php endforeach; ?>
-  <form method="get" class="typesel" data-noload="1"><input type="hidden" name="tab" value="agents"><input type="hidden" name="status" value="<?= pm_h($filter) ?>">
+<div class="listbar">
+  <h2><?= pm_h($fpTitle) ?> <span class="muted tnum"><?= $nList ?></span></h2>
+  <form method="get" class="typesel" data-noload="1"><input type="hidden" name="tab" value="agents"><input type="hidden" name="status" value="<?= pm_h($filter) ?>"><?php if ($ffolder !== ''): ?><input type="hidden" name="folder" value="<?= pm_h($ffolder) ?>"><?php endif; ?>
     <input type="search" name="q" value="<?= pm_h($fq) ?>" placeholder="Search leads" aria-label="Search leads by name, town or contact" class="narrow">
-    <?php $fOn = $ftype !== '' || $fcity !== '' || $fhas !== '' || $fmin || $fsort !== '' || $ffolder !== '' || $fper !== 25; ?>
+    <?php $fOn = $ftype !== '' || $fcity !== '' || $fhas !== '' || $fmin || $fsort !== '' || $fper !== 25; ?>
     <details class="fmore" <?= $fOn ? 'open' : '' ?>><summary class="btn small">Filters<?= $fOn ? ' · on' : '' ?></summary><span class="fmore-in">
     <select name="type" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Business type"><option value="">All business types</option>
       <?php foreach ($types as $tk => $tn): ?><option value="<?= pm_h($tk) ?>" <?= $ftype === $tk ? 'selected' : '' ?>><?= pm_h($tk) ?> (<?= $tn ?>)</option><?php endforeach; ?></select>
@@ -235,9 +240,8 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     <select name="has" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="What we know"><option value="">Any details</option><?php foreach ($leadHas as $hk => $hl): ?><option value="<?= $hk ?>" <?= $fhas === $hk ? 'selected' : '' ?>><?= pm_h($hl) ?></option><?php endforeach; ?></select>
     <select name="min" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Lowest fit score"><?php foreach ([0 => 'Any score', 60 => 'Score 60+', 75 => 'Score 75+', 85 => 'Score 85+'] as $mk => $ml): ?><option value="<?= $mk ?>" <?= $fmin === $mk ? 'selected' : '' ?>><?= $ml ?></option><?php endforeach; ?></select>
     <select name="sort" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Order"><?php foreach (['' => 'Best first', 'ready' => 'Most ready first', 'new' => 'Newest first', 'name' => 'Name A to Z', 'city' => 'By town'] as $sk => $sl): ?><option value="<?= $sk ?>" <?= $fsort === $sk ? 'selected' : '' ?>><?= $sl ?></option><?php endforeach; ?></select>
-    <?php if ($folders): ?><select name="folder" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Folder"><option value="">All folders</option><?php foreach ($folders as $fk => $fn): ?><option value="<?= pm_h((string)$fk) ?>" <?= $ffolder === (string)$fk ? 'selected' : '' ?>><?= pm_h((string)$fk) ?> (<?= (int)$fn ?>)</option><?php endforeach; ?></select><?php endif; ?>
     <select name="per" onchange="(this.form.requestSubmit || this.form.submit).call(this.form)" aria-label="Leads per page"><?php foreach ([10, 25, 50, 100, 200] as $pk): ?><option value="<?= $pk ?>" <?= $fper === $pk ? 'selected' : '' ?>><?= $pk ?> a page</option><?php endforeach; ?></select></span></details>
-    <?php if ($ftype !== '' || $fq !== '' || $fcity !== '' || $fhas !== '' || $fmin || $fsort !== '' || $ffolder !== ''): ?><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?>">Clear</a><?php endif; ?></form>
+    <?php if ($ftype !== '' || $fq !== '' || $fcity !== '' || $fhas !== '' || $fmin || $fsort !== ''): ?><a class="btn small" href="?tab=agents&status=<?= pm_h($filter) ?><?= $ffolder !== '' ? '&amp;folder=' . pm_h(rawurlencode($ffolder)) : '' ?>">Clear</a><?php endif; ?></form>
 </div>
 <?php endif; ?>
 <?php $isAdm = pm_user_is_admin(); $pickable = fn($l) => true; $nPick = count($shown); $adv = function_exists('pm_send_advice') ? pm_send_advice(pm_brand()) : ['lines' => []]; $outbox = array_values(array_filter(function_exists('pm_ml_outbox') ? pm_ml_outbox(pm_brand()) : [], fn($r) => empty($leadsAll[$r['lead'] ?? '']['approved_at']) && !(($r['kind'] ?? '') === 'first' && !empty($leadsAll[$r['lead'] ?? '']['sent'])))); // a lead queued again, or whose first email has since gone, is not shown twice ?>
@@ -282,7 +286,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
     $hasReply = !empty($l['reply_draft']);
     $sentFirst = $which === 'first' && !empty($l['sent']); // the first email went: its panel folds away and is not offered for sending again
 ?>
-<details class="lead" id="l<?= pm_h($id) ?>" <?= $focusId === $id ? 'open' : '' // one lead open at a time: the row chips say what each one needs ?>>
+<details class="lead<?= $hasReply || $waiting($l) ? ' unread' : '' // they wrote: marked like unread mail ?>" id="l<?= pm_h($id) ?>" <?= $focusId === $id ? 'open' : '' // one lead open at a time: the row chips say what each one needs ?>>
   <summary>
     <?php if ($pickable($l)): ?><label class="lpick" onclick="event.stopPropagation()" title="<?= $approvable($l) ? 'Tick to send this email' : ($fuOpen($l) ? 'Tick to follow up' : 'Tick to move, file or delete') ?>"><input type="checkbox" class="lsel" form="leadsel" name="ids[]" value="<?= pm_h($id) ?>" aria-label="Tick <?= pm_h($l['name']) ?>"></label><?php else: ?><span class="lpick none"></span><?php endif; ?>
     <span class="who"><b><?= pm_h($l['name']) ?></b><small><?= pm_h($l['type']) ?> · <?= pm_h($l['city']) ?></small></span>
@@ -543,3 +547,4 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
   <?php endif; ?>
   <?php endif; ?>
 </details>
+</div></div>
