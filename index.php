@@ -638,7 +638,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (in_array($_POST['bt'] ?? '', ['targeting', 'home', 'ops'], true)) { // the page the button was on
                 pm_redirect(['home' => 'home', 'ops' => 'settings&section=connections'][$_POST['bt']] ?? 'targeting', $m, $k);
             }
-            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'add', 'approve_send', 'send_now', 'followup_send', 'unapprove_send', 'set_send_after', 'dismiss_unmatched', 'folder_add', 'folder_remove', 'folder_rename', 'folder_delete', 'outbox_retry', 'outbox_discard', 'move_to', 'turn_down', 'tb_strike'], true);
+            $noLead = in_array($do, ['delete', 'lead_forget', 'plan', 'run', 'find_names', 'config', 'director', 'refresh_models', 'check_replies', 'sync_all', 'add', 'approve_send', 'send_now', 'followup_send', 'unapprove_send', 'set_send_after', 'dismiss_unmatched', 'folder_add', 'folder_remove', 'folder_rename', 'folder_delete', 'outbox_retry', 'outbox_discard', 'move_to', 'turn_down', 'tb_strike'], true);
             if ($id !== '' && !$noLead) {
                 pm_redirect(!empty($_POST['rl']) ? 'agents&lead=' . $id : 'agents' . $keep . '&at=' . rawurlencode($id) . '#l' . $id, $m, $k); // at= opens the page of the list that holds the lead
             }
@@ -813,6 +813,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             @set_time_limit(120);
             $dbr = pm_director_brief(true);
             $back(trim((string)($dbr['note'] ?? '')) !== '' ? (string)$dbr['note'] : "Today's strategy refreshed.");
+        }
+        if ($do === 'sync_all') { // Leads > Sync: the Sent folders, then the replies, then the mailbox desk, so nothing is written twice (lib/sx_mailbox.php)
+            [$syMsg, $syKind] = pm_mb_sync_all(pm_brand(), 'pm_send_reply');
+            pm_redirect('agents', $syMsg, $syKind);
         }
         if ($do === 'check_replies') {
             try {

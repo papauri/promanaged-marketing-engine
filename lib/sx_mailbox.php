@@ -745,3 +745,69 @@ function pm_job_mailbox(string $brand): string
     $r = pm_mb_read($brand);
     return $r['error'] !== '' ? 'mailbox: ' . $r['error'] : (($r['in'] + $r['out']) ? 'mailbox: ' . $r['in'] . ' in, ' . $r['out'] . ' sent' . ($r['outside'] ? ', in touch outside the app: ' . implode(', ', $r['outside']) : '') : '');
 }
+
+/**
+ * One Sync for the Leads page: everything that went out and came back is read in the right order, so nothing is ever written twice.
+ *   1. Sent: every Sent folder is compared with the leads (pm_ml_sync_sent): a lead emailed from the other copy, by hand or before a copy of the data, is marked
+ *      contacted, its queued email and a follow-up that already went are taken out of the queue.
+ *   2. Replies: the inbox is read and each reply from a lead is classified and answered as a draft (pm_inbox_poll).
+ *   3. The mailbox desk for this business (pm_mb_read): someone we are already talking to outside the app leaves cold outreach, an answer sent by hand ends the wait,
+ *      bounces and enquiries are placed.
+ * Returns [message, kind]. The time of the last sync is kept per business (mail_state.lead_sync).
+ */
+function pm_mb_sync_all(string $brand, ?callable $send = null): array
+{
+    @set_time_limit(300);
+    if (!function_exists('pm_inbox_poll')) {
+        require_once __DIR__ . '/engage.php';
+    }
+    $say = [];
+    $err = false;
+    try {
+        $leads = pm_leads();
+        $n = pm_ml_sync_sent($leads, 365, $rep);
+        ($n || !empty($rep['foldered'])) && pm_leads_save($leads);
+        $nm = count(array_unique((array)($rep['marked'] ?? [])));
+        $say[] = 'Sent: ' . (int)$rep['read'] . ' emails read, ' . ($nm ? $nm . ' lead' . ($nm === 1 ? '' : 's') . ' brought up to date (emailed outside this copy: marked contacted, follow-ups counted, nothing sent twice)' : 'every lead already up to date');
+    } catch (Throwable $e) {
+        $err = true;
+        $say[] = 'Sent folder not read (' . mb_substr($e->getMessage(), 0, 80) . ')';
+    }
+    pm_update('mail_state', function (array $d) { // the page's own Sent check (pm_ml_autosync) need not run again straight away
+        $d['sync_at'] = time();
+        return $d;
+    }, fn() => []);
+    if (pm_imap_ready()) {
+        try {
+            [$h] = pm_inbox_poll($send, $irep);
+            $nr = count((array)($irep['replies'] ?? []));
+            $auto = count(array_filter((array)($irep['replies'] ?? []), fn($x) => str_contains((string)($x['what'] ?? ''), 'automatically'))); // only when Sales > Targeting has replies on auto
+            $say[] = 'Inbox: ' . ($nr ? $nr . ' repl' . ($nr === 1 ? 'y' : 'ies') . ' from leads, answers drafted' . ($auto ? ' (' . $auto . ' answered automatically, as set in Targeting)' : '') : 'no new replies from leads') . (!empty($irep['bounces']) ? ', ' . count($irep['bounces']) . ' bounced' : '') . (!empty($irep['unmatched']) ? ', ' . count($irep['unmatched']) . ' from people who are not leads' : '');
+        } catch (Throwable $e) {
+            $err = true;
+            $say[] = 'Inbox not read (' . mb_substr($e->getMessage(), 0, 80) . ')';
+        }
+        $r = pm_mb_read($brand);
+        if ($r['error'] !== '') {
+            $err = true;
+            $say[] = 'Mailbox: ' . $r['error'];
+        } elseif ($r['outside'] || !empty($r['answered']) || !empty($r['made'])) {
+            $say[] = trim(($r['outside'] ? 'already in touch outside the app, out of cold outreach: ' . implode(', ', $r['outside']) . '. ' : '')
+                . (!empty($r['answered']) ? 'Answered by hand: ' . implode(', ', $r['answered']) . '. ' : '') . (!empty($r['made']) ? 'New leads from enquiries: ' . implode(', ', $r['made']) . '.' : ''));
+        }
+    } else {
+        $say[] = 'Inbox not set up (IMAP in .env), so replies were not read';
+    }
+    pm_update('mail_state', function (array $d) use ($brand, $err) {
+        $d['lead_sync'][$brand] = ['at' => time(), 'err' => $err];
+        return $d;
+    }, fn() => []);
+    return ['Synced. ' . implode('. ', $say) . '.', $err ? 'err' : 'ok'];
+}
+
+/** When this business's leads were last synced: ['at' => unix or 0, 'err' => bool]. */
+function pm_mb_sync_last(string $brand): array
+{
+    $s = (array)(pm_load('mail_state', fn() => [])['lead_sync'][$brand] ?? []);
+    return ['at' => (int)($s['at'] ?? 0), 'err' => !empty($s['err'])];
+}

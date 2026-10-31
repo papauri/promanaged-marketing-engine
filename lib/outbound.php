@@ -633,6 +633,25 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
             return $no(($lead['name'] ?? 'This business') . ' was already emailed from this mailbox on ' . ($seen['at'] ?: 'an earlier date') . ' ("' . $seen['subject'] . '"): it is in the Sent folder, so it was not sent again. The lead is now marked contacted.', 'lead');
         }
     }
+    if ($which !== 'drafts' && $mailer === 'pm_mail' && function_exists('pm_ml_sent_to')) { // a follow-up or win-back: if the other copy (or a person) wrote to them after our last known email, this one waits
+        $seen = pm_ml_sent_to((string)($lead['brand'] ?? pm_brand()), $email, 60);
+        $lastOut = max(array_merge([(string)($lead['last_out'] ?? ''), (string)($lead['last_contacted'] ?? '')], array_map('strval', (array)($lead['sent'] ?? []))));
+        if ($seen['found'] && $seen['at'] !== '' && strtotime($seen['at']) > strtotime($lastOut ?: '2000-01-01') + 180) {
+            $L = &$leads[$id];
+            if (!preg_match('/^\s*(re|aw|sv)\s*:/i', $seen['subject'])) { // a follow-up that went from elsewhere: counted, so the next one is timed from it
+                $L['sent'][] = $seen['at'];
+                $L['followups'] = max((int)($L['followups'] ?? 0), count($L['sent']) - 1);
+                $L['last_contacted'] = $seen['at'];
+            }
+            $L['thread'][] = ['dir' => 'out', 'at' => $seen['at'], 'text' => '(Found in the Sent folder) ' . $seen['subject']];
+            $L['last_out'] = $seen['at'];
+            unset($L['approved_at'], $L['send_after'], $L['followup_approved'], $L['followup_draft']);
+            pm_lead_note($L, 'Not sent: ' . $email . ' was emailed on ' . $seen['at'] . ' ("' . $seen['subject'] . '") from elsewhere, found in the Sent folder');
+            unset($L);
+            pm_leads_save($leads);
+            return $no(($lead['name'] ?? 'This business') . ' was emailed on ' . $seen['at'] . ' ("' . $seen['subject'] . '") from the other copy of the app or by hand: it is in the Sent folder, so this one was not sent. Sync brings everything up to date.', 'lead');
+        }
+    }
     $kitBlock = $which === 'drafts' && function_exists('pm_share_email_block') ? pm_share_email_block((string)$d['email_body']) : ''; // for the conversation record
     $res = $mailer($settings, ['to' => $email, 'lead' => $id, 'kind' => ['drafts' => 'first', 'followup_draft' => 'followup', 'winback_draft' => 'winback'][$which] ?? 'email',
         'dedupe' => ['drafts' => 'first:' . $id, 'followup_draft' => 'followup:' . $id . ':' . ((int)($lead['followups'] ?? 0) + 1), 'winback_draft' => 'winback:' . $id][$which] ?? '']

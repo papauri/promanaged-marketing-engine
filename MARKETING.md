@@ -121,6 +121,12 @@ accepted by being made; they are logged in the Done log below, not in the regist
 
 ## 6 · Done log
 
+### Owner request in chat, 2026-11-01 — an Inbox folder and one Sync on Leads, so emails are never duplicated
+
+- **Sync** on Leads (replaces Check replies and Compare with the Sent folder; `pm_mb_sync_all`, `lib/sx_mailbox.php`): the Sent folders first (anyone emailed from the other copy or by hand is marked contacted, follow-ups counted, queued emails taken out), then the inbox (replies drafted; answered automatically only when Targeting says auto), then the mailbox desk (in touch outside the app, answered by hand, bounces, enquiries). It says when it last ran and turns blue after an hour.
+- **Inbox and Sent** in the Leads pane: everyone who wrote to us and everyone we wrote to, newest first, each row showing the date and the start of the last message.
+- **Never twice**: the Sent sync no longer counts our answers in their thread ("Re:") as follow-ups and no longer adds a copy of an email the lead already has; before a follow-up or win-back goes, the Sent folder is checked for anything sent to them after our last known email, and if there is, it is not sent. On the first run against the real mailbox it found 13 Travel Malawi follow-ups sent from the other copy on 31 Oct that this copy did not know about.
+
 ### Owner request in chat, 2026-10-31 — "make the hardest leads the softest", human emails, leads in one folder each, a simpler lead card
 
 - **The firm decides the next move by code** (`lib/soften.php`, no AI): each lead is Hot, Warm, Cool or Hard from what they did (opened the proposal, wrote back, said no, follow-ups unanswered), and gets one move from a playbook: give first, a yes or no question, ask for the right person, show not tell, a smaller first step, change channel, their own timing, a second opinion, something new, close the file politely, book the next step. A move already used on them is skipped (each sent message records its move). The follow-up head, the sit-down and the win-back agent all get the same move, so the firm acts as one.

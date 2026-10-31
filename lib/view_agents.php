@@ -56,10 +56,20 @@ $readySend = fn($l) => $hasMail($l) && empty($l['approved_at']) && $l['status'] 
 $boxOf = [];
 foreach ($leadsAll as $l) { $boxOf[(string)$l['id']] = pm_lead_box($l, $acfg); } // each lead's one list, like a message in one mail folder
 if ($filter === '') { $bxAll = array_count_values($boxOf); $filter = !empty($bxAll['awaiting']) ? 'awaiting' : (!empty($bxAll['ready']) ? 'ready' : (!empty($bxAll['followups']) ? 'followups' : 'all')); }
-$inStatus = fn($l, $f) => isset(PM_LEAD_BOXES[$f]) ? ($boxOf[(string)$l['id']] ?? '') === $f : ($f === 'people' ? $people($l) : ($f === 'all' ? true : ($f === 'mine' ? (($l['owner'] ?? '') === $who && (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l))) : ($f === 'awaiting' ? $waiting($l)
+$mailAt = function (array $l, string $dir): string { // the latest message their way or ours: the Inbox and Sent views sort and show by it
+    foreach (array_reverse((array)($l['thread'] ?? [])) as $m) { if (($m['dir'] ?? '') === $dir) { return (string)($m['at'] ?? ''); } }
+    return $dir === 'in' ? (string)($l['last_reply'] ?? '') : (string)(($l['last_out'] ?? '') ?: (($sl = (array)($l['sent'] ?? [])) ? (string)end($sl) : ''));
+};
+$mailText = function (array $l, string $dir): string {
+    foreach (array_reverse((array)($l['thread'] ?? [])) as $m) { if (($m['dir'] ?? '') === $dir && trim((string)($m['text'] ?? '')) !== '') { return trim((string)preg_replace('/\s+/u', ' ', (string)$m['text'])); } }
+    return '';
+};
+$inInbox = fn($l) => $mailAt($l, 'in') !== ''; // everyone who ever wrote to us, whatever their stage
+$inSent = fn($l) => !empty($l['sent']) || $mailAt($l, 'out') !== ''; // everyone we wrote to
+$inStatus = fn($l, $f) => $f === 'inbox' ? $inInbox($l) : ($f === 'sent' ? $inSent($l) : (isset(PM_LEAD_BOXES[$f]) ? ($boxOf[(string)$l['id']] ?? '') === $f : ($f === 'people' ? $people($l) : ($f === 'all' ? true : ($f === 'mine' ? (($l['owner'] ?? '') === $who && (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l))) : ($f === 'awaiting' ? $waiting($l)
     : ($f === 'ready' ? $readySend($l) : ($f === 'noemail' ? (!$hasMail($l) && empty($l['listen']) && !in_array($l['status'], ['won', 'lost', 'optout'], true))
     : ($f === 'followups' ? $waitAns($l) : ($f === 'closed' ? in_array($l['status'], ['lost', 'optout'], true)
-    : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? $todo($l) : $l['status'] === $f))))))))));
+    : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? $todo($l) : $l['status'] === $f))))))))))));
 $inSearch = fn($l) => ($fq === '' || mb_stripos($l['name'] . ' ' . $l['city'] . ' ' . ($l['contact'] ?? '') . ' ' . ($l['type'] ?? '') . ' ' . ($l['email'] ?? ''), $fq) !== false)
     && ($fcity === '' || strcasecmp(trim((string)($l['city'] ?? '')), $fcity) === 0) && $hasOk($l) && (int)($l['score'] ?? 0) >= $fmin;
 $inFolder = fn($l) => $ffolder === '' || in_array($ffolder, (array)($l['folders'] ?? []), true); // a folder is a place of its own (the pane): its leads in every status
@@ -84,12 +94,16 @@ $counts['noemail'] = count(array_filter($base, fn($l) => $inStatus($l, 'noemail'
 $counts['people'] = count(array_filter($base, $people));
 $counts['closed'] = count(array_filter($base, fn($l) => $inStatus($l, 'closed')));
 $counts['all'] = count($base);
+$counts['inbox'] = count(array_filter($base, $inInbox));
+$counts['sent'] = count(array_filter($base, $inSent));
 $counts['mine'] = $who === '' ? 0 : count(array_filter($base, fn($l) => $inStatus($l, 'mine')));
 foreach ($base as $l) { $bx = $boxOf[(string)$l['id']] ?? ''; $bxN[$bx] = ($bxN[$bx] ?? 0) + 1; }
 foreach (PM_LEAD_BOXES as $bk => $bl) { $counts[$bk] = (int)($bxN[$bk] ?? 0); } // the lists hold each lead once, so their counts add up to All leads
 $shown = array_filter($base, fn($l) => $inStatus($l, $filter) && $inFolder($l));
 if ($focusId !== '') { $shown = [$focusId => $leadsAll[$focusId]]; }
-usort($shown, match ($fsort) {
+usort($shown, match ($fsort === '' && in_array($filter, ['inbox', 'sent'], true) ? $filter : $fsort) {
+    'inbox' => fn($a, $b) => strcmp($mailAt($b, 'in'), $mailAt($a, 'in')), // newest first, like a mailbox
+    'sent' => fn($a, $b) => strcmp($mailAt($b, 'out'), $mailAt($a, 'out')),
     'new' => fn($a, $b) => strcmp((string)($b['created'] ?? ''), (string)($a['created'] ?? '')),
     'name' => fn($a, $b) => strcasecmp((string)$a['name'], (string)$b['name']),
     'city' => fn($a, $b) => [strtolower((string)$a['city']), -(int)($a['score'] ?? 0)] <=> [strtolower((string)$b['city']), -(int)($b['score'] ?? 0)],
@@ -131,12 +145,13 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
 <?php
 $fpItem = fn(string $k, string $label, bool $hot = false) => ['label' => $label, 'n' => (int)($counts[$k] ?? 0), 'href' => '?tab=agents&status=' . $k . $fq2(['folder' => '']), 'on' => $ffolder === '' && $filter === $k, 'hot' => $hot];
 $fpBox = fn(array $keys, array $hot = []) => array_map(fn($k) => $fpItem($k, PM_LEAD_BOXES[$k], in_array($k, $hot, true)), $keys);
-$fpLists = ['To do' => $fpBox(['awaiting', 'ready', 'followups', 'queued', 'prep', 'noemail', 'people'], ['awaiting', 'ready', 'followups', 'people']), // each lead sits in one of these lists only (pm_lead_box)
+$fpLists = ['Mail' => [$fpItem('inbox', 'Inbox'), $fpItem('sent', 'Sent')], // what came back and what went out, newest first (a lead is also in one list below)
+    'To do' => $fpBox(['awaiting', 'ready', 'followups', 'queued', 'prep', 'noemail', 'people'], ['awaiting', 'ready', 'followups', 'people']), // each lead sits in one of these lists only (pm_lead_box)
     'Waiting' => $fpBox(['waiting', 'later', 'proposal']),
     'Done' => $fpBox(['won', 'closed']),
     'Views' => array_merge($who !== '' ? [$fpItem('mine', 'Mine')] : [], [$fpItem('all', 'All leads')]),
     'My folders' => array_map(fn($fk, $fn) => ['label' => (string)$fk, 'n' => (int)$fn, 'href' => '?tab=agents&status=all' . $fq2(['folder' => (string)$fk]), 'on' => $ffolder === (string)$fk], array_keys($folders), $folders)];
-$fpTitle = $ffolder !== '' ? $ffolder : (PM_LEAD_BOXES[$filter] ?? (['mine' => 'Mine', 'active' => 'Active', 'all' => 'All leads'][$filter] ?? (PM_LEAD_STATUSES[$filter] ?? 'Leads')));
+$fpTitle = $ffolder !== '' ? $ffolder : (PM_LEAD_BOXES[$filter] ?? (['inbox' => 'Inbox', 'sent' => 'Sent', 'mine' => 'Mine', 'active' => 'Active', 'all' => 'All leads'][$filter] ?? (PM_LEAD_STATUSES[$filter] ?? 'Leads')));
 ?>
 <div class="mailview">
 <aside class="mailside"><?= pm_ui_folderpane($fpLists, 'Lead lists and folders') ?>
@@ -151,9 +166,8 @@ $fpTitle = $ffolder !== '' ? $ffolder : (PM_LEAD_BOXES[$filter] ?? (['mine' => '
       <button class="btn">Find</button>
     </form>
     <div class="acts">
-      <?php if (pm_imap_ready()): $ir = pm_inbox_read_status(pm_brand()); ?><form method="post" id="check-replies"><?= $post('', 'check_replies') ?><button class="btn<?= $ir['age'] === null || $ir['age'] >= 3600 || $ir['err'] !== '' ? ' primary' : '' ?>" <?= $running ? 'disabled' : '' ?> title="<?= pm_h($ir['err'] !== '' ? 'The last check failed: ' . $ir['err'] : ($ir['age'] === null ? 'The inbox has never been read' : 'Inbox last read ' . pm_inbox_ago((int)$ir['age']) . ' ago')) ?>">Check replies</button></form><?php endif; ?>
+      <?php $sy = pm_mb_sync_last(pm_brand()); $syAge = $sy['at'] ? time() - $sy['at'] : null; ?><form method="post" id="check-replies" class="syncform"><?= $post('', 'sync_all') ?><button class="btn<?= $syAge === null || $syAge >= 3600 || $sy['err'] ? ' primary' : '' ?>" <?= $running ? 'disabled' : '' ?> title="Reads the Sent folders (anyone already emailed, by either copy of the app or by hand, is marked contacted and taken out of the send queue), then the inbox (replies are drafted), then the mailbox (anyone we are already talking to leaves cold outreach), so nobody is ever emailed twice">Sync</button><span class="muted t-sm"><?= $syAge === null ? 'never synced' : ($sy['err'] ? 'last sync had a problem' : 'synced ' . pm_h(pm_inbox_ago((int)$syAge)) . ' ago') ?></span></form>
       <div class="dd"><button type="button" class="ddbtn btn" aria-haspopup="true" aria-expanded="false">More <span class="caret"></span></button><div class="menu" role="menu">
-        <form method="post"><input type="hidden" name="csrf" value="<?= pm_h($csrf) ?>"><input type="hidden" name="action" value="mail_log"><input type="hidden" name="do" value="sync"><input type="hidden" name="back" value="agents"><button class="item" role="menuitem" <?= $running ? 'disabled' : '' ?> title="Reads the Sent folders in your mailboxes and marks every lead already emailed as contacted (out of Active), filed in the folder Already contacted">Compare with the Sent folder</button></form>
         <form method="post"><?= $post('', 'find_names') ?><button class="item" role="menuitem" <?= $running ? 'disabled' : '' ?> title="Looks for the owner or manager of leads that have no name yet">Find owner names</button></form>
       </div></div>
       <form method="post"><?= $post('', 'run') ?><button class="btn primary" id="runbtn" <?= $running ? 'disabled' : '' ?>><?= $running ? 'Working…' : 'Run the agents' ?></button></form>
@@ -304,7 +318,8 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
   <summary>
     <?php if ($pickable($l)): ?><label class="lpick" onclick="event.stopPropagation()" title="<?= $approvable($l) ? 'Tick to send this email' : ($fuOpen($l) ? 'Tick to follow up' : 'Tick to move, file or delete') ?>"><input type="checkbox" class="lsel" form="leadsel" name="ids[]" value="<?= pm_h($id) ?>" aria-label="Tick <?= pm_h($l['name']) ?>"></label><?php else: ?><span class="lpick none"></span><?php endif; ?>
     <span class="lav av<?= crc32((string)$l['name']) % 8 ?>" aria-hidden="true"><?= pm_h($ini((string)$l['name'])) ?></span>
-    <span class="who"><b><?= pm_h($l['name']) ?></b><small><?= pm_h($l['type']) ?> · <?= pm_h($l['city']) ?></small></span>
+    <?php $mDir = $filter === 'inbox' ? 'in' : ($filter === 'sent' ? 'out' : ''); $mLine = $mDir !== '' ? $mailText($l, $mDir) : ''; $mAt = $mDir !== '' ? $mailAt($l, $mDir) : ''; ?>
+    <span class="who"><b><?= pm_h($l['name']) ?></b><small><?php if ($mDir !== ''): ?><?= $mAt !== '' ? pm_h(date('j M', strtotime($mAt))) . ' · ' : '' ?><?= pm_h($mLine !== '' ? mb_substr($mLine, 0, 90) : ($mDir === 'out' ? 'Emailed outside the app (found in the Sent folder)' : '')) ?><?php else: ?><?= pm_h($l['type']) ?> · <?= pm_h($l['city']) ?><?php endif; ?></small></span>
     <span class="lmeta tnum" title="How good a fit, out of 100"><?= (int)($l['score'] ?? 0) ?></span>
     <span class="tags">
       <?= pm_pg_chip($l) ?><?= function_exists('pm_win_chip') ? pm_win_chip($l) : '' ?><?php if ($hasReply): ?><span class="pill warn">reply waiting</span><?php elseif ($waiting($l)): ?><span class="pill warn">they wrote</span><?php elseif ($l['status'] === 'contacted' && $waitAns($l)): $fuOn = pm_followup_due_on($l, ['max_followups' => 99] + $acfg); $fuNow = isset($fuDue[(string)$id]) || !empty($l['followup_draft']); ?><span class="pill <?= $fuNow ? 'warn' : '' ?>" title="<?= $which === 'followup' ? 'The follow-up is written: open the lead to read it' : 'The Follow-up head prepares it' ?>">follow-up <?= pm_followup_nth($l) ?> <?= $fuNow ? 'due now' : ($fuOn !== '' ? 'on ' . pm_h(date('D j M', strtotime($fuOn))) : 'prepared') ?></span><?php endif; ?>

@@ -433,21 +433,32 @@ function pm_ml_sync_sent(array &$leads, int $days = 365, ?array &$report = null)
                     $report['foldered'][] = (string)$id;
                 }
                 if (!empty($leads[$id]['sent']) && ($leads[$id]['status'] ?? '') === 'contacted') { // follow-ups sent from the other copy: counted, so the next one is timed right and never repeats
-                    $known = array_map(fn($x) => substr((string)$x, 0, 16), (array)$leads[$id]['sent']);
-                    $near = fn(string $t) => (bool)array_filter($known, fn($k) => abs(strtotime($k) - strtotime($t)) <= 180);
-                    $newer = array_filter(array_keys($all[$id] ?? []), fn($t) => !$near($t) && $t > max($known));
+                    // every email of ours this copy already has (sends, answers, copies found before) is known: a Sent copy within 3 minutes of one is the same email
+                    $known = array_merge(array_map(fn($x) => substr((string)$x, 0, 16), (array)$leads[$id]['sent']),
+                        array_map(fn($m) => substr((string)($m['at'] ?? ''), 0, 16), array_filter((array)($leads[$id]['thread'] ?? []), fn($m) => ($m['dir'] ?? '') === 'out')));
+                    $near = fn(string $t) => (bool)array_filter($known, fn($k) => $k !== '' && abs(strtotime($k) - strtotime($t)) <= 180);
+                    $newer = array_filter(array_keys($all[$id] ?? []), fn($t) => !$near($t) && $t > min(array_map(fn($x) => substr((string)$x, 0, 16), (array)$leads[$id]['sent'])));
                     if ($newer) {
                         sort($newer);
+                        $fu = 0;
                         foreach ($newer as $t) {
-                            $leads[$id]['sent'][] = $t;
+                            $isAnswer = (bool)preg_match('/^\s*(re|aw|sv)\s*:/i', (string)$all[$id][$t]); // our answer in their thread: a conversation, not a follow-up
                             $leads[$id]['thread'][] = ['dir' => 'out', 'at' => $t, 'text' => '(Found in the Sent folder) ' . $all[$id][$t]];
+                            if (!$isAnswer) {
+                                $leads[$id]['sent'][] = $t;
+                                $fu++;
+                            }
                         }
-                        $leads[$id]['followups'] = max((int)($leads[$id]['followups'] ?? 0), count($leads[$id]['sent']) - 1);
-                        $leads[$id]['last_contacted'] = $leads[$id]['last_out'] = end($newer);
-                        unset($leads[$id]['followup_draft'], $leads[$id]['followup_approved'], $leads[$id]['approved_at'], $leads[$id]['send_after']); // that follow-up already went
-                        pm_lead_note($leads[$id], count($newer) . ' later email' . (count($newer) === 1 ? '' : 's') . ' to them found in the Sent folder (last ' . end($newer) . '): follow-ups counted, the waiting draft cleared');
+                        usort($leads[$id]['thread'], fn($x, $y) => strcmp((string)($x['at'] ?? ''), (string)($y['at'] ?? ''))); // in the order they happened
+                        if ($fu) {
+                            $leads[$id]['followups'] = max((int)($leads[$id]['followups'] ?? 0), count($leads[$id]['sent']) - 1);
+                            $leads[$id]['last_contacted'] = max((string)($leads[$id]['last_contacted'] ?? ''), end($newer));
+                            unset($leads[$id]['followup_draft'], $leads[$id]['followup_approved'], $leads[$id]['approved_at'], $leads[$id]['send_after']); // that follow-up already went
+                        }
+                        $leads[$id]['last_out'] = max((string)($leads[$id]['last_out'] ?? ''), end($newer));
+                        pm_lead_note($leads[$id], count($newer) . ' later email' . (count($newer) === 1 ? '' : 's') . ' to them found in the Sent folder (last ' . end($newer) . ')' . ($fu ? ': ' . $fu . ' counted as follow-ups, the waiting draft cleared' : ': answers in their thread, not follow-ups'));
                         $report['marked'][] = (string)$id;
-                        $n++;
+                        $fu && $n++;
                     }
                     continue;
                 }

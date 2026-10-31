@@ -503,6 +503,7 @@ textarea.cc-new { box-shadow:0 0 0 3px color-mix(in srgb, var(--dept) 35%, trans
 .runtop b { display:block; font-size:14px; }
 .runtop .muted { font-size:13px; }
 .acts { display:flex; gap:8px; flex-wrap:wrap; }
+.syncform { display:flex; align-items:center; gap:var(--s-2) } /* Leads > Sync with when it last ran */
 .director > summary { display:flex; gap:8px; align-items:baseline; font-weight:500 !important; }
 .director .lbl { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--dept); font-weight:700; white-space:nowrap; }
 .director ol { margin:0 0 8px 16px; padding:0; }

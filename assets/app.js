@@ -15,6 +15,7 @@
     ex_meet: 'The department heads are meeting about the ad (with AI illustrations, up to a minute or two)', ex_chat: 'Changing the ad and drawing it again', ex_save: 'Drawing the ad again', ex_undo: 'Drawing the ad again', ex_pics: 'Making the illustrations and drawing the ad (up to a minute or two)', ex_approve: 'Approving and putting it in the plan',
     polish: 'Writing a tailored proposal',
     check_replies: 'Checking your inbox for replies',
+    sync_all: 'Syncing: the Sent folders, then the replies, then the mailbox',
     draft_outreach: 'Writing the outreach',
     paste_reply: 'Reading their reply',
     director: 'Reviewing the pipeline',
