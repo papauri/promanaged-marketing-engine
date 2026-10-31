@@ -660,6 +660,7 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
         $L['owner'] = $GLOBALS['PM_WHO']; // whoever sends it owns the follow-up
     }
     $now = date('Y-m-d H:i');
+    $play = $which === 'drafts' ? 'value_first' : (function_exists('pm_soften') ? pm_soften($L, max(1, (int)($cfg['max_followups'] ?? 3)))['play'] : ''); // the move this message made (lib/soften.php), so the next one tries another
     $L['sent'][] = $now;
     $L['thread'][] = ['dir' => 'out', 'at' => $now, 'text' => $d['email_body'] . $kitBlock] + ($mid ? ['mid' => $mid] : []);
     if ($mid) {
@@ -669,6 +670,7 @@ function pm_send_first_run(array &$leads, string $id, string $which, ?callable $
     pm_lead_mark_by($L);
     $L['status'] = 'contacted';
     unset($L['approved_at'], $L['send_fail_at'], $L['send_after']);
+    $play !== '' && function_exists('pm_soften_used') && pm_soften_used($L, $play);
     if ($which === 'followup_draft') {
         if (function_exists('pm_followup_log_sent')) { // C2-A03: remember the subject arm so the follow-up experiment can score it
             pm_followup_log_sent($L, $d, $now);

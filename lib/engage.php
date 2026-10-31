@@ -123,7 +123,11 @@ function pm_agent_reply(array $lead, string $incoming, string $ch = 'email'): ar
         . "Write as the person at {$s['company_name']} who signs the email: never name yourself, never mention an agent, an AI, a desk, a sit-down or a colleague by name, and end with your last sentence: no sign-off or name (the app adds the usual signature). "
         . "Length: as long as a complete, useful answer needs. Around 80 to 200 words reads best; go longer when they asked several or technical questions. Plain text, short paragraphs, no links, no bullet symbols (the owner's own answer below, when there is one, keeps its link, its numbered steps and its lines as written). "
         . "Set needs_human true if they are angry, complaining, negotiating price or terms, raise legal or security questions, unknown is not empty, or you are unsure. "
-        . "For stop, not_interested, not_now, out_of_office and bounce, reply_body must be empty and sitdown may be empty. "
+        . "objection: when they hesitate, say not now or say no, the main thing holding them back, one of price, timing, competitor (they already have someone), no_need, no_trust, other; with objection_words, their own words for it (short); both empty otherwise. "
+        . "For stop, out_of_office and bounce, reply_body must be empty and sitdown may be empty. "
+        . "For not_now and not_interested, write a short, gracious answer (40 to 90 words) that turns a hard no into a soft one: thank them, show you heard their reason in their own words, never argue, push or ask them to reconsider, "
+        . "then give one small useful thing or one honest reframe for that reason, from the facts only (price: a smaller first step, never a price; timing: say you will come back when they said; competitor: glad they are looked after, happy to be a second opinion any time; no_need: fair enough, plus one thing worth knowing; no_trust: who we are in plain words and one thing they can check), "
+        . "and leave the door open with at most one tiny question, or none. If they plainly want no more messages, two warm sentences and no question. The owner decides whether it goes. "
         . "resume_on: only for not_now, the date (YYYY-MM-DD) they asked to be contacted again, else " . date('Y-m-d', strtotime('+30 days')) . " (today is " . date('Y-m-d') . "). "
         . 'Answer like the best human salesperson would: professional, warm, specific to what they wrote and complete, so it never reads as automated, spam or phishing. ' . (function_exists('pm_trust_flags') ? PM_TRUST_RULES . ' ' : '') . (function_exists('pm_tb_line') ? pm_tb_line((string)($lead['brand'] ?? pm_brand()), 'replies', 3) . ' ' : '')
         . 'tell: a short note to each department that should act on this reply (writers: what it teaches about how we open; director: a hot lead or a lost one and why; followup: stop or change timing; research: a new fact they gave, like a name, a system they use or a number); leave a department empty when there is nothing. '
@@ -134,7 +138,7 @@ function pm_agent_reply(array $lead, string $incoming, string $ch = 'email'): ar
             ? $okBrief . "When the intent is interested or they ask how to join or what happens next, reply_body IS that answer, in its words, with its steps, link and notes kept: only add, at the start, one short line answering anything else they asked or said, and leave out a step they have clearly done already. Its WhatsApp version is the base of whatsapp (it may be longer than 50 words).\n" : '') // the owner's own words for a yes (Sales > Targeting and messages)
         . "Conversation so far:\n" . implode("\n", $thread) . "\n\nTheir new message" . ($ch === 'wa' ? ' (on WhatsApp)' : '') . ":\n" . mb_substr($incoming, 0, 4000)
         . "\n\nReturn JSON: {\"intent\",\"summary\":\"one sentence\",\"sitdown\":{\"asked\":[],\"known\":[],\"unknown\":[],\"options\":[{\"option\":\"\",\"for\":\"\",\"against\":\"\"}],\"lines\":[{\"who\":\"research|replies|advisor|writers|director\",\"says\":\"\"}],\"decision\":\"\",\"to_confirm\":\"\"},"
-        . "\"needs_human\":bool,\"reply_subject\",\"reply_body\",\"whatsapp\",\"resume_on\",\"next_step\":\"what the owner should do next\",\"tell\":{\"writers\":\"\",\"director\":\"\",\"followup\":\"\",\"research\":\"\"}}";
+        . "\"needs_human\":bool,\"objection\":\"\",\"objection_words\":\"\",\"reply_subject\",\"reply_body\",\"whatsapp\",\"resume_on\",\"next_step\":\"what the owner should do next\",\"tell\":{\"writers\":\"\",\"director\":\"\",\"followup\":\"\",\"research\":\"\"}}";
     $out = pm_agent_json(pm_claude($system, $user, false, 3000, 'std')); // a real person wrote back: the stronger model thinks it through (only messages from leads get here; STOP, bounces and auto-replies never do)
     if (!is_array($out)) {
         return pm_reply_fallback('Could not be classified.');
@@ -142,6 +146,13 @@ function pm_agent_reply(array $lead, string $incoming, string $ch = 'email'): ar
     $out['intent'] = in_array($out['intent'] ?? '', PM_REPLY_INTENTS, true) ? $out['intent'] : 'other';
     $out['needs_human'] = !empty($out['needs_human']);
     $out['resume_on'] = $out['intent'] === 'not_now' ? pm_resume_date((string)($out['resume_on'] ?? ''), 30) : '';
+    $soft = in_array($out['intent'], ['not_now', 'not_interested'], true);
+    $obj = strtolower(trim((string)($out['objection'] ?? '')));
+    $out['objection'] = in_array($obj, ['price', 'timing', 'competitor', 'no_need', 'no_trust', 'other'], true) ? $obj : ($soft && function_exists('pm_objection_guess') ? pm_objection_guess($incoming) : '');
+    $out['objection_words'] = mb_substr(trim(strip_tags((string)($out['objection_words'] ?? ''))), 0, 160);
+    if ($soft) {
+        $out['needs_human'] = true; // the gentle answer to a no is the owner's call: never sent on its own
+    }
     $out['wa_max'] = $okBrief !== '' && $out['intent'] === 'interested' ? 90 : 40; // the owner's interested answer is longer than a usual WhatsApp reply
     $out['whatsapp'] = pm_wa_reply_clean(pm_human_polish((string)($out['whatsapp'] ?? ''), 'whatsapp'), $out['wa_max']);
     foreach (['reply_body' => 'email', 'reply_subject' => 'subject'] as $k => $chn) {
@@ -860,20 +871,39 @@ function pm_apply_reply(array &$lead, string $text, array $r, string $mode, ?cal
             $lead['snooze_until'] = date('Y-m-d', strtotime('+7 days'));
             return 'automatic reply; paused 7 days';
         case 'not_now':
-            $lead['snooze_until'] = pm_resume_date((string)($r['resume_on'] ?? ''), 30); // cadence is not bumped: no followups / last_contacted change
-            $lead['reply_draft'] = null;
-            unset($lead['awaiting_reply_since']);
-            return 'not now; will be picked up again on ' . $lead['snooze_until'];
         case 'not_interested':
-            $lead['reply_draft'] = null;
-            unset($lead['awaiting_reply_since'], $lead['want_proposal'], $lead['snooze_until']);
+            $obj = (string)($r['objection'] ?? '');
+            if ($obj !== '' && $obj !== 'other') { // what holds them back: the next move (lib/soften.php) and the win-back are built on it
+                $lead['objection'] = ['kind' => $obj, 'words' => (string)($r['objection_words'] ?? ''), 'at' => $now];
+            }
+            $soft = trim((string)($r['reply_body'] ?? '')) !== '' || trim((string)($r['whatsapp'] ?? '')) !== ''; // the gentle answer that keeps the door open, for the owner to send or skip
+            $theirs = trim((string)($lead['last_in_subject'] ?? ''));
+            $lead['reply_draft'] = $soft ? ['subject' => $ch === 'email' && $theirs !== '' ? 'Re: ' . $theirs : (trim((string)($r['reply_subject'] ?? '')) ?: 'Re: ' . ($lead['drafts']['email_subject'] ?? 'your reply')),
+                'body' => trim((string)($r['reply_body'] ?? '')), 'whatsapp' => pm_wa_reply_clean((string)($r['whatsapp'] ?? ''), 40), 'needs_human' => true, 'next_step' => (string)($r['next_step'] ?? ''), 'ch' => $ch, 'soft' => $intent] : null;
+            unset($lead['awaiting_reply_since']);
+            if ($soft) {
+                $lead['awaiting_reply_since'] = $now; // shown under Needs reply until the owner sends it or presses No answer needed
+                pm_reply_sitdown_keep($lead, (array)($r['sitdown'] ?? []), $r);
+            }
+            if ($intent === 'not_now') {
+                $lead['snooze_until'] = pm_resume_date((string)($r['resume_on'] ?? ''), 30); // cadence is not bumped: no followups / last_contacted change
+                return 'not now; will be picked up again on ' . $lead['snooze_until'] . ($soft ? '; a gentle answer is drafted for you' : '');
+            }
+            unset($lead['want_proposal'], $lead['snooze_until']);
             if ($status === 'won') {
                 $lead['awaiting_reply_since'] = $now; // a customer: the owner should read it
                 return 'not interested (customer; status kept, please read it)';
             }
             $lead['status'] = 'lost';
-            $lead['lost_reason'] = $status === 'lost' && !empty($lead['lost_reason']) ? $lead['lost_reason'] : 'not_interested';
-            return 'not interested';
+            $lead['lost_at'] = $now;
+            $lead['lost_reason'] = $status === 'lost' && !empty($lead['lost_reason']) ? $lead['lost_reason'] : (in_array($obj, ['price', 'timing', 'competitor', 'no_need', 'no_trust'], true) ? $obj : 'not_interested');
+            if (function_exists('pm_soften_winback_days')) {
+                $lead['winback_after'] = date('Y-m-d', strtotime('+' . pm_soften_winback_days($obj) . ' days'));
+            }
+            return 'not interested' . ($obj !== '' && $obj !== 'other' ? ' (' . str_replace('_', ' ', $obj) . ')' : '') . ($soft ? '; a gentle answer is drafted for you' : '');
+    }
+    if (in_array($intent, ['interested', 'question', 'meeting_request'], true)) {
+        unset($lead['objection']); // they came round: the move is to book the next step
     }
     $keep = in_array($status, ['won', 'proposal', 'lost'], true);
     if (!$keep) {

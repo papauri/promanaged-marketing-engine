@@ -498,6 +498,7 @@ require_once __DIR__ . '/leadfolders.php'; // the owner's own folders of leads
 require_once __DIR__ . '/teamboard.php'; // how the departments talk to each other (no AI)
 require_once __DIR__ . '/agenttalk.php'; // the agents' conversation, day by day, for the Audit (no AI)
 require_once __DIR__ . '/sitdown.php'; // the team's sit-down about a lead: how best to approach it
+require_once __DIR__ . '/soften.php'; // how warm a lead is, what holds them back, and the firm's next move (no AI)
 require_once __DIR__ . '/heads.php'; // each head's goal from the firm's goal, and the heads asking each other for help when behind (no AI)
 require_once __DIR__ . '/board.php'; // today's board: each head reports to the Director, who keeps the Overview true (no AI)
 require_once __DIR__ . '/sx_listen.php'; // Thandi, head of Social: her morning huddle and the people asking for what we offer
@@ -1315,7 +1316,7 @@ function pm_agent_followup(array $leads, bool $prepare = false): array
         . pm_email_exp_followup_example(pm_brand()) . ' ' . pm_market_pulse_line() . ' '
         . pm_tb_line(pm_brand(), 'followup') . ' ' . PM_TRUST_RULES . ' Where an item has owner_feedback, the owner turned the last follow-up down for that reason: write a new one that fixes exactly that, and decide send. '
         . 'Before writing, DECIDE for each item what is best for winning this business: "send" (a follow-up now: write it), "wait" (too soon, or a better moment is coming: give wait_days 2 to 21 and leave the texts empty), '
-        . 'or "stop" (a poor fit, or enough follow-ups have gone with no sign of interest; only when followups_already_sent is 1 or more). Use days_since_our_last_email, followups_already_sent, state, views, score and what_we_know. Default to "send". Give a short why. ' . ($prepare ? 'This one is prepared ahead for the owner, who decides when it goes: always decide "send" and write it. ' : '')
+        . 'or "stop" (a poor fit, or enough follow-ups have gone with no sign of interest; only when followups_already_sent is 1 or more). Use days_since_our_last_email, followups_already_sent, state, views, score and what_we_know. Default to "send". Give a short why. our_move is the move the firm decided for this lead (how warm they are, what holds them back, what was tried before): the follow-up carries out that move, with the facts given. ' . ($prepare ? 'This one is prepared ahead for the owner, who decides when it goes: always decide "send" and write it. ' : '')
         . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $last = function (array $l, string $dir): string { // the latest message each way, so "pick up their last words" has their words to pick up
         foreach (array_reverse((array)($l['thread'] ?? [])) as $m) {
@@ -1328,7 +1329,7 @@ function pm_agent_followup(array $leads, bool $prepare = false): array
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'contact' => $l['contact'] ?? '', 'used' => mb_substr($l['drafts']['email_body'] ?? '', 0, 220),
         'their_last_message' => $last($l, 'in'), 'our_last_message' => $last($l, 'out'), 'followups_already_sent' => (int)($l['followups'] ?? 0), 'follow_up_number' => (int)($l['followups'] ?? 0) + 1, 'follow_ups_allowed' => $max,
         'state' => pm_lead_engagement((array)$l), 'views' => (int)($l['view_count'] ?? 0), 'last_seen' => (string)($l['last_viewed_at'] ?? ''), 'score' => (int)($l['score'] ?? 0),
-        'owner_feedback' => (string)($l['rewrite_reason'] ?? ''),
+        'owner_feedback' => (string)($l['rewrite_reason'] ?? ''), 'our_move' => pm_soften_note((array)$l, $max),
         'days_since_our_last_email' => ($lt = strtotime((string)($l['last_contacted'] ?? ''))) ? (int)floor((time() - $lt) / 86400) : null,
         'subject_style' => pm_subject_style(pm_followup_arm((array)$l))] + (!empty($l['research']) ? ['what_we_know' => pm_research_brief($l)] : []), $leads); // the morning study: real facts and news to build the new angle on
     return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"decision\":\"send|wait|stop\",\"wait_days\",\"why\",\"email_subject\",\"email_body\"" . (pm_wa_on() ? ",\"whatsapp\"" : '') . "}" . (pm_wa_on() ? '' : ' Email only: no WhatsApp message.'), false, 1800))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);

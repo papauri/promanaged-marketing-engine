@@ -82,7 +82,10 @@ function pm_sitdown_brief(array $l): array
         'days_since_last_email' => $lt ? (int)floor((time() - $lt) / 86400) : null, 'facts' => array_slice(array_map(fn($x) => (string)($x['fact'] ?? ''), (array)($r['discoveries'] ?? [])), 0, 3),
         'personal_line' => (string)($r['personal'] ?? ''), 'their_last_message' => $last('in'), 'our_waiting_email' => pm_sitdown_email_view($l, (string)($d['email_subject'] ?? ''), (string)($d['email_body'] ?? '')),
         'trust_flags' => pm_trust_flags((string)($d['email_subject'] ?? ''), (string)($d['email_body'] ?? '')), 'our_waiting_reply' => mb_substr((string)($l['reply_draft']['body'] ?? ''), 0, 2000),
-        'lead_with' => (string)($l['pain'] ?? ''), 'we_decided_before' => array_column($hist, 'action'), 'days_owner_left_it' => $ts ? (int)floor((time() - $ts) / 86400) : null];
+        'lead_with' => (string)($l['pain'] ?? ''), 'we_decided_before' => array_column($hist, 'action'), 'days_owner_left_it' => $ts ? (int)floor((time() - $ts) / 86400) : null]
+        + (function_exists('pm_soften_note') ? ['firm_move' => pm_soften_note($l), 'what_holds_them_back' => (string)($l['objection']['words'] ?? ($l['objection']['kind'] ?? ''))] : [])
+        + (function_exists('pm_human_read') && empty($d['edited_at']) && ($l['brand'] ?? '') !== 'travel' && !(function_exists('pm_dm_use_default') && pm_dm_use_default()) // the owner's own words (an edit, the default message, Travel Malawi's fixed text) are never sent back for stiffness
+            && ($hr = pm_human_read((string)($d['email_body'] ?? ''))) ? ['reads_stiff' => array_column($hr, 0)] : []);
 }
 
 /** The sit-down for up to six leads in one cheap AI call: [id => ['lines' => [[who, says]], 'action', 'angle', 'wait_days', 'why']]. */
@@ -93,7 +96,8 @@ function pm_sitdown_ask(array $leads): array
         return [];
     }
     $sys = pm_agents_company_brief('tiny') . "\nYou chair a short sit-down of our marketing team about each lead: research (what we know), replies (what they said, and whether our waiting reply answers it), writers (how to open), sender (whether our waiting email could look like spam or phishing to this owner: read trust_flags and the email itself), followup (when), then director decides. "
-        . 'If the sender sees anything that would make this owner distrust the email, or the email is not professional, warm, specific and useful, the decision is rewrite, with exactly what to fix. ' . PM_TRUST_RULES . ' '
+        . 'If the sender sees anything that would make this owner distrust the email, or the email is not professional, warm, specific and useful, the decision is rewrite, with exactly what to fix. '
+        . 'firm_move is the move the firm decided by its playbook (how warm they are, what holds them back, what was tried): back it unless the facts say otherwise, and when our waiting email does not carry it out, rewrite with that move as the angle. reads_stiff lists what makes the email read like a letterhead rather than a person: a reason to rewrite in plain, spoken words. Be decisive: one clear decision per lead, never a maybe. ' . PM_TRUST_RULES . ' '
         . 'For each lead write 4 to 6 lines of the team talking to EACH OTHER about the lead (never to the lead), each line an object {"who","says"}: one short sentence in the first person, sharp and specific to that lead, from the facts given only (no invented facts), the director last. '
         . 'Then the decision: action "send" (our waiting email is right), "rewrite" (give the new angle in one sentence: what to open with and why it will land), "wait" (wait_days 2 to 21), "call" (a phone call would win it), or "drop" (not a fit). '
         . 'Think for yourselves and never repeat an old verdict out of habit: when we_decided_before ends in "send" and the owner has left that email unsent for days_owner_left_it days, look at it again as that owner would. If it could be sent to any business (no fact only they would recognise, an offer that is vague), the decision is rewrite with the sharper angle; keep "send" only when you can say in why the one thing in it that will make this owner answer. '

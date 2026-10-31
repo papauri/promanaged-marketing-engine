@@ -38,7 +38,7 @@ $team = [
         'The chip on each lead shows who last wrote to them and when, for example "Jayne · WhatsApp 2 h ago". If a teammate wrote to them today, the app will not send yours.',
         'If they answered on WhatsApp or another inbox, use More › Paste their reply › Draft my answer.',
         'Keep the status right with More: They replied, Proposal sent, Won, Lost (give the reason) or Do not contact.',
-        $a('?tab=agents&status=gaps', 'Missing details') . ' lists leads with no email or WhatsApp number. Fill them in under To: on the card.',
+        'Every lead sits in one list only, the one that says what happens next: ' . $a('?tab=agents&status=awaiting', 'Needs reply') . ', Ready to send, Follow-ups due, Outbox (approved, going out in the sending hours), Being prepared, ' . $a('?tab=agents&status=noemail', 'No email') . ' (fill it in under To: on the card), Waiting on them, Paused, Proposal sent, Won, Lost. Your own folders are extra groups on top.',
     ]],
     'whatsapp' => ['WhatsApp', [
         'In the ' . $a('?tab=whatsapp', 'WhatsApp queue') . ', press Send on WhatsApp. WhatsApp opens with the message ready. Press send there, and the app records it.',

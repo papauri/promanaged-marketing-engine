@@ -419,7 +419,8 @@ function pm_winback_due(array $leads, int $max = 2): array
         }
         $lostAt = strtotime((string)($l['lost_at'] ?? $l['updated'] ?? '')) ?: 0;
         $wb = strtotime((string)($l['winback_at'] ?? ''));
-        if ($lostAt && $lostAt < time() - 60 * 86400 && (!$wb || $wb < time() - 90 * 86400)
+        $after = strtotime((string)($l['winback_after'] ?? '')); // set from what held them back (lib/soften.php): a price no is tried again sooner than a competitor's
+        if ($lostAt && ($after ? $after <= time() : $lostAt < time() - 60 * 86400) && (!$wb || $wb < time() - 90 * 86400)
             && (!empty($l['email']) || !empty($l['phone'])) && pm_lead_email_dead($l) !== true) {
             $due[] = $l;
         }
@@ -432,9 +433,10 @@ function pm_winback_due(array $leads, int $max = 2): array
 function pm_agent_winback(array $leads): array
 {
     $s = pm_settings();
-    $system = pm_agents_company_brief('tiny') . "\nYou are the Win-back agent for {$s['company_name']}. It has been a while since they said no. Write one short email (max 45 words) and one WhatsApp (max 25 words) that reopen the door with ONE genuinely new, true angle from the facts given. No guilt, no pressure, no prices, no urgency. Plain text, no sign-off. The email subject is written like a normal subject line: a capital letter first and a capital letter on every town, area, road, person and business name (for example 'Rooms near the Shire River barrage?'), every other word in ordinary lowercase, no full stop, no exclamation marks, no word in ALL CAPS except an acronym such as VAT. " . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
+    $system = pm_agents_company_brief('tiny') . "\nYou are the Win-back agent for {$s['company_name']}. It has been a while since they said no. Write one short email (max 45 words) and one WhatsApp (max 25 words) that reopen the door with ONE genuinely new, true angle from the facts given. Follow our_move (the firm's move for what held them back, in their_words when given) and build it on what_we_know when there is something new there. No guilt, no pressure, no prices, no urgency. Plain text, no sign-off. The email subject is written like a normal subject line: a capital letter first and a capital letter on every town, area, road, person and business name (for example 'Rooms near the Shire River barrage?'), every other word in ordinary lowercase, no full stop, no exclamation marks, no word in ALL CAPS except an acronym such as VAT. " . PM_HUMAN_RULES . ' ' . PM_AGENT_RULES;
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'why_lost' => mb_substr((string)($l['lost_reason'] ?? 'no reason recorded'), 0, 120),
-        'original_angle' => mb_substr((string)($l['pain'] ?? ''), 0, 80), 'offering' => (string)($l['offering'] ?? '')], $leads);
+        'their_words' => mb_substr((string)($l['objection']['words'] ?? ''), 0, 160), 'our_move' => function_exists('pm_soften_note') ? pm_soften_note($l) : '',
+        'original_angle' => mb_substr((string)($l['pain'] ?? ''), 0, 80), 'offering' => (string)($l['offering'] ?? '')] + (!empty($l['research']) ? ['what_we_know' => pm_research_brief($l)] : []), $leads);
     return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE) . "\nJSON array of {\"id\",\"email_subject\",\"email_body\",\"whatsapp\"}", false, 1800))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);
 }
 

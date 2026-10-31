@@ -12,10 +12,12 @@ $readied = function_exists('pm_dm_ready_all') ? pm_dm_ready_all() : 0; // every 
 function_exists('pm_followup_heal') && pm_followup_heal(pm_brand()); // and everyone we wrote to who has not answered has the next follow-up ready (no AI)
 $synced = function_exists('pm_ml_autosync') ? pm_ml_autosync() : 0; // the Sent folders are read at most every 5 minutes (no AI): a lead emailed from the other copy is not in Active
 $leadsAll = array_filter(pm_leads(), fn($l) => ($l['brand'] ?? 'promanaged') === pm_brand());
+pm_folders_tidy($leadsAll); // folders the agents filed by themselves show only leads that still belong there (saved by the morning run)
 $run = pm_run_state();
 $running = ($run['state'] ?? '') === 'running';
 $plan = pm_daily_plan($leadsAll, $acfg);
-$filter = (string)($_GET['status'] ?? 'active');
+$filter = (string)($_GET['status'] ?? ''); // none given: the first list with work in it (set once the counts are known)
+$filter = $filter === 'gaps' ? 'prep' : $filter; // the old name of Being prepared
 $ftype = (string)($_GET['type'] ?? '');
 $fq = trim((string)($_GET['q'] ?? ''));
 $fcity = trim((string)($_GET['city'] ?? ''));
@@ -51,10 +53,13 @@ $todo = fn($l) => in_array($l['status'], ['new', 'qualified', 'drafted', 'replie
 $hasMail = fn($l) => (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) && !(!empty($l['email_bad']) && strcasecmp((string)$l['email_bad'], (string)$l['email']) === 0);
 $readySend = fn($l) => $hasMail($l) && empty($l['approved_at']) && $l['status'] !== 'optout'
     && ((in_array($l['status'], ['new', 'qualified', 'drafted'], true) && empty($l['sent']) && !empty($l['drafts']['email_body'])) || ($l['status'] === 'contacted' && !empty($l['followup_draft']['email_body']))); // Ready to send: an email address and a message, nothing in the way
-$inStatus = fn($l, $f) => $f === 'people' ? $people($l) : ($f === 'all' ? true : ($f === 'mine' ? (($l['owner'] ?? '') === $who && (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l))) : ($f === 'awaiting' ? $waiting($l)
+$boxOf = [];
+foreach ($leadsAll as $l) { $boxOf[(string)$l['id']] = pm_lead_box($l, $acfg); } // each lead's one list, like a message in one mail folder
+if ($filter === '') { $bxAll = array_count_values($boxOf); $filter = !empty($bxAll['awaiting']) ? 'awaiting' : (!empty($bxAll['ready']) ? 'ready' : (!empty($bxAll['followups']) ? 'followups' : 'all')); }
+$inStatus = fn($l, $f) => isset(PM_LEAD_BOXES[$f]) ? ($boxOf[(string)$l['id']] ?? '') === $f : ($f === 'people' ? $people($l) : ($f === 'all' ? true : ($f === 'mine' ? (($l['owner'] ?? '') === $who && (!in_array($l['status'], ['won', 'lost', 'optout'], true) || $waiting($l))) : ($f === 'awaiting' ? $waiting($l)
     : ($f === 'ready' ? $readySend($l) : ($f === 'noemail' ? (!$hasMail($l) && empty($l['listen']) && !in_array($l['status'], ['won', 'lost', 'optout'], true))
     : ($f === 'followups' ? $waitAns($l) : ($f === 'closed' ? in_array($l['status'], ['lost', 'optout'], true)
-    : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? $todo($l) : $l['status'] === $f)))))))));
+    : ($f === 'gaps' ? $gaps($l) : ($f === 'active' ? $todo($l) : $l['status'] === $f))))))))));
 $inSearch = fn($l) => ($fq === '' || mb_stripos($l['name'] . ' ' . $l['city'] . ' ' . ($l['contact'] ?? '') . ' ' . ($l['type'] ?? '') . ' ' . ($l['email'] ?? ''), $fq) !== false)
     && ($fcity === '' || strcasecmp(trim((string)($l['city'] ?? '')), $fcity) === 0) && $hasOk($l) && (int)($l['score'] ?? 0) >= $fmin;
 $inFolder = fn($l) => $ffolder === '' || in_array($ffolder, (array)($l['folders'] ?? []), true); // a folder is a place of its own (the pane): its leads in every status
@@ -80,6 +85,8 @@ $counts['people'] = count(array_filter($base, $people));
 $counts['closed'] = count(array_filter($base, fn($l) => $inStatus($l, 'closed')));
 $counts['all'] = count($base);
 $counts['mine'] = $who === '' ? 0 : count(array_filter($base, fn($l) => $inStatus($l, 'mine')));
+foreach ($base as $l) { $bx = $boxOf[(string)$l['id']] ?? ''; $bxN[$bx] = ($bxN[$bx] ?? 0) + 1; }
+foreach (PM_LEAD_BOXES as $bk => $bl) { $counts[$bk] = (int)($bxN[$bk] ?? 0); } // the lists hold each lead once, so their counts add up to All leads
 $shown = array_filter($base, fn($l) => $inStatus($l, $filter) && $inFolder($l));
 if ($focusId !== '') { $shown = [$focusId => $leadsAll[$focusId]]; }
 usort($shown, match ($fsort) {
@@ -123,11 +130,13 @@ $ndone = count(array_filter($plan, fn($t) => $t['done']));
 
 <?php
 $fpItem = fn(string $k, string $label, bool $hot = false) => ['label' => $label, 'n' => (int)($counts[$k] ?? 0), 'href' => '?tab=agents&status=' . $k . $fq2(['folder' => '']), 'on' => $ffolder === '' && $filter === $k, 'hot' => $hot];
-$fpLists = ['Favourites' => array_merge($who !== '' ? [$fpItem('mine', 'Mine')] : [], [$fpItem('active', 'Active'), $fpItem('awaiting', 'Needs reply', true), $fpItem('ready', 'Ready to send', true), $fpItem('followups', 'Follow-ups')]),
-    'Pipeline' => [$fpItem('drafted', 'Draft ready'), $fpItem('contacted', 'Contacted'), $fpItem('replied', 'Replied', true), $fpItem('proposal', 'Proposal sent'), $fpItem('won', 'Won'), $fpItem('closed', 'Closed'), $fpItem('all', 'All leads')],
-    'To look at' => [$fpItem('people', 'People looking', true), $fpItem('noemail', 'No email'), $fpItem('gaps', 'Missing details')],
+$fpBox = fn(array $keys, array $hot = []) => array_map(fn($k) => $fpItem($k, PM_LEAD_BOXES[$k], in_array($k, $hot, true)), $keys);
+$fpLists = ['To do' => $fpBox(['awaiting', 'ready', 'followups', 'queued', 'prep', 'noemail', 'people'], ['awaiting', 'ready', 'followups', 'people']), // each lead sits in one of these lists only (pm_lead_box)
+    'Waiting' => $fpBox(['waiting', 'later', 'proposal']),
+    'Done' => $fpBox(['won', 'closed']),
+    'Views' => array_merge($who !== '' ? [$fpItem('mine', 'Mine')] : [], [$fpItem('all', 'All leads')]),
     'My folders' => array_map(fn($fk, $fn) => ['label' => (string)$fk, 'n' => (int)$fn, 'href' => '?tab=agents&status=all' . $fq2(['folder' => (string)$fk]), 'on' => $ffolder === (string)$fk], array_keys($folders), $folders)];
-$fpTitle = $ffolder !== '' ? $ffolder : (['mine' => 'Mine', 'active' => 'Active', 'awaiting' => 'Needs reply', 'ready' => 'Ready to send', 'followups' => 'Follow-ups', 'people' => 'People looking', 'noemail' => 'No email', 'gaps' => 'Missing details', 'closed' => 'Closed', 'all' => 'All leads'][$filter] ?? (PM_LEAD_STATUSES[$filter] ?? 'Leads'));
+$fpTitle = $ffolder !== '' ? $ffolder : (PM_LEAD_BOXES[$filter] ?? (['mine' => 'Mine', 'active' => 'Active', 'all' => 'All leads'][$filter] ?? (PM_LEAD_STATUSES[$filter] ?? 'Leads')));
 ?>
 <div class="mailview">
 <aside class="mailside"><?= pm_ui_folderpane($fpLists, 'Lead lists and folders') ?>
@@ -336,45 +345,53 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
           <p class="hint">Open the post, paste the reply and press "I replied". Facebook lets no app answer under other people's posts, so this one step is yours. Nothing else about them is looked up.</p>
         </section>
         <?php endif; ?>
-        <section class="lc"><h4 class="lc-h"><?= empty($l['listen']) ? 'Their business' : 'Who they are' ?></h4>
-        <?php if (!empty($l['contact'])): ?><p class="person"><b><?= pm_h($l['contact']) ?></b><?= !empty($l['contact_title']) ? ' · ' . pm_h($l['contact_title']) : '' ?></p><?php endif; ?>
-        <?php if (!empty($l['pitch_response'])): $pr = $l['pitch_response']; ?><p class="hint warnt">On the proposal page they chose "<?= $pr['act'] === 'yes' ? 'Yes, send me the agreement' : 'I have a question' ?>"<?= $pr['msg'] !== '' ? ': ' . pm_h($pr['msg']) : '' ?>.</p><?php endif; ?>
-        <?php if (!empty($l['view_count'])): ?><p class="hint">Opened the proposal <?= (int)$l['view_count'] ?> time<?= (int)$l['view_count'] === 1 ? '' : 's' ?>, last on <?= pm_h(date('j M, H:i', strtotime((string)($l['last_viewed_at'] ?? $l['viewed_at'])))) ?>.</p><?php endif; ?>
-        <?php if (!empty($l['reason']) || !empty($l['pain'])): ?><p class="why"><?= pm_h($l['reason'] ?? '') ?><?php if (!empty($l['pain'])): ?> <b>Lead with:</b> <?= pm_h($l['pain']) ?><?php endif; ?></p><?php endif; ?>
-        <?php foreach (array_slice((array)($l['evidence'] ?? []), 0, 3) as $e): ?><p class="hint ev">• <?= preg_replace('#(https?://[^\s<]+)#', '<a href="$1" target="_blank" rel="noopener noreferrer">source</a>', pm_h((string)$e)) ?></p><?php endforeach; ?>
-        <p class="hint"><?= pm_h(implode(' · ', array_filter([$l['website'] ?? '', $l['phone'] ?? '', $l['email'] ?? '']))) ?: 'No contact details found yet' ?>
-          <?php foreach (['facebook' => 'Facebook', 'instagram' => 'Instagram'] as $sk => $sl): if (!empty($l[$sk]) && preg_match('#^https?://#', $l[$sk])): ?> · <a href="<?= pm_h($l[$sk]) ?>" target="_blank" rel="noopener noreferrer"><?= $sl ?></a><?php endif; endforeach; ?></p>
-        <?php if ($waOn && trim((string)($l['phone'] ?? '') . (string)($l['whatsapp'] ?? '')) !== ''): ?><p class="hint wa-optin"><?= pm_h(pm_wa_optin_line($l)) ?></p><?php endif; ?>
-        <?php if (!empty($l['social_gaps'])): ?><p class="hint gaps"><b>Where they lack online:</b> <?= pm_h(implode(' · ', array_slice($l['social_gaps'], 0, 3))) ?></p><?php endif; ?>
-        </section>
-        <?php if (!empty($l['sitdown']['lines']) && !($sdReply && $convoTop)): $sdz = $l['sitdown']; ?>
-        <section class="lc"><h4 class="lc-h">The team's sit-down <span class="muted">· <?= pm_h((string)$sdz['at']) ?></span></h4>
-          <ul class="talklist"><?php foreach ($sdz['lines'] as [$sw, $ss]): ?><li><time></time><b><?= pm_h(pm_talk_name($sw)) ?>:</b><span><?= pm_h($ss) ?></span></li><?php endforeach; ?></ul>
-          <p class="hint"><b>Decided: <?= pm_h(PM_SD_ACTIONS[$sdz['action']] ?? ($sdz['action'] === 'reply' ? 'Answer them' : $sdz['action'])) ?></b><?= $sdz['angle'] !== '' ? ' · ' . pm_h($sdz['angle']) : '' ?><?= $sdz['why'] !== '' ? ' · ' . pm_h($sdz['why']) : '' ?></p></section>
-        <?php endif; ?>
-        <?php if (!empty($l['research'])): $rz = $l['research']; ?>
-        <section class="lc"><h4 class="lc-h">What the research found <span class="muted">· <?= pm_h(substr((string)$rz['at'], 0, 10)) ?></span></h4>
-        <div class="research">
-          <?php if (isset($rz['sure']) && !$rz['sure']): ?><p class="hint warnt">The researcher could not confirm it found this exact business online, so only facts our system checked itself are shown.</p><?php elseif (!empty($rz['identity'])): ?><p class="hint">Matched by: <?= pm_h($rz['identity']) ?></p><?php endif; ?>
-          <?php foreach (array_slice((array)$rz['discoveries'], 0, 7) as $dz): ?><p>• <?= pm_h($dz['fact']) ?><?= ($dz['confidence'] ?? '') === 'checked' ? ' <span class="pill hot" title="Checked by our system just now">checked</span>' : (!empty($dz['date']) ? ' <span class="muted">(' . pm_h($dz['date']) . ')</span>' : '') ?><?= ($dz['confidence'] ?? '') === 'medium' ? ' <span class="muted">· directory or review site</span>' : '' ?> <a href="<?= pm_h($dz['source']) ?>" target="_blank" rel="noopener noreferrer">source</a></p><?php endforeach; ?>
-          <?php foreach (array_slice((array)$rz['news'], 0, 2) as $nz): ?><p>• News: <?= pm_h($nz['headline']) ?> <a href="<?= pm_h($nz['source']) ?>" target="_blank" rel="noopener noreferrer">source</a></p><?php endforeach; ?>
-          <?php if (!empty($rz['website']['verdict'])): ?><p>• Website: <?= pm_h($rz['website']['verdict']) ?></p><?php endif; ?>
-          <?php if (!empty($rz['social']['verdict'])): ?><p>• Social: <?= pm_h($rz['social']['verdict']) ?></p><?php endif; ?>
-          <?php if (!empty($rz['opportunities'])): ?><p class="opp"><b>How we can help</b> (for us, not to paste): <?= pm_h(implode(' · ', array_slice($rz['opportunities'], 0, 3))) ?></p><?php endif; ?>
-          <?php if (!empty($rz['starters'])): ?><details class="sx-more"><summary><?= count($rz['starters']) ?> conversation starters, ready to send</summary>
+        <?php $rz = (array)($l['research'] ?? []); $rzSure = !isset($rz['sure']) || $rz['sure'];
+          $facts = []; // the few facts worth reading first: what the research found (each with its source), then what the scout saw
+          foreach (array_slice((array)($rz['discoveries'] ?? []), 0, 4) as $dz) { $facts[] = [(string)$dz['fact'], (string)($dz['source'] ?? ''), ($dz['confidence'] ?? '') === 'checked']; }
+          if (!empty($rz['website']['verdict'])) { $facts[] = ['Website: ' . $rz['website']['verdict'], '', false]; }
+          if (!empty($rz['social']['verdict'])) { $facts[] = ['Social: ' . $rz['social']['verdict'], '', false]; }
+          if (!$facts) { foreach (array_slice((array)($l['evidence'] ?? []), 0, 3) as $e) { $facts[] = [trim((string)preg_replace('#\s*https?://\S+#', '', (string)$e)), preg_match('#https?://\S+#', (string)$e, $em) ? $em[0] : '', false]; } }
+          $more = array_slice((array)($rz['discoveries'] ?? []), 4, 3);
+          $nMore = count($more) + count(array_slice((array)($rz['news'] ?? []), 0, 2)) + (empty($l['social_gaps']) ? 0 : 1) + (empty($rz['opportunities']) ? 0 : 1) + (!empty($rz) && !empty($l['evidence']) ? 1 : 0) + (empty($l['reason']) ? 0 : 1);
+        ?>
+        <section class="lc about"><h4 class="lc-h"><?= empty($l['listen']) ? 'About them' : 'Who they are' ?><?php if (!empty($rz['at'])): ?> <span class="muted">· researched <?= pm_h(date('j M', strtotime((string)$rz['at']))) ?></span><?php endif; ?></h4>
+          <?php if (!empty($l['contact'])): ?><p class="ab-person"><b><?= pm_h($l['contact']) ?></b><?= !empty($l['contact_title']) ? ' <span class="muted">· ' . pm_h($l['contact_title']) . '</span>' : '' ?></p><?php endif; ?>
+          <?php if (!empty($l['pitch_response'])): $pr = $l['pitch_response']; ?><p class="hint warnt">On the proposal page they chose "<?= $pr['act'] === 'yes' ? 'Yes, send me the agreement' : 'I have a question' ?>"<?= $pr['msg'] !== '' ? ': ' . pm_h($pr['msg']) : '' ?>.</p><?php endif; ?>
+          <?php if (!empty($l['view_count'])): ?><p class="hint">Opened the proposal <?= (int)$l['view_count'] ?> time<?= (int)$l['view_count'] === 1 ? '' : 's' ?>, last on <?= pm_h(date('j M, H:i', strtotime((string)($l['last_viewed_at'] ?? $l['viewed_at'])))) ?>.</p><?php endif; ?>
+          <?php if (!empty($l['pain'])): ?><p class="ab-lead"><span class="muted">Lead with</span> <?= pm_h($l['pain']) ?></p><?php endif; ?>
+          <?php if (!$rzSure): ?><p class="hint warnt">Not sure the research found this exact business, so only what our system checked itself is shown.</p><?php endif; ?>
+          <?php if ($facts): ?><ul class="facts"><?php foreach ($facts as [$ft, $fs, $fc]): ?><li><?= pm_h($ft) ?><?= $fc ? ' <span class="pill hot" title="Checked by our system">checked</span>' : '' ?><?php if ($fs !== '' && preg_match('#^https?://#', $fs)): ?> <a class="src" href="<?= pm_h($fs) ?>" target="_blank" rel="noopener noreferrer">source</a><?php endif; ?></li><?php endforeach; ?></ul>
+          <?php elseif (empty($l['listen'])): ?><p class="hint">Nothing found about them yet.</p><?php endif; ?>
+          <p class="ab-reach"><?= pm_h(implode(' · ', array_filter([preg_replace('#^https?://(www\.)?#i', '', rtrim((string)($l['website'] ?? ''), '/')), $l['phone'] ?? '', $l['email'] ?? '']))) ?: '<span class="muted">No contact details found yet</span>' ?>
+            <?php foreach (['facebook' => 'Facebook', 'instagram' => 'Instagram'] as $sk => $sl): if (!empty($l[$sk]) && preg_match('#^https?://#', $l[$sk])): ?> · <a href="<?= pm_h($l[$sk]) ?>" target="_blank" rel="noopener noreferrer"><?= $sl ?></a><?php endif; endforeach; ?></p>
+          <?php if ($nMore): ?><details class="ab-more"><summary>More about them</summary>
+            <?php if (!empty($l['reason'])): ?><p class="hint">Why they fit: <?= pm_h($l['reason']) ?></p><?php endif; ?>
+            <ul class="facts"><?php foreach ($more as $dz): ?><li><?= pm_h($dz['fact']) ?><?= !empty($dz['date']) ? ' <span class="muted">(' . pm_h($dz['date']) . ')</span>' : '' ?> <a class="src" href="<?= pm_h($dz['source']) ?>" target="_blank" rel="noopener noreferrer">source</a></li><?php endforeach; ?>
+            <?php foreach (array_slice((array)($rz['news'] ?? []), 0, 2) as $nz): ?><li>News: <?= pm_h($nz['headline']) ?> <a class="src" href="<?= pm_h($nz['source']) ?>" target="_blank" rel="noopener noreferrer">source</a></li><?php endforeach; ?>
+            <?php if (!empty($l['social_gaps'])): ?><li>Where they lack online: <?= pm_h(implode(' · ', array_slice($l['social_gaps'], 0, 3))) ?></li><?php endif; ?>
+            <?php if (!empty($rz) && !empty($l['evidence'])): foreach (array_slice((array)$l['evidence'], 0, 2) as $e): ?><li><?= preg_replace('#(https?://[^\s<]+)#', '<a class="src" href="$1" target="_blank" rel="noopener noreferrer">source</a>', pm_h((string)$e)) ?></li><?php endforeach; endif; ?></ul>
+            <?php if (!empty($rz['opportunities'])): ?><p class="hint"><b>How we can help</b> (for us, not to paste): <?= pm_h(implode(' · ', array_slice($rz['opportunities'], 0, 3))) ?></p><?php endif; ?>
+            <?php if (!empty($rz['identity']) && $rzSure): ?><p class="hint">Matched by: <?= pm_h($rz['identity']) ?></p><?php endif; ?>
+          </details><?php endif; ?>
+          <?php if ($waOn && trim((string)($l['phone'] ?? '') . (string)($l['whatsapp'] ?? '')) !== ''): ?><p class="hint wa-optin"><?= pm_h(pm_wa_optin_line($l)) ?></p><?php endif; ?>
+          <?php if (!empty($rz['starters'])): ?><details class="ab-more"><summary><?= count($rz['starters']) ?> ready-made openings</summary>
             <?php foreach ($rz['starters'] as $sz): ?><div class="starter"><b><?= pm_h($sz['angle']) ?></b><?= $sz['subject'] !== '' ? ' · <span class="muted">' . pm_h($sz['subject']) . '</span>' : '' ?><p><?= nl2br(pm_h($sz['email'])) ?></p>
               <div class="btns"><button type="button" class="btn small primary" data-fill="email" data-subject="<?= pm_h($sz['subject']) ?>" data-text="<?= pm_h($sz['email']) ?>">Put in email</button>
               <?php if ($waOn && $sz['whatsapp'] !== ''): ?><button type="button" class="btn small" data-fill="whatsapp" data-text="<?= pm_h($sz['whatsapp']) ?>">Put in WhatsApp</button><?php endif; ?></div></div><?php endforeach; ?></details>
-          <?php elseif (!empty($rz['hooks'])): ?><p class="opp"><b>Conversation hooks:</b></p><?php foreach (array_slice($rz['hooks'], 0, 3) as $hz): ?><p class="hook">“<?= pm_h($hz) ?>” <button type="button" class="btn small" data-copy="<?= pm_h($hz) ?>">Copy</button></p><?php endforeach; ?><?php endif; ?>
-        </div></section>
+          <?php elseif (!empty($rz['hooks'])): ?><details class="ab-more"><summary>Ways to open</summary><?php foreach (array_slice($rz['hooks'], 0, 3) as $hz): ?><p class="hook">“<?= pm_h($hz) ?>” <button type="button" class="btn small ghost" data-copy="<?= pm_h($hz) ?>">Copy</button></p><?php endforeach; ?></details><?php endif; ?>
+        </section>
+        <?php if (!empty($l['sitdown']['lines']) && !($sdReply && $convoTop)): $sdz = $l['sitdown']; ?>
+        <section class="lc team-line"><p class="mt-0 mb-0"><span class="muted">The team decided</span> <b><?= pm_h(PM_SD_ACTIONS[$sdz['action']] ?? ($sdz['action'] === 'reply' ? 'Answer them' : $sdz['action'])) ?></b><?= $sdz['angle'] !== '' ? ': ' . pm_h($sdz['angle']) : ($sdz['why'] !== '' ? ': ' . pm_h($sdz['why']) : '') ?> <span class="muted t-sm">· <?= pm_h(date('j M', strtotime((string)$sdz['at']))) ?></span></p>
+          <details class="ab-more"><summary>How they talked it over</summary><ul class="talklist"><?php foreach ($sdz['lines'] as [$sw, $ss]): ?><li><time></time><b><?= pm_h(pm_talk_name($sw)) ?>:</b><span><?= pm_h($ss) ?></span></li><?php endforeach; ?></ul><?php if ($sdz['angle'] !== '' && $sdz['why'] !== ''): ?><p class="hint"><?= pm_h($sdz['why']) ?></p><?php endif; ?></details></section>
         <?php endif; ?>
-        <?php if (!empty($l['thread']) && !$convoTop): ?><section class="lc"><h4 class="lc-h">Conversation</h4><div class="thread">
-          <?php foreach (array_slice($l['thread'], -4, null, true) as $ti => $tm): ?><div class="tm <?= $tm['dir'] === 'in' ? 'in' : 'out' ?>"><?= pm_adm_btn($csrf, 'msg', ['id' => $id, 'i' => $ti, 'back' => 'agents&lead=' . $id], 'Delete this message' . ($tm['dir'] === 'in' ? ' from them? If it is their only answer, the lead goes back to contacted.' : '?'), '×', 'icon admx') ?><b><?= $tm['dir'] === 'in' ? 'Them' : 'Us' ?></b> · <?= pm_h($tm['at']) ?><?= ($tm['ch'] ?? '') === 'wa' ? ' · WhatsApp' : '' ?><br><?= nl2br(pm_h(mb_substr($tm['text'], 0, 400))) ?></div><?php endforeach; ?></div></section><?php endif; ?>
-        <section class="lc"><h4 class="lc-h">Notes</h4>
-        <?php foreach (array_slice(array_reverse((array)($l['notes'] ?? []), true), 0, 3, true) as $ni => $n): ?><div class="hint note"><?= pm_adm_btn($csrf, 'note', ['id' => $id, 'i' => $ni, 'back' => 'agents&lead=' . $id], 'Delete this note?', '×', 'icon admx') ?><?= pm_h($n['at']) ?> · <?= pm_h($n['text']) ?><?= !empty($n['by']) ? ' · ' . pm_h($n['by']) : '' ?></div><?php endforeach; ?>
+        <?php $histN = (!$convoTop ? count((array)($l['thread'] ?? [])) : 0) + count((array)($l['notes'] ?? [])); ?>
+        <details class="lc hist"><summary class="lc-h">History and notes <span class="muted">· <?= $histN ?></span></summary>
+        <?php if (!empty($l['thread']) && !$convoTop): ?><div class="thread">
+          <?php foreach (array_slice($l['thread'], -4, null, true) as $ti => $tm): ?><div class="tm <?= $tm['dir'] === 'in' ? 'in' : 'out' ?>"><?= pm_adm_btn($csrf, 'msg', ['id' => $id, 'i' => $ti, 'back' => 'agents&lead=' . $id], 'Delete this message' . ($tm['dir'] === 'in' ? ' from them? If it is their only answer, the lead goes back to contacted.' : '?'), '×', 'icon admx') ?><b><?= $tm['dir'] === 'in' ? 'Them' : 'Us' ?></b> · <?= pm_h($tm['at']) ?><?= ($tm['ch'] ?? '') === 'wa' ? ' · WhatsApp' : '' ?><br><?= nl2br(pm_h(mb_substr($tm['text'], 0, 400))) ?></div><?php endforeach; ?></div><?php endif; ?>
+        <?php foreach (array_slice(array_reverse((array)($l['notes'] ?? []), true), 0, 5, true) as $ni => $n): ?><div class="hint note"><?= pm_adm_btn($csrf, 'note', ['id' => $id, 'i' => $ni, 'back' => 'agents&lead=' . $id], 'Delete this note?', '×', 'icon admx') ?><?= pm_h($n['at']) ?> · <?= pm_h($n['text']) ?><?= !empty($n['by']) ? ' · ' . pm_h($n['by']) : '' ?></div><?php endforeach; ?>
         <?= pm_social_panels('lead_card', $vb, ['lead' => $l]) ?>
         <form method="post" class="inline"><?= $post($id, 'note') ?><input type="text" name="text" placeholder="Add a note"><button class="btn small">Add</button></form>
-        </section>
+        </details>
       </div>
       <div class="lc-col">
         <?= pm_view_lead_drafts($l, $csrf, $post, $hid) ?>
@@ -400,19 +417,20 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
         <?php endif; ?>
         <?php if ($hasReply): $rp = $l['reply_draft']; $rpMail = (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL); $rpWa = pm_wa_link($l, ''); $rpWaText = (string)($rp['whatsapp'] ?? ''); $rpTip = pm_reply_length_tip((string)($rp['body'] ?? '')); ?>
         <form method="post" class="replybox"><?= $post($id, 'save_reply') ?>
-          <div class="rx-head"><b>Our answer</b><?php if (!empty($rp['needs_human'])): ?><span class="pill warn" title="Something in it needs your judgement, so it is never sent on its own">read before sending</span><?php endif; ?></div>
+          <div class="rx-head"><b>Our answer</b><?php if (!empty($rp['soft'])): ?><span class="pill" title="They said <?= $rp['soft'] === 'not_now' ? 'not now' : 'no' ?>: this answer thanks them, takes their reason seriously and leaves the door open. Send it, or press No answer needed">keeps the door open</span><?php endif; ?><?php if (!empty($rp['needs_human'])): ?><span class="pill warn" title="Something in it needs your judgement, so it is never sent on its own">read before sending</span><?php endif; ?></div>
           <?php if (!empty($rp['next_step'])): ?><p class="hint my-0">Next: <?= pm_h($rp['next_step']) ?></p><?php endif; ?>
           <?php if ($rpMail): ?>
           <label class="rx-lab">Subject</label>
           <input type="text" name="subject" value="<?= pm_h($rp['subject'] ?? '') ?>" aria-label="Subject">
           <label class="rx-lab">Email <?php if ($rpTip !== ''): ?><span class="muted">· <?= pm_h($rpTip) ?></span><?php endif; ?></label>
           <textarea name="body" rows="<?= max(8, min(22, (int)ceil(mb_strlen((string)($rp['body'] ?? '')) / 70) + substr_count((string)($rp['body'] ?? ''), "\n"))) ?>" aria-label="Reply by email"><?= pm_h($rp['body'] ?? '') ?></textarea>
+          <?php $hrd = pm_human_read((string)($rp['body'] ?? '')); if ($hrd): ?><p class="hint hr-tips">To sound more like a person: <?= pm_h(implode(' · ', array_column($hrd, 0))) ?><?php if (pm_agents_ready()): ?> <button class="btn small ghost" name="do" value="reword" title="One small AI call rewrites it to fix exactly these, with the same facts; Undo brings it back">Fix it</button><?php endif; ?></p><?php endif; ?>
           <div class="sigprev" title="Added under the answer when it is sent"><span>Added when sent: your usual signature · <a href="?tab=targeting#defaultmsg">change it</a></span><pre><?= pm_h(pm_reply_signature()) ?></pre></div>
           <?= pm_share_reply_controls((string)($l['brand'] ?? pm_brand()), (array)($rp['attach'] ?? [])) ?>
           <?php else: ?><span class="hint">No email address for this lead: answer on WhatsApp<?= $rpWa === '' ? ' (no mobile number either; add one in the box on the right)' : '' ?>.</span><?php endif; ?>
           <?php if ($waOn && ($rpWa !== '' || !$rpMail)): ?><label class="hint">WhatsApp answer <?= $rpWaText === '' && trim((string)($rp['body'] ?? '')) === '' ? '(write it, or press Draft my answer under More → Paste their reply)' : '' ?></label>
           <textarea name="whatsapp" rows="2" aria-label="Reply on WhatsApp"><?= pm_h($rpWaText) ?></textarea><?= pm_share_reply_controls((string)($l['brand'] ?? pm_brand()), [], 'wa') ?><?php endif; ?>
-          <div class="btns"><button class="btn small">Save</button><?= pm_regen_lead_buttons($l, 'reply_draft') ?>
+          <div class="btns"><button class="btn small">Save</button><?= pm_regen_lead_buttons($l, 'reply_draft') ?><button class="btn small ghost" name="do" value="reply_skip" formnovalidate title="Their message needs no answer (often a polite no): it leaves Needs reply and nothing is sent">No answer needed</button>
             <?php if ($rpMail && trim((string)($rp['body'] ?? '')) !== ''): ?><button class="btn small primary" formaction="?tab=agents" name="do" value="send_reply" onclick="return confirm('Send this reply now?')">Send reply</button><?php endif; ?>
             <?php if ($waBiz && trim($rpWaText) !== '' && pm_wa_biz_window_open($l)): ?><button class="btn small primary" formaction="?tab=agents" name="do" value="send_reply_wa" onclick="return confirm('Send this answer on WhatsApp now?')">Send on WhatsApp Business</button><?php endif; ?>
             <?php if ($waOn && $rpWa !== ''): ?><a class="btn small" data-wa-log data-id="<?= pm_h($id) ?>" data-csrf="<?= pm_h($csrf) ?>" data-url="<?= pm_h($rpWa) ?>" href="<?= pm_h($rpWa) ?>" target="_blank" rel="noopener noreferrer">Reply on WhatsApp</a><?php endif; ?></div>
@@ -432,6 +450,7 @@ $taskExtra = function (array $t) use ($leadsAll, $post): string { // a follow-up
           <label>Email</label>
           <input type="text" name="email_subject" value="<?= pm_h($dr['email_subject'] ?? '') ?>" placeholder="Subject">
           <textarea name="email_body" rows="6" placeholder="Message"><?= pm_h($dr['email_body'] ?? '') ?></textarea>
+          <?php $hrd = pm_human_read((string)($dr['email_body'] ?? '')); if ($hrd): ?><p class="hint hr-tips">To sound more like a person: <?= pm_h(implode(' · ', array_column($hrd, 0))) ?><?php if (pm_agents_ready()): ?> <button class="btn small ghost" name="do" value="reword" title="One small AI call rewrites it to fix exactly these, with the same facts; Undo brings it back">Fix it</button><?php endif; ?></p><?php endif; ?>
           <div class="sigprev" title="Added under every email when it is sent"><span>Added when sent · <a href="?tab=targeting#defaultmsg">change the signature</a></span><pre><?= pm_h(trim(pm_outreach_footer(pm_settings()))) ?></pre></div>
           <?= $which === 'first' ? pm_share_added_hint('email', (string)($l['brand'] ?? pm_brand())) : '' ?>
           <?php if ($waOn): ?><label>WhatsApp</label>

@@ -268,6 +268,9 @@ function pm_regen_lead(array $lead, string $slot, array $fields, string $note = 
             $fields[$bk] = pm_reply_strip_signoff((string)$fields[$bk]); // the signature is the app's: a sign-off left in the text ends up mid-message
         }
     }
+    if (trim($note) === '' && function_exists('pm_human_read_note')) { // no note: the fresh words fix what makes it read like a letterhead (pm_human_read), so it sounds like a person
+        $note = pm_human_read_note((string)($fields['email_body'] ?? $fields['body'] ?? ''));
+    }
     $new = pm_regen_words($fields, $kind, $note);
     foreach ($bodies as $bk) {
         if (isset($new[$bk])) {

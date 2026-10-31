@@ -101,17 +101,40 @@ function pm_approach(array $l): array
         'plan' => ['steps' => $steps, 'time' => $win, 'time_why' => $why, 'angle' => $hooks ? (string)$hooks[0] : '', 'touches' => array_slice(pm_touches($l), 0, 4)]];
 }
 
-/** The Approach block on a lead card: readiness, what is missing (with the button that fixes it), and the plan. */
+/** Short names for what is missing, for the one folded line under the next move. */
+const PM_AP_SHORT = ['name' => 'their name', 'whatsapp' => 'WhatsApp', 'email' => 'an email', 'online' => 'where they are online', 'research' => 'research', 'hook' => 'a personal opening', 'message' => 'the message', 'approved' => 'your approval'];
+
+/**
+ * The top of a lead card, kept to three lines: how warm they are and the firm's next move (lib/soften.php) with the one button that unblocks it; the plan in one line
+ * with the best time; and how ready the lead is, folded, with what is missing (the full checklist and its quick boxes open from there).
+ */
 function pm_approach_html(array $l, callable $post, callable $hid): string
 {
     $a = pm_approach($l);
     $id = (string)$l['id'];
     $ai = pm_agents_ready();
-    $h = '<div class="approach"><div class="ap-head"><b>Approach</b><span class="ap-meter" title="How ready this lead is for a good first approach"><i style="width:' . $a['ready'] . '%"></i></span><span class="muted t-sm">' . $a['ready'] . '% ready</span>';
-    if ($a['next'] && ($ai || !in_array($a['next'][1], ['find_contact', 'research', 'draft_outreach', 'followup_ai'], true))) {
-        $h .= '<form method="post" class="inline right">' . $post($id, $a['next'][1]) . '<button class="btn small primary" title="' . pm_h('Next: ' . $a['next'][2]) . '">' . pm_h($a['next'][0]) . '</button></form>';
+    $sf = function_exists('pm_soften') ? pm_soften($l, max(1, (int)(pm_agents_config()['max_followups'] ?? 3))) : null;
+    $h = '<div class="nextmove"><div class="nm-top">';
+    if ($sf) {
+        $h .= '<span class="pill ' . ['hot' => 'hot', 'warm' => 'ok', 'cool' => '', 'hard' => 'warn'][$sf['temp']] . '" title="' . pm_h(ucfirst($sf['why'])) . '">' . pm_h($sf['temp_label']) . '</span>'
+            . '<span class="nm-move"><span class="muted">Next move</span> <b>' . pm_h($sf['label']) . '</b></span>';
+    } else {
+        $h .= '<span class="nm-move"><b>Approach</b></span>';
     }
-    $h .= '</div><div class="ap-cols"><ul class="ap-checks">';
+    if ($a['next'] && ($ai || !in_array($a['next'][1], ['find_contact', 'research', 'draft_outreach', 'followup_ai'], true))) {
+        $h .= '<form method="post" class="inline right">' . $post($id, $a['next'][1]) . '<button class="btn small primary" title="' . pm_h('Missing: ' . $a['next'][2]) . '">' . pm_h($a['next'][0]) . '</button></form>';
+    }
+    $h .= '</div>';
+    if ($sf) {
+        $h .= '<p class="nm-how">' . pm_h($sf['move']) . ' <span class="muted">(' . pm_h($sf['why']) . ')</span></p>';
+    }
+    if ($a['plan']['steps']) {
+        $h .= '<p class="nm-plan"><span class="muted">Plan</span> ' . implode(' <span class="muted">→</span> ', array_map(fn($st) => '<span class="' . (!empty($st[3]) ? 'done' : '') . '" title="' . pm_h($st[2]) . '">' . pm_h($st[0] . ' ' . $st[1]) . (!empty($st[3]) ? ' ✓' : '') . '</span>', $a['plan']['steps']))
+            . ' <span class="muted">· best ' . pm_h($a['plan']['time']) . '</span></p>';
+    }
+    $miss = array_values(array_map(fn($c) => PM_AP_SHORT[$c[0]] ?? strtolower($c[1]), array_filter($a['checks'], fn($c) => !$c[2])));
+    $h .= '<details class="nm-have"><summary><span class="ap-meter" aria-hidden="true"><i style="width:' . $a['ready'] . '%"></i></span>' . $a['ready'] . '% ready'
+        . ($miss ? '<span class="muted"> · missing ' . pm_h(implode(', ', $miss)) . '</span>' : '<span class="muted"> · everything is there</span>') . '</summary><ul class="ap-checks">';
     foreach ($a['checks'] as [$k, $label, $ok, , $note]) {
         $h .= '<li class="' . ($ok ? 'ok' : 'miss') . '"><i aria-hidden="true">' . ($ok ? '✓' : '·') . '</i><span><b>' . pm_h($label) . '</b><small>' . pm_h($note) . '</small>';
         if (!$ok && $k === 'email') {
@@ -124,23 +147,9 @@ function pm_approach_html(array $l, callable $post, callable $hid): string
         }
         $h .= '</span></li>';
     }
-    $h .= '</ul><div class="ap-plan">';
-    if ($a['plan']['steps']) {
-        $h .= '<ol class="ap-steps">';
-        foreach ($a['plan']['steps'] as $st) {
-            [$when, $ch, $what] = $st;
-            $h .= '<li' . (!empty($st[3]) ? ' class="done"' : '') . '><b>' . pm_h($when) . ' · ' . pm_h($ch) . (!empty($st[3]) ? ' ✓' : '') . '</b><small>' . pm_h($what) . '</small></li>';
-        }
-        $h .= '</ol>';
-        if ($a['plan']['touches']) {
-            $h .= '<p class="hint">So far: ' . pm_h(implode(' · ', array_map(fn($x) => date('j M', strtotime($x['at'])) . ' ' . pm_touch_label($x['ch']) . ' (' . $x['by'] . ')', $a['plan']['touches']))) . '</p>';
-        }
-        $h .= '<p class="hint">Best time: <b>' . pm_h($a['plan']['time']) . '</b>, ' . pm_h($a['plan']['time_why']) . '.</p>';
-        if ($a['plan']['angle'] !== '') {
-            $h .= '<p class="hint">Open on: “' . pm_h(mb_substr($a['plan']['angle'], 0, 160)) . '”</p>';
-        }
-    } else {
-        $h .= '<p class="hint">No approach needed: this lead is ' . pm_h(strtolower((string)(PM_LEAD_STATUSES[$l['status']] ?? $l['status']))) . '.</p>';
+    $h .= '</ul>';
+    if ($a['plan']['touches']) {
+        $h .= '<p class="hint">So far: ' . pm_h(implode(' · ', array_map(fn($x) => date('j M', strtotime($x['at'])) . ' ' . pm_touch_label($x['ch']) . ' (' . $x['by'] . ')', $a['plan']['touches']))) . '</p>';
     }
-    return $h . '</div></div></div>';
+    return $h . '</details></div>';
 }

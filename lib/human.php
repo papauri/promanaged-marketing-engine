@@ -40,6 +40,21 @@ const PM_HUMAN_REWORD = [
     '/\bWe(?:\'re| are) (?:so |really )?(?:thrilled|excited|delighted) to (?:announce|share|introduce)\b/i' => 'We are glad to tell you about',
     '/\bThrilled to (?:announce|share)\b/i' => 'Glad to share', '/\bExcited to (?:announce|share)\b/i' => 'Glad to share',
     '/\bI(?:\'m| am) reaching out\b/i' => 'I am writing', '/\bJust (?:a quick )?(?:checking|touching) (?:in|base)\b/i' => 'A quick follow-up',
+    // stiff office English that no one says out loud, swapped for what a person would say across the table
+    '/\b(?:Please )?(?:Do not|Don\'t|do not|don\'t) hesitate to (?:contact|call|reach out to|get in touch with|reach) (?:me|us)\b/' => 'Just reply here any time',
+    '/\bat your earliest convenience\b/i' => 'when you have a moment', '/\bPlease find attached\b/' => 'I have attached', '/\bplease find attached\b/' => 'I have attached',
+    '/\b(?:will|shall) revert(?: back)?(?: to you)?\b/i' => 'will get back to you', '/\b(?:Kindly|Please) revert(?: back)?(?: to (?:me|us))?\b/' => 'Please get back to me', '/\b(?:kindly|please) revert(?: back)?(?: to (?:me|us))?\b/' => 'please get back to me',
+    '/\bKindly\b/' => 'Please', '/\bkindly\b/' => 'please', '/\byour good selves?\b/i' => 'you',
+    '/\b[Ii]n regards? to\b/' => 'about', '/\bWith regards? to\b/' => 'About', '/\bwith regards? to\b/' => 'about', '/\bAs per\b/' => 'Following', '/\bas per\b/' => 'following',
+    '/\b(?:We|I) (?:are|am) (?:pleased|delighted|happy) to inform you that\s*/i' => "\x01", '/\bI am writing to (?:inform you|let you know) that\s*/i' => "\x01",
+    '/\b([Ww]e|I) would like to take this opportunity to\b/' => '$1 want to',
+];
+
+/** Signs that a message talks like a letterhead instead of a person: [regex, the tip]. Checked by pm_human_read, never refused on. */
+const PM_HUMAN_STIFF = [
+    '/\b(?:esteemed|valued (?:client|customer|partner)|the undersigned|herewith|aforementioned|hereby)\b/i' => 'letter-style words (esteemed, herewith, the undersigned)',
+    '/\b(?:our (?:solutions?|services offering|value proposition)|one-stop shop|end-to-end|synerg)/i' => 'brochure words (solutions, one-stop shop)',
+    '/\b(?:touch base|reach out|circle back|loop in)\b/i' => 'office jargon (reach out, touch base)',
 ];
 
 /** What is still wrong with a text: a list of short labels (empty = it reads naturally). */
@@ -137,4 +152,53 @@ function pm_human_rows(array $rows, array $fields): array
         }
     }
     return $rows;
+}
+
+/**
+ * How a message reads to the person getting it, measured by code (free): [[short label, what to change]], empty when it reads like a person talking.
+ * Looked at: talking about us more than them, sentences too long to say in one breath, a wall of a paragraph, more than one question, letter-style words.
+ * Advice only: the sit-down reads it, the message box shows it, and New wording fixes exactly these when the owner gives no note.
+ */
+function pm_human_read(string $text): array
+{
+    $t = trim(str_replace("\r\n", "\n", $text));
+    if ($t === '' || str_word_count($t) < 20) {
+        return [];
+    }
+    $body = (string)preg_replace('/^[^\n]{0,60},\s*\n/u', '', $t); // the greeting line is not a sentence
+    $out = [];
+    $we = preg_match_all('/\b(we|our|us|i|my|me)\b/i', $body);
+    $you = preg_match_all('/\b(you|your|yours)\b/i', $body);
+    if ($we >= 4 && $we > $you * 1.5) {
+        $out[] = ['about us more than them', 'talk about them more than about us: turn "we offer" sentences into what they get ("you can...")'];
+    }
+    $long = 0;
+    foreach (preg_split('/(?<=[.!?])\s+|\n+/u', $body) ?: [] as $s) {
+        $long = max($long, str_word_count($s));
+    }
+    if ($long > 28) {
+        $out[] = ['a ' . $long . '-word sentence', 'split the ' . $long . '-word sentence in two, the way you would say it out loud'];
+    }
+    foreach (preg_split('/\n\s*\n/u', $body) ?: [] as $p) {
+        if (str_word_count($p) > 75) {
+            $out[] = ['a wall of text', 'break the long paragraph into two short ones'];
+            break;
+        }
+    }
+    if (($q = substr_count($body, '?')) > 2) {
+        $out[] = [$q . ' questions', 'keep one question at the end, the easiest one to answer'];
+    }
+    foreach (PM_HUMAN_STIFF as $re => $label) {
+        if (preg_match($re, $body)) {
+            $out[] = [$label, 'swap the ' . $label . ' for everyday words'];
+        }
+    }
+    return $out;
+}
+
+/** pm_human_read as a note for New wording: what to change, in one line ('' when nothing). */
+function pm_human_read_note(string $text): string
+{
+    $r = pm_human_read($text);
+    return $r ? 'Make it sound like one person talking to another: ' . implode('; ', array_column($r, 1)) . '. Keep everything else.' : '';
 }

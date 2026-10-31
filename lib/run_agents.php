@@ -535,6 +535,7 @@ try {
         pm_sitdown_reply_rewrites($leads);
         $save();
     }
+    function_exists('pm_folders_tidy') && pm_folders_tidy($leads) && $save(); // "Already contacted", "To call" and "Team says drop" hold only the leads that still belong there
 
     // ---- 3c. Re-qualify: a researched lead gets a fresh score and package from what was found (capped per run), before the Writers read the score ----
     $rq = $cfg['enabled']['qualifier'] && !$hold && function_exists('pm_requalify_due') ? pm_requalify_due($leads, 3) : [];

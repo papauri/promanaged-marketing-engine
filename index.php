@@ -1268,6 +1268,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pm_leads_save($leads);
             $back('Reply saved.');
         }
+        if ($do === 'reply_skip') { // their message needs no answer (often a polite no): out of Needs reply, nothing is sent
+            $leads[$id]['reply_draft'] = null;
+            unset($leads[$id]['awaiting_reply_since']);
+            if (($leads[$id]['status'] ?? '') === 'replied') {
+                $leads[$id]['status'] = 'contacted';
+            }
+            pm_lead_note($leads[$id], 'No answer needed (marked by ' . ((string)($GLOBALS['PM_WHO'] ?? '') ?: 'the owner') . ')');
+            pm_leads_save($leads);
+            $back($lead['name'] . ': marked as needing no answer. Nothing was sent.');
+        }
         if ($do === 'progress_mark') { // their progress: where it stands now, and the update written for them (lib/sx_progress.php)
             $pgMsg = pm_pg_mark($leads[$id], (int)($_POST['pg_at'] ?? 0), (string)($_POST['pg_state'] ?? 'working'), (string)($_POST['pg_note'] ?? ''));
             pm_leads_save($leads);

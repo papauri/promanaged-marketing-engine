@@ -108,6 +108,9 @@ function pm_lead_set_status(array &$lead, string $st, string $lostReason = ''): 
     $lead['status'] = $st;
     if ($st === 'lost') {
         $lead['lost_reason'] = isset(pm_lost_reasons()[$lostReason]) ? $lostReason : ($lead['lost_reason'] ?? 'other');
+        if ($was !== 'lost') {
+            $lead['lost_at'] = date('Y-m-d H:i'); // the win-back counts from the day it was lost, not from the last edit
+        }
     } else {
         unset($lead['lost_reason']);
     }
@@ -222,4 +225,65 @@ function pm_leads_turn_down(array $ids, string $reason): array
         }
     }
     return [$done, $n, "$n turned down, $done written again with your reason" . ($done < $n ? ' (the rest at the next agent run)' : '') . '. Every Writer has your reason on the team board.'];
+}
+
+/**
+ * The lists of the Leads page, like mail folders: each lead lives in exactly one, the one that says what happens to it next. Key => name, in the order of the folder pane.
+ * The owner's own folders (above) are extra groups on top of these, and a lead can be in several of those.
+ */
+const PM_LEAD_BOXES = [
+    'awaiting' => 'Needs reply', 'ready' => 'Ready to send', 'followups' => 'Follow-ups due', 'queued' => 'Outbox', 'prep' => 'Being prepared', 'noemail' => 'No email',
+    'people' => 'People looking', 'waiting' => 'Waiting on them', 'later' => 'Paused', 'proposal' => 'Proposal sent', 'won' => 'Won', 'closed' => 'Lost and do not contact',
+];
+
+/**
+ * The one list a lead belongs to (a key of PM_LEAD_BOXES), first match wins: they wrote and wait for us; won; lost or do not contact; a person found on a public post;
+ * a proposal out; approved and waiting for the sending hours; paused; no working email; a first email ready, or still being written; a follow-up due; else waiting on them.
+ */
+function pm_lead_box(array $l, array $cfg): string
+{
+    $st = (string)($l['status'] ?? 'new');
+    $mail = (bool)filter_var($l['email'] ?? '', FILTER_VALIDATE_EMAIL) && !(!empty($l['email_bad']) && strcasecmp((string)$l['email_bad'], (string)$l['email']) === 0);
+    return match (true) {
+        $st !== 'optout' && ($st === 'replied' || !empty($l['awaiting_reply_since'])) => 'awaiting',
+        $st === 'won' => 'won',
+        in_array($st, ['lost', 'optout'], true) => 'closed',
+        !empty($l['listen']) => 'people',
+        $st === 'proposal' => 'proposal',
+        !empty($l['approved_at']) => 'queued',
+        pm_lead_snoozed($l) => 'later',
+        !$mail => 'noemail',
+        in_array($st, ['new', 'qualified', 'drafted'], true) && empty($l['sent']) => !empty($l['drafts']['email_body']) ? 'ready' : 'prep',
+        $st === 'contacted' && (bool)pm_followup_due([$l], $cfg, true) => 'followups',
+        default => 'waiting',
+    };
+}
+
+/**
+ * The folders the agents file leads in by themselves stay true: "Already contacted" only while the lead is at Contacted, "Team says drop" and "To call" leave a lead that
+ * is closed or that wrote back. The owner's own folders are never touched. Returns how many leads changed.
+ */
+function pm_folders_tidy(array &$leads): int
+{
+    $n = 0;
+    foreach ($leads as $id => $l) {
+        $f = (array)($l['folders'] ?? []);
+        if (!$f) {
+            continue;
+        }
+        $st = (string)($l['status'] ?? '');
+        $drop = [];
+        $st !== 'contacted' && $drop[] = 'Already contacted';
+        (in_array($st, ['won', 'lost', 'optout', 'replied', 'proposal'], true) || !empty($l['awaiting_reply_since'])) && array_push($drop, 'Team says drop', 'To call');
+        $keep = array_values(array_diff($f, $drop));
+        if (count($keep) !== count($f)) {
+            if ($keep) {
+                $leads[$id]['folders'] = $keep;
+            } else {
+                unset($leads[$id]['folders']);
+            }
+            $n++;
+        }
+    }
+    return $n;
 }
