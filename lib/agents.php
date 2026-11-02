@@ -498,6 +498,7 @@ require_once __DIR__ . '/leadfolders.php'; // the owner's own folders of leads
 require_once __DIR__ . '/teamboard.php'; // how the departments talk to each other (no AI)
 require_once __DIR__ . '/agenttalk.php'; // the agents' conversation, day by day, for the Audit (no AI)
 require_once __DIR__ . '/sitdown.php'; // the team's sit-down about a lead: how best to approach it
+require_once __DIR__ . '/opener.php'; // the first-email summit: how every first email tells a stranger who we are and all that we do
 require_once __DIR__ . '/soften.php'; // how warm a lead is, what holds them back, and the firm's next move (no AI)
 require_once __DIR__ . '/heads.php'; // each head's goal from the firm's goal, and the heads asking each other for help when behind (no AI)
 require_once __DIR__ . '/board.php'; // today's board: each head reports to the Director, who keeps the Overview true (no AI)
@@ -1220,7 +1221,7 @@ const PM_EMAIL_CRAFT = "Write like one real person writing to one owner, never l
     . "(4) One easy, low-pressure question: a 10-minute call, or a one-page plan for their business. "
     . "Warm, plain, contractions welcome; no buzzwords (streamline, leverage, solution, seamless, cutting-edge, elevate). Subject: under 45 characters, specific to them, truthful, written like a normal subject line: a capital letter first and a capital letter on every town, area, road, person and business name (for example 'Rooms near the Shire River barrage?'), every other word in ordinary lowercase, no full stop, no exclamation marks, no word in ALL CAPS except an acronym such as VAT. "
     . "NEVER mention prices, fees or numbers you cannot source. No urgency, scarcity, guarantees, links or attachments; never ask for passwords or payment; never claim we know them or follow their work; never name a town as our base. "
-    . "No sign-off (the app adds it). Email: 70 to 110 words. WhatsApp: 30 to 45 words, one paragraph: greeting with first name, who you are, the gain, the easy question. " . PM_HUMAN_RULES;
+    . "No sign-off (the app adds it). Email: 100 to 150 words. WhatsApp: 30 to 45 words, one paragraph: greeting with first name, who you are, the gain, the easy question. " . PM_HUMAN_RULES;
 
 /** The email rules in a nutshell, for the proposal cover email. */
 const PM_EMAIL_CRAFT_SHORT = "under 60 words, opens with something specific and true about THEM, states the gain in plain words, ends with one easy yes (the attached plan, or a 10-minute chat). NEVER any price, fee or amount of money; no urgency or hype. " . PM_HUMAN_RULES;
@@ -1251,14 +1252,14 @@ function pm_agent_write(array $leads): array
         : "";
     $sender = pm_sender_name();
     $subjectLine = function_exists('pm_email_exp_example') ? pm_email_exp_example(pm_brand()) : '';
-    $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou are writing outreach for {$s['company_name']} as " . ($sender !== '' ? "$sender (use this first name: " . explode(' ', $sender)[0] . ")" : "a member of the team (no personal name: introduce the company instead)") . ". $ask" . PM_EMAIL_CRAFT . ' ' . ($subjectLine !== '' ? $subjectLine . ' ' : '')
+    $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou are writing outreach for {$s['company_name']} as " . ($sender !== '' ? "$sender (use this first name: " . explode(' ', $sender)[0] . ")" : "a member of the team (no personal name: introduce the company instead)") . ". $ask" . pm_email_craft($sender) . ' ' . ($subjectLine !== '' ? $subjectLine . ' ' : '')
         . "Each item has subject_style: write that item's email subject in that style. Where an item has owner_feedback, the owner turned the last version down for that reason: fix exactly that. " . PM_TRUST_RULES . ' ' . pm_market_pulse_line() . ' ' . pm_tb_line(pm_brand(), 'writers') . ' ' . PM_AGENT_RULES;
     $brand = pm_brand();
     $slim = array_map(fn($l) => ['id' => $l['id'], 'name' => $l['name'], 'type' => $l['type'], 'city' => $l['city'], 'currency' => pm_local_currency($l)['word'], 'contact' => $l['contact'] ?? '',
         'evidence' => array_slice($l['evidence'] ?? [], 0, 2), 'online_gaps' => array_slice($l['social_gaps'] ?? [], 0, 2), 'research' => pm_research_brief($l), 'lead_with' => $l['pain'] ?? '', 'how_it_stops' => pm_fix_for((string)($l['pain'] ?? '')),
         'subject_style' => pm_subject_style(pm_email_exp_arm((string)$l['id'], $brand))] + (!empty($l['rewrite_reason']) ? ['owner_feedback' => (string)$l['rewrite_reason']] : []), $leads);
-    return pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
-        . "\nJSON array of {\"id\",\"email_subject\",\"email_body\"" . (pm_wa_on() ? ",\"whatsapp\"" : '') . "}. Never greet with the business name." . (pm_wa_on() ? '' : ' Email only: no WhatsApp message.'), false, 2500, 'write'))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads);
+    return pm_op_fix_rows(pm_subjects_polish(pm_human_rows(pm_agent_list(pm_agent_json(pm_claude($system, json_encode($slim, JSON_UNESCAPED_UNICODE)
+        . "\nJSON array of {\"id\",\"email_subject\",\"email_body\"" . (pm_wa_on() ? ",\"whatsapp\"" : '') . "}. Never greet with the business name." . (pm_wa_on() ? '' : ' Email only: no WhatsApp message.'), false, 2500, 'write'))), ['email_body' => 'email', 'whatsapp' => 'whatsapp']), $leads)); // every first email tells them who we are and all that we do (lib/opener.php)
 }
 
 /**
@@ -1286,12 +1287,12 @@ function pm_starter_draft(array $lead): ?array
     }
     $name = mb_strtolower(trim((string)($lead['name'] ?? '')));
     foreach ((array)($lead['research']['starters'] ?? []) as $st) {
-        $body = trim((string)($st['email'] ?? ''));
+        $body = pm_op_fix_body(trim((string)($st['email'] ?? ''))); // a starter that left out who we are and all that we do gets it added (lib/opener.php)
         $wa = trim((string)($st['whatsapp'] ?? ''));
         $subj = trim((string)($st['subject'] ?? ''));
         $first = mb_strtolower(trim((string)strtok($body, "\n")));
         $n = str_word_count($body);
-        if ($subj === '' || $n < 40 || $n > 120 || (pm_wa_on() && str_word_count($wa) < 15) || // no WhatsApp set up: the starter needs no WhatsApp version
+        if ($subj === '' || $n < 40 || $n > 185 || (pm_wa_on() && str_word_count($wa) < 15) || // no WhatsApp set up: the starter needs no WhatsApp version
              pm_has_price($body . ' ' . $wa)
             || ($name !== '' && str_contains($first, $name))) { // the Writer is told never to greet with the business name
             continue;
@@ -2462,7 +2463,7 @@ function pm_agent_compose(array $lead, string $channel, string $tone, string $le
     $sender = pm_sender_name();
     $system = pm_agents_company_brief('tiny') . ' ' . pm_win_line(pm_brand()) . "\nYou write one " . ($wa ? 'WhatsApp message' : 'email') . " for {$s['company_name']}, as " . ($sender !== '' ? $sender . ' (first name ' . explode(' ', $sender)[0] . ')' : 'a member of the team (no personal name: introduce the company)') . ".\n"
         . "Tone: $toneTxt\nAngle: $angleTxt\nLength: about $words words (never more than " . (int)($words * 1.25) . ").\nLanguage: $langTxt\n"
-        . PM_EMAIL_CRAFT . ' ' . ($wa ? 'This is the WhatsApp version.' : 'This is the email version.') . ' ' . pm_local_currency_rule($lead) . ' Reply JSON only.';
+        . pm_email_craft($sender, false) . ' ' . ($wa ? 'This is the WhatsApp version.' : 'This is the email version.') . ' ' . pm_local_currency_rule($lead) . ' Reply JSON only.';
     $user = json_encode([
         'business' => $lead['name'], 'type' => $lead['type'], 'city' => $lead['city'], 'contact' => $lead['contact'] ?? '',
         'evidence' => array_slice($lead['evidence'] ?? [], 0, 3), 'research' => pm_research_brief($lead), 'online_gaps' => array_slice($lead['social_gaps'] ?? [], 0, 2), 'lead_with' => $lead['pain'] ?? '', 'how_it_stops' => pm_fix_for((string)($lead['pain'] ?? '')),
@@ -2758,6 +2759,7 @@ function pm_agent_research_batch(array $leads): array
         return [];
     }
     $many = count($items) > 1;
+    $opAbout = function_exists('pm_op_about') ? pm_op_about(pm_brand()) : ''; // the first-email plan's words about us (lib/opener.php); '' for Travel Malawi
     $system = pm_agents_company_brief($pkgs ? 'packages' : 'short') . "\nYou are the Researcher, and precision is your job. Use web search to study " . ($many ? 'EACH business in the list, separately, one result per business with its id' : 'ONE business') . '. '
         . "Step 1, identity: make sure every source is about THIS business in THIS town (same name, same place). Similar names elsewhere, directories that only list the name, and other branches do not count. If you cannot confirm it, say so. "
         . "Step 2, facts: from its own website, its Facebook and Instagram pages, Google reviews, and local or business/finance news from the last 18 months (expansion, new rooms or branch, awards, funding, tenders won, hiring, events). "
@@ -2766,7 +2768,8 @@ function pm_agent_research_batch(array $leads): array
         . "Step 2b, people and contacts: who owns or runs it (owner, founder, director, general manager, manager or host; never kitchen, restaurant, front-desk or housekeeping staff, guests or reviewers), each with the exact source URL that names them. Try hard for the owner's real name: their About page, Facebook About and posts, review replies signed by the owner or manager on TripAdvisor or Google, the host on Airbnb or Booking.com, news, LinkedIn. And its public email, phone and WhatsApp, with the source URL. Only what a source states; leave empty what you did not find. "
         . "Step 3, through our eyes: at most 3 short lines on what is weak or missing online and where we could genuinely help (for our team only). "
         . "Step 4, write 2 hooks: one real observation plus a curious question that makes the owner want to reply, WITHOUT handing over the solution or offering to fix it. Friendly, never critical or creepy, business information only. "
-        . ($nStart ? "Step 5, write 1 conversation starter, built on the best hook, ready to send: an email (subject of max 7 words, then a body of 45 to 80 words: a greeting line to first_name when given, one line saying who we are"
+        . ($nStart ? "Step 5, write 1 conversation starter, built on the best hook, ready to send: an email (subject of max 7 words, then a body of " . ($opAbout !== '' ? '90 to 130' : '45 to 80') . " words: a greeting line to first_name when given, "
+            . ($opAbout !== '' ? 'two short sentences telling a stranger who we are and the whole of what we do, in your own words, from this: "' . $opAbout . '"' : 'one line saying who we are')
             . ", the observation, one easy question about how they handle it today; ONE question only, no offer to fix it, no prices, no feature list, no sign-off)" . (pm_wa_on() ? ' and a WhatsApp version of 25 to 40 words' : '') . ". " : '')
         . (pm_brand() === 'travel' // the opening that shows the owner we really looked at their place
             ? 'Step 5b, personal: the lines our first email opens with, no greeting, price or link: ' . PM_TM_OPENING_RULE . ' Built on confirmed facts only. Never name yourself, never say or suggest you were looking for a stay or travelling. '

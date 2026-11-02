@@ -12,7 +12,8 @@
 
 const PM_DM_VARS = ['first_name' => 'their first name', 'name' => 'their business', 'city' => 'their town', 'currency' => 'the money of their country (kwacha in Malawi, never dollars)', 'type' => 'kind of business', 'intro' => 'who is writing ("I\'m Grace from ...")',
     'sender' => 'your name', 'company' => 'your business name', 'tagline' => 'your tagline', 'phone' => 'your phone', 'email' => 'your email', 'website' => 'your website',
-    'address' => 'your address', 'title' => 'your job title', 'link' => 'your website link', 'listing' => 'their live page on our website, when there is one (a line with it is left out otherwise)', 'opening' => 'the personal line about this lead from the day\'s study (one true detail about them); with nothing found, how you came across them'];
+    'address' => 'your address', 'title' => 'your job title', 'link' => 'your website link', 'listing' => 'their live page on our website, when there is one (a line with it is left out otherwise)', 'opening' => 'the personal line about this lead from the day\'s study (one true detail about them); with nothing found, how you came across them',
+    'about' => 'who we are and the whole of what we do, in a few plain words (agreed by the team in Sales > Targeting > First-email plan; a line with it is left out when there is none)'];
 
 /** The default opening line (who is writing and how they came across the lead), with {placeholders}. */
 const PM_DM_OPENING_TRAVEL = 'I would love {name} in {city} to be part of something new.'; // no name (the signature has it), no posing as a traveller
@@ -46,7 +47,7 @@ function pm_dm_seed(string $brand): array
             'signature' => $sig, 'wa_signature' => '— {sender}, {company}'] + pm_tm_followup_seed() + pm_tm_ok_seed() + pm_tm_wl_seed();
     }
     return ['email_subject' => 'A short note for {name}',
-        'email_body' => "Hello {first_name},\n\n{intro}.\n\n{opening} If it would be useful, I can send you a short plan for your business.\n\n"
+        'email_body' => "Hello {first_name},\n\n{intro}. {about}\n\n{opening} If it would be useful, I can send you a short plan for your business, covering the part of this that fits {name} best.\n\n"
             . (pm_our_wa_number(pm_settings()) !== '' ? 'Reply to this email, or message us on WhatsApp on {phone}, and I will come back to you.' : 'Reply to this email and I will come back to you.'), // WhatsApp only with a number to reach us on
         'whatsapp' => 'Hello {first_name}, {intro}. I came across {name} and thought we could help. May I send you a short plan for your business?',
         'signature' => $sig, 'wa_signature' => '— {sender}, {company}',
@@ -110,7 +111,8 @@ function pm_dm_vars(array $lead = [], string $opening = ''): array
         'tagline' => trim((string)($s['tagline'] ?? '')), 'phone' => trim((string)($s['phone'] ?? '')), 'email' => trim((string)($s['email'] ?? '')), 'website' => trim((string)($s['website'] ?? '')),
         'address' => trim((string)($s['address'] ?? '')), 'currency' => pm_local_currency($lead)['word'], 'title' => $sender !== '' && $sender === trim((string)($s['signatory_name'] ?? '')) ? trim((string)($s['signatory_title'] ?? '')) : '',
         'link' => $link !== '' ? $link : (trim((string)($s['website'] ?? '')) !== '' ? 'https://' . preg_replace('#^https?://#i', '', trim((string)$s['website'])) : ''),
-        'listing' => (string)($lead['live_listing']['url'] ?? '')]; // lib/sx_wins.php: their page, once it is live
+        'listing' => (string)($lead['live_listing']['url'] ?? ''),  // lib/sx_wins.php: their page, once it is live
+        'about' => function_exists('pm_op_about') ? pm_op_about(pm_brand()) : '']; // lib/opener.php: who we are and all that we do
     $personal = function_exists('pm_lead_personal') ? pm_lead_personal($lead) : ''; // the day's study wrote it: no AI here
     $v['opening'] = $opening !== '' ? $opening : ($personal !== '' ? $personal : pm_dm_fill(pm_brand() === 'travel' ? PM_DM_OPENING_TRAVEL : PM_DM_OPENING, $v));
     return $v;
@@ -119,7 +121,7 @@ function pm_dm_vars(array $lead = [], string $opening = ''): array
 function pm_dm_fill(string $text, array $vars): string
 {
     $t = (string)preg_replace_callback('/\{([A-Za-z_]+)\}/', fn($m) => array_key_exists(strtolower($m[1]), $vars) ? (string)$vars[strtolower($m[1])] : $m[0], $text); // {Email} works as {email}
-    return (string)preg_replace(['/(Hello|Hi|Dear|Good day) +,/', '/[ \t]+,/'], ['$1,', ','], $t); // no name: "Hello,"
+    return (string)preg_replace(['/(Hello|Hi|Dear|Good day) +,/', '/[ \t]+,/', '/[ \t]+(?=\R|$)/'], ['$1,', ',', ''], $t); // no name: "Hello,"; a line left with a space at its end (nothing for {about}) is trimmed
 }
 
 /** A signature: one line per line of the template, a line whose words are all missing is left out ("{phone}" with no phone). */

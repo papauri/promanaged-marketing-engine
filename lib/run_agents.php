@@ -514,6 +514,22 @@ try {
     }
     $np && $save();
 
+    // ---- 3b1. The first-email summit: the whole team agrees how every first email tells a stranger who we are and all that we do (one call; again only when the offerings or facts change, or after 30 days),
+    //      then the waiting first emails that lack it are put right by code (lib/opener.php) ----
+    if (function_exists('pm_op_due') && pm_op_due($brand)) {
+        $progress('The team sitting down: how every first email should start');
+        try {
+            [$opOk, $opMsg] = pm_op_hold($brand);
+            pm_agent_log('Director', $opMsg, !$opOk);
+        } catch (Throwable $e) {
+            pm_agent_log('Director', 'The first-email summit could not be held: ' . mb_substr($e->getMessage(), 0, 120), true);
+        }
+    }
+    if (function_exists('pm_op_repair') && ($opN = pm_op_repair($leads, $brand))) {
+        $stats['first_emails_fixed'] = $opN;
+        $save();
+    }
+
     // ---- 3b2. The team's sit-down: the day's top leads (who wrote back, follow-ups due, the best emails ready) are talked over and decided, six to one cheap call ----
     $sd = ($cfg['enabled']['writer'] ?? true) && function_exists('pm_sitdown_due') ? pm_sitdown_due($leads, $cfg, 12) : [];
     if ($sd) {

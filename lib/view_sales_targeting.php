@@ -65,6 +65,7 @@ echo function_exists('pm_adv_card') ? pm_adv_card($vb, $csrf) : '';
 </form>
 
 <?php require_once __DIR__ . '/view_sendschedule.php'; pm_view_sendschedule($vb, $csrf); ?>
+<?php require_once __DIR__ . '/view_opener.php'; pm_view_opener($vb, $csrf); ?>
 <?php require_once __DIR__ . '/view_msgdefaults.php'; pm_view_msgdefaults($vb, $csrf); ?>
 
 <?php if ($custom):

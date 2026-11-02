@@ -2185,6 +2185,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         pm_redirect('targeting#defaultmsg', $dmMsg, $dmKind);
     }
 
+    if ($action === 'opener') { // the first-email plan: the owner's wording, back to the team's, or the team sits down again (lib/opener.php)
+        $b = pm_brand_norm($_POST['brand'] ?? '');
+        [$opMsg, $opKind] = pm_op_handle(preg_replace('/[^a-z_]/', '', (string)($_POST['do'] ?? '')), $b);
+        pm_redirect('targeting#openerplan', $opMsg, $opKind);
+    }
+
     if ($action === 'share') { // the share kit: PDFs and website links added to a business's emails and WhatsApp messages (lib/sharekit.php)
         $b = pm_brand_norm($_POST['brand'] ?? '');
         pm_brand_set($b);
