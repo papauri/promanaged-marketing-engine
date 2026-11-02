@@ -121,6 +121,11 @@ accepted by being made; they are logged in the Done log below, not in the regist
 
 ## 6 · Done log
 
+### Owner request in chat, 2026-11-03 — the team sits down on how the first email starts (new leads have never heard of us)
+
+- **First-email summit** (`lib/opener.php`): research, writers, sender, replies, follow-up and the director talk in one call and agree the plan: `about` (who we are and the WHOLE of what we do, two sentences), `bridge`, `ask`, `mistakes`. Held again only when the offerings or facts change or after 30 days (`pm_op_due`, morning run step 3b1); the talk goes into Audit. Sales > Targeting > First-email plan shows it and takes the owner's own wording (`owner_about`, the last word) or sends the team back to the table.
+- Every first-email path reads it: the Writers (`pm_email_craft`), the study's ready starters (prompt and `pm_starter_draft`), the default message (`{about}`, the ProManaged seed) and the sit-down (`shows_what_we_offer`). Code guarantees it for free: `pm_op_fix_body` adds `about` to any first email that does not name us and two of our offerings, fixes "My name is with X" when no sender is named, and `pm_op_repair` updated the 25 waiting drafts nobody had edited or approved. Travel Malawi keeps its own fixed text.
+
 ### Owner request in chat, 2026-11-01 — an Inbox folder and one Sync on Leads, so emails are never duplicated
 
 - **Sync** on Leads (replaces Check replies and Compare with the Sent folder; `pm_mb_sync_all`, `lib/sx_mailbox.php`): the Sent folders first (anyone emailed from the other copy or by hand is marked contacted, follow-ups counted, queued emails taken out), then the inbox (replies drafted; answered automatically only when Targeting says auto), then the mailbox desk (in touch outside the app, answered by hand, bounces, enquiries). It says when it last ran and turns blue after an hour.
